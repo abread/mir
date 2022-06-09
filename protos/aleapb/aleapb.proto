@@ -6,34 +6,35 @@ import "requestpb/requestpb.proto";
 
 option go_package = "github.com/hyperledger-labs/mirbft/pkg/pb/aleapb";
 
+// ============================================================
+// Messages
+// ============================================================
+
 message AleaMessage {
-    uint64 instance = 1;
     oneof type {
-        VCBCMessage vcbc = 2;
-        AgreementMessage agreement = 3;
-        ABBAMessage abba = 4;
+        VCBC broadcast = 1;
+        Agreement agreement = 2;
     }
 }
 
-message AgreementMessage {
-    uint64 instance = 1;
+message Agreement {
     oneof type {
-        AgreementFillGapMessage fillGap = 2;
-        AgreementFillerMessage filler = 3;
+        CobaltABBA aba = 1;
+        AgreementFillGap fillGap = 2;
+        AgreementFiller filler = 3;
     }
 }
 
-message AgreementFillGapMessage {
+message AgreementFillGap {
     uint32 queue_idx = 1;
     uint64 slot = 2; // TODO: confirm type
 }
 
-message AgreementFillerMessage {
-    // TODO: may be simplified(?)
-    repeated VCBCMessage entries = 1;
+message AgreementFiller {
+    repeated VCBC entries = 1;
 }
 
-message VCBCMessage {
+message VCBC {
     VCBCId instance = 1;
     message VCBCId {
         uint64 initiator_id = 1;
@@ -41,27 +42,35 @@ message VCBCMessage {
     }
 
     oneof type {
-        VCBCSendMessage send = 2;
-        VCBCEchoMessage echo = 3;
-        VCBCFinalMessage final = 4;
+        VCBCSend send = 2;
+        VCBCEcho echo = 3;
+        VCBCFinal final = 4;
     }
 }
 
-message VCBCSendMessage {
+message VCBCSend {
     requestpb.Batch payload = 1;
 }
 
-message VCBCEchoMessage {
+message VCBCEcho {
     requestpb.Batch payload = 1;
     bytes signature_share = 2;
 }
 
-message VCBCFinalMessage {
+message VCBCFinal {
     requestpb.Batch payload = 1;
     bytes signature = 2;
 }
 
-message ABBAMessage {
+message CobaltABBA {
     uint64 instance = 1;
+    // TODO
+}
+
+// ============================================================
+// Status
+// ============================================================
+
+message Status {
     // TODO
 }
