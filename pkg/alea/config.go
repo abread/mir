@@ -3,7 +3,7 @@ package alea
 import (
 	"fmt"
 
-	t "github.com/hyperledger-labs/mirbft/pkg/types"
+	t "github.com/filecoin-project/mir/pkg/types"
 )
 
 type Config struct {

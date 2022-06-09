@@ -4,7 +4,7 @@ package aleapb;
 
 import "requestpb/requestpb.proto";
 
-option go_package = "github.com/hyperledger-labs/mirbft/pkg/pb/aleapb";
+option go_package = "github.com/filecoin-project/mir/pkg/pb/aleapb";
 
 // ============================================================
 // Messages

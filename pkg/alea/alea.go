@@ -3,12 +3,12 @@ package alea
 import (
 	"fmt"
 
-	"github.com/hyperledger-labs/mirbft/pkg/events"
-	"github.com/hyperledger-labs/mirbft/pkg/logging"
-	"github.com/hyperledger-labs/mirbft/pkg/pb/aleapb"
-	"github.com/hyperledger-labs/mirbft/pkg/pb/eventpb"
-	"github.com/hyperledger-labs/mirbft/pkg/pb/messagepb"
-	t "github.com/hyperledger-labs/mirbft/pkg/types"
+	"github.com/filecoin-project/mir/pkg/events"
+	"github.com/filecoin-project/mir/pkg/logging"
+	"github.com/filecoin-project/mir/pkg/pb/aleapb"
+	"github.com/filecoin-project/mir/pkg/pb/eventpb"
+	"github.com/filecoin-project/mir/pkg/pb/messagepb"
+	t "github.com/filecoin-project/mir/pkg/types"
 )
 
 type Alea struct {
