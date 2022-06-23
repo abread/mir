@@ -25,6 +25,7 @@ import "batchfetcherpb/batchfetcherpb.proto";
 import "threshcryptopb/threshcryptopb.proto";
 import "pingpongpb/pingpongpb.proto";
 import "checkpointpb/checkpointpb.proto";
+import "aleapb/aleapb.proto";
 
 option go_package = "github.com/filecoin-project/mir/pkg/pb/eventpb";
 
@@ -71,6 +72,7 @@ message Event {
     threshcryptopb.Event    thresh_crypto           = 36;
     pingpongpb.Event        ping_pong               = 37;
     checkpointpb.Event      checkpoint              = 38;
+    aleapb.AleaEvent        alea                    = 39;
 
     // for unit-tests
     google.protobuf.StringValue testingString = 301;

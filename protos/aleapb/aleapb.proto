@@ -17,29 +17,13 @@ message AleaMessage {
     }
 }
 
-message Agreement {
-    oneof type {
-        CobaltABBA aba = 1;
-        AgreementFillGap fillGap = 2;
-        AgreementFiller filler = 3;
-    }
-}
-
-message AgreementFillGap {
-    uint32 queue_idx = 1;
-    uint64 slot = 2; // TODO: confirm type
-}
-
-message AgreementFiller {
-    repeated VCBC entries = 1;
+message MsgId {
+    string queue_idx = 1;
+    uint64 slot = 2;
 }
 
 message VCBC {
-    VCBCId instance = 1;
-    message VCBCId {
-        uint64 initiator_id = 1;
-        uint64 priority = 2;
-    }
+    MsgId instance = 1;
 
     oneof type {
         VCBCSend send = 2;
@@ -62,10 +46,45 @@ message VCBCFinal {
     bytes signature = 2;
 }
 
+message Agreement {
+    oneof type {
+        CobaltABBA aba = 1;
+        AgreementFillGap fillGap = 2;
+        AgreementFiller filler = 3;
+    }
+}
+
+message AgreementFillGap {
+    MsgId id = 1;
+}
+
+message AgreementFiller {
+    MsgId id = 1;
+    VCBCFinal msg = 2;
+}
+
+
 message CobaltABBA {
-    uint64 instance = 1;
+    MsgId instance = 1;
     // TODO
 }
+
+// ============================================================
+// Events
+// ============================================================
+
+message AleaEvent {
+    oneof type {
+        VCBCDeliver vcbc_deliver = 1;
+    }
+}
+
+message VCBCDeliver {
+    MsgId id = 1;
+    requestpb.Batch payload = 2;
+}
+
+// TODO: extend with thresh signshare/combine/validate results
 
 // ============================================================
 // Status

@@ -3,6 +3,7 @@ package eventpb
 import (
 	wrapperspb "google.golang.org/protobuf/types/known/wrapperspb"
 
+	aleapb "github.com/filecoin-project/mir/pkg/pb/aleapb"
 	availabilitypb "github.com/filecoin-project/mir/pkg/pb/availabilitypb"
 	batchdbpb "github.com/filecoin-project/mir/pkg/pb/availabilitypb/batchdbpb"
 	batchfetcherpb "github.com/filecoin-project/mir/pkg/pb/batchfetcherpb"
@@ -168,6 +169,10 @@ func (p *Event_PingPong) Unwrap() *pingpongpb.Event {
 
 func (p *Event_Checkpoint) Unwrap() *checkpointpb.Event {
 	return p.Checkpoint
+}
+
+func (p *Event_Alea) Unwrap() *aleapb.AleaEvent {
+	return p.Alea
 }
 
 func (p *Event_TestingString) Unwrap() *wrapperspb.StringValue {

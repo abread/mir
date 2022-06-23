@@ -16,7 +16,8 @@ type Alea struct {
 	logger logging.Logger
 	config *Config
 
-	broadcastInstances []broadcastInst
+	vcbcSenderInstances   map[SlotId]vcbcSenderInst
+	vcbcReceiverInstances map[MsgId]vcbcReceiverInst
 }
 
 func New(ownID t.NodeID, config *Config, logger *logging.Logger) (*Alea, error) {
@@ -25,9 +26,11 @@ func New(ownID t.NodeID, config *Config, logger *logging.Logger) (*Alea, error) 
 	}
 
 	alea := &Alea{
-		ownID:  ownID,
-		logger: *logger,
-		config: config,
+		ownID:                 ownID,
+		logger:                *logger,
+		config:                config,
+		vcbcSenderInstances:   make(map[SlotId]vcbcSenderInst),
+		vcbcReceiverInstances: make(map[MsgId]vcbcReceiverInst),
 	}
 
 	// TODO: WAL recovery(?)
