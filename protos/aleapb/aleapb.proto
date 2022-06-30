@@ -60,7 +60,38 @@ message Filler {
 
 message CobaltABBA {
     MsgId instance = 1;
-    // TODO
+    oneof type {
+        CobaltInit init = 2;
+        CobaltFinish finish = 3;
+        CobaltAux aux = 4;
+        CobaltConf conf = 5;
+    }
+}
+
+message CobaltInit {
+    uint64 round = 1;
+    bool value = 2;
+}
+
+message CobaltFinish {
+    bool value = 1;
+}
+
+message CobaltAux {
+    uint64 round = 1;
+    bool value = 2;
+}
+
+enum CobaltValueSet {
+    EMPTY = 0;
+    ON = 1;
+    OFF = 2;
+    ON_AND_OFF = 3;
+}
+
+message CobaltConf {
+    uint64 round = 1;
+    CobaltValueSet config = 2;
 }
 
 // ============================================================
@@ -70,6 +101,7 @@ message CobaltABBA {
 message AleaEvent {
     oneof type {
         VCBCDeliver vcbc_deliver = 1;
+        CobaltABBADeliver aba_deliver = 2;
     }
 }
 
@@ -78,5 +110,9 @@ message VCBCDeliver {
     requestpb.Batch payload = 2;
 }
 
+message CobaltABBADeliver {
+    MsgId id = 1;
+    bool result = 2;
+}
 
 // TODO: extend with thresh signshare/combine/validate results
