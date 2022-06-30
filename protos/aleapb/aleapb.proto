@@ -12,8 +12,10 @@ option go_package = "github.com/filecoin-project/mir/pkg/pb/aleapb";
 
 message AleaMessage {
     oneof type {
-        VCBC broadcast = 1;
-        Agreement agreement = 2;
+        VCBC vcbc = 1;
+        CobaltABBA aba = 2;
+        FillGap fillGap = 3;
+        Filler filler = 4;
     }
 }
 
@@ -46,19 +48,11 @@ message VCBCFinal {
     bytes signature = 2;
 }
 
-message Agreement {
-    oneof type {
-        CobaltABBA aba = 1;
-        AgreementFillGap fillGap = 2;
-        AgreementFiller filler = 3;
-    }
-}
-
-message AgreementFillGap {
+message FillGap {
     MsgId id = 1;
 }
 
-message AgreementFiller {
+message Filler {
     MsgId id = 1;
     VCBCFinal msg = 2;
 }
@@ -84,12 +78,5 @@ message VCBCDeliver {
     requestpb.Batch payload = 2;
 }
 
+
 // TODO: extend with thresh signshare/combine/validate results
-
-// ============================================================
-// Status
-// ============================================================
-
-message Status {
-    // TODO
-}

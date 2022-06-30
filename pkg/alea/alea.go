@@ -20,6 +20,16 @@ type Alea struct {
 	vcbcReceiverInstances map[MsgId]vcbcReceiverInst
 }
 
+var (
+	aleaModuleName t.ModuleID = "alea"
+	netModuleName  t.ModuleID = "net"
+	//appModuleName    t.ModuleID = "app"
+	//walModuleName    t.ModuleID = "wal"
+	//hasherModuleName t.ModuleID = "hasher"
+	//cryptoModuleName t.ModuleID = "crypto"
+	//timerModuleName  t.ModuleID = "timer"
+)
+
 func New(ownID t.NodeID, config *Config, logger *logging.Logger) (*Alea, error) {
 	if err := CheckConfig(config); err != nil {
 		return nil, fmt.Errorf("invalid Alea configuration: %w", err)
@@ -63,12 +73,27 @@ func (alea *Alea) applyMessageReceived(messageReceived *eventpb.MessageReceived)
 	from := t.NodeID(messageReceived.From)
 
 	switch msg := message.Type.(*messagepb.Message_Alea).Alea.Type.(type) {
-	case *aleapb.AleaMessage_Agreement:
-		return alea.applyAgreementMessage(msg.Agreement, from)
-	case *aleapb.AleaMessage_Broadcast:
-		return alea.applyBroadcastMessage(msg.Broadcast, from)
+	case *aleapb.AleaMessage_Aba:
+		return alea.applyAgreementMessage(msg.Aba, from)
+	case *aleapb.AleaMessage_Vcbc:
+		return alea.applyVcbcMessage(msg.Vcbc, from)
 	default:
 		panic(fmt.Errorf("unknown Alea message type: %T", msg))
+	}
+}
+
+func (alea *Alea) applyVcbcMessage(message *aleapb.VCBC, src t.NodeID) *events.EventList {
+	id := MsgIdFromDomain(message.Instance)
+
+	switch msg := message.Type.(type) {
+	case *aleapb.VCBC_Send:
+		return alea.applyVCBCSendMessage(id, msg.Send, src)
+	case *aleapb.VCBC_Echo:
+		return alea.applyVCBCEchoMessage(id, msg.Echo, src)
+	case *aleapb.VCBC_Final:
+		return alea.applyVCBCFinalMessage(id, msg.Final, src)
+	default:
+		panic(fmt.Errorf("unknown Alea VCBC message type: %T", msg))
 	}
 }
 

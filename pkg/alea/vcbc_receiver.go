@@ -13,9 +13,7 @@ type vcbcReceiverInst struct {
 	signature threshSigFull
 }
 
-func (alea *Alea) applyVCBCSendMessage(idPb *aleapb.MsgId, msg *aleapb.VCBCSend, source t.NodeID) *events.EventList {
-	id := MsgIdFromDomain(idPb)
-
+func (alea *Alea) applyVCBCSendMessage(id MsgId, msg *aleapb.VCBCSend, source t.NodeID) *events.EventList {
 	if _, ok := alea.vcbcReceiverInstances[id]; ok {
 		// broadcast instance already created
 		// TODO: we can detect byzantine behavior from here (SEND message with different messages for the same slot)
@@ -45,8 +43,7 @@ func (alea *Alea) applyThreshShareSignResult(id MsgId, sig threshSigShare) *even
 	return &events.EventList{}
 }
 
-func (alea *Alea) applyVCBCFinalMessage(idPb *aleapb.MsgId, msg *aleapb.VCBCFinal, source t.NodeID) *events.EventList {
-	id := MsgIdFromDomain(idPb)
+func (alea *Alea) applyVCBCFinalMessage(id MsgId, msg *aleapb.VCBCFinal, source t.NodeID) *events.EventList {
 	// TODO: ignore if id is too old and was already discarded
 
 	inst, ok := alea.vcbcReceiverInstances[id]

@@ -57,8 +57,8 @@ func VCBCFinal(id MsgId, batch *requestpb.Batch, sig threshSigFull) *messagepb.M
 
 func prepareBroadcastMessage(msg *aleapb.VCBC) *messagepb.Message {
 	return prepareAleaMessage(&aleapb.AleaMessage{
-		Type: &aleapb.AleaMessage_Broadcast{
-			Broadcast: msg,
+		Type: &aleapb.AleaMessage_Vcbc{
+			Vcbc: msg,
 		},
 	})
 }

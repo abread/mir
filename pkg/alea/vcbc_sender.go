@@ -35,8 +35,7 @@ func (alea *Alea) newVcbcSenderInstance(slot SlotId, batch *requestpb.Batch) *ev
 	return alea.broadcastMessage(sendMsg)
 }
 
-func (alea *Alea) applyVCBCEchoMessage(idPb *aleapb.MsgId, msg *aleapb.VCBCEcho, source t.NodeID) *events.EventList {
-	id := MsgIdFromDomain(idPb)
+func (alea *Alea) applyVCBCEchoMessage(id MsgId, msg *aleapb.VCBCEcho, source t.NodeID) *events.EventList {
 	if id.ProposerId != alea.ownID {
 		// message is not for us
 		return &events.EventList{}
