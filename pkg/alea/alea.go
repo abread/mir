@@ -18,6 +18,7 @@ type Alea struct {
 
 	vcbcSenderInstances   map[SlotId]vcbcSenderInst
 	vcbcReceiverInstances map[MsgId]vcbcReceiverInst
+	abbaInstances map[MsgId]cobaltAbbaInst
 }
 
 var (
@@ -73,8 +74,8 @@ func (alea *Alea) applyMessageReceived(messageReceived *eventpb.MessageReceived)
 	from := t.NodeID(messageReceived.From)
 
 	switch msg := message.Type.(*messagepb.Message_Alea).Alea.Type.(type) {
-	case *aleapb.AleaMessage_Aba:
-		return alea.applyAgreementMessage(msg.Aba, from)
+	case *aleapb.AleaMessage_Agreement:
+		return alea.applyAgreementMessage(msg.Agreement, from)
 	case *aleapb.AleaMessage_Vcbc:
 		return alea.applyVcbcMessage(msg.Vcbc, from)
 	default:

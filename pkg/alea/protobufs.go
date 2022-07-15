@@ -63,6 +63,71 @@ func prepareBroadcastMessage(msg *aleapb.VCBC) *messagepb.Message {
 	})
 }
 
+func CobaltAbbaFinish(id MsgId, v bit) *messagepb.Message {
+	return prepareAbaMessage(id, &aleapb.CobaltABBA{
+		Type: &aleapb.CobaltABBA_Finish{
+			Finish: &aleapb.CobaltFinish{
+				Value: v.Pb(),
+			},
+		},
+	})
+}
+
+func CobaltAbbaInit(id MsgId, r uint64, v bit) *messagepb.Message {
+	return prepareAbaMessage(id, &aleapb.CobaltABBA{
+		Type: &aleapb.CobaltABBA_Init{
+			Init: &aleapb.CobaltInit{
+				Round: r,
+				Value: v.Pb(),
+			},
+		},
+	})
+}
+
+func CobaltAbbaAux(id MsgId, r uint64, v bit) *messagepb.Message {
+	return prepareAbaMessage(id, &aleapb.CobaltABBA{
+		Type: &aleapb.CobaltABBA_Aux{
+			Aux: &aleapb.CobaltAux{
+				Round: r,
+				Value: v.Pb(),
+			},
+		},
+	})
+}
+
+func CobaltAbbaConf(id MsgId, r uint64, c BitSet) *messagepb.Message {
+	return prepareAbaMessage(id, &aleapb.CobaltABBA{
+		Type: &aleapb.CobaltABBA_Conf{
+			Conf: &aleapb.CobaltConf{
+				Round:  r,
+				Config: c.Pb(),
+			},
+		},
+	})
+}
+
+func CobaltAbbaCoinShare(id MsgId, r uint64, share threshSigShare) *messagepb.Message {
+	return prepareAbaMessage(id, &aleapb.CobaltABBA{
+		Type: &aleapb.CobaltABBA_CoinShare{
+			CoinShare: &aleapb.CobaltCoinShare{
+				Round:     r,
+				CoinShare: share.Pb(),
+			},
+		},
+	})
+}
+
+func prepareAbaMessage(id MsgId, msg *aleapb.CobaltABBA) *messagepb.Message {
+	return prepareAleaMessage(&aleapb.AleaMessage{
+		Type: &aleapb.AleaMessage_Agreement{
+			Agreement: &aleapb.Agreement{
+				Instance: id.Pb(),
+				Msg:      msg,
+			},
+		},
+	})
+}
+
 func prepareAleaMessage(msg *aleapb.AleaMessage) *messagepb.Message {
 	return &messagepb.Message{
 		Type: &messagepb.Message_Alea{
@@ -81,6 +146,17 @@ func VCBCDeliver(id MsgId, batch *requestpb.Batch) *eventpb.Event {
 			VcbcDeliver: &aleapb.VCBCDeliver{
 				Id:      id.Pb(),
 				Payload: batch,
+			},
+		},
+	})
+}
+
+func AbaDeliver(id MsgId, result bit) *eventpb.Event {
+	return prepareAleaEvent(&aleapb.AleaEvent{
+		Type: &aleapb.AleaEvent_AbaDeliver{
+			AbaDeliver: &aleapb.CobaltABBADeliver{
+				Id:     id.Pb(),
+				Result: result.Pb(),
 			},
 		},
 	})

@@ -13,7 +13,7 @@ option go_package = "github.com/filecoin-project/mir/pkg/pb/aleapb";
 message AleaMessage {
     oneof type {
         VCBC vcbc = 1;
-        CobaltABBA aba = 2;
+        Agreement agreement = 2;
         FillGap fillGap = 3;
         Filler filler = 4;
     }
@@ -57,14 +57,18 @@ message Filler {
     VCBCFinal msg = 2;
 }
 
+message Agreement {
+    MsgId instance = 1;
+    CobaltABBA msg = 2;
+}
 
 message CobaltABBA {
-    MsgId instance = 1;
     oneof type {
         CobaltInit init = 2;
         CobaltFinish finish = 3;
         CobaltAux aux = 4;
         CobaltConf conf = 5;
+        CobaltCoinShare coinShare = 6;
     }
 }
 
@@ -84,14 +88,19 @@ message CobaltAux {
 
 enum CobaltValueSet {
     EMPTY = 0;
-    ON = 1;
-    OFF = 2;
-    ON_AND_OFF = 3;
+    ZERO = 1;
+    ONE = 2;
+    ZERO_AND_ONE = 3;
 }
 
 message CobaltConf {
     uint64 round = 1;
     CobaltValueSet config = 2;
+}
+
+message CobaltCoinShare {
+    uint64 round = 1;
+    bytes coin_share = 2;
 }
 
 // ============================================================
