@@ -42,6 +42,7 @@ func (alea *Alea) applyAgreementMessage(agreementMsg *aleapb.Agreement, source t
 	}
 
 	// TODO: silently drop?
+	return &events.EventList{}
 }
 
 func (inst *cobaltAbbaInst) applyMessage(alea *Alea, id MsgId, abbaMsg *aleapb.CobaltABBA, source t.NodeID) *events.EventList {

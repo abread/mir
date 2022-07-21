@@ -26,7 +26,7 @@ func (alea *Alea) newVcbcSenderInstance(slot SlotId, batch *requestpb.Batch) *ev
 	}
 
 	if _, ok := alea.vcbcSenderInstances[slot]; ok {
-		panic(fmt.Errorf("duplicate broadcast instance for (%s, %ld)", id.ProposerId, id.Slot))
+		panic(fmt.Errorf("duplicate broadcast instance for (%s, %d)", id.ProposerId, id.Slot))
 	}
 
 	alea.vcbcSenderInstances[slot] = inst
