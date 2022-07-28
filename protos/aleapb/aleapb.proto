@@ -58,7 +58,7 @@ message Filler {
 }
 
 message Agreement {
-    MsgId instance = 1;
+    uint64 agreementRound = 1;
     CobaltABBA msg = 2;
 }
 
@@ -119,7 +119,7 @@ message VCBCDeliver {
 }
 
 message CobaltABBADeliver {
-    MsgId id = 1;
+    uint64 agreementRound = 1;
     bool result = 2;
 }
 

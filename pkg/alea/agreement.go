@@ -33,40 +33,36 @@ type cobaltAbbaInst struct {
 }
 
 func (alea *Alea) applyAgreementMessage(agreementMsg *aleapb.Agreement, source t.NodeID) *events.EventList {
-	id := MsgIdFromDomain(agreementMsg.Instance)
-
-	inst, ok := alea.abbaInstances[id]
-
-	if ok {
-		return inst.applyMessage(alea, id, agreementMsg.Msg, source)
+	if agreementMsg.AgreementRound != alea.agreementRound {
+		// not yet/already done
+		return &events.EventList{}
 	}
 
-	// TODO: silently drop?
-	return &events.EventList{}
+	return alea.abbaInstance.applyMessage(alea, alea.agreementRound, agreementMsg.Msg, source)
 }
 
-func (inst *cobaltAbbaInst) applyMessage(alea *Alea, id MsgId, abbaMsg *aleapb.CobaltABBA, source t.NodeID) *events.EventList {
+func (inst *cobaltAbbaInst) applyMessage(alea *Alea, agreementRound uint64, abbaMsg *aleapb.CobaltABBA, source t.NodeID) *events.EventList {
 	if inst.finished {
 		return &events.EventList{}
 	}
 
 	switch msg := abbaMsg.Type.(type) {
 	case *aleapb.CobaltABBA_Finish:
-		return inst.applyFinishMessage(alea, id, msg.Finish, source)
+		return inst.applyFinishMessage(alea, agreementRound, msg.Finish, source)
 	case *aleapb.CobaltABBA_Init:
-		return inst.applyInitMessage(alea, id, msg.Init, source)
+		return inst.applyInitMessage(alea, agreementRound, msg.Init, source)
 	case *aleapb.CobaltABBA_Aux:
-		return inst.applyAuxMessage(alea, id, msg.Aux, source)
+		return inst.applyAuxMessage(alea, agreementRound, msg.Aux, source)
 	case *aleapb.CobaltABBA_Conf:
-		return inst.applyConfMessage(alea, id, msg.Conf, source)
+		return inst.applyConfMessage(alea, agreementRound, msg.Conf, source)
 	case *aleapb.CobaltABBA_CoinShare:
-		return inst.applyCoinShareMessage(alea, id, msg.CoinShare, source)
+		return inst.applyCoinShareMessage(alea, agreementRound, msg.CoinShare, source)
 	default:
 		panic(fmt.Errorf("unknown Cobalt ABBA message type: %T", msg))
 	}
 }
 
-func (inst *cobaltAbbaInst) applyFinishMessage(alea *Alea, id MsgId, msg *aleapb.CobaltFinish, source t.NodeID) *events.EventList {
+func (inst *cobaltAbbaInst) applyFinishMessage(alea *Alea, id uint64, msg *aleapb.CobaltFinish, source t.NodeID) *events.EventList {
 	v := bit(msg.Value)
 	inst.finishSenders[v][source] = void{}
 
@@ -86,7 +82,7 @@ func (inst *cobaltAbbaInst) applyFinishMessage(alea *Alea, id MsgId, msg *aleapb
 	}
 }
 
-func (inst *cobaltAbbaInst) applyInitMessage(alea *Alea, id MsgId, msg *aleapb.CobaltInit, source t.NodeID) *events.EventList {
+func (inst *cobaltAbbaInst) applyInitMessage(alea *Alea, id uint64, msg *aleapb.CobaltInit, source t.NodeID) *events.EventList {
 	if inst.r != msg.Round {
 		// not the current round, ignore message (will be retransmitted if it just came before anything important)
 		return &events.EventList{}
@@ -111,7 +107,7 @@ func (inst *cobaltAbbaInst) applyInitMessage(alea *Alea, id MsgId, msg *aleapb.C
 	}
 }
 
-func (inst *cobaltAbbaInst) applyAuxMessage(alea *Alea, id MsgId, msg *aleapb.CobaltAux, source t.NodeID) *events.EventList {
+func (inst *cobaltAbbaInst) applyAuxMessage(alea *Alea, id uint64, msg *aleapb.CobaltAux, source t.NodeID) *events.EventList {
 	if inst.r != msg.Round {
 		// not the current round, ignore message (will be retransmitted if it just came before anything important)
 		return &events.EventList{}
@@ -142,7 +138,7 @@ func (inst *cobaltAbbaInst) recvAuxWithValidValuesCount() int {
 	return count
 }
 
-func (inst *cobaltAbbaInst) applyConfMessage(alea *Alea, id MsgId, msg *aleapb.CobaltConf, source t.NodeID) *events.EventList {
+func (inst *cobaltAbbaInst) applyConfMessage(alea *Alea, id uint64, msg *aleapb.CobaltConf, source t.NodeID) *events.EventList {
 	if inst.r != msg.Round {
 		// not the current round, ignore message (will be retransmitted if it just came before anything important)
 		return &events.EventList{}
@@ -177,7 +173,7 @@ func (inst *cobaltAbbaInst) recvConfWithValidValuesCount() int {
 	return count
 }
 
-func (inst *cobaltAbbaInst) applyCoinShareMessage(alea *Alea, id MsgId, msg *aleapb.CobaltCoinShare, source t.NodeID) *events.EventList {
+func (inst *cobaltAbbaInst) applyCoinShareMessage(alea *Alea, id uint64, msg *aleapb.CobaltCoinShare, source t.NodeID) *events.EventList {
 	if inst.r != msg.Round {
 		// not the current round, ignore message (will be retransmitted if it just came before anything important)
 		return &events.EventList{}

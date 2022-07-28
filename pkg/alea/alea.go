@@ -16,9 +16,12 @@ type Alea struct {
 	logger logging.Logger
 	config *Config
 
+	ownQueueNextSlot uint64
+	agreementRound   uint64
+
 	vcbcSenderInstances   *InfVec[vcbcSenderInst]
 	vcbcReceiverInstances map[t.NodeID]*InfVec[vcbcReceiverInst]
-	abbaInstances map[MsgId]cobaltAbbaInst
+	abbaInstance          cobaltAbbaInst
 }
 
 var (
@@ -42,11 +45,16 @@ func New(ownID t.NodeID, config *Config, logger *logging.Logger) (*Alea, error) 
 	}
 
 	alea := &Alea{
-		ownID:                 ownID,
-		logger:                *logger,
-		config:                config,
+		ownID:  ownID,
+		logger: *logger,
+		config: config,
+
+		ownQueueNextSlot: 0,
+		agreementRound:   0,
+
 		vcbcSenderInstances:   NewInfVec[vcbcSenderInst](config.BroadcastOutWindowSize),
 		vcbcReceiverInstances: vcbcReceiverInstances,
+		// TODO: create first abba instance?
 	}
 
 	// TODO: WAL recovery(?)
@@ -119,3 +127,16 @@ func (alea *Alea) applyTick(tick *eventpb.Tick) *events.EventList {
 func (alea *Alea) applyHashResult(result *eventpb.HashResult) *events.EventList {
 	panic("TODO: route hashresult to correct protocol instance or whatever")
 }
+
+/*
+
+- thresh-sign
+
+- plumbing msg->broadcast->agreement->deliver
+  * Batcher (RequestReady -> add to batch|VCBC init batch in next node slot)
+  * AgreementController (ABBA deliver/first VCBC deliver/???Event_Init??? --> (maybe) batch deliver --> ABBA init / agreementRound+=1)
+  * thresh-sign stuff
+
+- retransmissions/acks
+
+*/

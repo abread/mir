@@ -15,6 +15,8 @@ type Config struct {
 
 	BroadcastOutWindowSize int
 
+	AgreementWindowSize int
+
 	MsgBufCapacity uint
 
 	F int
@@ -31,6 +33,10 @@ func CheckConfig(config *Config) error {
 
 	if config.BroadcastOutWindowSize <= 0 {
 		return fmt.Errorf("Must be able to accept at least 1 outgoing broadcast (configured for %d)", config.BroadcastOutWindowSize)
+	}
+
+	if config.AgreementWindowSize <= 0 {
+		return fmt.Errorf("Must be able to accept at least 1 ABBA instance (configured for %d)", config.AgreementWindowSize)
 	}
 
 	// TODO

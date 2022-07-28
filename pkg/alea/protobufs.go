@@ -63,7 +63,7 @@ func prepareBroadcastMessage(msg *aleapb.VCBC) *messagepb.Message {
 	})
 }
 
-func CobaltAbbaFinish(id MsgId, v bit) *messagepb.Message {
+func CobaltAbbaFinish(id uint64, v bit) *messagepb.Message {
 	return prepareAbaMessage(id, &aleapb.CobaltABBA{
 		Type: &aleapb.CobaltABBA_Finish{
 			Finish: &aleapb.CobaltFinish{
@@ -73,7 +73,7 @@ func CobaltAbbaFinish(id MsgId, v bit) *messagepb.Message {
 	})
 }
 
-func CobaltAbbaInit(id MsgId, r uint64, v bit) *messagepb.Message {
+func CobaltAbbaInit(id uint64, r uint64, v bit) *messagepb.Message {
 	return prepareAbaMessage(id, &aleapb.CobaltABBA{
 		Type: &aleapb.CobaltABBA_Init{
 			Init: &aleapb.CobaltInit{
@@ -84,7 +84,7 @@ func CobaltAbbaInit(id MsgId, r uint64, v bit) *messagepb.Message {
 	})
 }
 
-func CobaltAbbaAux(id MsgId, r uint64, v bit) *messagepb.Message {
+func CobaltAbbaAux(id uint64, r uint64, v bit) *messagepb.Message {
 	return prepareAbaMessage(id, &aleapb.CobaltABBA{
 		Type: &aleapb.CobaltABBA_Aux{
 			Aux: &aleapb.CobaltAux{
@@ -95,7 +95,7 @@ func CobaltAbbaAux(id MsgId, r uint64, v bit) *messagepb.Message {
 	})
 }
 
-func CobaltAbbaConf(id MsgId, r uint64, c BitSet) *messagepb.Message {
+func CobaltAbbaConf(id uint64, r uint64, c BitSet) *messagepb.Message {
 	return prepareAbaMessage(id, &aleapb.CobaltABBA{
 		Type: &aleapb.CobaltABBA_Conf{
 			Conf: &aleapb.CobaltConf{
@@ -106,7 +106,7 @@ func CobaltAbbaConf(id MsgId, r uint64, c BitSet) *messagepb.Message {
 	})
 }
 
-func CobaltAbbaCoinShare(id MsgId, r uint64, share threshSigShare) *messagepb.Message {
+func CobaltAbbaCoinShare(id uint64, r uint64, share threshSigShare) *messagepb.Message {
 	return prepareAbaMessage(id, &aleapb.CobaltABBA{
 		Type: &aleapb.CobaltABBA_CoinShare{
 			CoinShare: &aleapb.CobaltCoinShare{
@@ -117,12 +117,12 @@ func CobaltAbbaCoinShare(id MsgId, r uint64, share threshSigShare) *messagepb.Me
 	})
 }
 
-func prepareAbaMessage(id MsgId, msg *aleapb.CobaltABBA) *messagepb.Message {
+func prepareAbaMessage(id uint64, msg *aleapb.CobaltABBA) *messagepb.Message {
 	return prepareAleaMessage(&aleapb.AleaMessage{
 		Type: &aleapb.AleaMessage_Agreement{
 			Agreement: &aleapb.Agreement{
-				Instance: id.Pb(),
-				Msg:      msg,
+				AgreementRound: id,
+				Msg:            msg,
 			},
 		},
 	})
@@ -140,23 +140,22 @@ func prepareAleaMessage(msg *aleapb.AleaMessage) *messagepb.Message {
 // Events
 // ============================
 
-func VCBCDeliver(id MsgId, batch *requestpb.Batch) *eventpb.Event {
+func VCBCDeliver(id MsgId) *eventpb.Event {
 	return prepareAleaEvent(&aleapb.AleaEvent{
 		Type: &aleapb.AleaEvent_VcbcDeliver{
 			VcbcDeliver: &aleapb.VCBCDeliver{
-				Id:      id.Pb(),
-				Payload: batch,
+				Id: id.Pb(),
 			},
 		},
 	})
 }
 
-func AbaDeliver(id MsgId, result bit) *eventpb.Event {
+func AbaDeliver(agreementRound uint64, result bit) *eventpb.Event {
 	return prepareAleaEvent(&aleapb.AleaEvent{
 		Type: &aleapb.AleaEvent_AbaDeliver{
 			AbaDeliver: &aleapb.CobaltABBADeliver{
-				Id:     id.Pb(),
-				Result: result.Pb(),
+				AgreementRound: agreementRound,
+				Result:         result.Pb(),
 			},
 		},
 	})
