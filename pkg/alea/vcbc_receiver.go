@@ -14,26 +14,25 @@ type vcbcReceiverInst struct {
 }
 
 func (alea *Alea) applyVCBCSendMessage(id MsgId, msg *aleapb.VCBCSend, source t.NodeID) *events.EventList {
-	if _, ok := alea.vcbcReceiverInstances[id]; ok {
-		// broadcast instance already created
-		// TODO: we can detect byzantine behavior from here (SEND message with different messages for the same slot)
-
-		// Safety: we will never sign a different message for the same queue/slot
-		return &events.EventList{}
-	}
-
 	inst := vcbcReceiverInst{
 		payload:   msg.Payload,
 		delivered: false,
 	}
-	alea.vcbcReceiverInstances[id] = inst
+
+	if !alea.vcbcReceiverInstances[id.ProposerId].TryPut(uint64(id.Slot), inst) {
+		// broadcast instance already created (possibly already ended)
+		// TODO: we can maybe detect byzantine behavior from here (SEND message with different messages for the same slot)
+
+		// Safety: we will never sign a different message for the same queue/slot
+		return &events.EventList{}
+	}
 
 	// TODO: dispatch share-sign event for (id, inst.payload)
 	return &events.EventList{}
 }
 
 func (alea *Alea) applyThreshShareSignResult(id MsgId, sig threshSigShare) *events.EventList {
-	if inst, instOk := alea.vcbcReceiverInstances[id]; instOk {
+	if inst, instOk := alea.vcbcReceiverInstances[id.ProposerId].Get(uint64(id.Slot)); instOk {
 		// TODO: does the FINAL message really need a payload?
 		finalMsg := VCBCEcho(id, inst.payload, sig)
 		return alea.sendMessage(finalMsg, id.ProposerId)
@@ -44,24 +43,18 @@ func (alea *Alea) applyThreshShareSignResult(id MsgId, sig threshSigShare) *even
 }
 
 func (alea *Alea) applyVCBCFinalMessage(id MsgId, msg *aleapb.VCBCFinal, source t.NodeID) *events.EventList {
-	// TODO: ignore if id is too old and was already discarded
+	alea.vcbcReceiverInstances[id.ProposerId].TryPut(uint64(id.Slot), vcbcReceiverInst{
+		payload:   msg.Payload,
+		delivered: false,
+	})
 
-	inst, ok := alea.vcbcReceiverInstances[id]
-	if !ok {
-		// TODO: consider removing payload from final message
-		inst = vcbcReceiverInst{
-			payload:   msg.Payload,
-			delivered: false,
-		}
-		alea.vcbcReceiverInstances[id] = inst
-	}
-
-	if inst.delivered {
-		// avoid working for nothing
+	if inst, ok := alea.vcbcReceiverInstances[id.ProposerId].Get(uint64(id.Slot)); ok {
+		// TODO: dispatch signature verification for (id, inst.Payload, msg.Signature)
+		inst.payload.String() // XXX: remove - this is just to keep the compiler happy
 		return &events.EventList{}
 	}
 
-	// TODO: dispatch signature verification for (id, inst.Payload, msg.Signature)
+	// instance doesn't exist: too old or was fully-processed already
 	return &events.EventList{}
 }
 
@@ -72,14 +65,13 @@ func (alea *Alea) applyThreshValidateSignatureResult(id MsgId, sig threshSigFull
 		return &events.EventList{}
 	}
 
-	if inst, instOk := alea.vcbcReceiverInstances[id]; instOk {
+	if inst, instOk := alea.vcbcReceiverInstances[id.ProposerId].Get(uint64(id.Slot)); instOk {
 		inst.delivered = true
 		inst.signature = sig
-		alea.vcbcReceiverInstances[id] = inst
 
-		return (&events.EventList{}).PushBack(VCBCDeliver(id, inst.payload))
+		return (&events.EventList{}).PushBack(VCBCDeliver(id))
 	}
 
-	// nothing to do, broadcast instance was discarded (too old)
+	// nothing to do, broadcast instance was discarded (too old/already processed)
 	return &events.EventList{}
 }

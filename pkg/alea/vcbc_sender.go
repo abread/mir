@@ -25,11 +25,9 @@ func (alea *Alea) newVcbcSenderInstance(slot SlotId, batch *requestpb.Batch) *ev
 		Slot:       slot,
 	}
 
-	if _, ok := alea.vcbcSenderInstances[slot]; ok {
+	if ! alea.vcbcSenderInstances.TryPut(uint64(slot), inst) {
 		panic(fmt.Errorf("duplicate broadcast instance for (%s, %d)", id.ProposerId, id.Slot))
 	}
-
-	alea.vcbcSenderInstances[slot] = inst
 
 	sendMsg := VCBCSend(id, batch)
 	return alea.broadcastMessage(sendMsg)
@@ -41,7 +39,7 @@ func (alea *Alea) applyVCBCEchoMessage(id MsgId, msg *aleapb.VCBCEcho, source t.
 		return &events.EventList{}
 	}
 
-	inst, ok := alea.vcbcSenderInstances[id.Slot]
+	inst, ok := alea.vcbcSenderInstances.Get(uint64(id.Slot))
 	if !ok {
 		// broadcast instance already destroyed/never created
 		return &events.EventList{}
@@ -69,14 +67,14 @@ func (alea *Alea) applyVCBCEchoMessage(id MsgId, msg *aleapb.VCBCEcho, source t.
 
 func (alea *Alea) applyThreshCombineValidateResult(slot SlotId, sig threshSigFull, sigOk bool) *events.EventList {
 	if sigOk {
-		if inst, instOk := alea.vcbcSenderInstances[slot]; instOk {
-			// TODO: does the FINAL message really need a payload?
+		if inst, instOk := alea.vcbcSenderInstances.Get(uint64(slot)); instOk {
+			// TODO: does the FINAL message reaaaally need a payload?
 			id := MsgId{
 				ProposerId: alea.ownID,
 				Slot:       slot,
 			}
 			finalMsg := VCBCFinal(id, inst.payload, sig)
-			delete(alea.vcbcSenderInstances, slot)
+			alea.vcbcSenderInstances.Free(uint64(slot))
 			return alea.broadcastMessage(finalMsg)
 		}
 	}

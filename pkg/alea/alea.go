@@ -16,8 +16,8 @@ type Alea struct {
 	logger logging.Logger
 	config *Config
 
-	vcbcSenderInstances   map[SlotId]vcbcSenderInst
-	vcbcReceiverInstances map[MsgId]vcbcReceiverInst
+	vcbcSenderInstances   *InfVec[vcbcSenderInst]
+	vcbcReceiverInstances map[t.NodeID]*InfVec[vcbcReceiverInst]
 	abbaInstances map[MsgId]cobaltAbbaInst
 }
 
@@ -36,12 +36,17 @@ func New(ownID t.NodeID, config *Config, logger *logging.Logger) (*Alea, error) 
 		return nil, fmt.Errorf("invalid Alea configuration: %w", err)
 	}
 
+	vcbcReceiverInstances := make(map[t.NodeID]*InfVec[vcbcReceiverInst], len(config.Membership))
+	for _, n := range config.Membership {
+		vcbcReceiverInstances[n] = NewInfVec[vcbcReceiverInst](config.NodeBroadcastInWindowSize)
+	}
+
 	alea := &Alea{
 		ownID:                 ownID,
 		logger:                *logger,
 		config:                config,
-		vcbcSenderInstances:   make(map[SlotId]vcbcSenderInst),
-		vcbcReceiverInstances: make(map[MsgId]vcbcReceiverInst),
+		vcbcSenderInstances:   NewInfVec[vcbcSenderInst](config.BroadcastOutWindowSize),
+		vcbcReceiverInstances: vcbcReceiverInstances,
 	}
 
 	// TODO: WAL recovery(?)

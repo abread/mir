@@ -116,7 +116,6 @@ message AleaEvent {
 
 message VCBCDeliver {
     MsgId id = 1;
-    requestpb.Batch payload = 2;
 }
 
 message CobaltABBADeliver {

@@ -22,6 +22,59 @@ func NewInfVec[T any](capacity int) *InfVec[T] {
 	}
 }
 
+func (v *InfVec[T]) Get(n uint64) (*T, bool) {
+	if v.NInOperationalRange(n) && *v.nthSlotState(n) != SLOT_FREED {
+		*v.nthSlotState(n) = SLOT_OCCUPIED
+		return v.nthUnchecked(n), true
+	} else {
+		return nil, false
+	}
+}
+
+func (v *InfVec[T]) Free(n uint64) {
+	if v.NInOperationalRange(n) {
+		var zero T
+		*v.nthUnchecked(n) = zero
+		*v.nthSlotState(n) = SLOT_FREED
+
+		// whenever possible, advance lower bound to allow free slot reuse with future elements
+		for *v.nthSlotState(v.lowerBound) == SLOT_FREED {
+			*v.nthSlotState(v.lowerBound) = SLOT_UNUSED
+			v.lowerBound += 1
+		}
+	} else if n > v.UpperBound() {
+		panic("cannot free a never-inserted element")
+	}
+}
+
+func (v *InfVec[T]) TryPut(n uint64, t T) bool {
+	if *v.nthSlotState(n) == SLOT_UNUSED {
+		*v.nthUnchecked(n) = t
+		return true
+	} else {
+		return false
+	}
+}
+
+func (v *InfVec[T]) GetOrDefault(n uint64, mutator func(*T), defaultProducer func() T) (*T, bool) {
+
+	slotState := v.nthSlotState(n)
+
+	switch *slotState {
+	case SLOT_UNUSED:
+		*v.nthUnchecked(n) = defaultProducer()
+		*slotState = SLOT_OCCUPIED
+	case SLOT_OCCUPIED:
+		mutator(v.nthUnchecked(n))
+	case SLOT_FREED:
+		// noop
+	default:
+		panic("invalid slot state in InfVec")
+	}
+
+	return v.nthUnchecked(n), *slotState != SLOT_FREED
+}
+
 func (v *InfVec[T]) LowerBound() uint64 {
 	return v.lowerBound
 }
@@ -44,29 +97,4 @@ func (v *InfVec[T]) nthUnchecked(n uint64) *T {
 
 func (v *InfVec[T]) nthSlotState(n uint64) *slotState {
 	return &v.slotStates[v.nthIdx(n)]
-}
-
-func (v *InfVec[T]) Get(n uint64) (*T, bool) {
-	if v.NInOperationalRange(n) && *v.nthSlotState(n) != SLOT_FREED {
-		*v.nthSlotState(n) = SLOT_OCCUPIED
-		return v.nthUnchecked(n), true
-	} else {
-		return nil, false
-	}
-}
-
-func (v *InfVec[T]) Free(idx uint64) {
-	if v.NInOperationalRange(idx) {
-		var zero T
-		*v.nthUnchecked(idx) = zero
-		*v.nthSlotState(idx) = SLOT_FREED
-
-		// whenever possible, advance lower bound to allow free slot reuse with future elements
-		for *v.nthSlotState(v.lowerBound) == SLOT_FREED {
-			*v.nthSlotState(v.lowerBound) = SLOT_UNUSED
-			v.lowerBound += 1
-		}
-	} else if idx > v.UpperBound() {
-		panic("cannot free a never-inserted element")
-	}
 }
