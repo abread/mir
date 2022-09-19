@@ -3,6 +3,7 @@ syntax = "proto3";
 package aleapb;
 
 import "requestpb/requestpb.proto";
+import "mir/plugin.proto";
 
 option go_package = "github.com/filecoin-project/mir/pkg/pb/aleapb";
 
@@ -12,9 +13,9 @@ option go_package = "github.com/filecoin-project/mir/pkg/pb/aleapb";
 
 message AleaMessage {
     oneof type {
-        VCBC vcbc = 1;
-        Agreement agreement = 2;
-        FillGap fillGap = 3;
+        BroadcastMsg broadcast = 1;
+        AgreementMsg agreement = 2;
+        FillGap fill_gap = 3;
         Filler filler = 4;
     }
 }
@@ -24,9 +25,27 @@ message MsgId {
     uint64 slot = 2;
 }
 
-message VCBC {
-    MsgId instance = 1;
+message BroadcastMsg {
+    MsgId instance_id = 1;
+    VCBC message = 2;
+}
 
+message AgreementMsg {
+    uint64 instance_id = 1;
+    CobaltABBA message = 2;
+}
+
+message FillGap {
+    MsgId id = 1;
+}
+
+message Filler {
+    MsgId id = 1;
+    requestpb.Batch message = 2;
+    bytes signature = 3;
+}
+
+message VCBC {
     oneof type {
         VCBCSend send = 2;
         VCBCEcho echo = 3;
@@ -48,32 +67,24 @@ message VCBCFinal {
     bytes signature = 2;
 }
 
-message FillGap {
-    MsgId id = 1;
-}
-
-message Filler {
-    MsgId id = 1;
-    VCBCFinal msg = 2;
-}
-
-message Agreement {
-    uint64 agreementRound = 1;
-    CobaltABBA msg = 2;
-}
-
 message CobaltABBA {
     oneof type {
+        CobaltFinish finish = 2;
+        CobaltRoundMessage round_message = 3;
+    }
+}
+
+message CobaltRoundMessage {
+    uint64 round_number = 1;
+    oneof type {
         CobaltInit init = 2;
-        CobaltFinish finish = 3;
-        CobaltAux aux = 4;
-        CobaltConf conf = 5;
-        CobaltCoinShare coinShare = 6;
+        CobaltAux aux = 3;
+        CobaltConf conf = 4;
+        CobaltCoinShare coin_share = 5;
     }
 }
 
 message CobaltInit {
-    uint64 round = 1;
     bool value = 2;
 }
 
@@ -82,7 +93,6 @@ message CobaltFinish {
 }
 
 message CobaltAux {
-    uint64 round = 1;
     bool value = 2;
 }
 
@@ -94,7 +104,6 @@ enum CobaltValueSet {
 }
 
 message CobaltConf {
-    uint64 round = 1;
     CobaltValueSet config = 2;
 }
 
@@ -107,19 +116,28 @@ message CobaltCoinShare {
 // Events
 // ============================================================
 
-message AleaEvent {
+message Event {
     oneof type {
+        option (mir.event_type) = true;
         VCBCDeliver vcbc_deliver = 1;
-        CobaltABBADeliver aba_deliver = 2;
+        VCBCMessageRecvd vcbc_message = 2;
+        CobaltABBADeliver aba_deliver = 3;
     }
 }
 
 message VCBCDeliver {
-    MsgId id = 1;
+    MsgId instance_id = 1;
+    requestpb.Batch payload = 2;
+}
+
+message VCBCMessageRecvd {
+    MsgId instance_id = 1;
+    string from = 2;
+    VCBC message = 3;
 }
 
 message CobaltABBADeliver {
-    uint64 agreementRound = 1;
+    uint64 instance_id = 1;
     bool result = 2;
 }
 

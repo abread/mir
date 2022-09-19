@@ -171,7 +171,7 @@ func (p *Event_Checkpoint) Unwrap() *checkpointpb.Event {
 	return p.Checkpoint
 }
 
-func (p *Event_Alea) Unwrap() *aleapb.AleaEvent {
+func (p *Event_Alea) Unwrap() *aleapb.Event {
 	return p.Alea
 }
 

@@ -72,7 +72,7 @@ message Event {
     threshcryptopb.Event    thresh_crypto           = 36;
     pingpongpb.Event        ping_pong               = 37;
     checkpointpb.Event      checkpoint              = 38;
-    aleapb.AleaEvent        alea                    = 39;
+    aleapb.Event            alea                    = 39;
 
     // for unit-tests
     google.protobuf.StringValue testingString = 301;
