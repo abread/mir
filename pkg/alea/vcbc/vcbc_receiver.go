@@ -20,7 +20,7 @@ func (v *vcbcReceiverInit) UponVCBCSend(m dsl.Module, ctx *VCBCModuleState[vcbcR
 	ctx.protocolState = &vcbcReceiverAwaitingSignShare{}
 
 	ctx.payload = msg.Payload
-	threshDsl.SignShare(m, ctx.config.ThreshCryptoModuleID, ctx.vcbcSignData(), &void{})
+	threshDsl.SignShare(m, ctx.config.ThreshCryptoModuleID, ctx.dataToSign(), &void{})
 
 	return nil
 }
@@ -67,7 +67,7 @@ func (v *vcbcReceiverEchoed) UponVCBCSend(m dsl.Module, ctx *VCBCModuleState[vcb
 
 func (v *vcbcReceiverEchoed) UponVCBCFinal(m dsl.Module, ctx *VCBCModuleState[vcbcReceiverProtocolStateImpl], from t.NodeID, msg *aleapb.VCBCFinal) error {
 	opCtx := fullSig(msg.Signature)
-	threshDsl.VerifyFull(m, ctx.config.ThreshCryptoModuleID, ctx.vcbcSignData(), msg.Signature, &opCtx)
+	threshDsl.VerifyFull(m, ctx.config.ThreshCryptoModuleID, ctx.dataToSign(), msg.Signature, &opCtx)
 
 	ctx.protocolState = &vcbcReceiverAwaitingVerifyFull{}
 
@@ -90,7 +90,7 @@ func (v *vcbcReceiverAwaitingVerifyFull) UponVCBCSend(m dsl.Module, ctx *VCBCMod
 
 func (v *vcbcReceiverAwaitingVerifyFull) UponVCBCFinal(m dsl.Module, ctx *VCBCModuleState[vcbcReceiverProtocolStateImpl], from t.NodeID, msg *aleapb.VCBCFinal) error {
 	opCtx := fullSig(msg.Signature)
-	threshDsl.VerifyFull(m, ctx.config.ThreshCryptoModuleID, ctx.vcbcSignData(), msg.Signature, &opCtx)
+	threshDsl.VerifyFull(m, ctx.config.ThreshCryptoModuleID, ctx.dataToSign(), msg.Signature, &opCtx)
 
 	ctx.protocolState = &vcbcReceiverAwaitingVerifyFull{}
 

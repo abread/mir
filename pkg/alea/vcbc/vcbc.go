@@ -1,10 +1,9 @@
 package vcbc
 
 import (
-	"bytes"
-	"encoding/binary"
 	"fmt"
 
+	"github.com/filecoin-project/mir/pkg/alea/util"
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/pb/aleapb"
@@ -12,9 +11,6 @@ import (
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
-
-// some unique string
-const VCBC_PROTO_ID = "github.com/filecoin-project/mir/pkg/alea/vcbc"
 
 type VCBCConfig struct {
 	Id        *aleapb.MsgId
@@ -142,26 +138,6 @@ func uponVcbcMessage(m dsl.Module, id *aleapb.MsgId, handler func(from t.NodeID,
 	})
 }
 
-func (vcbc *VCBCModuleState[any]) vcbcSignData() [][]byte {
-	id := vcbc.config.Id
-	payload := vcbc.payload
-
-	data := [][]byte{
-		[]byte(VCBC_PROTO_ID),
-		[]byte(id.QueueIdx),
-		uint64Bytes(id.Slot),
-		uint64Bytes(uint64(len(payload.Requests))),
-	}
-
-	for _, hashedReq := range payload.Requests {
-		data = append(data, hashedReq.Digest)
-	}
-
-	return data
-}
-
-func uint64Bytes(v uint64) []byte {
-	buf := bytes.NewBuffer(make([]byte, 0, binary.Size(v)))
-	binary.Write(buf, binary.BigEndian, v)
-	return buf.Bytes()
+func (vcbc *VCBCModuleState[any]) dataToSign() [][]byte {
+	return util.SlotMessageData(vcbc.config.Id, vcbc.payload)
 }

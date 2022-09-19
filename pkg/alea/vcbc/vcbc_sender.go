@@ -25,7 +25,7 @@ func (v *vcbcSenderInit) UponVCBCEcho(m dsl.Module, moduleState *VCBCModuleState
 
 	v.pendingVerification[from] = void{}
 
-	threshDsl.VerifyShare(m, moduleState.config.SelfModuleID, moduleState.vcbcSignData(), msg.SignatureShare, from, &verifyShareCtx{
+	threshDsl.VerifyShare(m, moduleState.config.SelfModuleID, moduleState.dataToSign(), msg.SignatureShare, from, &verifyShareCtx{
 		node:     from,
 		sigShare: msg.SignatureShare,
 	})
@@ -53,7 +53,7 @@ func (v *vcbcSenderInit) UponReachedStrongSupport(m dsl.Module, moduleState *VCB
 		shares = append(shares, share)
 	}
 
-	threshDsl.Recover(m, moduleState.config.SelfModuleID, moduleState.vcbcSignData(), shares, &void{})
+	threshDsl.Recover(m, moduleState.config.SelfModuleID, moduleState.dataToSign(), shares, &void{})
 	return nil
 }
 
