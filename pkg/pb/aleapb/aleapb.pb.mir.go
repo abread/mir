@@ -18,3 +18,7 @@ func (p *Event_VcbcMessage) Unwrap() *VCBCMessageRecvd {
 func (p *Event_AbaDeliver) Unwrap() *CobaltABBADeliver {
 	return p.AbaDeliver
 }
+
+func (p *Event_AbaMessage) Unwrap() *CobaltABBAMessageRecvd {
+	return p.AbaMessage
+}

@@ -69,9 +69,13 @@ message VCBCFinal {
 
 message CobaltABBA {
     oneof type {
-        CobaltFinish finish = 2;
-        CobaltRoundMessage round_message = 3;
+        CobaltFinish finish = 1;
+        CobaltRoundMessage round_message = 2;
     }
+}
+
+message CobaltFinish {
+    bool value = 1;
 }
 
 message CobaltRoundMessage {
@@ -80,20 +84,16 @@ message CobaltRoundMessage {
         CobaltInit init = 2;
         CobaltAux aux = 3;
         CobaltConf conf = 4;
-        CobaltCoinShare coin_share = 5;
+        CobaltCoinTossShare coin_toss_share = 5;
     }
 }
 
 message CobaltInit {
-    bool value = 2;
-}
-
-message CobaltFinish {
-    bool value = 1;
+    bool estimate = 1;
 }
 
 message CobaltAux {
-    bool value = 2;
+    bool value = 1;
 }
 
 enum CobaltValueSet {
@@ -104,12 +104,11 @@ enum CobaltValueSet {
 }
 
 message CobaltConf {
-    CobaltValueSet config = 2;
+    CobaltValueSet values = 1;
 }
 
-message CobaltCoinShare {
-    uint64 round = 1;
-    bytes coin_share = 2;
+message CobaltCoinTossShare {
+    bytes coin_share = 1;
 }
 
 // ============================================================
@@ -122,6 +121,7 @@ message Event {
         VCBCDeliver vcbc_deliver = 1;
         VCBCMessageRecvd vcbc_message = 2;
         CobaltABBADeliver aba_deliver = 3;
+        CobaltABBAMessageRecvd aba_message = 4;
     }
 }
 
@@ -141,4 +141,8 @@ message CobaltABBADeliver {
     bool result = 2;
 }
 
-// TODO: extend with thresh signshare/combine/validate results
+message CobaltABBAMessageRecvd {
+    uint64 instance_id = 1;
+    string from = 2;
+    CobaltABBA message = 3;
+}
