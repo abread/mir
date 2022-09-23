@@ -17,8 +17,8 @@ func SlotMessageData(slotId *aleapb.MsgId, payload *requestpb.Batch) [][]byte {
 
 	result = append(result, []byte(SLOT_MESSAGE_PAIR_TAG))
 	result = append(result, []byte(slotId.QueueIdx))
-	result = append(result, toBytes(slotId.Slot))
-	result = append(result, toBytes(len(payload.Requests)))
+	result = append(result, ToBytes(slotId.Slot))
+	result = append(result, ToBytes(len(payload.Requests)))
 
 	for _, hashedReq := range payload.Requests {
 		result = append(result, hashedReq.Digest)
@@ -27,7 +27,7 @@ func SlotMessageData(slotId *aleapb.MsgId, payload *requestpb.Batch) [][]byte {
 	return result
 }
 
-func toBytes[T any](v T) []byte {
+func ToBytes[T any](v T) []byte {
 	buf := bytes.NewBuffer(make([]byte, 0, binary.Size(v)))
 	binary.Write(buf, binary.BigEndian, v)
 	return buf.Bytes()
