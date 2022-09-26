@@ -26,15 +26,15 @@ func (v *vcbcReceiverInit) UponVCBCSend(m dsl.Module, ctx *VCBCModuleState[vcbcR
 }
 
 func (v *vcbcReceiverInit) UponVCBCFinal(m dsl.Module, ctx *VCBCModuleState[vcbcReceiverProtocolStateImpl], from t.NodeID, msg *aleapb.VCBCFinal) error {
-	return nil // noop
+	return uponVcbcFinal(m, ctx, from, msg)
 }
 
 func (v *vcbcReceiverInit) UponSignShareResult(m dsl.Module, ctx *VCBCModuleState[vcbcReceiverProtocolStateImpl], opCtx *void, sigShare []byte) error {
-	return nil // noop
+	panic("unexpected sign share result")
 }
 
 func (v *vcbcReceiverInit) UponVerifyFullResult(m dsl.Module, ctx *VCBCModuleState[vcbcReceiverProtocolStateImpl], opCtx *fullSig, ok bool, err string) error {
-	return nil // noop
+	panic("unexpected verify full result")
 }
 
 type vcbcReceiverAwaitingSignShare struct{}
@@ -44,7 +44,7 @@ func (v *vcbcReceiverAwaitingSignShare) UponVCBCSend(m dsl.Module, ctx *VCBCModu
 }
 
 func (v *vcbcReceiverAwaitingSignShare) UponVCBCFinal(m dsl.Module, ctx *VCBCModuleState[vcbcReceiverProtocolStateImpl], from t.NodeID, msg *aleapb.VCBCFinal) error {
-	return nil
+	return uponVcbcFinal(m, ctx, from, msg)
 }
 
 func (v *vcbcReceiverAwaitingSignShare) UponSignShareResult(m dsl.Module, ctx *VCBCModuleState[vcbcReceiverProtocolStateImpl], opCtx *void, sigShare []byte) error {
@@ -56,7 +56,7 @@ func (v *vcbcReceiverAwaitingSignShare) UponSignShareResult(m dsl.Module, ctx *V
 }
 
 func (v *vcbcReceiverAwaitingSignShare) UponVerifyFullResult(m dsl.Module, ctx *VCBCModuleState[vcbcReceiverProtocolStateImpl], opCtx *fullSig, ok bool, err string) error {
-	return nil // noop
+	panic("unexpected verify full result")
 }
 
 type vcbcReceiverEchoed struct{}
@@ -66,12 +66,7 @@ func (v *vcbcReceiverEchoed) UponVCBCSend(m dsl.Module, ctx *VCBCModuleState[vcb
 }
 
 func (v *vcbcReceiverEchoed) UponVCBCFinal(m dsl.Module, ctx *VCBCModuleState[vcbcReceiverProtocolStateImpl], from t.NodeID, msg *aleapb.VCBCFinal) error {
-	opCtx := fullSig(msg.Signature)
-	threshDsl.VerifyFull(m, ctx.config.ThreshCryptoModuleID, ctx.dataToSign(), msg.Signature, &opCtx)
-
-	ctx.protocolState = &vcbcReceiverAwaitingVerifyFull{}
-
-	return nil
+	return uponVcbcFinal(m, ctx, from, msg)
 }
 
 func (v *vcbcReceiverEchoed) UponSignShareResult(m dsl.Module, ctx *VCBCModuleState[vcbcReceiverProtocolStateImpl], opCtx *void, sigShare []byte) error {
@@ -79,7 +74,7 @@ func (v *vcbcReceiverEchoed) UponSignShareResult(m dsl.Module, ctx *VCBCModuleSt
 }
 
 func (v *vcbcReceiverEchoed) UponVerifyFullResult(m dsl.Module, ctx *VCBCModuleState[vcbcReceiverProtocolStateImpl], opCtx *fullSig, ok bool, err string) error {
-	return nil // noop
+	panic("unexpected verify full result")
 }
 
 type vcbcReceiverAwaitingVerifyFull struct{}
@@ -89,12 +84,7 @@ func (v *vcbcReceiverAwaitingVerifyFull) UponVCBCSend(m dsl.Module, ctx *VCBCMod
 }
 
 func (v *vcbcReceiverAwaitingVerifyFull) UponVCBCFinal(m dsl.Module, ctx *VCBCModuleState[vcbcReceiverProtocolStateImpl], from t.NodeID, msg *aleapb.VCBCFinal) error {
-	opCtx := fullSig(msg.Signature)
-	threshDsl.VerifyFull(m, ctx.config.ThreshCryptoModuleID, ctx.dataToSign(), msg.Signature, &opCtx)
-
-	ctx.protocolState = &vcbcReceiverAwaitingVerifyFull{}
-
-	return nil
+	return nil // noop
 }
 
 func (v *vcbcReceiverAwaitingVerifyFull) UponSignShareResult(m dsl.Module, ctx *VCBCModuleState[vcbcReceiverProtocolStateImpl], opCtx *void, sigShare []byte) error {
@@ -132,4 +122,18 @@ func (v *vcbcReceiverDone) UponSignShareResult(m dsl.Module, ctx *VCBCModuleStat
 
 func (v *vcbcReceiverDone) UponVerifyFullResult(m dsl.Module, ctx *VCBCModuleState[vcbcReceiverProtocolStateImpl], opCtx *fullSig, ok bool, err string) error {
 	return nil // noop
+}
+
+func uponVcbcFinal(m dsl.Module, ctx *VCBCModuleState[vcbcReceiverProtocolStateImpl], from t.NodeID, msg *aleapb.VCBCFinal) error {
+	if from != t.NodeID(ctx.config.Id.QueueIdx) {
+		// TODO: notify byz behavior?
+		return nil
+	}
+
+	opCtx := fullSig(msg.Signature)
+	threshDsl.VerifyFull(m, ctx.config.ThreshCryptoModuleID, ctx.dataToSign(), msg.Signature, &opCtx)
+
+	ctx.protocolState = &vcbcReceiverAwaitingVerifyFull{}
+
+	return nil
 }
