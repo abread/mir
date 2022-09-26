@@ -16,11 +16,11 @@ type roundSetup struct {
 	estimate bool
 	values   valueSet
 
-	initRecvd            map[bool]Set[t.NodeID]
+	initRecvd            map[bool]util.Set[t.NodeID]
 	auxSent              bool
-	auxFromValuesRecvd   Set[t.NodeID]
-	confValueSubsetRecvd Set[t.NodeID]
-	coinSharesRecvd      Set[t.NodeID]
+	auxFromValuesRecvd   util.Set[t.NodeID]
+	confValueSubsetRecvd util.Set[t.NodeID]
+	coinSharesRecvd      util.Set[t.NodeID]
 	coinSharesOk         [][]byte
 
 	coinSignData [][]byte
@@ -29,17 +29,17 @@ type roundSetup struct {
 func (rs *roundSetup) Initialize(m dsl.Module, moduleState *ModuleState) {
 	rs.values = newValueSet()
 
-	rs.initRecvd = make(map[bool]Set[t.NodeID], 2)
+	rs.initRecvd = make(map[bool]util.Set[t.NodeID], 2)
 	for _, v := range []bool{true, false} {
-		rs.initRecvd[v] = make(Set[t.NodeID], moduleState.strongSupportThresh())
+		rs.initRecvd[v] = make(util.Set[t.NodeID], moduleState.strongSupportThresh())
 	}
 
 	rs.auxSent = false
 
-	rs.auxFromValuesRecvd = make(Set[t.NodeID], moduleState.strongSupportThresh())
-	rs.confValueSubsetRecvd = make(Set[t.NodeID], moduleState.strongSupportThresh())
+	rs.auxFromValuesRecvd = make(util.Set[t.NodeID], moduleState.strongSupportThresh())
+	rs.confValueSubsetRecvd = make(util.Set[t.NodeID], moduleState.strongSupportThresh())
 
-	rs.coinSharesRecvd = make(Set[t.NodeID], len(moduleState.config.Members))
+	rs.coinSharesRecvd = make(util.Set[t.NodeID], len(moduleState.config.Members))
 	rs.coinSharesOk = make([][]byte, moduleState.strongSupportThresh())
 
 	rs.coinSignData = genCoinSignData(moduleState.config.InstanceId, rs.number)

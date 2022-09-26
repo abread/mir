@@ -5,6 +5,7 @@ import (
 
 	abaConfig "github.com/filecoin-project/mir/pkg/alea/aba/config"
 	abaDsl "github.com/filecoin-project/mir/pkg/alea/aba/dsl"
+	"github.com/filecoin-project/mir/pkg/alea/util"
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/pb/aleapb"
@@ -17,7 +18,7 @@ type ModuleState struct {
 
 	round roundSetup
 
-	finishRecvd map[bool]Set[t.NodeID]
+	finishRecvd map[bool]util.Set[t.NodeID]
 	finishSent  bool
 }
 
@@ -45,12 +46,12 @@ func New(config abaConfig.Config, initialValue bool) modules.PassiveModule {
 			estimate: initialValue,
 		},
 
-		finishRecvd: make(map[bool]Set[t.NodeID], 2),
+		finishRecvd: make(map[bool]util.Set[t.NodeID], 2),
 		finishSent:  false,
 	}
 
 	for _, v := range []bool{true, false} {
-		moduleState.finishRecvd[v] = make(Set[t.NodeID], len(config.Members))
+		moduleState.finishRecvd[v] = make(util.Set[t.NodeID], len(config.Members))
 	}
 
 	abaDsl.UponRoundMessage(m, &moduleState.config, func(from t.NodeID, msg *aleapb.CobaltRoundMessage) error {
