@@ -48,7 +48,7 @@ func (v *vcbcReceiverAwaitingSignShare) UponVCBCFinal(m dsl.Module, ctx *VCBCMod
 }
 
 func (v *vcbcReceiverAwaitingSignShare) UponSignShareResult(m dsl.Module, ctx *VCBCModuleState[vcbcReceiverProtocolStateImpl], opCtx *void, sigShare []byte) error {
-	sendVCBCEcho(m, ctx, t.NodeID(ctx.config.Id.QueueIdx), ctx.payload, sigShare)
+	sendVCBCEcho(m, ctx, t.NodeID(ctx.config.Id.QueueIdx), sigShare)
 
 	ctx.protocolState = &vcbcReceiverEchoed{}
 
@@ -104,9 +104,8 @@ func (v *vcbcReceiverAwaitingVerifyFull) UponSignShareResult(m dsl.Module, ctx *
 func (v *vcbcReceiverAwaitingVerifyFull) UponVerifyFullResult(m dsl.Module, ctx *VCBCModuleState[vcbcReceiverProtocolStateImpl], opCtx *fullSig, ok bool, err string) error {
 	if ok {
 		fullSig := []byte(*opCtx)
-		ctx.signature = fullSig
 
-		// TODO: emit delivery event
+		deliverBatch(m, ctx, ctx.payload, fullSig)
 
 		ctx.protocolState = &vcbcReceiverDone{}
 		return nil

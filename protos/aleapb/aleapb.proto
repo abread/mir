@@ -58,7 +58,6 @@ message VCBCSend {
 }
 
 message VCBCEcho {
-    requestpb.Batch payload = 1;
     bytes signature_share = 2;
 }
 
@@ -128,6 +127,7 @@ message Event {
 message VCBCDeliver {
     MsgId instance_id = 1;
     requestpb.Batch payload = 2;
+    bytes signature = 3;
 }
 
 message VCBCMessageRecvd {

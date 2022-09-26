@@ -59,10 +59,8 @@ func (v *vcbcSenderInit) UponReachedStrongSupport(m dsl.Module, moduleState *VCB
 
 func (v *vcbcSenderInit) UponRecoverResult(m dsl.Module, moduleState *VCBCModuleState[vcbcSenderProtocolStateImpl], opCtx *verifyShareCtx, ok bool, fullSig []byte, err string) error {
 	if ok {
-		moduleState.signature = fullSig
-
 		bcVCBCFinal(m, moduleState, moduleState.payload, fullSig)
-		// TODO: emit delivery event
+		deliverBatch(m, moduleState, moduleState.payload, fullSig)
 
 		moduleState.protocolState = &vcbcSenderDone{}
 		return nil

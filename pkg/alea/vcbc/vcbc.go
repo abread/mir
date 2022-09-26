@@ -18,6 +18,7 @@ type VCBCConfig struct {
 	Threshold int
 
 	SelfModuleID         t.ModuleID
+	AleaModuleID         t.ModuleID
 	NetModuleID          t.ModuleID
 	ThreshCryptoModuleID t.ModuleID
 }
@@ -26,7 +27,6 @@ type VCBCModuleState[PS any] struct {
 	config        VCBCConfig
 	protocolState PS
 	payload       *requestpb.Batch
-	signature     []byte
 }
 
 type void struct{}
@@ -60,7 +60,6 @@ func NewVCBCReceiver(config VCBCConfig) modules.PassiveModule {
 		config:        config,
 		protocolState: &vcbcReceiverInit{},
 		payload:       nil,
-		signature:     nil,
 	}
 
 	uponVcbcMessage(m, config.Id, func(from t.NodeID, msgWrapped *aleapb.VCBC) error {
@@ -89,7 +88,6 @@ func NewVCBCSender(config VCBCConfig, payload *requestpb.Batch) modules.PassiveM
 		config:        config,
 		protocolState: protocolState,
 		payload:       payload,
-		signature:     nil,
 	}
 
 	uponVcbcMessage(m, config.Id, func(from t.NodeID, msgWrapped *aleapb.VCBC) error {
