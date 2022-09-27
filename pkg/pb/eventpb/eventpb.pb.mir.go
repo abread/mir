@@ -14,6 +14,7 @@ import (
 	mempoolpb "github.com/filecoin-project/mir/pkg/pb/mempoolpb"
 	pingpongpb "github.com/filecoin-project/mir/pkg/pb/pingpongpb"
 	threshcryptopb "github.com/filecoin-project/mir/pkg/pb/threshcryptopb"
+	vcbpb "github.com/filecoin-project/mir/pkg/pb/vcbpb"
 )
 
 type Event_Type = isEvent_Type
@@ -169,6 +170,10 @@ func (p *Event_PingPong) Unwrap() *pingpongpb.Event {
 
 func (p *Event_Checkpoint) Unwrap() *checkpointpb.Event {
 	return p.Checkpoint
+}
+
+func (p *Event_Vcb) Unwrap() *vcbpb.Event {
+	return p.Vcb
 }
 
 func (p *Event_Alea) Unwrap() *aleapb.Event {

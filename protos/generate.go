@@ -28,6 +28,7 @@ package protos
 //go:generate protoc-events threshcryptopb/threshcryptopb.proto
 //go:generate protoc-events pingpongpb/pingpongpb.proto
 //go:generate protoc-events checkpointpb/checkpointpb.proto
+//go:generate protoc-events vcbpb/vcbpb.proto
 //go:generate protoc-events aleapb/aleapb.proto
 
 //go:generate protoc --proto_path=. --go_out=:../pkg/ --go_opt=paths=source_relative simplewal/simplewal.proto

@@ -13,7 +13,6 @@ option go_package = "github.com/filecoin-project/mir/pkg/pb/aleapb";
 
 message AleaMessage {
     oneof type {
-        BroadcastMsg broadcast = 1;
         AgreementMsg agreement = 2;
         FillGap fill_gap = 3;
         Filler filler = 4;
@@ -23,11 +22,6 @@ message AleaMessage {
 message MsgId {
     string queue_idx = 1;
     uint64 slot = 2;
-}
-
-message BroadcastMsg {
-    MsgId instance_id = 1;
-    VCBC message = 2;
 }
 
 message AgreementMsg {
@@ -43,27 +37,6 @@ message Filler {
     MsgId id = 1;
     requestpb.Batch message = 2;
     bytes signature = 3;
-}
-
-message VCBC {
-    oneof type {
-        VCBCSend send = 2;
-        VCBCEcho echo = 3;
-        VCBCFinal final = 4;
-    }
-}
-
-message VCBCSend {
-    requestpb.Batch payload = 1;
-}
-
-message VCBCEcho {
-    bytes signature_share = 2;
-}
-
-message VCBCFinal {
-    requestpb.Batch payload = 1;
-    bytes signature = 2;
 }
 
 message CobaltABBA {
@@ -117,23 +90,9 @@ message CobaltCoinTossShare {
 message Event {
     oneof type {
         option (mir.event_type) = true;
-        VCBCDeliver vcbc_deliver = 1;
-        VCBCMessageRecvd vcbc_message = 2;
         CobaltABBADeliver aba_deliver = 3;
         CobaltABBAMessageRecvd aba_message = 4;
     }
-}
-
-message VCBCDeliver {
-    MsgId instance_id = 1;
-    requestpb.Batch payload = 2;
-    bytes signature = 3;
-}
-
-message VCBCMessageRecvd {
-    MsgId instance_id = 1;
-    string from = 2;
-    VCBC message = 3;
 }
 
 message CobaltABBADeliver {

@@ -7,14 +7,6 @@ type Event_TypeWrapper[Ev any] interface {
 	Unwrap() *Ev
 }
 
-func (p *Event_VcbcDeliver) Unwrap() *VCBCDeliver {
-	return p.VcbcDeliver
-}
-
-func (p *Event_VcbcMessage) Unwrap() *VCBCMessageRecvd {
-	return p.VcbcMessage
-}
-
 func (p *Event_AbaDeliver) Unwrap() *CobaltABBADeliver {
 	return p.AbaDeliver
 }
