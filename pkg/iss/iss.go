@@ -506,7 +506,7 @@ func (iss *ISS) applyNewConfig(config *eventpb.NewConfig) (*events.EventList, er
 	))
 
 	// Submit configurations to the corresponding instance of the checkpoint protocol.
-	chkpModuleID := iss.moduleConfig.Checkpoint.Then(t.ModuleID(fmt.Sprintf("%v", iss.epoch.Nr())))
+	chkpModuleID := iss.moduleConfig.Checkpoint.Then(t.NewModuleIDFromInt(iss.epoch.Nr()))
 	eventsOut.PushBack(chkpprotos.EpochConfigEvent(
 		chkpModuleID,
 		events.EpochConfig(
@@ -848,7 +848,7 @@ func (iss *ISS) bootstrapAvailability() *events.EventList {
 func (iss *ISS) initAvailabilityModule(epochNr t.EpochNr, membership *commonpb.Membership) *eventpb.Event {
 	return factoryevents.NewModule(
 		iss.moduleConfig.Availability,
-		iss.moduleConfig.Availability.Then(t.ModuleID(fmt.Sprintf("%v", epochNr))),
+		iss.moduleConfig.Availability.Then(t.NewModuleIDFromInt(epochNr)),
 		t.RetentionIndex(epochNr),
 		&factorymodulepb.GeneratorParams{Type: &factorymodulepb.GeneratorParams_MultisigCollector{
 			MultisigCollector: &mscpb.InstanceParams{Membership: membership},
@@ -952,7 +952,7 @@ func (iss *ISS) initEpoch(newEpochNr t.EpochNr, firstSN t.SeqNr, nodeIDs []t.Nod
 			newPBFTConfig(
 				iss.params,
 				nodeIDs,
-				iss.moduleConfig.Availability.Then(t.ModuleID(fmt.Sprintf("%v", epoch.Nr()))),
+				iss.moduleConfig.Availability.Then(t.NewModuleIDFromInt(epoch.Nr())),
 			),
 			&sbEventService{moduleConfig: iss.moduleConfig, epoch: newEpochNr, instance: t.SBInstanceNr(i)},
 			logging.Decorate(iss.logger, "PBFT: ", "epoch", newEpochNr, "instance", i))
@@ -1087,7 +1087,7 @@ func (iss *ISS) advanceEpoch() (*events.EventList, error) {
 	// iss.nextDeliveredSN is the first sequence number *not* included in the checkpoint,
 	// i.e., as sequence numbers start at 0, the checkpoint includes the first iss.nextDeliveredSN sequence numbers.
 	// The membership used for the checkpoint tracker still must be the old membership.
-	chkpModuleID := iss.moduleConfig.Checkpoint.Then(t.ModuleID(fmt.Sprintf("%v", newEpochNr)))
+	chkpModuleID := iss.moduleConfig.Checkpoint.Then(t.NewModuleIDFromInt(newEpochNr))
 	eventsOut.PushBack(factoryevents.NewModule(
 		iss.moduleConfig.Checkpoint,
 		chkpModuleID,

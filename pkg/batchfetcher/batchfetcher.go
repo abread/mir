@@ -1,8 +1,6 @@
 package batchfetcher
 
 import (
-	"fmt"
-
 	availabilitydsl "github.com/filecoin-project/mir/pkg/availability/dsl"
 	bfdsl "github.com/filecoin-project/mir/pkg/batchfetcher/dsl"
 	bfevents "github.com/filecoin-project/mir/pkg/batchfetcher/events"
@@ -75,7 +73,7 @@ func NewModule(mc *ModuleConfig, epochNr t.EpochNr, clientProgress *clientprogre
 			// If this is a proper certificate, request transactions from the availability layer.
 			availabilitydsl.RequestTransactions(
 				m,
-				mc.Availability.Then(t.ModuleID(fmt.Sprintf("%v", epochNr))),
+				mc.Availability.Then(t.NewModuleIDFromInt(epochNr)),
 				cert.Cert,
 				&txRequestContext{queueItem: &item},
 			)
@@ -101,7 +99,7 @@ func NewModule(mc *ModuleConfig, epochNr t.EpochNr, clientProgress *clientprogre
 			f: func(_ *eventpb.Event) {
 				clientProgress.GarbageCollect()
 				dsl.EmitEvent(m, bfevents.ClientProgress(
-					mc.Checkpoint.Then(t.ModuleID(fmt.Sprintf("%v", epoch))),
+					mc.Checkpoint.Then(t.NewModuleIDFromInt(epoch)),
 					clientProgress.Pb(),
 				))
 			},

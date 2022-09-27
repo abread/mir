@@ -1,6 +1,11 @@
 package types
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+
+	"golang.org/x/exp/constraints"
+)
 
 const Separator = "/"
 
@@ -37,4 +42,8 @@ func (mid ModuleID) Sub() ModuleID {
 // Then combines the module ID with a relative path to its submodule in a single module ID.
 func (mid ModuleID) Then(submodule ModuleID) ModuleID {
 	return ModuleID(string(mid) + Separator + string(submodule))
+}
+
+func NewModuleIDFromInt[T constraints.Integer](t T) ModuleID {
+	return ModuleID(fmt.Sprintf("%v", t))
 }
