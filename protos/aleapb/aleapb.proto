@@ -2,8 +2,7 @@ syntax = "proto3";
 
 package aleapb;
 
-import "requestpb/requestpb.proto";
-import "mir/plugin.proto";
+//import "mir/plugin.proto";
 
 option go_package = "github.com/filecoin-project/mir/pkg/pb/aleapb";
 
@@ -13,7 +12,6 @@ option go_package = "github.com/filecoin-project/mir/pkg/pb/aleapb";
 
 message AleaMessage {
     oneof type {
-        AgreementMsg agreement = 2;
         FillGap fill_gap = 3;
         Filler filler = 4;
     }
@@ -24,84 +22,24 @@ message MsgId {
     uint64 slot = 2;
 }
 
-message AgreementMsg {
-    uint64 instance_id = 1;
-    CobaltABBA message = 2;
-}
-
 message FillGap {
     MsgId id = 1;
 }
 
 message Filler {
     MsgId id = 1;
-    requestpb.Batch message = 2;
+    repeated bytes tx_ids = 2;
     bytes signature = 3;
 }
 
-message CobaltABBA {
-    oneof type {
-        CobaltFinish finish = 1;
-        CobaltRoundMessage round_message = 2;
-    }
-}
-
-message CobaltFinish {
-    bool value = 1;
-}
-
-message CobaltRoundMessage {
-    uint64 round_number = 1;
-    oneof type {
-        CobaltInit init = 2;
-        CobaltAux aux = 3;
-        CobaltConf conf = 4;
-        CobaltCoinTossShare coin_toss_share = 5;
-    }
-}
-
-message CobaltInit {
-    bool estimate = 1;
-}
-
-message CobaltAux {
-    bool value = 1;
-}
-
-enum CobaltValueSet {
-    EMPTY = 0;
-    ZERO = 1;
-    ONE = 2;
-    ZERO_AND_ONE = 3;
-}
-
-message CobaltConf {
-    CobaltValueSet values = 1;
-}
-
-message CobaltCoinTossShare {
-    bytes coin_share = 1;
-}
 
 // ============================================================
 // Events
 // ============================================================
 
 message Event {
-    oneof type {
+    /*oneof type {
         option (mir.event_type) = true;
-        CobaltABBADeliver aba_deliver = 3;
-        CobaltABBAMessageRecvd aba_message = 4;
-    }
+    }*/
 }
 
-message CobaltABBADeliver {
-    uint64 instance_id = 1;
-    bool result = 2;
-}
-
-message CobaltABBAMessageRecvd {
-    uint64 instance_id = 1;
-    string from = 2;
-    CobaltABBA message = 3;
-}

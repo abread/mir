@@ -14,8 +14,8 @@ type InfVec[T any] struct {
 	lowerBound uint64
 }
 
-func NewInfVec[T any](capacity int) *InfVec[T] {
-	return &InfVec[T]{
+func NewInfVec[T any](capacity int) InfVec[T] {
+	return InfVec[T]{
 		elements:   make([]T, capacity),
 		slotStates: make([]slotState, capacity),
 		lowerBound: 0,
@@ -81,6 +81,18 @@ func (v *InfVec[T]) LowerBound() uint64 {
 
 func (v *InfVec[T]) UpperBound() uint64 {
 	return v.lowerBound + uint64(len(v.elements))
+}
+
+func (v *InfVec[T]) Len() int {
+	count := 0
+
+	for _, slotState := range v.slotStates {
+		if slotState == SLOT_OCCUPIED {
+			count += 1
+		}
+	}
+
+	return count
 }
 
 func (v *InfVec[T]) NInOperationalRange(idx uint64) bool {

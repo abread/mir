@@ -26,6 +26,7 @@ import "threshcryptopb/threshcryptopb.proto";
 import "pingpongpb/pingpongpb.proto";
 import "checkpointpb/checkpointpb.proto";
 import "vcbpb/vcbpb.proto";
+import "abbapb/abbapb.proto";
 import "aleapb/aleapb.proto";
 
 option go_package = "github.com/filecoin-project/mir/pkg/pb/eventpb";
@@ -75,6 +76,7 @@ message Event {
     checkpointpb.Event      checkpoint              = 38;
     vcbpb.Event             vcb                     = 39;
     aleapb.Event            alea                    = 40;
+    abbapb.Event            abba                    = 41;
 
     // for unit-tests
     google.protobuf.StringValue testingString = 301;

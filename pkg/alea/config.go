@@ -11,28 +11,26 @@ type Config struct {
 
 	MaxBatchSize t.NumRequests
 
-	NodeBroadcastInWindowSize int
-
-	BroadcastOutWindowSize int
+	NodeBroadcastWindowSize int
 
 	AgreementWindowSize int
 
-	MsgBufCapacity uint
-
 	F int
+
+	NetModuleName          t.ModuleID
+	ThreshCryptoModuleName t.ModuleID
+	AleaModuleName         t.ModuleID
+	VCBCModuleFactoryName  t.ModuleID
+	ABAModuleFactoryName   t.ModuleID
 }
 
 func CheckConfig(config *Config) error {
 	if len(config.Membership) < 3*config.F+1 {
-		return fmt.Errorf("Not enough nodes to tolerate %d failures", config.F)
+		return fmt.Errorf("Not enough nodes to tolerate %d faulty ones (with 3f+1 nodes, up to f can be byzantine)", config.F)
 	}
 
-	if config.NodeBroadcastInWindowSize <= 0 {
-		return fmt.Errorf("Must be able to accept at least 1 incoming broadcast per node (configured for %d)", config.NodeBroadcastInWindowSize)
-	}
-
-	if config.BroadcastOutWindowSize <= 0 {
-		return fmt.Errorf("Must be able to accept at least 1 outgoing broadcast (configured for %d)", config.BroadcastOutWindowSize)
+	if config.NodeBroadcastWindowSize <= 0 {
+		return fmt.Errorf("Must be able to accept at least 1 broadcast per node (configured for %d)", config.NodeBroadcastWindowSize)
 	}
 
 	if config.AgreementWindowSize <= 0 {

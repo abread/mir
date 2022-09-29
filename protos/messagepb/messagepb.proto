@@ -14,6 +14,7 @@ import "availabilitypb/mscpb/mscpb.proto";
 import "pingpongpb/pingpongpb.proto";
 import "checkpointpb/checkpointpb.proto";
 import "vcbpb/vcbpb.proto";
+import "abbapb/abbapb.proto";
 import "aleapb/aleapb.proto";
 
 option go_package = "github.com/filecoin-project/mir/pkg/pb/messagepb";
@@ -28,5 +29,6 @@ message Message {
     checkpointpb.Message         checkpoint         = 6;
     vcbpb.Message                vcb                = 7;
     aleapb.AleaMessage           alea               = 8;
+    abbapb.Message               abba               = 9;
   }
 }
