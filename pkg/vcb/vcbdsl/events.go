@@ -4,40 +4,39 @@ import (
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
 	"github.com/filecoin-project/mir/pkg/pb/messagepb"
+	"github.com/filecoin-project/mir/pkg/pb/requestpb"
 	"github.com/filecoin-project/mir/pkg/pb/vcbpb"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
 // Module-specific dsl functions for emitting events.
 
-func Request(m dsl.Module, dest t.ModuleID, data []byte) {
+func Event(m dsl.Module, dest t.ModuleID, ev *vcbpb.Event) {
 	dsl.EmitEvent(m, &eventpb.Event{
 		DestModule: dest.Pb(),
 
 		Type: &eventpb.Event_Vcb{
-			Vcb: &vcbpb.Event{
-				Type: &vcbpb.Event_Request{
-					Request: &vcbpb.BroadcastRequest{
-						Data: data,
-					},
-				},
+			Vcb: ev,
+		},
+	})
+}
+
+func Request(m dsl.Module, dest t.ModuleID, data []*requestpb.Request) {
+	Event(m, dest, &vcbpb.Event{
+		Type: &vcbpb.Event_Request{
+			Request: &vcbpb.BroadcastRequest{
+				Data: data,
 			},
 		},
 	})
 }
 
-func Deliver(m dsl.Module, dest t.ModuleID, data []byte, signature []byte) {
-	dsl.EmitEvent(m, &eventpb.Event{
-		DestModule: dest.Pb(),
-
-		Type: &eventpb.Event_Vcb{
-			Vcb: &vcbpb.Event{
-				Type: &vcbpb.Event_Deliver{
-					Deliver: &vcbpb.Deliver{
-						Data:      data,
-						Signature: signature,
-					},
-				},
+func Deliver(m dsl.Module, dest t.ModuleID, data []*requestpb.Request, signature []byte) {
+	Event(m, dest, &vcbpb.Event{
+		Type: &vcbpb.Event_Deliver{
+			Deliver: &vcbpb.Deliver{
+				Data:      data,
+				Signature: signature,
 			},
 		},
 	})
@@ -55,13 +54,13 @@ func UponEvent[EvWrapper vcbpb.Event_TypeWrapper[Ev], Ev any](m dsl.Module, hand
 	})
 }
 
-func UponBroadcastRequest(m dsl.Module, handler func(data []byte) error) {
+func UponBroadcastRequest(m dsl.Module, handler func(data []*requestpb.Request) error) {
 	UponEvent[*vcbpb.Event_Request](m, func(ev *vcbpb.BroadcastRequest) error {
 		return handler(ev.Data)
 	})
 }
 
-func UponDeliver(m dsl.Module, handler func(data []byte) error) {
+func UponDeliver(m dsl.Module, handler func(data []*requestpb.Request) error) {
 	UponEvent[*vcbpb.Event_Deliver](m, func(ev *vcbpb.Deliver) error {
 		return handler(ev.Data)
 	})
@@ -78,7 +77,7 @@ func UponVcbMessageReceived(m dsl.Module, handler func(from t.NodeID, msg *vcbpb
 	})
 }
 
-func UponSendMessageReceived(m dsl.Module, handler func(from t.NodeID, data []byte) error) {
+func UponSendMessageReceived(m dsl.Module, handler func(from t.NodeID, data []*requestpb.Request) error) {
 	UponVcbMessageReceived(m, func(from t.NodeID, msg *vcbpb.Message) error {
 		startMsgWrapper, ok := msg.Type.(*vcbpb.Message_SendMessage)
 		if !ok {
@@ -89,7 +88,7 @@ func UponSendMessageReceived(m dsl.Module, handler func(from t.NodeID, data []by
 	})
 }
 
-func UponEchoMessageReceived(m dsl.Module, handler func(from t.NodeID, signature []byte) error) {
+func UponEchoMessageReceived(m dsl.Module, handler func(from t.NodeID, signatureShare []byte) error) {
 	UponVcbMessageReceived(m, func(from t.NodeID, msg *vcbpb.Message) error {
 		echoMsgWrapper, ok := msg.Type.(*vcbpb.Message_EchoMessage)
 		if !ok {
@@ -102,7 +101,7 @@ func UponEchoMessageReceived(m dsl.Module, handler func(from t.NodeID, signature
 
 func UponFinalMessageReceived(
 	m dsl.Module,
-	handler func(from t.NodeID, data []byte, signature []byte) error,
+	handler func(from t.NodeID, data []*requestpb.Request, signature []byte) error,
 ) {
 	UponVcbMessageReceived(m, func(from t.NodeID, msg *vcbpb.Message) error {
 		finalMsgWrapper, ok := msg.Type.(*vcbpb.Message_FinalMessage)

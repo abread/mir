@@ -4,6 +4,7 @@ package vcbpb;
 
 option go_package = "github.com/filecoin-project/mir/pkg/pb/vcbpb";
 
+import "requestpb/requestpb.proto";
 import "mir/plugin.proto";
 
 message Event {
@@ -15,11 +16,11 @@ message Event {
 }
 
 message BroadcastRequest {
-  bytes data = 1;
+  repeated requestpb.Request data = 1;
 }
 
 message Deliver {
-  bytes data = 1;
+  repeated requestpb.Request data = 1;
   bytes signature = 2;
 }
 
@@ -32,7 +33,7 @@ message Message {
 }
 
 message SendMessage {
-  bytes data = 1;
+  repeated requestpb.Request data = 1;
 }
 
 message EchoMessage {
@@ -40,6 +41,6 @@ message EchoMessage {
 }
 
 message FinalMessage {
-  bytes data = 1;
+  repeated requestpb.Request data = 1;
   bytes signature = 2;
 }
