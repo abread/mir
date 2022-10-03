@@ -8,10 +8,14 @@ import (
 
 	"github.com/filecoin-project/mir/pkg/abba/abbadsl"
 	"github.com/filecoin-project/mir/pkg/dsl"
+	"github.com/filecoin-project/mir/pkg/factorymodule"
+	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/pb/abbapb"
+	"github.com/filecoin-project/mir/pkg/pb/factorymodulepb"
 	threshDsl "github.com/filecoin-project/mir/pkg/threshcrypto/dsl"
 	t "github.com/filecoin-project/mir/pkg/types"
+	"github.com/filecoin-project/mir/pkg/util/maputil"
 )
 
 // ModuleConfig sets the module ids. All replicas are expected to use identical module configurations.
@@ -88,6 +92,41 @@ type recoverCoinCtx struct {
 }
 
 const MAX_STEP uint8 = 10
+
+func NewReconfigurableModule(mc *ModuleConfig, nodeID t.NodeID, logger logging.Logger) modules.PassiveModule {
+	return factorymodule.New(
+		mc.Self,
+		factorymodule.DefaultParams(
+
+			// This function will be called whenever the factory module
+			// is asked to create a new instance of the vcb protocol.
+			func(abbaID t.ModuleID, genericParams *factorymodulepb.GeneratorParams) (modules.PassiveModule, error) {
+				params := genericParams.Type.(*factorymodulepb.GeneratorParams_Abba).Abba
+
+				// Extract the IDs of the nodes in the membership associated with this instance
+				allNodes := maputil.GetSortedKeys(t.Membership(params.Membership))
+
+				// Crate a copy of basic module config with an adapted ID for the submodule.
+				submc := *mc
+				submc.Self = abbaID
+
+				// Create a new instance of the vcb protocol.
+				inst := NewModule(
+					&submc,
+					&ModuleParams{
+						// TODO: Use InstanceUIDs properly.
+						//       (E.g., concatenate this with the instantiating protocol's InstanceUID when introduced.)
+						InstanceUID: []byte(abbaID),
+						AllNodes:    allNodes,
+					},
+					nodeID,
+				)
+				return inst, nil
+			},
+		),
+		logger,
+	)
+}
 
 func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID) modules.PassiveModule {
 	m := dsl.NewModule(mc.Self)

@@ -4,8 +4,14 @@ package vcbpb;
 
 option go_package = "github.com/filecoin-project/mir/pkg/pb/vcbpb";
 
+import "commonpb/commonpb.proto";
 import "requestpb/requestpb.proto";
 import "mir/plugin.proto";
+
+
+// ============================================================
+// Events
+// ============================================================
 
 message Event {
   oneof type {
@@ -24,6 +30,11 @@ message Deliver {
   bytes                      batch_id  = 2;
   bytes                      signature = 3;
 }
+
+
+// ============================================================
+// Messages
+// ============================================================
 
 message Message {
   oneof type {
@@ -44,4 +55,14 @@ message EchoMessage {
 message FinalMessage {
   repeated requestpb.Request data      = 1;
   bytes                      signature = 2;
+}
+
+
+// ============================================================
+// Instantiation parameters
+// ============================================================
+
+message InstanceParams {
+  commonpb.Membership membership = 1;
+  string              leader_id  = 2;
 }

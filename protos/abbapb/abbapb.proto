@@ -4,7 +4,13 @@ package abbapb;
 
 option go_package = "github.com/filecoin-project/mir/pkg/pb/abbapb";
 
+import "commonpb/commonpb.proto";
 import "mir/plugin.proto";
+
+
+// ============================================================
+// Events
+// ============================================================
 
 message Event {
   oneof type {
@@ -22,6 +28,10 @@ message Deliver {
   bool result = 1;
 }
 
+
+// ============================================================
+// Messages
+// ============================================================
 
 message Message {
   oneof type {
@@ -62,4 +72,13 @@ enum ValueSet {
     ZERO = 1;
     ONE = 2;
     ZERO_AND_ONE = 3;
+}
+
+
+// ============================================================
+// Instantiation parameters
+// ============================================================
+
+message InstanceParams {
+  commonpb.Membership membership = 1;
 }
