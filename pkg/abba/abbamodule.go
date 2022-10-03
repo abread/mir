@@ -20,6 +20,7 @@ type ModuleConfig struct {
 	Consumer     t.ModuleID // id of the module to send the "Deliver" event to
 	Net          t.ModuleID
 	ThreshCrypto t.ModuleID
+	Hasher       t.ModuleID
 }
 
 // ModuleParams sets the values for the parameters of an instance of the protocol.
@@ -82,7 +83,7 @@ type verifyCoinShareCtx struct {
 	sigShare    []byte
 }
 
-type recoverCtx struct {
+type recoverCoinCtx struct {
 	roundNumber uint64
 }
 
@@ -257,7 +258,7 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID) modules.
 	dsl.UponCondition(m, func() error {
 		// still in 9. sample coin
 		if state.step == 9 && len(state.round.coinRecvdOkShares) > state.round.coinRecoverMinShareCount && !state.round.coinRecoverInProgress {
-			context := &recoverCtx{
+			context := &recoverCoinCtx{
 				roundNumber: state.round.number,
 			}
 			threshDsl.Recover(m, mc.ThreshCrypto, state.round.coinData(params), state.round.coinRecvdOkShares, context)
@@ -270,39 +271,51 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID) modules.
 	})
 
 	// still in 9. sample coin
-	threshDsl.UponRecoverResult(m, func(ok bool, fullSig []byte, err string, context *recoverCtx) error {
+	threshDsl.UponRecoverResult(m, func(ok bool, fullSig []byte, err string, context *recoverCoinCtx) error {
 		if context.roundNumber != state.round.number || state.step != 9 {
+			// TODO: is this branch even possible?
 			return nil // stale result
 		}
 
 		if ok {
-			// coin sampled
-			s_r := coinFromSig(fullSig)
-			state.step = 9
-
-			// 10.
-			if state.round.values.Len() == 2 {
-				state.round.estimate = s_r
-			} else if state.round.values.Len() == 1 { // values = {v}
-				v := state.round.values.Has(true) // if values contains true, v=true, otherwise v=false
-				state.round.estimate = v
-
-				// If in fact values = { s_r }, broadcast FINISH(s_r) if we haven't broadcast FINISH(_) already
-				if v == s_r && !state.finishSent {
-					dsl.SendMessage(m, mc.Net, FinishMessage(mc.Self, s_r), params.AllNodes)
-					state.finishSent = true
-				}
-			}
-
-			// (still 10.) Set r = r + 1, and return to step 4
-			state.round.number += 1
-			state.round.resetState(params)
-			state.step = 4
-
+			// we have a signature, all we need to do is hash it and
+			dsl.HashOneMessage(m, mc.Hasher, [][]byte{fullSig}, context)
 		} else {
-			state.round.coinRecoverInProgress = false
 			// will attempt to recover when more signature shares arrive
+			state.round.coinRecoverInProgress = false
 		}
+
+		return nil
+	})
+
+	dsl.UponOneHashResult(m, func(hash []byte, context *recoverCoinCtx) error {
+		if state.round.number != context.roundNumber || state.step != 9 {
+			// TODO: is this branch even possible?
+			return nil // stale result
+		}
+
+		// finishing step 9
+		s_r := (hash[0] & 1) == 1 // TODO: this is ok, right?
+		state.step = 10
+
+		// 10.
+		if state.round.values.Len() == 2 {
+			state.round.estimate = s_r
+		} else if state.round.values.Len() == 1 { // values = {v}
+			v := state.round.values.Has(true) // if values contains true, v=true, otherwise v=false
+			state.round.estimate = v
+
+			// If in fact values = { s_r }, broadcast FINISH(s_r) if we haven't broadcast FINISH(_) already
+			if v == s_r && !state.finishSent {
+				dsl.SendMessage(m, mc.Net, FinishMessage(mc.Self, s_r), params.AllNodes)
+				state.finishSent = true
+			}
+		}
+
+		// (still 10.) Set r = r + 1, and return to step 4
+		state.round.number += 1
+		state.round.resetState(params)
+		state.step = 4
 
 		return nil
 	})
@@ -403,22 +416,6 @@ func (rs *abbaRoundState) coinData(params *ModuleParams) [][]byte {
 		params.InstanceUID,
 		toBytes(rs.number),
 	}
-}
-
-func coinFromSig(sig []byte) bool {
-	// TODO: is this safe? or do i need a proper hash?
-
-	b := byte(0)
-	for _, bSig := range sig {
-		b = b ^ bSig
-	}
-
-	finalB := byte(0)
-	for i := 0; i < 8; i++ {
-		finalB ^= (b >> i) & 1
-	}
-
-	return finalB == 0
 }
 
 func toBytes[T any](v T) []byte {
