@@ -1,6 +1,8 @@
 package vcb
 
 import (
+	"fmt"
+
 	"github.com/filecoin-project/mir/pkg/dsl"
 	mpdsl "github.com/filecoin-project/mir/pkg/mempool/dsl"
 	"github.com/filecoin-project/mir/pkg/modules"
@@ -57,6 +59,7 @@ type vcbModuleLeaderState struct {
 type vcbModuleCommonState struct {
 	data    []*requestpb.Request
 	sigData [][]byte
+	batchID t.BatchID
 
 	recvdSent  bool
 	recvdFinal bool
@@ -96,7 +99,7 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID) modules.
 	}
 
 	vcbdsl.UponSendMessageReceived(m, func(from t.NodeID, data []*requestpb.Request) error {
-		if from == params.Leader && !state.recvdSent {
+		if from == params.Leader && !state.recvdSent && !state.delivered {
 			state.data = data
 			state.recvdSent = true
 
@@ -112,6 +115,7 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID) modules.
 
 	mpdsl.UponBatchIDResponse(m, func(batchID t.BatchID, context *handleSendCtx) error {
 		state.sigData = SigData(params.InstanceUID, batchID)
+		state.batchID = batchID
 		threshDsl.SignShare(m, mc.ThreshCrypto, state.sigData, context)
 		return nil
 	})
@@ -149,6 +153,7 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID) modules.
 
 		mpdsl.UponBatchIDResponse(m, func(batchID t.BatchID, context *handleFinalCtx) error {
 			state.sigData = SigData(params.InstanceUID, batchID)
+			state.batchID = batchID
 			threshDsl.VerifyFull(m, mc.ThreshCrypto, state.sigData, context.signature, context)
 			return nil
 		})
@@ -156,7 +161,7 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID) modules.
 		threshDsl.UponVerifyFullResult(m, func(ok bool, err string, context *handleFinalCtx) error {
 			if ok {
 				state.delivered = true
-				vcbdsl.Deliver(m, mc.Consumer, state.data, context.signature)
+				vcbdsl.Deliver(m, mc.Consumer, state.data, state.batchID, context.signature)
 			}
 
 			return nil
@@ -175,6 +180,12 @@ func setupVcbLeader(m dsl.Module, mc *ModuleConfig, params *ModuleParams, common
 	}
 
 	vcbdsl.UponBroadcastRequest(m, func(data []*requestpb.Request) error {
+		if commonState.data != nil {
+			return fmt.Errorf("cannot vcb-broadcast more than once in same instance")
+		} else if data == nil {
+			return fmt.Errorf("cannot vcb-broadcast nil")
+		}
+
 		commonState.data = data
 
 		// pre-compute sigData before broadcasting SEND(m) to simplify further code
@@ -190,11 +201,16 @@ func setupVcbLeader(m dsl.Module, mc *ModuleConfig, params *ModuleParams, common
 
 	mpdsl.UponBatchIDResponse(m, func(batchID t.BatchID, context *precomputeSigDataCtx) error {
 		commonState.sigData = SigData(params.InstanceUID, batchID)
+		commonState.batchID = batchID
 		dsl.SendMessage(m, mc.Net, SendMessage(mc.Self, commonState.data), params.AllNodes)
 		return nil
 	})
 
 	vcbdsl.UponEchoMessageReceived(m, func(from t.NodeID, sigShare []byte) error {
+		if commonState.delivered {
+			return nil
+		}
+
 		if _, present := state.receivedEcho[from]; present {
 			return nil // already received Echo from this node
 		}
@@ -225,7 +241,8 @@ func setupVcbLeader(m dsl.Module, mc *ModuleConfig, params *ModuleParams, common
 			state.sentFinal = true
 
 			dsl.SendMessage(m, mc.Net, FinalMessage(mc.Self, commonState.data, fullSig), params.AllNodes)
-			vcbdsl.Deliver(m, mc.Consumer, commonState.data, fullSig)
+			vcbdsl.Deliver(m, mc.Consumer, commonState.data, commonState.batchID, fullSig)
+			commonState.delivered = true
 		}
 		return nil
 	})
