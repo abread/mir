@@ -38,7 +38,7 @@ func Deliver(m dsl.Module, dest t.ModuleID, data []*requestpb.Request, batchID t
 				Data:      data,
 				BatchId:   batchID.Pb(),
 				Signature: signature,
-				Origin: origin,
+				Origin:    origin,
 			},
 		},
 	})
