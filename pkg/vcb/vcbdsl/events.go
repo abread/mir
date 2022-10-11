@@ -31,13 +31,14 @@ func Request(m dsl.Module, dest t.ModuleID, data []*requestpb.Request) {
 	})
 }
 
-func Deliver(m dsl.Module, dest t.ModuleID, data []*requestpb.Request, batchID t.BatchID, signature []byte) {
+func Deliver(m dsl.Module, dest t.ModuleID, data []*requestpb.Request, batchID t.BatchID, signature []byte, origin *vcbpb.Origin) {
 	Event(m, dest, &vcbpb.Event{
 		Type: &vcbpb.Event_Deliver{
 			Deliver: &vcbpb.Deliver{
 				Data:      data,
 				BatchId:   batchID.Pb(),
 				Signature: signature,
+				Origin: origin,
 			},
 		},
 	})
@@ -61,9 +62,20 @@ func UponBroadcastRequest(m dsl.Module, handler func(data []*requestpb.Request) 
 	})
 }
 
-func UponDeliver(m dsl.Module, handler func(data []*requestpb.Request, batchID t.BatchID, signature []byte) error) {
+func UponDeliver[C any](m dsl.Module, handler func(data []*requestpb.Request, batchID t.BatchID, signature []byte, context *C) error) {
 	UponEvent[*vcbpb.Event_Deliver](m, func(ev *vcbpb.Deliver) error {
-		return handler(ev.Data, t.BatchID(ev.BatchId), ev.Signature)
+		OriginWrapper, ok := ev.Origin.Type.(*vcbpb.Origin_Dsl)
+		if !ok {
+			return nil
+		}
+
+		contextRaw := m.DslHandle().RecoverAndCleanupContext(dsl.ContextID(OriginWrapper.Dsl.ContextID))
+		context, ok := contextRaw.(*C)
+		if !ok {
+			return nil
+		}
+
+		return handler(ev.Data, t.BatchID(ev.BatchId), ev.Signature, context)
 	})
 }
 

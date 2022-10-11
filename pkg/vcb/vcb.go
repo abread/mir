@@ -12,6 +12,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/pb/factorymodulepb"
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"
+	"github.com/filecoin-project/mir/pkg/pb/vcbpb"
 	threshDsl "github.com/filecoin-project/mir/pkg/threshcrypto/dsl"
 	t "github.com/filecoin-project/mir/pkg/types"
 	"github.com/filecoin-project/mir/pkg/util/maputil"
@@ -44,6 +45,8 @@ type ModuleParams struct {
 	InstanceUID []byte     // unique identifier for this instance of VCB
 	AllNodes    []t.NodeID // the list of participating nodes, which must be the same as the set of nodes in the threshcrypto module
 	Leader      t.NodeID   // the id of the leader of the instance
+
+	Origin *vcbpb.Origin // tag for the delivery event
 }
 
 // GetN returns the total number of nodes.
@@ -92,7 +95,7 @@ func SigData(instanceUid []byte, batchID t.BatchID) [][]byte {
 	}
 }
 
-func NewReconfigurableModule(mc *ModuleConfig, nodeID t.NodeID, logger logging.Logger) modules.PassiveModule {
+func NewReconfigurableModule(mc *ModuleConfig, nodeID t.NodeID, logger logging.Logger) *factorymodule.FactoryModule {
 	return factorymodule.New(
 		mc.Self,
 		factorymodule.DefaultParams(
@@ -123,6 +126,7 @@ func NewReconfigurableModule(mc *ModuleConfig, nodeID t.NodeID, logger logging.L
 						InstanceUID: []byte(vcbID),
 						AllNodes:    allNodes,
 						Leader:      leader,
+						Origin:      params.Origin,
 					},
 					nodeID,
 				)
@@ -208,7 +212,7 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID) modules.
 		threshDsl.UponVerifyFullResult(m, func(ok bool, err string, context *handleFinalCtx) error {
 			if ok {
 				state.delivered = true
-				vcbdsl.Deliver(m, mc.Consumer, state.data, state.batchID, context.signature)
+				vcbdsl.Deliver(m, mc.Consumer, state.data, state.batchID, context.signature, params.Origin)
 			}
 
 			return nil
@@ -288,7 +292,7 @@ func setupVcbLeader(m dsl.Module, mc *ModuleConfig, params *ModuleParams, common
 			state.sentFinal = true
 
 			dsl.SendMessage(m, mc.Net, FinalMessage(mc.Self, commonState.data, fullSig), params.AllNodes)
-			vcbdsl.Deliver(m, mc.Consumer, commonState.data, commonState.batchID, fullSig)
+			vcbdsl.Deliver(m, mc.Consumer, commonState.data, commonState.batchID, fullSig, params.Origin)
 			commonState.delivered = true
 		}
 		return nil

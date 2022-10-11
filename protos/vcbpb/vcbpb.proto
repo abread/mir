@@ -6,6 +6,8 @@ option go_package = "github.com/filecoin-project/mir/pkg/pb/vcbpb";
 
 import "commonpb/commonpb.proto";
 import "requestpb/requestpb.proto";
+import "dslpb/dslpb.proto";
+import "contextstorepb/contextstorepb.proto";
 import "mir/plugin.proto";
 
 
@@ -29,8 +31,17 @@ message Deliver {
   repeated requestpb.Request data      = 1;
   bytes                      batch_id  = 2;
   bytes                      signature = 3;
+
+  Origin origin = 4;
 }
 
+message Origin {
+  string module = 1;
+  oneof type {
+    contextstorepb.Origin context_store = 2;
+    dslpb.Origin          dsl           = 3;
+  }
+}
 
 // ============================================================
 // Messages
@@ -65,4 +76,5 @@ message FinalMessage {
 message InstanceParams {
   commonpb.Membership membership = 1;
   string              leader_id  = 2;
+  Origin              origin     = 3;
 }
