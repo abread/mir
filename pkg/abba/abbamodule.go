@@ -27,6 +27,17 @@ type ModuleConfig struct {
 	Hasher       t.ModuleID
 }
 
+// DefaultModuleConfig returns a valid module config with default names for all modules.
+func DefaultModuleConfig(consumer t.ModuleID) *ModuleConfig {
+	return &ModuleConfig{
+		Self:         "abba",
+		Consumer:     consumer,
+		Net:          "net",
+		ThreshCrypto: "threshcrypto",
+		Hasher:       "hasher",
+	}
+}
+
 // ModuleParams sets the values for the parameters of an instance of the protocol.
 // All replicas are expected to use identical module parameters.
 type ModuleParams struct {
@@ -60,7 +71,7 @@ type abbaRoundState struct {
 	estimate bool
 	values   abbadsl.ValueSet
 
-	initRecvd          recvTracker
+	initRecvd          map[bool]recvTracker
 	initRecvdEstimates map[bool]int
 
 	auxRecvd       recvTracker
@@ -72,7 +83,7 @@ type abbaRoundState struct {
 	coinRecvd         recvTracker
 	coinRecvdOkShares [][]byte
 
-	initSent                 map[bool]bool
+	initWeakSupport          map[bool]bool
 	auxSent                  bool
 	coinRecoverInProgress    bool
 	coinRecoverMinShareCount int
@@ -120,6 +131,7 @@ func NewReconfigurableModule(mc *ModuleConfig, nodeID t.NodeID, logger logging.L
 						AllNodes:    allNodes,
 					},
 					nodeID,
+					logger,
 				)
 				return inst, nil
 			},
@@ -128,7 +140,7 @@ func NewReconfigurableModule(mc *ModuleConfig, nodeID t.NodeID, logger logging.L
 	)
 }
 
-func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID) modules.PassiveModule {
+func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging.Logger) modules.PassiveModule {
 	m := dsl.NewModule(mc.Self)
 	state := &abbaModuleState{
 		round: abbaRoundState{
@@ -145,6 +157,7 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID) modules.
 
 	abbadsl.UponFinishMessageReceived(m, func(from t.NodeID, value bool) error {
 		if _, present := state.finishRecvd[from]; present {
+			logger.Log(logging.LevelDebug, "duplicate FINISH(v)", "v", value)
 			return nil // duplicate message
 		}
 		state.finishRecvd[from] = struct{}{}
@@ -152,12 +165,14 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID) modules.
 
 		// 1. upon receiving weak support for FINISH(v), broadcast FINISH(v)
 		if !state.finishSent && state.finishRecvdValues[value] >= params.weakSupportThresh() {
+			logger.Log(logging.LevelDebug, "received weak support for FINISH(v)", "v", value)
 			dsl.SendMessage(m, mc.Net, FinishMessage(mc.Self, value), params.AllNodes)
 			state.finishSent = true
 		}
 
 		// 2. upon receiving strong support for FINISH(v), output v and terminate
 		if state.step <= 10 && state.finishRecvdValues[value] >= params.strongSupportThresh() {
+			logger.Log(logging.LevelDebug, "received strong support for FINISH(v)", "v", value)
 			abbadsl.Deliver(m, mc.Consumer, value)
 			state.step = math.MaxUint8 // no more progress can be made
 		}
@@ -170,7 +185,7 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID) modules.
 	// 3. upon P_i providing input value v_in, set est^r_i=v_in, r=0
 	abbadsl.UponInputValue(m, func(input bool) error {
 		if state.step > 3 {
-			return fmt.Errorf("Input value already provided for ABBA instance")
+			return fmt.Errorf("input value already provided for ABBA instance")
 		}
 
 		state.round.number = 0
@@ -186,28 +201,45 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID) modules.
 
 	abbadsl.UponInitMessageReceived(m, func(from t.NodeID, r uint64, est bool) error {
 		if r != state.round.number {
+			logger.Log(logging.LevelDebug, "wrong round for INIT(r, est)", "current", state.round.number, "got", r)
 			return nil // not ready yet or wrong round
 		}
-		if _, present := state.round.initRecvd[from]; present {
+		if _, present := state.round.initRecvd[est][from]; present {
+			logger.Log(logging.LevelDebug, "duplicate INIT(r, _)", "r", r)
 			return nil // duplicate message
 		}
-		state.round.initRecvd[from] = struct{}{}
+		state.round.initRecvd[est][from] = struct{}{}
 		state.round.initRecvdEstimates[est] += 1
 
+		return nil
+	})
+
+	dsl.UponCondition(m, func() error {
 		if state.step < 5 || state.step > MAX_STEP {
-			return nil // not ready yet for the next steps (or already delivered)
+			return nil // did not perform the initial INIT broadcast or has already terminated
 		}
 
-		// 5. upon receiving weak support for INIT(r, v), broadcast INIT(r, v)
-		if !state.round.initSent[est] && state.round.initRecvdEstimates[est] == params.weakSupportThresh() {
-			dsl.SendMessage(m, mc.Net, InitMessage(mc.Self, r, est), params.AllNodes)
-			state.step = 6
-		}
+		r := state.round.number
+		for _, est := range []bool{false, true} {
+			// 5. upon receiving weak support for INIT(r, v), add v to values and broadcast INIT(r, v)
+			if !state.round.initWeakSupport[est] && state.round.initRecvdEstimates[est] >= params.weakSupportThresh() {
+				logger.Log(logging.LevelDebug, "received weak support for INIT(r, v)", "r", r, "v", est)
 
-		// 6. upon receiving strong support for INIT(r, v), broadcast AUX(r, v)
-		if !state.round.auxSent && state.round.initRecvdEstimates[est] == params.strongSupportThresh() {
-			dsl.SendMessage(m, mc.Net, AuxMessage(mc.Self, r, est), params.AllNodes)
-			state.step = 7
+				state.round.values.Add(est)
+
+				dsl.SendMessage(m, mc.Net, InitMessage(mc.Self, r, est), params.AllNodes)
+				state.round.initWeakSupport[est] = true
+
+				state.step = 6
+			}
+
+			// 6. upon receiving strong support for INIT(r, v), broadcast AUX(r, v) if we have not already broadcast AUX(r, _)
+			if !state.round.auxSent && state.round.initRecvdEstimates[est] >= params.strongSupportThresh() {
+				logger.Log(logging.LevelDebug, "received strong support for INIT(r, v)", "r", r, "v", est)
+				dsl.SendMessage(m, mc.Net, AuxMessage(mc.Self, r, est), params.AllNodes)
+				state.round.auxSent = true
+				state.step = 7
+			}
 		}
 
 		return nil
@@ -215,16 +247,30 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID) modules.
 
 	abbadsl.UponAuxMessageReceived(m, func(from t.NodeID, r uint64, value bool) error {
 		if r != state.round.number {
+			logger.Log(logging.LevelDebug, "wrong round for AUX(r, v)", "current", state.round.number, "got", r)
 			return nil // not processing this round
 		}
 		if _, present := state.round.auxRecvd[from]; present {
+			logger.Log(logging.LevelDebug, "duplicate AUX(r, _)", "r", r)
 			return nil // duplicate message
 		}
 		state.round.auxRecvd[from] = struct{}{}
 		state.round.auxRecvdValues[value] += 1
 
-		// 7. wait until there exists a subset of nodes with size >= q_S(= N-F), from which we have received AUX(v', r) with any v' in round.values, then broadcast CONF(values, r)
-		if state.step == 7 && state.round.isNiceAuxValueCount(params) {
+		logger.Log(logging.LevelDebug, "recvd AUX(r, v)", "r", r, "v", value)
+
+		return nil
+	})
+
+	// 7. wait until there exists a subset of nodes with size >= q_S(= N-F), from which we have received AUX(v', r) with any v' in round.values, then broadcast CONF(values, r)
+	dsl.UponCondition(m, func() error {
+		if state.step != 7 {
+			return nil
+		}
+
+		if state.round.isNiceAuxValueCount(params) {
+			r := state.round.number
+			logger.Log(logging.LevelDebug, "received enough support for AUX(r, v in values)", "r", r, "values", state.round.values)
 			dsl.SendMessage(m, mc.Net, ConfMessage(mc.Self, r, state.round.values), params.AllNodes)
 			state.step = 8
 		}
@@ -234,21 +280,33 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID) modules.
 
 	abbadsl.UponConfMessageReceived(m, func(from t.NodeID, r uint64, values abbadsl.ValueSet) error {
 		if r != state.round.number {
+			logger.Log(logging.LevelDebug, "wrong round for CONF(r, c)", "current", state.round.number, "got", r)
 			return nil // wrong round
 		}
 		if _, present := state.round.confRecvd[from]; present {
+			logger.Log(logging.LevelDebug, "duplicate CONF(r, _)", "r", r)
 			return nil // duplicate message
 		}
 		state.round.confRecvd[from] = struct{}{}
 		state.round.confRecvdValues[values] += 1
 
-		// 8. wait until there exists a subset of nodes with size >= q_S(= N-F), from which we have received CONF(vs', r) with any vs' subset of round.values
-		if state.step == 8 && state.round.isNiceConfValuesCount(params) {
+		return nil
+	})
+
+	// 8. wait until there exists a subset of nodes with size >= q_S(= N-F), from which we have received CONF(vs', r) with any vs' subset of round.values
+	dsl.UponCondition(m, func() error {
+		if state.step != 8 {
+			return nil
+		}
+
+		if state.round.isNiceConfValuesCount(params) {
+			r := state.round.number
+			logger.Log(logging.LevelDebug, "received enough support for CONF(r, C subset of values)", "r", r, "values", state.round.values)
 
 			// 9. sample coin
 			state.step = 9
 			threshDsl.SignShare(m, mc.ThreshCrypto, state.round.coinData(params), &signCoinShareCtx{
-				roundNumber: state.round.number,
+				roundNumber: r,
 			})
 		}
 
@@ -257,19 +315,26 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID) modules.
 
 	// still in 9. sample coin
 	threshDsl.UponSignShareResult(m, func(sigShare []byte, context *signCoinShareCtx) error {
-		dsl.SendMessage(m, mc.ThreshCrypto, CoinMessage(mc.Self, context.roundNumber, sigShare), params.AllNodes)
+		dsl.SendMessage(m, mc.Net, CoinMessage(mc.Self, context.roundNumber, sigShare), params.AllNodes)
 
 		return nil
 	})
 
 	// working in advance for 9. sample coin
 	abbadsl.UponCoinMessageReceived(m, func(from t.NodeID, r uint64, coinShare []byte) error {
-		if r != state.round.number || state.step > MAX_STEP {
+		if r != state.round.number {
+			logger.Log(logging.LevelDebug, "wrong round for COIN(r, s)", "current", state.round.number, "got", r)
 			return nil // wrong round or already terminated
 		}
+		if state.step > MAX_STEP {
+			logger.Log(logging.LevelDebug, "already terminated (recvd COIN)")
+			return nil // already terminated
+		}
 		if _, present := state.round.coinRecvd[from]; present {
+			logger.Log(logging.LevelDebug, "duplicate COIN(r, _)", "r", r)
 			return nil // duplicate message
 		}
+		logger.Log(logging.LevelDebug, "recvd COIN(r, share)", "r", r)
 		state.round.coinRecvd[from] = struct{}{}
 
 		context := &verifyCoinShareCtx{
@@ -284,6 +349,7 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID) modules.
 	// working in advance for 9. sample coin
 	threshDsl.UponVerifyShareResult(m, func(ok bool, err string, context *verifyCoinShareCtx) error {
 		if context.roundNumber != state.round.number {
+			logger.Log(logging.LevelDebug, "wrong round for verifyshares", "current", state.round.number, "got", context.roundNumber)
 			return nil
 		}
 
@@ -294,9 +360,13 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID) modules.
 		return nil
 	})
 
+	// still in 9. sample coin
 	dsl.UponCondition(m, func() error {
-		// still in 9. sample coin
-		if state.step == 9 && len(state.round.coinRecvdOkShares) > state.round.coinRecoverMinShareCount && !state.round.coinRecoverInProgress {
+		if state.step != 9 {
+			return nil
+		}
+
+		if len(state.round.coinRecvdOkShares) > state.round.coinRecoverMinShareCount && !state.round.coinRecoverInProgress {
 			context := &recoverCoinCtx{
 				roundNumber: state.round.number,
 			}
@@ -312,6 +382,7 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID) modules.
 	// still in 9. sample coin
 	threshDsl.UponRecoverResult(m, func(ok bool, fullSig []byte, err string, context *recoverCoinCtx) error {
 		if context.roundNumber != state.round.number || state.step != 9 {
+			logger.Log(logging.LevelDebug, "impossible condition on RecoverResult?")
 			// TODO: is this branch even possible?
 			return nil // stale result
 		}
@@ -320,6 +391,7 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID) modules.
 			// we have a signature, all we need to do is hash it and
 			dsl.HashOneMessage(m, mc.Hasher, [][]byte{fullSig}, context)
 		} else {
+			logger.Log(logging.LevelDebug, "could not recover coin ...YET")
 			// will attempt to recover when more signature shares arrive
 			state.round.coinRecoverInProgress = false
 		}
@@ -329,6 +401,7 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID) modules.
 
 	dsl.UponOneHashResult(m, func(hash []byte, context *recoverCoinCtx) error {
 		if state.round.number != context.roundNumber || state.step != 9 {
+			logger.Log(logging.LevelDebug, "impossible condition on OneHashResult?")
 			// TODO: is this branch even possible?
 			return nil // stale result
 		}
@@ -356,6 +429,10 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID) modules.
 		state.round.resetState(params)
 		state.step = 4
 
+		// 4. broadcast INIT(r, est)
+		dsl.SendMessage(m, mc.Net, InitMessage(mc.Self, state.round.number, state.round.estimate), params.AllNodes)
+		state.step = 5
+
 		return nil
 	})
 
@@ -366,7 +443,11 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID) modules.
 func (rs *abbaRoundState) resetState(params *ModuleParams) {
 	rs.values = abbadsl.EmptyValueSet()
 
-	rs.initRecvd = make(recvTracker, params.GetN())
+	rs.initRecvd = make(map[bool]recvTracker, 2)
+	for _, v := range []bool{false, true} {
+		rs.initRecvd[v] = make(recvTracker, params.GetN())
+	}
+
 	rs.initRecvdEstimates = makeBoolCounterMap()
 
 	rs.auxRecvd = make(recvTracker, params.GetN())
@@ -378,8 +459,9 @@ func (rs *abbaRoundState) resetState(params *ModuleParams) {
 	rs.coinRecvd = make(recvTracker, params.strongSupportThresh())
 	rs.coinRecvdOkShares = make([][]byte, 0, params.GetN()-params.GetF())
 
-	rs.initSent = makeBoolBoolMap()
+	rs.initWeakSupport = makeBoolBoolMap()
 	rs.auxSent = false
+	rs.coinRecoverInProgress = false
 	rs.coinRecoverMinShareCount = params.strongSupportThresh() - 1
 }
 
