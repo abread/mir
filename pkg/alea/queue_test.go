@@ -14,9 +14,9 @@ func TestInfVec_Mutation(t *testing.T) {
 
 	*el0 = "asd"
 
-	el0_again, ok0_again := v.Get(0)
-	assert.True(t, ok0_again)
-	assert.Equal(t, "asd", *el0_again)
+	el0Again, ok0Again := v.Get(0)
+	assert.True(t, ok0Again)
+	assert.Equal(t, "asd", *el0Again)
 }
 
 func TestInfVec_GetNonFirst(t *testing.T) {

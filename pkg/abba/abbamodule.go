@@ -1,8 +1,6 @@
 package abba
 
 import (
-	"bytes"
-	"encoding/binary"
 	"fmt"
 	"math"
 
@@ -13,6 +11,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/pb/abbapb"
 	"github.com/filecoin-project/mir/pkg/pb/factorymodulepb"
+	"github.com/filecoin-project/mir/pkg/serializing"
 	threshDsl "github.com/filecoin-project/mir/pkg/threshcrypto/dsl"
 	t "github.com/filecoin-project/mir/pkg/types"
 	"github.com/filecoin-project/mir/pkg/util/maputil"
@@ -102,7 +101,7 @@ type recoverCoinCtx struct {
 	roundNumber uint64
 }
 
-const MAX_STEP uint8 = 10
+const MaxStep uint8 = 10
 
 func NewReconfigurableModule(mc *ModuleConfig, nodeID t.NodeID, logger logging.Logger) modules.PassiveModule {
 	return factorymodule.New(
@@ -161,7 +160,7 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 			return nil // duplicate message
 		}
 		state.finishRecvd[from] = struct{}{}
-		state.finishRecvdValues[value] += 1
+		state.finishRecvdValues[value]++
 
 		// 1. upon receiving weak support for FINISH(v), broadcast FINISH(v)
 		if !state.finishSent && state.finishRecvdValues[value] >= params.weakSupportThresh() {
@@ -199,6 +198,14 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 		return nil
 	})
 
+	registerRoundEvents(m, state, mc, params, nodeID, logger)
+
+	return m
+}
+
+func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging.Logger) { // nolint: gocognit, gocyclo
+	// TODO: isolate coin sampling to different module to reduce complexity/noise
+
 	abbadsl.UponInitMessageReceived(m, func(from t.NodeID, r uint64, est bool) error {
 		if r != state.round.number {
 			logger.Log(logging.LevelDebug, "wrong round for INIT(r, est)", "current", state.round.number, "got", r)
@@ -209,13 +216,13 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 			return nil // duplicate message
 		}
 		state.round.initRecvd[est][from] = struct{}{}
-		state.round.initRecvdEstimates[est] += 1
+		state.round.initRecvdEstimates[est]++
 
 		return nil
 	})
 
 	dsl.UponCondition(m, func() error {
-		if state.step < 5 || state.step > MAX_STEP {
+		if state.step < 5 || state.step > MaxStep {
 			return nil // did not perform the initial INIT broadcast or has already terminated
 		}
 
@@ -255,7 +262,7 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 			return nil // duplicate message
 		}
 		state.round.auxRecvd[from] = struct{}{}
-		state.round.auxRecvdValues[value] += 1
+		state.round.auxRecvdValues[value]++
 
 		logger.Log(logging.LevelDebug, "recvd AUX(r, v)", "r", r, "v", value)
 
@@ -288,7 +295,7 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 			return nil // duplicate message
 		}
 		state.round.confRecvd[from] = struct{}{}
-		state.round.confRecvdValues[values] += 1
+		state.round.confRecvdValues[values]++
 
 		return nil
 	})
@@ -326,7 +333,7 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 			logger.Log(logging.LevelDebug, "wrong round for COIN(r, s)", "current", state.round.number, "got", r)
 			return nil // wrong round or already terminated
 		}
-		if state.step > MAX_STEP {
+		if state.step > MaxStep {
 			logger.Log(logging.LevelDebug, "already terminated (recvd COIN)")
 			return nil // already terminated
 		}
@@ -407,25 +414,25 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 		}
 
 		// finishing step 9
-		s_r := (hash[0] & 1) == 1 // TODO: this is ok, right?
+		sR := (hash[0] & 1) == 1 // TODO: this is ok, right?
 		state.step = 10
 
 		// 10.
 		if state.round.values.Len() == 2 {
-			state.round.estimate = s_r
+			state.round.estimate = sR
 		} else if state.round.values.Len() == 1 { // values = {v}
 			v := state.round.values.Has(true) // if values contains true, v=true, otherwise v=false
 			state.round.estimate = v
 
 			// If in fact values = { s_r }, broadcast FINISH(s_r) if we haven't broadcast FINISH(_) already
-			if v == s_r && !state.finishSent {
-				dsl.SendMessage(m, mc.Net, FinishMessage(mc.Self, s_r), params.AllNodes)
+			if v == sR && !state.finishSent {
+				dsl.SendMessage(m, mc.Net, FinishMessage(mc.Self, sR), params.AllNodes)
 				state.finishSent = true
 			}
 		}
 
 		// (still 10.) Set r = r + 1, and return to step 4
-		state.round.number += 1
+		state.round.number++
 		state.round.resetState(params)
 		state.step = 4
 
@@ -435,8 +442,6 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 
 		return nil
 	})
-
-	return m
 }
 
 // resets round state, apart from the round number and estimate
@@ -529,18 +534,12 @@ func (rs *abbaRoundState) isNiceConfValuesCount(params *ModuleParams) bool {
 	return total >= params.strongSupportThresh()
 }
 
-const COIN_SIGN_DATA_PREFIX = "github.com/filecoin-project/mir/pkg/alea/aba"
+const CoinSignDataPrefix = "github.com/filecoin-project/mir/pkg/alea/aba"
 
 func (rs *abbaRoundState) coinData(params *ModuleParams) [][]byte {
 	return [][]byte{
-		[]byte(COIN_SIGN_DATA_PREFIX),
+		[]byte(CoinSignDataPrefix),
 		params.InstanceUID,
-		toBytes(rs.number),
+		serializing.Uint64ToBytes(rs.number),
 	}
-}
-
-func toBytes[T any](v T) []byte {
-	buf := bytes.NewBuffer(make([]byte, 0, binary.Size(v)))
-	binary.Write(buf, binary.BigEndian, v)
-	return buf.Bytes()
 }

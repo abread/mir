@@ -40,7 +40,7 @@ func DefaultModuleConfig(consumer t.ModuleID) *ModuleConfig {
 }
 
 // ModuleParams sets the values for the parameters of an instance of the protocol.
-// All replicas are expected to use identical module parameters.
+// All replicas are expected to use identical module parameters, apart from the Origin.
 type ModuleParams struct {
 	InstanceUID []byte     // unique identifier for this instance of VCB
 	AllNodes    []t.NodeID // the list of participating nodes, which must be the same as the set of nodes in the threshcrypto module
@@ -87,10 +87,10 @@ type handleFinalCtx struct {
 
 type precomputeSigDataCtx struct{}
 
-func SigData(instanceUid []byte, batchID t.BatchID) [][]byte {
+func SigData(instanceUID []byte, batchID t.BatchID) [][]byte {
 	return [][]byte{
 		[]byte("github.com/filecoin-project/mir/pkg/vbc"),
-		instanceUid,
+		instanceUID,
 		[]byte(batchID),
 	}
 }

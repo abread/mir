@@ -8,15 +8,8 @@ import (
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
-func (alea *Alea) sendMessage(msg *messagepb.Message, destination t.NodeID) *events.EventList {
-	return (&events.EventList{}).PushBack(events.SendMessage(netModuleName, msg, []t.NodeID{destination}))
-}
-
-func (alea *Alea) broadcastMessage(msg *messagepb.Message) *events.EventList {
-	return (&events.EventList{}).PushBack(events.SendMessage(netModuleName, msg, alea.config.Membership))
-}
-
 type pendingMessageTree struct {
+	netModule            t.ModuleID
 	message              *messagepb.Message
 	destinations         []t.NodeID
 	timeSinceLastAttempt uint64
@@ -34,15 +27,15 @@ func NewPendingMessageTree() pendingMessageTree {
 func (tree *pendingMessageTree) Put(id []uint64, destinations []t.NodeID, msg *messagepb.Message) error {
 	if len(id) == 0 {
 		if tree.message != nil {
-			return fmt.Errorf("Message already present: %+v for nodes %v", tree.message, tree.destinations)
-		} else {
-			tree.message = msg
-			tree.destinations = destinations
-			return nil
+			return fmt.Errorf("message already present: %+v for nodes %v", tree.message, tree.destinations)
 		}
-	} else {
-		return tree.subtree(id[0]).Put(id[1:], destinations, msg)
+
+		tree.message = msg
+		tree.destinations = destinations
+		return nil
 	}
+
+	return tree.subtree(id[0]).Put(id[1:], destinations, msg)
 }
 
 func (tree *pendingMessageTree) MarkReceivedAll(id []uint64) {
@@ -76,7 +69,7 @@ func (tree *pendingMessageTree) ToEventList() *events.EventList {
 
 	// TODO: track message timers individually to prevent a thundering herd of retransmissions (also allows for smarter timeouts)
 	if tree.message != nil && len(tree.destinations) > 0 {
-		list.PushBack(events.SendMessage(netModuleName, tree.message, tree.destinations))
+		list.PushBack(events.SendMessage(tree.netModule, tree.message, tree.destinations))
 	}
 
 	for _, st := range tree.children {
@@ -100,11 +93,11 @@ func (tree *pendingMessageTree) Gc() bool {
 func (tree *pendingMessageTree) subtree(idPart uint64) *pendingMessageTree {
 	if st, exists := tree.children[idPart]; exists {
 		return st
-	} else {
-		st := NewPendingMessageTree()
-		tree.children[idPart] = &st
-		return &st
 	}
+
+	st := NewPendingMessageTree()
+	tree.children[idPart] = &st
+	return &st
 }
 
 func DeleteSliceEl(s []t.NodeID, toDelete t.NodeID) []t.NodeID {

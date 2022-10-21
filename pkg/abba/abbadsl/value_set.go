@@ -15,9 +15,9 @@ func (vs ValueSet) Pb() abbapb.ValueSet {
 func cobaltValueSetFromBool(v bool) abbapb.ValueSet {
 	if v {
 		return abbapb.ValueSet_ONE
-	} else {
-		return abbapb.ValueSet_ZERO
 	}
+
+	return abbapb.ValueSet_ZERO
 }
 
 func valueSetFromBool(v bool) ValueSet {

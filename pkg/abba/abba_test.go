@@ -256,7 +256,7 @@ func newCountingApp(inputValue bool) *countingApp {
 			app.firstDelivered = result
 		}
 
-		app.deliveredCount += 1
+		app.deliveredCount++
 
 		return nil
 	})

@@ -114,7 +114,7 @@ func runTest(t *testing.T, conf *TestConfig) (heapObjects int64, heapAlloc int64
 		app := replica.Modules["app"].(*countingApp)
 		assert.Equal(t, 1, app.deliveredCount)
 		// TODO: check request data
-		assert.Equal(t, app0.firstBatchId, app.firstBatchId)
+		assert.Equal(t, app0.firstBatchID, app.firstBatchID)
 		assert.ElementsMatch(t, app0.firstSignature, app.firstSignature)
 	}
 
@@ -152,7 +152,7 @@ func newDeployment(conf *TestConfig) (*deploytest.Deployment, error) {
 
 	nodeModules := make(map[types.NodeID]modules.Modules)
 
-	leader := nodeIDs[rand.New(rand.NewSource(conf.RandomSeed)).Intn(len(nodeIDs))]
+	leader := nodeIDs[rand.New(rand.NewSource(conf.RandomSeed)).Intn(len(nodeIDs))] // nolint: gosec
 
 	for _, nodeID := range nodeIDs {
 		//nodeLogger := logging.Decorate(logger, fmt.Sprintf("Node %d: ", i))
@@ -218,7 +218,7 @@ type countingApp struct {
 
 	deliveredCount int
 	firstData      []*requestpb.Request
-	firstBatchId   types.BatchID
+	firstBatchID   types.BatchID
 	firstSignature []byte
 }
 
@@ -248,11 +248,11 @@ func newCountingApp(isLeader bool) *countingApp {
 	vcbdsl.UponDeliver(m, func(data []*requestpb.Request, batchID types.BatchID, signature []byte, context *struct{}) error {
 		if app.deliveredCount == 0 {
 			app.firstData = data
-			app.firstBatchId = batchID
+			app.firstBatchID = batchID
 			app.firstSignature = signature
 		}
 
-		app.deliveredCount += 1
+		app.deliveredCount++
 
 		return nil
 	})

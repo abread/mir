@@ -3,9 +3,9 @@ package alea
 type slotState uint8
 
 const (
-	SLOT_UNUSED   slotState = 0
-	SLOT_OCCUPIED           = 1
-	SLOT_FREED              = 2
+	UnusedSlot slotState = iota
+	OccupiedSlot
+	FreedSlot
 )
 
 type InfVec[T any] struct {
@@ -23,24 +23,24 @@ func NewInfVec[T any](capacity int) InfVec[T] {
 }
 
 func (v *InfVec[T]) Get(n uint64) (*T, bool) {
-	if v.NInOperationalRange(n) && *v.nthSlotState(n) != SLOT_FREED {
-		*v.nthSlotState(n) = SLOT_OCCUPIED
+	if v.NInOperationalRange(n) && *v.nthSlotState(n) != FreedSlot {
+		*v.nthSlotState(n) = OccupiedSlot
 		return v.nthUnchecked(n), true
-	} else {
-		return nil, false
 	}
+
+	return nil, false
 }
 
 func (v *InfVec[T]) Free(n uint64) {
 	if v.NInOperationalRange(n) {
 		var zero T
 		*v.nthUnchecked(n) = zero
-		*v.nthSlotState(n) = SLOT_FREED
+		*v.nthSlotState(n) = FreedSlot
 
 		// whenever possible, advance lower bound to allow free slot reuse with future elements
-		for *v.nthSlotState(v.lowerBound) == SLOT_FREED {
-			*v.nthSlotState(v.lowerBound) = SLOT_UNUSED
-			v.lowerBound += 1
+		for *v.nthSlotState(v.lowerBound) == FreedSlot {
+			*v.nthSlotState(v.lowerBound) = UnusedSlot
+			v.lowerBound++
 		}
 	} else if n > v.UpperBound() {
 		panic("cannot free a never-inserted element")
@@ -48,12 +48,12 @@ func (v *InfVec[T]) Free(n uint64) {
 }
 
 func (v *InfVec[T]) TryPut(n uint64, t T) bool {
-	if *v.nthSlotState(n) == SLOT_UNUSED {
+	if *v.nthSlotState(n) == UnusedSlot {
 		*v.nthUnchecked(n) = t
 		return true
-	} else {
-		return false
 	}
+
+	return false
 }
 
 func (v *InfVec[T]) GetOrDefault(n uint64, mutator func(*T), defaultProducer func() T) (*T, bool) {
@@ -61,18 +61,18 @@ func (v *InfVec[T]) GetOrDefault(n uint64, mutator func(*T), defaultProducer fun
 	slotState := v.nthSlotState(n)
 
 	switch *slotState {
-	case SLOT_UNUSED:
+	case UnusedSlot:
 		*v.nthUnchecked(n) = defaultProducer()
-		*slotState = SLOT_OCCUPIED
-	case SLOT_OCCUPIED:
+		*slotState = OccupiedSlot
+	case OccupiedSlot:
 		mutator(v.nthUnchecked(n))
-	case SLOT_FREED:
+	case FreedSlot:
 		// noop
 	default:
 		panic("invalid slot state in InfVec")
 	}
 
-	return v.nthUnchecked(n), *slotState != SLOT_FREED
+	return v.nthUnchecked(n), *slotState != FreedSlot
 }
 
 func (v *InfVec[T]) LowerBound() uint64 {
@@ -87,8 +87,8 @@ func (v *InfVec[T]) Len() int {
 	count := 0
 
 	for _, slotState := range v.slotStates {
-		if slotState == SLOT_OCCUPIED {
-			count += 1
+		if slotState == OccupiedSlot {
+			count++
 		}
 	}
 
