@@ -1,0 +1,67 @@
+syntax = "proto3";
+
+package aleapb;
+
+import "requestpb/requestpb.proto";
+
+option go_package = "github.com/hyperledger-labs/mirbft/pkg/pb/aleapb";
+
+message AleaMessage {
+    uint64 instance = 1;
+    oneof type {
+        VCBCMessage vcbc = 2;
+        AgreementMessage agreement = 3;
+        ABBAMessage abba = 4;
+    }
+}
+
+message AgreementMessage {
+    uint64 instance = 1;
+    oneof type {
+        AgreementFillGapMessage fillGap = 2;
+        AgreementFillerMessage filler = 3;
+    }
+}
+
+message AgreementFillGapMessage {
+    uint32 queue_idx = 1;
+    uint64 slot = 2; // TODO: confirm type
+}
+
+message AgreementFillerMessage {
+    // TODO: may be simplified(?)
+    repeated VCBCMessage entries = 1;
+}
+
+message VCBCMessage {
+    VCBCId instance = 1;
+    message VCBCId {
+        uint64 initiator_id = 1;
+        uint64 priority = 2;
+    }
+
+    oneof type {
+        VCBCSendMessage send = 2;
+        VCBCEchoMessage echo = 3;
+        VCBCFinalMessage final = 4;
+    }
+}
+
+message VCBCSendMessage {
+    requestpb.Batch payload = 1;
+}
+
+message VCBCEchoMessage {
+    requestpb.Batch payload = 1;
+    bytes signature_share = 2;
+}
+
+message VCBCFinalMessage {
+    requestpb.Batch payload = 1;
+    bytes signature = 2;
+}
+
+message ABBAMessage {
+    uint64 instance = 1;
+    // TODO
+}
