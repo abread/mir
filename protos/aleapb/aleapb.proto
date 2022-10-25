@@ -2,44 +2,34 @@ syntax = "proto3";
 
 package aleapb;
 
-//import "mir/plugin.proto";
-
 option go_package = "github.com/filecoin-project/mir/pkg/pb/aleapb";
+
+import "aleapb/common/common.proto";
+import "requestpb/requestpb.proto";
 
 // ============================================================
 // Messages
 // ============================================================
 
-message AleaMessage {
+message Message {
     oneof type {
-        FillGap fill_gap = 3;
-        Filler filler = 4;
+        FillGapMessage fill_gap_message = 1;
+        FillerMessage  filler_message   = 2;
     }
 }
 
-message MsgId {
-    string queue_idx = 1;
-    uint64 slot = 2;
+message FillGapMessage {
+    common.Slot slot = 1;
 }
 
-message FillGap {
-    MsgId id = 1;
+message FillerMessage {
+    common.Slot                slot      = 1;
+    repeated requestpb.Request txs       = 2;
+    bytes                      signature = 3;
 }
 
-message Filler {
-    MsgId id = 1;
-    repeated bytes tx_ids = 2;
-    bytes signature = 3;
+// Availability interface certificate
+message Cert {
+    common.Slot slot = 1;
+    // agreement guarantees that at least f+1 nodes have the batch for this slot
 }
-
-
-// ============================================================
-// Events
-// ============================================================
-
-message Event {
-    /*oneof type {
-        option (mir.event_type) = true;
-    }*/
-}
-

@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package aleapb.common;
+
+option go_package = "github.com/filecoin-project/mir/pkg/pb/aleapb/common";
+
+message Slot {
+    uint32 queue_idx = 1;
+    uint64 queue_slot = 2;
+}

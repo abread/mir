@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package aleapb.bcpb;
+
+option go_package = "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb";
+
+import "aleapb/common/common.proto";
+import "requestpb/requestpb.proto";
+import "mir/plugin.proto";
+
+
+// ============================================================
+// Events
+// ============================================================
+
+message Event {
+    oneof type {
+        option (mir.event_type) = true;
+
+        StartBroadcast start_broadcast = 1;
+        Deliver        deliver         = 2;
+        FreeSlot       free_slot       = 3;
+    }
+}
+
+message StartBroadcast {
+    // queue_idx is the one for this node
+    uint64                     queue_slot = 1;
+    repeated requestpb.Request txs        = 2;
+}
+
+
+message Deliver {
+    common.Slot                slot = 1;
+    repeated requestpb.Request txs  = 2;
+}
+
+message FreeSlot {
+    common.Slot slot = 1;
+}

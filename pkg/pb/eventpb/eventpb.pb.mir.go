@@ -4,7 +4,8 @@ import (
 	wrapperspb "google.golang.org/protobuf/types/known/wrapperspb"
 
 	abbapb "github.com/filecoin-project/mir/pkg/pb/abbapb"
-	aleapb "github.com/filecoin-project/mir/pkg/pb/aleapb"
+	agreementpb "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb"
+	bcpb "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb"
 	availabilitypb "github.com/filecoin-project/mir/pkg/pb/availabilitypb"
 	batchdbpb "github.com/filecoin-project/mir/pkg/pb/availabilitypb/batchdbpb"
 	batchfetcherpb "github.com/filecoin-project/mir/pkg/pb/batchfetcherpb"
@@ -177,12 +178,16 @@ func (p *Event_Vcb) Unwrap() *vcbpb.Event {
 	return p.Vcb
 }
 
-func (p *Event_Alea) Unwrap() *aleapb.Event {
-	return p.Alea
-}
-
 func (p *Event_Abba) Unwrap() *abbapb.Event {
 	return p.Abba
+}
+
+func (p *Event_AleaBroadcast) Unwrap() *bcpb.Event {
+	return p.AleaBroadcast
+}
+
+func (p *Event_AleaAgreement) Unwrap() *agreementpb.Event {
+	return p.AleaAgreement
 }
 
 func (p *Event_TestingString) Unwrap() *wrapperspb.StringValue {

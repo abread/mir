@@ -28,7 +28,7 @@ message Message {
     pingpongpb.Message           pingpong           = 5;
     checkpointpb.Message         checkpoint         = 6;
     vcbpb.Message                vcb                = 7;
-    aleapb.AleaMessage           alea               = 8;
-    abbapb.Message               abba               = 9;
+    abbapb.Message               abba               = 8;
+    aleapb.Message               alea               = 9;
   }
 }

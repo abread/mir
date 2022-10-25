@@ -7,6 +7,7 @@ option go_package = "github.com/filecoin-project/mir/pkg/pb/availabilitypb";
 import "contextstorepb/contextstorepb.proto";
 import "dslpb/dslpb.proto";
 import "availabilitypb/mscpb/mscpb.proto";
+import "aleapb/aleapb.proto";
 import "mir/plugin.proto";
 import "requestpb/requestpb.proto";
 
@@ -100,6 +101,7 @@ message VerifyCertOrigin {
 
 message Cert {
   oneof Type {
-    availabilitypb.mscpb.Cert msc = 1;
+    availabilitypb.mscpb.Cert msc  = 1;
+    aleapb.Cert               alea = 2;
   }
 }

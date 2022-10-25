@@ -12,6 +12,9 @@ import (
 
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+
+	common "github.com/filecoin-project/mir/pkg/pb/aleapb/common"
+	requestpb "github.com/filecoin-project/mir/pkg/pb/requestpb"
 )
 
 const (
@@ -21,19 +24,19 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-type AleaMessage struct {
+type Message struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to Type:
-	//	*AleaMessage_FillGap
-	//	*AleaMessage_Filler
-	Type isAleaMessage_Type `protobuf_oneof:"type"`
+	//	*Message_FillGapMessage
+	//	*Message_FillerMessage
+	Type isMessage_Type `protobuf_oneof:"type"`
 }
 
-func (x *AleaMessage) Reset() {
-	*x = AleaMessage{}
+func (x *Message) Reset() {
+	*x = Message{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_aleapb_aleapb_proto_msgTypes[0]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -41,13 +44,13 @@ func (x *AleaMessage) Reset() {
 	}
 }
 
-func (x *AleaMessage) String() string {
+func (x *Message) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*AleaMessage) ProtoMessage() {}
+func (*Message) ProtoMessage() {}
 
-func (x *AleaMessage) ProtoReflect() protoreflect.Message {
+func (x *Message) ProtoReflect() protoreflect.Message {
 	mi := &file_aleapb_aleapb_proto_msgTypes[0]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -59,59 +62,58 @@ func (x *AleaMessage) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use AleaMessage.ProtoReflect.Descriptor instead.
-func (*AleaMessage) Descriptor() ([]byte, []int) {
+// Deprecated: Use Message.ProtoReflect.Descriptor instead.
+func (*Message) Descriptor() ([]byte, []int) {
 	return file_aleapb_aleapb_proto_rawDescGZIP(), []int{0}
 }
 
-func (m *AleaMessage) GetType() isAleaMessage_Type {
+func (m *Message) GetType() isMessage_Type {
 	if m != nil {
 		return m.Type
 	}
 	return nil
 }
 
-func (x *AleaMessage) GetFillGap() *FillGap {
-	if x, ok := x.GetType().(*AleaMessage_FillGap); ok {
-		return x.FillGap
+func (x *Message) GetFillGapMessage() *FillGapMessage {
+	if x, ok := x.GetType().(*Message_FillGapMessage); ok {
+		return x.FillGapMessage
 	}
 	return nil
 }
 
-func (x *AleaMessage) GetFiller() *Filler {
-	if x, ok := x.GetType().(*AleaMessage_Filler); ok {
-		return x.Filler
+func (x *Message) GetFillerMessage() *FillerMessage {
+	if x, ok := x.GetType().(*Message_FillerMessage); ok {
+		return x.FillerMessage
 	}
 	return nil
 }
 
-type isAleaMessage_Type interface {
-	isAleaMessage_Type()
+type isMessage_Type interface {
+	isMessage_Type()
 }
 
-type AleaMessage_FillGap struct {
-	FillGap *FillGap `protobuf:"bytes,3,opt,name=fill_gap,json=fillGap,proto3,oneof"`
+type Message_FillGapMessage struct {
+	FillGapMessage *FillGapMessage `protobuf:"bytes,1,opt,name=fill_gap_message,json=fillGapMessage,proto3,oneof"`
 }
 
-type AleaMessage_Filler struct {
-	Filler *Filler `protobuf:"bytes,4,opt,name=filler,proto3,oneof"`
+type Message_FillerMessage struct {
+	FillerMessage *FillerMessage `protobuf:"bytes,2,opt,name=filler_message,json=fillerMessage,proto3,oneof"`
 }
 
-func (*AleaMessage_FillGap) isAleaMessage_Type() {}
+func (*Message_FillGapMessage) isMessage_Type() {}
 
-func (*AleaMessage_Filler) isAleaMessage_Type() {}
+func (*Message_FillerMessage) isMessage_Type() {}
 
-type MsgId struct {
+type FillGapMessage struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	QueueIdx string `protobuf:"bytes,1,opt,name=queue_idx,json=queueIdx,proto3" json:"queue_idx,omitempty"`
-	Slot     uint64 `protobuf:"varint,2,opt,name=slot,proto3" json:"slot,omitempty"`
+	Slot *common.Slot `protobuf:"bytes,1,opt,name=slot,proto3" json:"slot,omitempty"`
 }
 
-func (x *MsgId) Reset() {
-	*x = MsgId{}
+func (x *FillGapMessage) Reset() {
+	*x = FillGapMessage{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_aleapb_aleapb_proto_msgTypes[1]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -119,13 +121,13 @@ func (x *MsgId) Reset() {
 	}
 }
 
-func (x *MsgId) String() string {
+func (x *FillGapMessage) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*MsgId) ProtoMessage() {}
+func (*FillGapMessage) ProtoMessage() {}
 
-func (x *MsgId) ProtoReflect() protoreflect.Message {
+func (x *FillGapMessage) ProtoReflect() protoreflect.Message {
 	mi := &file_aleapb_aleapb_proto_msgTypes[1]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -137,35 +139,30 @@ func (x *MsgId) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use MsgId.ProtoReflect.Descriptor instead.
-func (*MsgId) Descriptor() ([]byte, []int) {
+// Deprecated: Use FillGapMessage.ProtoReflect.Descriptor instead.
+func (*FillGapMessage) Descriptor() ([]byte, []int) {
 	return file_aleapb_aleapb_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *MsgId) GetQueueIdx() string {
-	if x != nil {
-		return x.QueueIdx
-	}
-	return ""
-}
-
-func (x *MsgId) GetSlot() uint64 {
+func (x *FillGapMessage) GetSlot() *common.Slot {
 	if x != nil {
 		return x.Slot
 	}
-	return 0
+	return nil
 }
 
-type FillGap struct {
+type FillerMessage struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Id *MsgId `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Slot      *common.Slot         `protobuf:"bytes,1,opt,name=slot,proto3" json:"slot,omitempty"`
+	Txs       []*requestpb.Request `protobuf:"bytes,2,rep,name=txs,proto3" json:"txs,omitempty"`
+	Signature []byte               `protobuf:"bytes,3,opt,name=signature,proto3" json:"signature,omitempty"`
 }
 
-func (x *FillGap) Reset() {
-	*x = FillGap{}
+func (x *FillerMessage) Reset() {
+	*x = FillerMessage{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_aleapb_aleapb_proto_msgTypes[2]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -173,13 +170,13 @@ func (x *FillGap) Reset() {
 	}
 }
 
-func (x *FillGap) String() string {
+func (x *FillerMessage) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*FillGap) ProtoMessage() {}
+func (*FillerMessage) ProtoMessage() {}
 
-func (x *FillGap) ProtoReflect() protoreflect.Message {
+func (x *FillerMessage) ProtoReflect() protoreflect.Message {
 	mi := &file_aleapb_aleapb_proto_msgTypes[2]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -191,30 +188,43 @@ func (x *FillGap) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use FillGap.ProtoReflect.Descriptor instead.
-func (*FillGap) Descriptor() ([]byte, []int) {
+// Deprecated: Use FillerMessage.ProtoReflect.Descriptor instead.
+func (*FillerMessage) Descriptor() ([]byte, []int) {
 	return file_aleapb_aleapb_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *FillGap) GetId() *MsgId {
+func (x *FillerMessage) GetSlot() *common.Slot {
 	if x != nil {
-		return x.Id
+		return x.Slot
 	}
 	return nil
 }
 
-type Filler struct {
+func (x *FillerMessage) GetTxs() []*requestpb.Request {
+	if x != nil {
+		return x.Txs
+	}
+	return nil
+}
+
+func (x *FillerMessage) GetSignature() []byte {
+	if x != nil {
+		return x.Signature
+	}
+	return nil
+}
+
+// Availability interface certificate
+type Cert struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Id        *MsgId   `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	TxIds     [][]byte `protobuf:"bytes,2,rep,name=tx_ids,json=txIds,proto3" json:"tx_ids,omitempty"`
-	Signature []byte   `protobuf:"bytes,3,opt,name=signature,proto3" json:"signature,omitempty"`
+	Slot *common.Slot `protobuf:"bytes,1,opt,name=slot,proto3" json:"slot,omitempty"` // agreement guarantees that at least f+1 nodes have the batch for this slot
 }
 
-func (x *Filler) Reset() {
-	*x = Filler{}
+func (x *Cert) Reset() {
+	*x = Cert{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_aleapb_aleapb_proto_msgTypes[3]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -222,13 +232,13 @@ func (x *Filler) Reset() {
 	}
 }
 
-func (x *Filler) String() string {
+func (x *Cert) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*Filler) ProtoMessage() {}
+func (*Cert) ProtoMessage() {}
 
-func (x *Filler) ProtoReflect() protoreflect.Message {
+func (x *Cert) ProtoReflect() protoreflect.Message {
 	mi := &file_aleapb_aleapb_proto_msgTypes[3]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -240,98 +250,54 @@ func (x *Filler) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use Filler.ProtoReflect.Descriptor instead.
-func (*Filler) Descriptor() ([]byte, []int) {
+// Deprecated: Use Cert.ProtoReflect.Descriptor instead.
+func (*Cert) Descriptor() ([]byte, []int) {
 	return file_aleapb_aleapb_proto_rawDescGZIP(), []int{3}
 }
 
-func (x *Filler) GetId() *MsgId {
+func (x *Cert) GetSlot() *common.Slot {
 	if x != nil {
-		return x.Id
+		return x.Slot
 	}
 	return nil
-}
-
-func (x *Filler) GetTxIds() [][]byte {
-	if x != nil {
-		return x.TxIds
-	}
-	return nil
-}
-
-func (x *Filler) GetSignature() []byte {
-	if x != nil {
-		return x.Signature
-	}
-	return nil
-}
-
-type Event struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-}
-
-func (x *Event) Reset() {
-	*x = Event{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_aleapb_aleapb_proto_msgTypes[4]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *Event) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Event) ProtoMessage() {}
-
-func (x *Event) ProtoReflect() protoreflect.Message {
-	mi := &file_aleapb_aleapb_proto_msgTypes[4]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Event.ProtoReflect.Descriptor instead.
-func (*Event) Descriptor() ([]byte, []int) {
-	return file_aleapb_aleapb_proto_rawDescGZIP(), []int{4}
 }
 
 var File_aleapb_aleapb_proto protoreflect.FileDescriptor
 
 var file_aleapb_aleapb_proto_rawDesc = []byte{
 	0x0a, 0x13, 0x61, 0x6c, 0x65, 0x61, 0x70, 0x62, 0x2f, 0x61, 0x6c, 0x65, 0x61, 0x70, 0x62, 0x2e,
-	0x70, 0x72, 0x6f, 0x74, 0x6f, 0x12, 0x06, 0x61, 0x6c, 0x65, 0x61, 0x70, 0x62, 0x22, 0x6d, 0x0a,
-	0x0b, 0x41, 0x6c, 0x65, 0x61, 0x4d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x12, 0x2c, 0x0a, 0x08,
-	0x66, 0x69, 0x6c, 0x6c, 0x5f, 0x67, 0x61, 0x70, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0f,
-	0x2e, 0x61, 0x6c, 0x65, 0x61, 0x70, 0x62, 0x2e, 0x46, 0x69, 0x6c, 0x6c, 0x47, 0x61, 0x70, 0x48,
-	0x00, 0x52, 0x07, 0x66, 0x69, 0x6c, 0x6c, 0x47, 0x61, 0x70, 0x12, 0x28, 0x0a, 0x06, 0x66, 0x69,
-	0x6c, 0x6c, 0x65, 0x72, 0x18, 0x04, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0e, 0x2e, 0x61, 0x6c, 0x65,
-	0x61, 0x70, 0x62, 0x2e, 0x46, 0x69, 0x6c, 0x6c, 0x65, 0x72, 0x48, 0x00, 0x52, 0x06, 0x66, 0x69,
-	0x6c, 0x6c, 0x65, 0x72, 0x42, 0x06, 0x0a, 0x04, 0x74, 0x79, 0x70, 0x65, 0x22, 0x38, 0x0a, 0x05,
-	0x4d, 0x73, 0x67, 0x49, 0x64, 0x12, 0x1b, 0x0a, 0x09, 0x71, 0x75, 0x65, 0x75, 0x65, 0x5f, 0x69,
-	0x64, 0x78, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x71, 0x75, 0x65, 0x75, 0x65, 0x49,
-	0x64, 0x78, 0x12, 0x12, 0x0a, 0x04, 0x73, 0x6c, 0x6f, 0x74, 0x18, 0x02, 0x20, 0x01, 0x28, 0x04,
-	0x52, 0x04, 0x73, 0x6c, 0x6f, 0x74, 0x22, 0x28, 0x0a, 0x07, 0x46, 0x69, 0x6c, 0x6c, 0x47, 0x61,
-	0x70, 0x12, 0x1d, 0x0a, 0x02, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0d, 0x2e,
-	0x61, 0x6c, 0x65, 0x61, 0x70, 0x62, 0x2e, 0x4d, 0x73, 0x67, 0x49, 0x64, 0x52, 0x02, 0x69, 0x64,
-	0x22, 0x5c, 0x0a, 0x06, 0x46, 0x69, 0x6c, 0x6c, 0x65, 0x72, 0x12, 0x1d, 0x0a, 0x02, 0x69, 0x64,
-	0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0d, 0x2e, 0x61, 0x6c, 0x65, 0x61, 0x70, 0x62, 0x2e,
-	0x4d, 0x73, 0x67, 0x49, 0x64, 0x52, 0x02, 0x69, 0x64, 0x12, 0x15, 0x0a, 0x06, 0x74, 0x78, 0x5f,
-	0x69, 0x64, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28, 0x0c, 0x52, 0x05, 0x74, 0x78, 0x49, 0x64, 0x73,
-	0x12, 0x1c, 0x0a, 0x09, 0x73, 0x69, 0x67, 0x6e, 0x61, 0x74, 0x75, 0x72, 0x65, 0x18, 0x03, 0x20,
-	0x01, 0x28, 0x0c, 0x52, 0x09, 0x73, 0x69, 0x67, 0x6e, 0x61, 0x74, 0x75, 0x72, 0x65, 0x22, 0x07,
-	0x0a, 0x05, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x42, 0x2f, 0x5a, 0x2d, 0x67, 0x69, 0x74, 0x68, 0x75,
-	0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x66, 0x69, 0x6c, 0x65, 0x63, 0x6f, 0x69, 0x6e, 0x2d, 0x70,
-	0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, 0x2f, 0x6d, 0x69, 0x72, 0x2f, 0x70, 0x6b, 0x67, 0x2f, 0x70,
-	0x62, 0x2f, 0x61, 0x6c, 0x65, 0x61, 0x70, 0x62, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x70, 0x72, 0x6f, 0x74, 0x6f, 0x12, 0x06, 0x61, 0x6c, 0x65, 0x61, 0x70, 0x62, 0x1a, 0x1a, 0x61,
+	0x6c, 0x65, 0x61, 0x70, 0x62, 0x2f, 0x63, 0x6f, 0x6d, 0x6d, 0x6f, 0x6e, 0x2f, 0x63, 0x6f, 0x6d,
+	0x6d, 0x6f, 0x6e, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x1a, 0x19, 0x72, 0x65, 0x71, 0x75, 0x65,
+	0x73, 0x74, 0x70, 0x62, 0x2f, 0x72, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x70, 0x62, 0x2e, 0x70,
+	0x72, 0x6f, 0x74, 0x6f, 0x22, 0x95, 0x01, 0x0a, 0x07, 0x4d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65,
+	0x12, 0x42, 0x0a, 0x10, 0x66, 0x69, 0x6c, 0x6c, 0x5f, 0x67, 0x61, 0x70, 0x5f, 0x6d, 0x65, 0x73,
+	0x73, 0x61, 0x67, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x16, 0x2e, 0x61, 0x6c, 0x65,
+	0x61, 0x70, 0x62, 0x2e, 0x46, 0x69, 0x6c, 0x6c, 0x47, 0x61, 0x70, 0x4d, 0x65, 0x73, 0x73, 0x61,
+	0x67, 0x65, 0x48, 0x00, 0x52, 0x0e, 0x66, 0x69, 0x6c, 0x6c, 0x47, 0x61, 0x70, 0x4d, 0x65, 0x73,
+	0x73, 0x61, 0x67, 0x65, 0x12, 0x3e, 0x0a, 0x0e, 0x66, 0x69, 0x6c, 0x6c, 0x65, 0x72, 0x5f, 0x6d,
+	0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x15, 0x2e, 0x61,
+	0x6c, 0x65, 0x61, 0x70, 0x62, 0x2e, 0x46, 0x69, 0x6c, 0x6c, 0x65, 0x72, 0x4d, 0x65, 0x73, 0x73,
+	0x61, 0x67, 0x65, 0x48, 0x00, 0x52, 0x0d, 0x66, 0x69, 0x6c, 0x6c, 0x65, 0x72, 0x4d, 0x65, 0x73,
+	0x73, 0x61, 0x67, 0x65, 0x42, 0x06, 0x0a, 0x04, 0x74, 0x79, 0x70, 0x65, 0x22, 0x39, 0x0a, 0x0e,
+	0x46, 0x69, 0x6c, 0x6c, 0x47, 0x61, 0x70, 0x4d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x12, 0x27,
+	0x0a, 0x04, 0x73, 0x6c, 0x6f, 0x74, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x13, 0x2e, 0x61,
+	0x6c, 0x65, 0x61, 0x70, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x6d, 0x6f, 0x6e, 0x2e, 0x53, 0x6c, 0x6f,
+	0x74, 0x52, 0x04, 0x73, 0x6c, 0x6f, 0x74, 0x22, 0x7c, 0x0a, 0x0d, 0x46, 0x69, 0x6c, 0x6c, 0x65,
+	0x72, 0x4d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x12, 0x27, 0x0a, 0x04, 0x73, 0x6c, 0x6f, 0x74,
+	0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x13, 0x2e, 0x61, 0x6c, 0x65, 0x61, 0x70, 0x62, 0x2e,
+	0x63, 0x6f, 0x6d, 0x6d, 0x6f, 0x6e, 0x2e, 0x53, 0x6c, 0x6f, 0x74, 0x52, 0x04, 0x73, 0x6c, 0x6f,
+	0x74, 0x12, 0x24, 0x0a, 0x03, 0x74, 0x78, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x12,
+	0x2e, 0x72, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x70, 0x62, 0x2e, 0x52, 0x65, 0x71, 0x75, 0x65,
+	0x73, 0x74, 0x52, 0x03, 0x74, 0x78, 0x73, 0x12, 0x1c, 0x0a, 0x09, 0x73, 0x69, 0x67, 0x6e, 0x61,
+	0x74, 0x75, 0x72, 0x65, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x09, 0x73, 0x69, 0x67, 0x6e,
+	0x61, 0x74, 0x75, 0x72, 0x65, 0x22, 0x2f, 0x0a, 0x04, 0x43, 0x65, 0x72, 0x74, 0x12, 0x27, 0x0a,
+	0x04, 0x73, 0x6c, 0x6f, 0x74, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x13, 0x2e, 0x61, 0x6c,
+	0x65, 0x61, 0x70, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x6d, 0x6f, 0x6e, 0x2e, 0x53, 0x6c, 0x6f, 0x74,
+	0x52, 0x04, 0x73, 0x6c, 0x6f, 0x74, 0x42, 0x2f, 0x5a, 0x2d, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62,
+	0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x66, 0x69, 0x6c, 0x65, 0x63, 0x6f, 0x69, 0x6e, 0x2d, 0x70, 0x72,
+	0x6f, 0x6a, 0x65, 0x63, 0x74, 0x2f, 0x6d, 0x69, 0x72, 0x2f, 0x70, 0x6b, 0x67, 0x2f, 0x70, 0x62,
+	0x2f, 0x61, 0x6c, 0x65, 0x61, 0x70, 0x62, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -346,24 +312,27 @@ func file_aleapb_aleapb_proto_rawDescGZIP() []byte {
 	return file_aleapb_aleapb_proto_rawDescData
 }
 
-var file_aleapb_aleapb_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_aleapb_aleapb_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_aleapb_aleapb_proto_goTypes = []interface{}{
-	(*AleaMessage)(nil), // 0: aleapb.AleaMessage
-	(*MsgId)(nil),       // 1: aleapb.MsgId
-	(*FillGap)(nil),     // 2: aleapb.FillGap
-	(*Filler)(nil),      // 3: aleapb.Filler
-	(*Event)(nil),       // 4: aleapb.Event
+	(*Message)(nil),           // 0: aleapb.Message
+	(*FillGapMessage)(nil),    // 1: aleapb.FillGapMessage
+	(*FillerMessage)(nil),     // 2: aleapb.FillerMessage
+	(*Cert)(nil),              // 3: aleapb.Cert
+	(*common.Slot)(nil),       // 4: aleapb.common.Slot
+	(*requestpb.Request)(nil), // 5: requestpb.Request
 }
 var file_aleapb_aleapb_proto_depIdxs = []int32{
-	2, // 0: aleapb.AleaMessage.fill_gap:type_name -> aleapb.FillGap
-	3, // 1: aleapb.AleaMessage.filler:type_name -> aleapb.Filler
-	1, // 2: aleapb.FillGap.id:type_name -> aleapb.MsgId
-	1, // 3: aleapb.Filler.id:type_name -> aleapb.MsgId
-	4, // [4:4] is the sub-list for method output_type
-	4, // [4:4] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	1, // 0: aleapb.Message.fill_gap_message:type_name -> aleapb.FillGapMessage
+	2, // 1: aleapb.Message.filler_message:type_name -> aleapb.FillerMessage
+	4, // 2: aleapb.FillGapMessage.slot:type_name -> aleapb.common.Slot
+	4, // 3: aleapb.FillerMessage.slot:type_name -> aleapb.common.Slot
+	5, // 4: aleapb.FillerMessage.txs:type_name -> requestpb.Request
+	4, // 5: aleapb.Cert.slot:type_name -> aleapb.common.Slot
+	6, // [6:6] is the sub-list for method output_type
+	6, // [6:6] is the sub-list for method input_type
+	6, // [6:6] is the sub-list for extension type_name
+	6, // [6:6] is the sub-list for extension extendee
+	0, // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_aleapb_aleapb_proto_init() }
@@ -373,7 +342,7 @@ func file_aleapb_aleapb_proto_init() {
 	}
 	if !protoimpl.UnsafeEnabled {
 		file_aleapb_aleapb_proto_msgTypes[0].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*AleaMessage); i {
+			switch v := v.(*Message); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -385,7 +354,7 @@ func file_aleapb_aleapb_proto_init() {
 			}
 		}
 		file_aleapb_aleapb_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*MsgId); i {
+			switch v := v.(*FillGapMessage); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -397,7 +366,7 @@ func file_aleapb_aleapb_proto_init() {
 			}
 		}
 		file_aleapb_aleapb_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*FillGap); i {
+			switch v := v.(*FillerMessage); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -409,19 +378,7 @@ func file_aleapb_aleapb_proto_init() {
 			}
 		}
 		file_aleapb_aleapb_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Filler); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_aleapb_aleapb_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Event); i {
+			switch v := v.(*Cert); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -434,8 +391,8 @@ func file_aleapb_aleapb_proto_init() {
 		}
 	}
 	file_aleapb_aleapb_proto_msgTypes[0].OneofWrappers = []interface{}{
-		(*AleaMessage_FillGap)(nil),
-		(*AleaMessage_Filler)(nil),
+		(*Message_FillGapMessage)(nil),
+		(*Message_FillerMessage)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -443,7 +400,7 @@ func file_aleapb_aleapb_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_aleapb_aleapb_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   5,
+			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
