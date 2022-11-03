@@ -1,6 +1,7 @@
 package abbadsl
 
 import (
+	abbaEvents "github.com/filecoin-project/mir/pkg/abba/abbaevents"
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/pb/abbapb"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
@@ -11,35 +12,11 @@ import (
 // Module-specific dsl functions for emitting events.
 
 func InputValue(m dsl.Module, dest t.ModuleID, input bool) {
-	dsl.EmitEvent(m, &eventpb.Event{
-		DestModule: dest.Pb(),
-
-		Type: &eventpb.Event_Abba{
-			Abba: &abbapb.Event{
-				Type: &abbapb.Event_InputValue{
-					InputValue: &abbapb.InputValue{
-						Input: input,
-					},
-				},
-			},
-		},
-	})
+	dsl.EmitEvent(m, abbaEvents.InputValue(dest, input))
 }
 
 func Deliver(m dsl.Module, dest t.ModuleID, result bool) {
-	dsl.EmitEvent(m, &eventpb.Event{
-		DestModule: dest.Pb(),
-
-		Type: &eventpb.Event_Abba{
-			Abba: &abbapb.Event{
-				Type: &abbapb.Event_Deliver{
-					Deliver: &abbapb.Deliver{
-						Result: result,
-					},
-				},
-			},
-		},
-	})
+	dsl.EmitEvent(m, abbaEvents.Deliver(dest, result))
 }
 
 // Module-specific dsl functions for processing events.

@@ -39,6 +39,11 @@ func (mid ModuleID) Sub() ModuleID {
 	return ModuleID(sub)
 }
 
+func (mid ModuleID) StripParent(parent ModuleID) ModuleID {
+	stripped := strings.TrimPrefix(string(mid), string(parent)+Separator)
+	return ModuleID(stripped)
+}
+
 // Then combines the module ID with a relative path to its submodule in a single module ID.
 func (mid ModuleID) Then(submodule ModuleID) ModuleID {
 	return ModuleID(string(mid) + Separator + string(submodule))
