@@ -25,7 +25,8 @@ message InputValue {
 }
 
 message Deliver {
-  bool result = 1;
+  bool   result        = 1;
+  string origin_module = 2;
 }
 
 

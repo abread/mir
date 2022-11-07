@@ -148,10 +148,12 @@ func runTest(t *testing.T, conf *TestConfig) (result bool, heapObjects int64, he
 
 	// Check if all requests were delivered exactly once in all replicas.
 	app0 := deployment.TestReplicas[0].Modules["app"].(*countingApp)
+	assert.Equal(t, app0.firstDeliveredOrigin, types.ModuleID("abba"))
 	for _, replica := range deployment.TestReplicas {
 		app := replica.Modules["app"].(*countingApp)
 		assert.Equal(t, 1, app.deliveredCount)
 		assert.Equal(t, app0.firstDelivered, app.firstDelivered)
+		assert.Equal(t, app0.firstDeliveredOrigin, app.firstDeliveredOrigin)
 	}
 
 	// If the test failed, keep the generated data.
@@ -233,8 +235,9 @@ func newDeployment(conf *TestConfig) (*deploytest.Deployment, error) {
 type countingApp struct {
 	module dsl.Module
 
-	deliveredCount int
-	firstDelivered bool
+	deliveredCount       int
+	firstDelivered       bool
+	firstDeliveredOrigin types.ModuleID
 }
 
 func newCountingApp(inputValue bool) *countingApp {
@@ -251,9 +254,10 @@ func newCountingApp(inputValue bool) *countingApp {
 		return nil
 	})
 
-	abbadsl.UponDeliver(m, func(result bool) error {
+	abbadsl.UponDeliver(m, func(result bool, from types.ModuleID) error {
 		if app.deliveredCount == 0 {
 			app.firstDelivered = result
+			app.firstDeliveredOrigin = from
 		}
 
 		app.deliveredCount++

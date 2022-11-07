@@ -16,7 +16,7 @@ func InputValue(m dsl.Module, dest t.ModuleID, input bool) {
 }
 
 func Deliver(m dsl.Module, dest t.ModuleID, result bool) {
-	dsl.EmitEvent(m, abbaEvents.Deliver(dest, result))
+	dsl.EmitEvent(m, abbaEvents.Deliver(dest, result, m.ModuleID()))
 }
 
 // Module-specific dsl functions for processing events.
@@ -37,9 +37,9 @@ func UponInputValue(m dsl.Module, handler func(input bool) error) {
 	})
 }
 
-func UponDeliver(m dsl.Module, handler func(result bool) error) {
+func UponDeliver(m dsl.Module, handler func(result bool, from t.ModuleID) error) {
 	UponEvent[*abbapb.Event_Deliver](m, func(ev *abbapb.Deliver) error {
-		return handler(ev.Result)
+		return handler(ev.Result, t.ModuleID(ev.OriginModule))
 	})
 }
 

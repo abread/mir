@@ -16,11 +16,12 @@ func InputValue(destModule t.ModuleID, input bool) *eventpb.Event {
 	})
 }
 
-func Deliver(destModule t.ModuleID, result bool) *eventpb.Event {
+func Deliver(destModule t.ModuleID, result bool, fromModule t.ModuleID) *eventpb.Event {
 	return Event(destModule, &abbapb.Event{
 		Type: &abbapb.Event_Deliver{
 			Deliver: &abbapb.Deliver{
-				Result: result,
+				Result:       result,
+				OriginModule: fromModule.Pb(),
 			},
 		},
 	})
