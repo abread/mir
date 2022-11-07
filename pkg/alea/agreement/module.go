@@ -75,9 +75,9 @@ func (m agModule) ApplyEvents(eventsIn *events.EventList) (*events.EventList, er
 	return modules.ApplyEventsSequentially(eventsIn, m.applyEvent)
 }
 
-func (m agModule) ImplementsModule() {}
+func (m *agModule) ImplementsModule() {}
 
-func (m agModule) applyEvent(event *eventpb.Event) (*events.EventList, error) {
+func (m *agModule) applyEvent(event *eventpb.Event) (*events.EventList, error) {
 	if event.DestModule != m.config.Self.Pb() {
 		return m.proxyABBAEvent(event)
 	}
@@ -98,7 +98,7 @@ func (m agModule) applyEvent(event *eventpb.Event) (*events.EventList, error) {
 	}
 }
 
-func (m agModule) proxyABBAEvent(event *eventpb.Event) (*events.EventList, error) {
+func (m *agModule) proxyABBAEvent(event *eventpb.Event) (*events.EventList, error) {
 	destSub := t.ModuleID(event.DestModule).StripParent(m.config.Self)
 
 	if destSub.Top() == t.NewModuleIDFromInt(m.currentRound) {
@@ -122,7 +122,7 @@ func (m agModule) proxyABBAEvent(event *eventpb.Event) (*events.EventList, error
 	return m.currentAbba.ApplyEvents((&events.EventList{}).PushBack(event))
 }
 
-func (m agModule) handleAgreementEvent(event *agreementpb.Event) (*events.EventList, error) {
+func (m *agModule) handleAgreementEvent(event *agreementpb.Event) (*events.EventList, error) {
 	evWrapped, ok := event.Type.(*agreementpb.Event_InputValue)
 	if !ok {
 		return nil, fmt.Errorf("unexpected agreement event: %v", event)
@@ -137,11 +137,11 @@ func (m agModule) handleAgreementEvent(event *agreementpb.Event) (*events.EventL
 	// we skip going around the event loop, and forward this straight to the ABBA instance
 	m.inputDone = true
 	return m.currentAbba.ApplyEvents((&events.EventList{}).PushBack(
-		abbaEvents.InputValue(m.abbaModuleId(), ev.Input),
+		abbaEvents.InputValue(m.abbaModuleID(), ev.Input),
 	))
 }
 
-func (m agModule) handleABBAEvent(event *abbapb.Event) (*events.EventList, error) {
+func (m *agModule) handleABBAEvent(event *abbapb.Event) (*events.EventList, error) {
 	evWrapped, ok := event.Type.(*abbapb.Event_Deliver)
 	if !ok {
 		return nil, fmt.Errorf("unexpected abba event: %v", event)
@@ -157,23 +157,23 @@ func (m agModule) handleABBAEvent(event *abbapb.Event) (*events.EventList, error
 	return (&events.EventList{}).PushBack(aagEvents.Deliver(m.config.Alea, m.currentRound, ev.Result)), nil
 }
 
-func (m agModule) abbaModuleId() t.ModuleID {
+func (m *agModule) abbaModuleID() t.ModuleID {
 	return m.config.Self.Then(t.NewModuleIDFromInt(m.currentRound))
 }
 
 func (m *agModule) advanceRound() (*events.EventList, error) {
-	m.currentRound += 1
+	m.currentRound++
 
 	m.delivered = false
 	m.inputDone = false
 
-	abbaModuleId := m.abbaModuleId()
+	abbaModuleID := m.abbaModuleID()
 
 	instanceUID := slices.Clone(m.params.InstanceUID)
 	instanceUID = append(instanceUID, serializing.Uint64ToBytes(m.currentRound)...)
 
 	m.currentAbba = abba.NewModule(&abba.ModuleConfig{
-		Self:         abbaModuleId,
+		Self:         abbaModuleID,
 		Consumer:     m.config.Self,
 		Net:          m.config.Net,
 		ThreshCrypto: m.config.ThreshCrypto,
@@ -183,5 +183,5 @@ func (m *agModule) advanceRound() (*events.EventList, error) {
 		AllNodes:    m.params.AllNodes,
 	}, m.nodeID, logging.Decorate(m.logger, "[alea-ag-abba]", "agreementRound", m.currentRound))
 
-	return m.currentAbba.ApplyEvents((&events.EventList{}).PushBack(events.Init(abbaModuleId)))
+	return m.currentAbba.ApplyEvents((&events.EventList{}).PushBack(events.Init(abbaModuleID)))
 }
