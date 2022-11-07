@@ -1,6 +1,7 @@
 package abcdsl
 
 import (
+	"github.com/filecoin-project/mir/pkg/alea/broadcast/abcevents"
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb"
 	aleapb "github.com/filecoin-project/mir/pkg/pb/aleapb/common"
@@ -10,35 +11,15 @@ import (
 )
 
 func StartBroadcast(m dsl.Module, destModule t.ModuleID, slot uint64, txs []*requestpb.Request) {
-	EmitEvent(m, destModule, &bcpb.Event{
-		Type: &bcpb.Event_StartBroadcast{
-			StartBroadcast: &bcpb.StartBroadcast{
-				QueueSlot: slot,
-				Txs:       txs,
-			},
-		},
-	})
+	dsl.EmitEvent(m, abcevents.StartBroadcast(destModule, slot, txs))
 }
 
 func Deliver(m dsl.Module, destModule t.ModuleID, slot *aleapb.Slot, txs []*requestpb.Request, signature []byte) {
-	EmitEvent(m, destModule, &bcpb.Event{
-		Type: &bcpb.Event_Deliver{
-			Deliver: &bcpb.Deliver{
-				Slot: slot,
-				Txs:  txs,
-			},
-		},
-	})
+	dsl.EmitEvent(m, abcevents.Deliver(destModule, slot, txs, signature))
 }
 
 func FreeSlot(m dsl.Module, destModule t.ModuleID, slot *aleapb.Slot) {
-	EmitEvent(m, destModule, &bcpb.Event{
-		Type: &bcpb.Event_FreeSlot{
-			FreeSlot: &bcpb.FreeSlot{
-				Slot: slot,
-			},
-		},
-	})
+	dsl.EmitEvent(m, abcevents.FreeSlot(destModule, slot))
 }
 
 func UponStartBroadcast(m dsl.Module, handler func(slot uint64, txs []*requestpb.Request) error) {
@@ -57,17 +38,6 @@ func UponFreeSlot(m dsl.Module, handler func(slot *aleapb.Slot) error) {
 	UponEvent[*bcpb.Event_FreeSlot](m, func(ev *bcpb.FreeSlot) error {
 		return handler(ev.Slot)
 	})
-}
-
-func EmitEvent(m dsl.Module, destModule t.ModuleID, ev *bcpb.Event) {
-	evWrapped := &eventpb.Event{
-		Type: &eventpb.Event_AleaBroadcast{
-			AleaBroadcast: ev,
-		},
-		DestModule: destModule.Pb(),
-	}
-
-	dsl.EmitEvent(m, evWrapped)
 }
 
 func UponEvent[EvWrapper bcpb.Event_TypeWrapper[Ev], Ev any](m dsl.Module, handler func(ev *Ev) error) {
