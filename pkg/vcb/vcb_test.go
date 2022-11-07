@@ -24,10 +24,8 @@ import (
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/mempool/simplemempool"
 	"github.com/filecoin-project/mir/pkg/modules"
-	"github.com/filecoin-project/mir/pkg/pb/dslpb"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"
-	"github.com/filecoin-project/mir/pkg/pb/vcbpb"
 	"github.com/filecoin-project/mir/pkg/testsim"
 	"github.com/filecoin-project/mir/pkg/types"
 	"github.com/filecoin-project/mir/pkg/vcb/vcbdsl"
@@ -110,12 +108,14 @@ func runTest(t *testing.T, conf *TestConfig) (heapObjects int64, heapAlloc int64
 
 	// Check if all requests were delivered exactly once in all replicas.
 	app0 := deployment.TestReplicas[0].Modules["app"].(*countingApp)
+	assert.Equal(t, app0.firstFrom, types.ModuleID("vcb"))
 	for _, replica := range deployment.TestReplicas {
 		app := replica.Modules["app"].(*countingApp)
 		assert.Equal(t, 1, app.deliveredCount)
 		// TODO: check request data
 		assert.Equal(t, app0.firstBatchID, app.firstBatchID)
 		assert.ElementsMatch(t, app0.firstSignature, app.firstSignature)
+		assert.Equal(t, app0.firstFrom, app.firstFrom)
 	}
 
 	// If the test failed, keep the generated data.
@@ -177,14 +177,6 @@ func newDeployment(conf *TestConfig) (*deploytest.Deployment, error) {
 			InstanceUID: []byte{0},
 			AllNodes:    nodeIDs,
 			Leader:      leader,
-			Origin: &vcbpb.Origin{
-				Module: "app",
-				Type: &vcbpb.Origin_Dsl{
-					Dsl: &dslpb.Origin{
-						ContextID: 0,
-					},
-				},
-			},
 		}, nodeID)
 
 		modulesWithDefaults := map[types.ModuleID]modules.Module{
@@ -220,6 +212,7 @@ type countingApp struct {
 	firstData      []*requestpb.Request
 	firstBatchID   types.BatchID
 	firstSignature []byte
+	firstFrom      types.ModuleID
 }
 
 func newCountingApp(isLeader bool) *countingApp {
@@ -245,11 +238,12 @@ func newCountingApp(isLeader bool) *countingApp {
 		})
 	}
 
-	vcbdsl.UponDeliver(m, func(data []*requestpb.Request, batchID types.BatchID, signature []byte, context *struct{}) error {
+	vcbdsl.UponDeliver(m, func(data []*requestpb.Request, batchID types.BatchID, signature []byte, from types.ModuleID) error {
 		if app.deliveredCount == 0 {
 			app.firstData = data
 			app.firstBatchID = batchID
 			app.firstSignature = signature
+			app.firstFrom = from
 		}
 
 		app.deliveredCount++
