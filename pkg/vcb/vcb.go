@@ -86,7 +86,7 @@ type precomputeSigDataCtx struct{}
 
 func SigData(instanceUID []byte, batchID t.BatchID) [][]byte {
 	return [][]byte{
-		[]byte("github.com/filecoin-project/mir/pkg/vbc"),
+		[]byte("github.com/filecoin-project/mir/pkg/vcb"),
 		instanceUID,
 		[]byte(batchID),
 	}
