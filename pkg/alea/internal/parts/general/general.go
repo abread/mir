@@ -71,6 +71,13 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 		state.bcOwnQueueHead++
 		return nil
 	})
+	abcdsl.UponDeliver(m, func(slot *aleapbCommon.Slot, _txs []*requestpb.Request) error {
+		if slot.QueueIdx == ownQueueIdx && slot.QueueSlot == state.bcOwnQueueHead-1 {
+			// new batch was delivered
+			state.batchCutInProgress = false
+		}
+		return nil
+	})
 
 	// =============================================================================================
 	// Agreement Round Control
