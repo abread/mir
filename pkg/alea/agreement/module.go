@@ -38,9 +38,11 @@ func DefaultModuleConfig(consumer t.ModuleID) *ModuleConfig {
 	}
 }
 
+// ModuleParams sets the values for the parameters of an instance of the protocol.
+// All replicas are expected to use identical module parameters.
 type ModuleParams struct {
-	InstanceUID []byte
-	AllNodes    []t.NodeID
+	InstanceUID []byte // must be the same as the one in the main and broadcast alea components
+	AllNodes    []t.NodeID // the list of participating nodes, which must be the same as the set of nodes in the threshcrypto module
 }
 
 type agModule struct {

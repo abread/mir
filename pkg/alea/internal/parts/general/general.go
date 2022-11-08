@@ -202,7 +202,7 @@ func newState(params *common.ModuleParams, tunables *common.ModuleTunables, node
 		if queueIdx == ownQueueIdx {
 			state.slotsReadyToDeliver[queueIdx] = make(set[uint64], tunables.TargetOwnUnagreedBatchCount)
 		} else {
-			state.slotsReadyToDeliver[queueIdx] = make(set[uint64], tunables.MaxConcurrentVcbInstancesPerQueue)
+			state.slotsReadyToDeliver[queueIdx] = make(set[uint64], tunables.MaxConcurrentVcbPerQueue)
 		}
 	}
 
