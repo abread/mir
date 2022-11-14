@@ -324,19 +324,19 @@ func newDeploymentAlea(conf *TestConfig) (*deploytest.Deployment, error) {
 		moduleSet[aleaConfig.Mempool] = simplemempool.NewModule(
 			&simplemempool.ModuleConfig{
 				Self:   aleaConfig.Mempool,
-				Hasher: "hasher",
+				Hasher: aleaConfig.Hasher,
 			},
 			&simplemempool.ModuleParams{
 				MaxTransactionsInBatch: 10,
 			},
 		)
 
-		moduleSet["hasher"] = mircrypto.NewHasher(crypto.SHA256)
+		moduleSet[aleaConfig.Hasher] = mircrypto.NewHasher(crypto.SHA256)
 
 		// Use fake batch database.
 		moduleSet[aleaConfig.BatchDB] = fakebatchdb.NewModule(
 			&fakebatchdb.ModuleConfig{
-				Self: "batchdb",
+				Self: aleaConfig.BatchDB,
 			},
 		)
 

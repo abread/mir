@@ -20,6 +20,7 @@ type Config struct {
 	AleaAgreement t.ModuleID
 	Consumer      t.ModuleID
 	BatchDB       t.ModuleID
+	Hasher        t.ModuleID
 	Mempool       t.ModuleID
 	Net           t.ModuleID
 	ThreshCrypto  t.ModuleID
@@ -52,6 +53,7 @@ func DefaultConfig(consumer t.ModuleID) *Config {
 		AleaAgreement: "alea_ag",
 		Consumer:      consumer,
 		BatchDB:       "batchdb",
+		Hasher:        "hasher",
 		Mempool:       "mempool",
 		Net:           "net",
 		ThreshCrypto:  "threshcrypto",
@@ -145,7 +147,7 @@ func New(ownID t.NodeID, config *Config, params *Params, startingChkp *checkpoin
 		&agreement.ModuleConfig{
 			Self:         config.AleaAgreement,
 			Consumer:     config.AleaDirector,
-			Mempool:      config.Mempool,
+			Hasher:       config.Hasher,
 			Net:          config.Net,
 			ThreshCrypto: config.ThreshCrypto,
 		},

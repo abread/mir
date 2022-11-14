@@ -275,16 +275,15 @@ func NewAlea(
 		return nil, fmt.Errorf("error creating Alea protocol modules: %w", err)
 	}
 
-	// TODO: checkpointing
+	aleaProtocolModules[aleaConfig.Net] = transport
 
-	hasherModuleID := t.ModuleID("hasher")
-	aleaProtocolModules[hasherModuleID] = mircrypto.NewHasher(crypto.SHA256)
+	// TODO: checkpointing
 
 	// Use a simple mempool for incoming requests.
 	aleaProtocolModules[aleaConfig.Mempool] = simplemempool.NewModule(
 		&simplemempool.ModuleConfig{
 			Self:   aleaConfig.Mempool,
-			Hasher: hasherModuleID,
+			Hasher: aleaConfig.Hasher,
 		},
 		params.Mempool,
 	)
@@ -295,6 +294,8 @@ func NewAlea(
 			Self: aleaConfig.BatchDB,
 		},
 	)
+
+	aleaProtocolModules[aleaConfig.Hasher] = mircrypto.NewHasher(crypto.SHA256)
 
 	// Instantiate the batch fetcher module that transforms availability certificates ordered by Alea
 	// into batches of transactions that can be applied to the replicated application.

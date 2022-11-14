@@ -22,7 +22,7 @@ import (
 type ModuleConfig struct {
 	Self         t.ModuleID // id of this module
 	Consumer     t.ModuleID
-	Mempool      t.ModuleID
+	Hasher       t.ModuleID
 	Net          t.ModuleID
 	ThreshCrypto t.ModuleID
 }
@@ -32,7 +32,7 @@ func DefaultModuleConfig(consumer t.ModuleID) *ModuleConfig {
 	return &ModuleConfig{
 		Self:         "alea_ag",
 		Consumer:     "alea_dir",
-		Mempool:      "mempool",
+		Hasher:       "hasher",
 		Net:          "net",
 		ThreshCrypto: "threshcrypto",
 	}
@@ -180,7 +180,7 @@ func (m *agModule) initializeRound() (*events.EventList, error) {
 		Consumer:     m.config.Self,
 		Net:          m.config.Net,
 		ThreshCrypto: m.config.ThreshCrypto,
-		Hasher:       m.config.Mempool,
+		Hasher:       m.config.Hasher,
 	}, &abba.ModuleParams{
 		InstanceUID: instanceUID,
 		AllNodes:    m.params.AllNodes,
