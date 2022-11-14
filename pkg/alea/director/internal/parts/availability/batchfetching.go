@@ -181,7 +181,7 @@ func formatAleaBatchID(slot *aleapbCommon.Slot) t.BatchID {
 }
 
 func certSigData(params *common.ModuleParams, slot batchSlot, batchID t.BatchID) [][]byte {
-	return vcb.SigData(broadcast.VBCInstanceUID(params.InstanceUID, slot.QueueIdx, slot.QueueSlot), batchID)
+	return vcb.SigData(broadcast.VCBInstanceUID(params.InstanceUID, slot.QueueIdx, slot.QueueSlot), batchID)
 }
 
 func batchSlotFromPb(pb *aleapbCommon.Slot) batchSlot {

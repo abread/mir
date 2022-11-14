@@ -238,7 +238,7 @@ func (m *queueBcModule) getOrTryCreateQueueSlot(slotID uint64) (*queueSlot, *eve
 		// we need to create the slot module first
 		m.windowSizeCtrl.Acquire(slotID)
 
-		instanceUID := VBCInstanceUID(m.params.InstanceUID, m.queueIdx, slotID)
+		instanceUID := VCBInstanceUID(m.params.InstanceUID, m.queueIdx, slotID)
 		newSlotModuleID := m.config.Self.Then(t.NewModuleIDFromInt(slotID))
 
 		newSlot := &queueSlot{
@@ -305,7 +305,7 @@ func (m *queueBcModule) StartBroadcast(slotID uint64, data []*requestpb.Request)
 	return (&events.EventList{}).PushBack(outEvent), nil
 }
 
-func VBCInstanceUID(bcInstanceUID []byte, queueIdx uint32, queueSlot uint64) []byte {
+func VCBInstanceUID(bcInstanceUID []byte, queueIdx uint32, queueSlot uint64) []byte {
 	uid := slices.Clone(bcInstanceUID)
 	uid = append(uid, []byte("bc")...)
 	uid = append(uid, serializing.Uint64ToBytes(uint64(queueIdx))...)
