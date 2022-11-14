@@ -153,7 +153,7 @@ func (m *bcModule) handleBroadcastEvent(event *bcpb.Event) (*events.EventList, e
 }
 
 func (m *bcModule) handleStartBroadcast(event *bcpb.StartBroadcast) (*events.EventList, error) {
-	return m.queueBcModules[m.ownQueueIdx].StartBroadcast(event.QueueSlot, event.Txs)
+	return m.queueBcModules[m.ownQueueIdx].StartBroadcast(event.QueueSlot, event.TxIds, event.Txs)
 }
 
 func (m *bcModule) handleFreeSlot(event *bcpb.FreeSlot) (*events.EventList, error) {
@@ -280,7 +280,7 @@ func (m *queueBcModule) FreeSlot(slotID uint64) {
 	delete(m.slots, slotID)
 }
 
-func (m *queueBcModule) StartBroadcast(slotID uint64, txs []*requestpb.Request) (*events.EventList, error) {
+func (m *queueBcModule) StartBroadcast(slotID uint64, txIDsPb [][]byte, txs []*requestpb.Request) (*events.EventList, error) {
 	// TODO: rethink design to leave only one side responsible for window size control
 	// assumes caller checked that current queue window has this slot in view (and unused)
 
@@ -293,7 +293,8 @@ func (m *queueBcModule) StartBroadcast(slotID uint64, txs []*requestpb.Request) 
 			Vcb: &vcbpb.Event{
 				Type: &vcbpb.Event_Request{
 					Request: &vcbpb.BroadcastRequest{
-						Txs: txs,
+						TxIds: txIDsPb,
+						Txs:   txs,
 					},
 				},
 			},

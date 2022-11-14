@@ -8,11 +8,12 @@ import (
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
-func StartBroadcast(destModule t.ModuleID, slot uint64, txs []*requestpb.Request) *eventpb.Event {
+func StartBroadcast(destModule t.ModuleID, slot uint64, txIDs []t.TxID, txs []*requestpb.Request) *eventpb.Event {
 	return Event(destModule, &bcpb.Event{
 		Type: &bcpb.Event_StartBroadcast{
 			StartBroadcast: &bcpb.StartBroadcast{
 				QueueSlot: slot,
+				TxIds:     t.TxIDSlicePb(txIDs),
 				Txs:       txs,
 			},
 		},

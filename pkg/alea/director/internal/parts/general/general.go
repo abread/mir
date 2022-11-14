@@ -69,7 +69,7 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 		}
 		return nil
 	})
-	mempooldsl.UponNewBatch(m, func(_txIDs []t.TxID, txs []*requestpb.Request, context *struct{}) error {
+	mempooldsl.UponNewBatch(m, func(txIDs []t.TxID, txs []*requestpb.Request, context *struct{}) error {
 		if len(txs) == 0 {
 			// batch is empty, try again
 			// TODO: introduce timer and exponential backoff or something
@@ -79,7 +79,7 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 			return nil
 		}
 
-		abcdsl.StartBroadcast(m, mc.AleaBroadcast, state.bcOwnQueueHead, txs)
+		abcdsl.StartBroadcast(m, mc.AleaBroadcast, state.bcOwnQueueHead, txIDs, txs)
 		state.bcOwnQueueHead++
 		return nil
 	})

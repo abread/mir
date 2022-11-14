@@ -26,7 +26,8 @@ message Event {
 message StartBroadcast {
     // queue_idx is the one for this node
     uint64                     queue_slot = 1;
-    repeated requestpb.Request txs        = 2;
+    repeated bytes             tx_ids     = 2;
+    repeated requestpb.Request txs        = 3;
 }
 
 

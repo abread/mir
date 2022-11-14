@@ -21,11 +21,12 @@ func Event(m dsl.Module, dest t.ModuleID, ev *vcbpb.Event) {
 	})
 }
 
-func Request(m dsl.Module, dest t.ModuleID, txs []*requestpb.Request) {
+func Request(m dsl.Module, dest t.ModuleID, txIDs []t.TxID, txs []*requestpb.Request) {
 	Event(m, dest, &vcbpb.Event{
 		Type: &vcbpb.Event_Request{
 			Request: &vcbpb.BroadcastRequest{
-				Txs: txs,
+				TxIds: t.TxIDSlicePb(txIDs),
+				Txs:   txs,
 			},
 		},
 	})
@@ -56,9 +57,9 @@ func UponEvent[EvWrapper vcbpb.Event_TypeWrapper[Ev], Ev any](m dsl.Module, hand
 	})
 }
 
-func UponBroadcastRequest(m dsl.Module, handler func(data []*requestpb.Request) error) {
+func UponBroadcastRequest(m dsl.Module, handler func(txIDs []t.TxID, txs []*requestpb.Request) error) {
 	UponEvent[*vcbpb.Event_Request](m, func(ev *vcbpb.BroadcastRequest) error {
-		return handler(ev.Txs)
+		return handler(t.TxIDSlice(ev.TxIds), ev.Txs)
 	})
 }
 

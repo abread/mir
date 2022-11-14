@@ -83,8 +83,6 @@ type handleFinalCtx struct {
 	signature []byte
 }
 
-type precomputeSigDataCtx struct{}
-
 func SigData(instanceUID []byte, txIDs []t.TxID) [][]byte {
 	res := make([][]byte, 0, len(txIDs)+3)
 
@@ -153,19 +151,19 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 		delivered:  false,
 	}
 
-	vcbdsl.UponSendMessageReceived(m, func(from t.NodeID, data []*requestpb.Request) error {
+	vcbdsl.UponSendMessageReceived(m, func(from t.NodeID, txs []*requestpb.Request) error {
 		if from == params.Leader && !state.recvdSent && !state.delivered {
-			state.txs = data
+			state.txs = txs
 			state.recvdSent = true
 
-			mpdsl.RequestTransactionIDs(m, mc.Mempool, data, &handleSendCtx{})
+			mpdsl.RequestTransactionIDs(m, mc.Mempool, txs, &handleSendCtx{})
 		}
 		return nil
 	})
 
 	mpdsl.UponTransactionIDsResponse(m, func(txIDs []t.TxID, context *handleSendCtx) error {
-		state.sigData = SigData(params.InstanceUID, txIDs)
 		state.txIDs = txIDs
+		state.sigData = SigData(params.InstanceUID, txIDs)
 		threshDsl.SignShare(m, mc.ThreshCrypto, state.sigData, context)
 		return nil
 	})
@@ -197,8 +195,8 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 		})
 
 		mpdsl.UponTransactionIDsResponse(m, func(txIDs []t.TxID, context *handleFinalCtx) error {
-			state.sigData = SigData(params.InstanceUID, txIDs)
 			state.txIDs = txIDs
+			state.sigData = SigData(params.InstanceUID, txIDs)
 			threshDsl.VerifyFull(m, mc.ThreshCrypto, state.sigData, context.signature, context)
 			return nil
 		})
@@ -224,24 +222,17 @@ func setupVcbLeader(m dsl.Module, mc *ModuleConfig, params *ModuleParams, common
 		sigShares:    make([][]byte, params.GetN()-params.GetF()),
 	}
 
-	vcbdsl.UponBroadcastRequest(m, func(data []*requestpb.Request) error {
+	vcbdsl.UponBroadcastRequest(m, func(txIDs []t.TxID, txs []*requestpb.Request) error {
 		if commonState.txs != nil {
 			return fmt.Errorf("cannot vcb-broadcast more than once in same instance")
-		} else if data == nil {
-			return fmt.Errorf("cannot vcb-broadcast nil")
+		} else if len(txs) == 0 {
+			return fmt.Errorf("cannot vcb-broadcast an empty batch")
 		}
 
-		commonState.txs = data
-
-		// pre-compute sigData before broadcasting SEND(m) to simplify further code
-		ctx := &precomputeSigDataCtx{}
-		mpdsl.RequestTransactionIDs(m, mc.Mempool, data, ctx)
-		return nil
-	})
-
-	mpdsl.UponTransactionIDsResponse(m, func(txIDs []t.TxID, context *precomputeSigDataCtx) error {
-		commonState.sigData = SigData(params.InstanceUID, txIDs)
 		commonState.txIDs = txIDs
+		commonState.txs = txs
+		commonState.sigData = SigData(params.InstanceUID, txIDs)
+
 		dsl.SendMessage(m, mc.Net, SendMessage(mc.Self, commonState.txs), params.AllNodes)
 		return nil
 	})

@@ -22,7 +22,8 @@ message Event {
 }
 
 message BroadcastRequest {
-  repeated requestpb.Request txs = 1;
+  repeated bytes             tx_ids = 1;
+  repeated requestpb.Request txs    = 2;
 }
 
 message Deliver {

@@ -22,6 +22,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/logging"
+	mpdsl "github.com/filecoin-project/mir/pkg/mempool/dsl"
 	"github.com/filecoin-project/mir/pkg/mempool/simplemempool"
 	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
@@ -224,16 +225,28 @@ func newCountingApp(isLeader bool) *countingApp {
 	}
 
 	if isLeader {
-		dsl.UponInit(m, func() error {
-			vcbdsl.Request(m, "vcb", []*requestpb.Request{
-				{
-					ClientId: "asd",
-					ReqNo:    42,
-					Type:     0,
-					Data:     []byte{4, 2},
-				},
-			})
+		txs := []*requestpb.Request{
+			{
+				ClientId: "asd",
+				ReqNo:    42,
+				Type:     0,
+				Data:     []byte{4, 2},
+			},
+			{
+				ClientId: "asd",
+				ReqNo:    4242,
+				Type:     0,
+				Data:     []byte{2, 4, 2, 4},
+			},
+		}
 
+		dsl.UponInit(m, func() error {
+			mpdsl.RequestTransactionIDs(m, "mempool", txs, &struct{}{})
+			return nil
+		})
+
+		mpdsl.UponTransactionIDsResponse(m, func(txIDs []types.TxID, _context *struct{}) error {
+			vcbdsl.Request(m, "vcb", txIDs, txs)
 			return nil
 		})
 	}

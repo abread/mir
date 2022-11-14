@@ -10,8 +10,8 @@ import (
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
-func StartBroadcast(m dsl.Module, destModule t.ModuleID, slot uint64, txs []*requestpb.Request) {
-	dsl.EmitEvent(m, abcevents.StartBroadcast(destModule, slot, txs))
+func StartBroadcast(m dsl.Module, destModule t.ModuleID, slot uint64, txIDs []t.TxID, txs []*requestpb.Request) {
+	dsl.EmitEvent(m, abcevents.StartBroadcast(destModule, slot, txIDs, txs))
 }
 
 func Deliver(m dsl.Module, destModule t.ModuleID, slot *aleapb.Slot, txIDs []t.TxID, txs []*requestpb.Request, signature []byte) {
@@ -22,9 +22,9 @@ func FreeSlot(m dsl.Module, destModule t.ModuleID, slot *aleapb.Slot) {
 	dsl.EmitEvent(m, abcevents.FreeSlot(destModule, slot))
 }
 
-func UponStartBroadcast(m dsl.Module, handler func(slot uint64, txs []*requestpb.Request) error) {
+func UponStartBroadcast(m dsl.Module, handler func(slot uint64, txIDs []t.TxID, txs []*requestpb.Request) error) {
 	UponEvent[*bcpb.Event_StartBroadcast](m, func(ev *bcpb.StartBroadcast) error {
-		return handler(ev.QueueSlot, ev.Txs)
+		return handler(ev.QueueSlot, t.TxIDSlice(ev.TxIds), ev.Txs)
 	})
 }
 
