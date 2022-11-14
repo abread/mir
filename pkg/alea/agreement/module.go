@@ -174,6 +174,7 @@ func (m *agModule) initializeRound() (*events.EventList, error) {
 	abbaModuleID := m.abbaModuleID()
 
 	instanceUID := slices.Clone(m.params.InstanceUID)
+	instanceUID = append(instanceUID, []byte("ag")...)
 	instanceUID = append(instanceUID, serializing.Uint64ToBytes(m.currentRound)...)
 
 	m.currentAbba = abba.NewModule(&abba.ModuleConfig{
