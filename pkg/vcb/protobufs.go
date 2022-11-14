@@ -16,10 +16,10 @@ func Message(moduleID t.ModuleID, msg *vcbpb.Message) *messagepb.Message {
 	}
 }
 
-func SendMessage(moduleID t.ModuleID, data []*requestpb.Request) *messagepb.Message {
+func SendMessage(moduleID t.ModuleID, txs []*requestpb.Request) *messagepb.Message {
 	return Message(moduleID, &vcbpb.Message{
 		Type: &vcbpb.Message_SendMessage{
-			SendMessage: &vcbpb.SendMessage{Data: data},
+			SendMessage: &vcbpb.SendMessage{Txs: txs},
 		},
 	})
 }
@@ -34,11 +34,11 @@ func EchoMessage(moduleID t.ModuleID, signatureShare []byte) *messagepb.Message 
 	})
 }
 
-func FinalMessage(moduleID t.ModuleID, data []*requestpb.Request, signature []byte) *messagepb.Message {
+func FinalMessage(moduleID t.ModuleID, txs []*requestpb.Request, signature []byte) *messagepb.Message {
 	return Message(moduleID, &vcbpb.Message{
 		Type: &vcbpb.Message_FinalMessage{
 			FinalMessage: &vcbpb.FinalMessage{
-				Data:      data,
+				Txs:       txs,
 				Signature: signature,
 			},
 		},

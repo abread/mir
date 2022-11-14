@@ -1,8 +1,6 @@
 package availability
 
 import (
-	"fmt"
-
 	"github.com/filecoin-project/mir/pkg/alea/broadcast"
 	bcdsl "github.com/filecoin-project/mir/pkg/alea/director/internal/aleadsl"
 	"github.com/filecoin-project/mir/pkg/alea/director/internal/common"
@@ -53,7 +51,7 @@ func IncludeBatchFetching(
 	bcdsl.UponRequestTransactions(m, func(cert *aleapb.Cert, origin *apb.RequestTransactionsOrigin) error {
 
 		// NOTE: it is assumed that cert is valid.
-		batchdbdsl.LookupBatch(m, mc.BatchDB, formatAleaBatchID(cert.Slot), &lookupBatchLocallyContext{cert, origin})
+		batchdbdsl.LookupBatch(m, mc.BatchDB, common.FormatAleaBatchID(cert.Slot), &lookupBatchLocallyContext{cert, origin})
 		return nil
 	})
 
@@ -88,7 +86,7 @@ func IncludeBatchFetching(
 	bcdsl.UponFillGapMessageReceived(m, func(from t.NodeID, msg *aleapb.FillGapMessage) error {
 		slot := batchSlotFromPb(msg.Slot)
 
-		batchdbdsl.LookupBatch(m, mc.BatchDB, formatAleaBatchID(msg.Slot), &lookupBatchOnRemoteRequestContext{from, slot})
+		batchdbdsl.LookupBatch(m, mc.BatchDB, common.FormatAleaBatchID(msg.Slot), &lookupBatchOnRemoteRequestContext{from, slot})
 		return nil
 	})
 
@@ -124,23 +122,16 @@ func IncludeBatchFetching(
 		return nil
 	})
 
-	// When transaction ids are computed, compute the batchID
+	// When transaction ids are computed, check if the signature is correct
 	mempooldsl.UponTransactionIDsResponse(m, func(txIDs []t.TxID, context *handleFillerContext) error {
-		context.txIDs = txIDs
-		mempooldsl.RequestBatchID(m, mc.Mempool, txIDs, context)
-		return nil
-	})
-
-	// When the id of the batch is computed, check if the signature is correct
-	mempooldsl.UponBatchIDResponse(m, func(batchID t.BatchID, context *handleFillerContext) error {
 		_, ok := state.RequestsState[context.slot]
 		if !ok {
 			// The request has already been completed.
 			return nil
 		}
 
-		context.batchID = batchID
-		sigData := certSigData(params, context.slot, batchID)
+		context.txIDs = txIDs
+		sigData := certSigData(params, context.slot, txIDs)
 		threshDsl.VerifyFull(m, mc.ThreshCrypto, sigData, context.signature, context)
 		return nil
 	})
@@ -176,12 +167,8 @@ func IncludeBatchFetching(
 	})
 }
 
-func formatAleaBatchID(slot *aleapbCommon.Slot) t.BatchID {
-	return t.BatchID(fmt.Sprintf("alea-%d:%d", slot.QueueIdx, slot.QueueSlot))
-}
-
-func certSigData(params *common.ModuleParams, slot batchSlot, batchID t.BatchID) [][]byte {
-	return vcb.SigData(broadcast.VCBInstanceUID(params.InstanceUID, slot.QueueIdx, slot.QueueSlot), batchID)
+func certSigData(params *common.ModuleParams, slot batchSlot, txIDs []t.TxID) [][]byte {
+	return vcb.SigData(broadcast.VCBInstanceUID(params.InstanceUID, slot.QueueIdx, slot.QueueSlot), txIDs)
 }
 
 func batchSlotFromPb(pb *aleapbCommon.Slot) batchSlot {

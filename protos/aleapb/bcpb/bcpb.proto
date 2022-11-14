@@ -31,8 +31,10 @@ message StartBroadcast {
 
 
 message Deliver {
-    common.Slot                slot = 1;
-    repeated requestpb.Request txs  = 2;
+    common.Slot                slot      = 1;
+    repeated bytes             tx_ids    = 2;
+    repeated requestpb.Request txs       = 3;
+    bytes                      signature = 4;
 }
 
 message FreeSlot {

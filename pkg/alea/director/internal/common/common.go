@@ -1,6 +1,11 @@
 package common
 
-import t "github.com/filecoin-project/mir/pkg/types"
+import (
+	"fmt"
+
+	aleapbCommon "github.com/filecoin-project/mir/pkg/pb/aleapb/common"
+	t "github.com/filecoin-project/mir/pkg/types"
+)
 
 // ModuleConfig sets the module ids. All replicas are expected to use identical module configurations.
 type ModuleConfig struct {
@@ -30,4 +35,8 @@ type ModuleTunables struct {
 	// Number of batches that the broadcast component tries to have broadcast at all times in own queue
 	// Must be at least 1
 	TargetOwnUnagreedBatchCount int
+}
+
+func FormatAleaBatchID(slot *aleapbCommon.Slot) t.BatchID {
+	return t.BatchID(fmt.Sprintf("alea-%d:%d", slot.QueueIdx, slot.QueueSlot))
 }

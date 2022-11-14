@@ -22,13 +22,13 @@ message Event {
 }
 
 message BroadcastRequest {
-  repeated requestpb.Request data = 1;
+  repeated requestpb.Request txs = 1;
 }
 
 message Deliver {
-  repeated requestpb.Request data      = 1;
-  bytes                      batch_id  = 2;
-  bytes                      signature = 3;
+  repeated requestpb.Request txs             = 1;
+  repeated bytes             tx_ids          = 2;
+  bytes                      signature       = 3;
 
   string origin_module = 4;
 }
@@ -46,7 +46,7 @@ message Message {
 }
 
 message SendMessage {
-  repeated requestpb.Request data = 1;
+  repeated requestpb.Request txs = 1;
 }
 
 message EchoMessage {
@@ -54,7 +54,7 @@ message EchoMessage {
 }
 
 message FinalMessage {
-  repeated requestpb.Request data      = 1;
+  repeated requestpb.Request txs       = 1;
   bytes                      signature = 2;
 }
 

@@ -113,7 +113,7 @@ func runTest(t *testing.T, conf *TestConfig) (heapObjects int64, heapAlloc int64
 		app := replica.Modules["app"].(*countingApp)
 		assert.Equal(t, 1, app.deliveredCount)
 		// TODO: check request data
-		assert.Equal(t, app0.firstBatchID, app.firstBatchID)
+		assert.ElementsMatch(t, app0.firstTxIDs, app.firstTxIDs)
 		assert.ElementsMatch(t, app0.firstSignature, app.firstSignature)
 		assert.Equal(t, app0.firstFrom, app.firstFrom)
 	}
@@ -210,7 +210,7 @@ type countingApp struct {
 
 	deliveredCount int
 	firstData      []*requestpb.Request
-	firstBatchID   types.BatchID
+	firstTxIDs     []types.TxID
 	firstSignature []byte
 	firstFrom      types.ModuleID
 }
@@ -238,10 +238,10 @@ func newCountingApp(isLeader bool) *countingApp {
 		})
 	}
 
-	vcbdsl.UponDeliver(m, func(data []*requestpb.Request, batchID types.BatchID, signature []byte, from types.ModuleID) error {
+	vcbdsl.UponDeliver(m, func(txIDs []types.TxID, data []*requestpb.Request, signature []byte, from types.ModuleID) error {
 		if app.deliveredCount == 0 {
 			app.firstData = data
-			app.firstBatchID = batchID
+			app.firstTxIDs = txIDs
 			app.firstSignature = signature
 			app.firstFrom = from
 		}

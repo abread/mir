@@ -8,6 +8,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/alea/agreement/aagdsl"
 	"github.com/filecoin-project/mir/pkg/alea/broadcast/abcdsl"
 	"github.com/filecoin-project/mir/pkg/alea/director/internal/common"
+	batchdbdsl "github.com/filecoin-project/mir/pkg/availability/batchdb/dsl"
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/logging"
@@ -53,7 +54,7 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 
 		return nil
 	})
-	abcdsl.UponDeliver(m, func(slot *aleapbCommon.Slot, _txs []*requestpb.Request) error {
+	abcdsl.UponDeliver(m, func(slot *aleapbCommon.Slot, _txIDs []t.TxID, _txs []*requestpb.Request, _signature []byte) error {
 		if slot.QueueIdx == ownQueueIdx {
 			state.unagreedBroadcastedOwnSlotCount++
 		}
@@ -71,11 +72,9 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 	mempooldsl.UponNewBatch(m, func(_txIDs []t.TxID, txs []*requestpb.Request, context *struct{}) error {
 		if len(txs) == 0 {
 			// batch is empty, try again
-			// TODO: introduce timer and some sort of cool-off
-			for i := 0; i < 100; i++ {
-				runtime.Gosched()
-			}
-			mempooldsl.RequestBatch(m, mc.Mempool, &struct{}{})
+			// TODO: introduce timer and exponential backoff or something
+			runtime.Gosched()
+			mempooldsl.RequestBatch(m, mc.Mempool, context)
 
 			return nil
 		}
@@ -84,7 +83,7 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 		state.bcOwnQueueHead++
 		return nil
 	})
-	abcdsl.UponDeliver(m, func(slot *aleapbCommon.Slot, _txs []*requestpb.Request) error {
+	abcdsl.UponDeliver(m, func(slot *aleapbCommon.Slot, _txIDs []t.TxID, _txs []*requestpb.Request, _signature []byte) error {
 		if slot.QueueIdx == ownQueueIdx && slot.QueueSlot == state.bcOwnQueueHead-1 {
 			// new batch was delivered
 			state.batchCutInProgress = false
@@ -121,7 +120,7 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 	})
 
 	// upon vcb completion for the stalled agreement slot or one of ours, start the stalled agreement round
-	abcdsl.UponDeliver(m, func(slot *aleapbCommon.Slot, _txs []*requestpb.Request) error {
+	abcdsl.UponDeliver(m, func(slot *aleapbCommon.Slot, _txIDs []t.TxID, _txs []*requestpb.Request, _signature []byte) error {
 		if state.stalledAgreementSlot == nil {
 			return nil // nothing to do
 		}
@@ -149,12 +148,6 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 		aagdsl.InputValue(m, mc.AleaAgreement, round, false)
 		state.stalledAgreementSlot = nil
 
-		return nil
-	})
-
-	// track vcb completion (needed for other ops above)
-	abcdsl.UponDeliver(m, func(slot *aleapbCommon.Slot, _txs []*requestpb.Request) error {
-		state.slotsReadyToDeliver[slot.QueueIdx][slot.QueueSlot] = struct{}{}
 		return nil
 	})
 
@@ -192,6 +185,18 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 
 		return nil
 	})
+
+	// upon broadcast completion, save transactions
+	abcdsl.UponDeliver(m, func(slot *aleapbCommon.Slot, txIDs []t.TxID, txs []*requestpb.Request, signature []byte) error {
+		batchdbdsl.StoreBatch(m, mc.BatchDB, common.FormatAleaBatchID(slot), txIDs, txs, signature, slot)
+		return nil
+	})
+	batchdbdsl.UponBatchStored(m, func(slot *aleapbCommon.Slot) error {
+		// track vcb completion (needed for other ops in agreement round control)
+		state.slotsReadyToDeliver[slot.QueueIdx][slot.QueueSlot] = struct{}{}
+		return nil
+	})
+
 }
 
 func newState(params *common.ModuleParams, tunables *common.ModuleTunables, nodeID t.NodeID) *state {

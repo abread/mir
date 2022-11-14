@@ -188,8 +188,7 @@ func (m *bcModule) handleVcbEvent(event *vcbpb.Event) (*events.EventList, error)
 		QueueSlot: queueSlot,
 	}
 
-	// TODO: don't we need to pass ev.BatchID?
-	outEvent := abcevents.Deliver(m.consumer, slot, ev.Data, ev.Signature)
+	outEvent := abcevents.Deliver(m.consumer, slot, t.TxIDSlice(ev.TxIds), ev.Txs, ev.Signature)
 
 	return (&events.EventList{}).PushBack(outEvent), nil
 }
@@ -281,7 +280,7 @@ func (m *queueBcModule) FreeSlot(slotID uint64) {
 	delete(m.slots, slotID)
 }
 
-func (m *queueBcModule) StartBroadcast(slotID uint64, data []*requestpb.Request) (*events.EventList, error) {
+func (m *queueBcModule) StartBroadcast(slotID uint64, txs []*requestpb.Request) (*events.EventList, error) {
 	// TODO: rethink design to leave only one side responsible for window size control
 	// assumes caller checked that current queue window has this slot in view (and unused)
 
@@ -294,7 +293,7 @@ func (m *queueBcModule) StartBroadcast(slotID uint64, data []*requestpb.Request)
 			Vcb: &vcbpb.Event{
 				Type: &vcbpb.Event_Request{
 					Request: &vcbpb.BroadcastRequest{
-						Data: data,
+						Txs: txs,
 					},
 				},
 			},

@@ -14,8 +14,8 @@ func StartBroadcast(m dsl.Module, destModule t.ModuleID, slot uint64, txs []*req
 	dsl.EmitEvent(m, abcevents.StartBroadcast(destModule, slot, txs))
 }
 
-func Deliver(m dsl.Module, destModule t.ModuleID, slot *aleapb.Slot, txs []*requestpb.Request, signature []byte) {
-	dsl.EmitEvent(m, abcevents.Deliver(destModule, slot, txs, signature))
+func Deliver(m dsl.Module, destModule t.ModuleID, slot *aleapb.Slot, txIDs []t.TxID, txs []*requestpb.Request, signature []byte) {
+	dsl.EmitEvent(m, abcevents.Deliver(destModule, slot, txIDs, txs, signature))
 }
 
 func FreeSlot(m dsl.Module, destModule t.ModuleID, slot *aleapb.Slot) {
@@ -28,9 +28,9 @@ func UponStartBroadcast(m dsl.Module, handler func(slot uint64, txs []*requestpb
 	})
 }
 
-func UponDeliver(m dsl.Module, handler func(slot *aleapb.Slot, txs []*requestpb.Request) error) {
+func UponDeliver(m dsl.Module, handler func(slot *aleapb.Slot, txIDs []t.TxID, txs []*requestpb.Request, signature []byte) error) {
 	UponEvent[*bcpb.Event_Deliver](m, func(ev *bcpb.Deliver) error {
-		return handler(ev.Slot, ev.Txs)
+		return handler(ev.Slot, t.TxIDSlice(ev.TxIds), ev.Txs, ev.Signature)
 	})
 }
 

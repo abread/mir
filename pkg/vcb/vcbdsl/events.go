@@ -21,22 +21,22 @@ func Event(m dsl.Module, dest t.ModuleID, ev *vcbpb.Event) {
 	})
 }
 
-func Request(m dsl.Module, dest t.ModuleID, data []*requestpb.Request) {
+func Request(m dsl.Module, dest t.ModuleID, txs []*requestpb.Request) {
 	Event(m, dest, &vcbpb.Event{
 		Type: &vcbpb.Event_Request{
 			Request: &vcbpb.BroadcastRequest{
-				Data: data,
+				Txs: txs,
 			},
 		},
 	})
 }
 
-func Deliver(m dsl.Module, dest t.ModuleID, data []*requestpb.Request, batchID t.BatchID, signature []byte) {
+func Deliver(m dsl.Module, dest t.ModuleID, txIDs []t.TxID, txs []*requestpb.Request, signature []byte) {
 	Event(m, dest, &vcbpb.Event{
 		Type: &vcbpb.Event_Deliver{
 			Deliver: &vcbpb.Deliver{
-				Data:         data,
-				BatchId:      batchID.Pb(),
+				TxIds:        t.TxIDSlicePb(txIDs),
+				Txs:          txs,
 				Signature:    signature,
 				OriginModule: string(m.ModuleID()),
 			},
@@ -58,13 +58,13 @@ func UponEvent[EvWrapper vcbpb.Event_TypeWrapper[Ev], Ev any](m dsl.Module, hand
 
 func UponBroadcastRequest(m dsl.Module, handler func(data []*requestpb.Request) error) {
 	UponEvent[*vcbpb.Event_Request](m, func(ev *vcbpb.BroadcastRequest) error {
-		return handler(ev.Data)
+		return handler(ev.Txs)
 	})
 }
 
-func UponDeliver(m dsl.Module, handler func(data []*requestpb.Request, batchID t.BatchID, signature []byte, from t.ModuleID) error) {
+func UponDeliver(m dsl.Module, handler func(txIDs []t.TxID, txs []*requestpb.Request, signature []byte, from t.ModuleID) error) {
 	UponEvent[*vcbpb.Event_Deliver](m, func(ev *vcbpb.Deliver) error {
-		return handler(ev.Data, t.BatchID(ev.BatchId), ev.Signature, t.ModuleID(ev.OriginModule))
+		return handler(t.TxIDSlice(ev.TxIds), ev.Txs, ev.Signature, t.ModuleID(ev.OriginModule))
 	})
 }
 
@@ -86,7 +86,7 @@ func UponSendMessageReceived(m dsl.Module, handler func(from t.NodeID, data []*r
 			return nil
 		}
 
-		return handler(from, startMsgWrapper.SendMessage.Data)
+		return handler(from, startMsgWrapper.SendMessage.Txs)
 	})
 }
 
@@ -112,6 +112,6 @@ func UponFinalMessageReceived(
 		}
 
 		finalMsg := finalMsgWrapper.FinalMessage
-		return handler(from, finalMsg.Data, finalMsg.Signature)
+		return handler(from, finalMsg.Txs, finalMsg.Signature)
 	})
 }

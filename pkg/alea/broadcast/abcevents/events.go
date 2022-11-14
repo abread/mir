@@ -19,12 +19,14 @@ func StartBroadcast(destModule t.ModuleID, slot uint64, txs []*requestpb.Request
 	})
 }
 
-func Deliver(destModule t.ModuleID, slot *aleapb.Slot, txs []*requestpb.Request, signature []byte) *eventpb.Event {
+func Deliver(destModule t.ModuleID, slot *aleapb.Slot, txIDs []t.TxID, txs []*requestpb.Request, signature []byte) *eventpb.Event {
 	return Event(destModule, &bcpb.Event{
 		Type: &bcpb.Event_Deliver{
 			Deliver: &bcpb.Deliver{
-				Slot: slot,
-				Txs:  txs,
+				Slot:      slot,
+				TxIds:     t.TxIDSlicePb(txIDs),
+				Txs:       txs,
+				Signature: signature,
 			},
 		},
 	})
