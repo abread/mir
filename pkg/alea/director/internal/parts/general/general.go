@@ -1,6 +1,8 @@
 package general
 
 import (
+	"runtime"
+
 	"golang.org/x/exp/slices"
 
 	"github.com/filecoin-project/mir/pkg/alea/agreement/aagdsl"
@@ -67,6 +69,17 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 		return nil
 	})
 	mempooldsl.UponNewBatch(m, func(_txIDs []t.TxID, txs []*requestpb.Request, context *struct{}) error {
+		if len(txs) == 0 {
+			// batch is empty, try again
+			// TODO: introduce timer and some sort of cool-off
+			for i := 0; i < 100; i++ {
+				runtime.Gosched()
+			}
+			mempooldsl.RequestBatch(m, mc.Mempool, &struct{}{})
+
+			return nil
+		}
+
 		abcdsl.StartBroadcast(m, mc.AleaBroadcast, state.bcOwnQueueHead, txs)
 		state.bcOwnQueueHead++
 		return nil
