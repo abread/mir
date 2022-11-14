@@ -73,7 +73,7 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 	}
 }
 
-func (m agModule) ApplyEvents(eventsIn *events.EventList) (*events.EventList, error) {
+func (m *agModule) ApplyEvents(eventsIn *events.EventList) (*events.EventList, error) {
 	return modules.ApplyEventsSequentially(eventsIn, m.applyEvent)
 }
 
@@ -87,9 +87,7 @@ func (m *agModule) applyEvent(event *eventpb.Event) (*events.EventList, error) {
 	switch e := event.Type.(type) {
 	case *eventpb.Event_Init:
 		m.currentRound = 0
-		m.inputDone = false
-		m.delivered = false
-		return &events.EventList{}, nil
+		return m.initializeRound() // first round is not lazy, for simplicity
 	case *eventpb.Event_AleaAgreement:
 		return m.handleAgreementEvent(e.AleaAgreement)
 	case *eventpb.Event_Abba:
@@ -165,7 +163,10 @@ func (m *agModule) abbaModuleID() t.ModuleID {
 
 func (m *agModule) advanceRound() (*events.EventList, error) {
 	m.currentRound++
+	return m.initializeRound()
+}
 
+func (m *agModule) initializeRound() (*events.EventList, error) {
 	m.delivered = false
 	m.inputDone = false
 
