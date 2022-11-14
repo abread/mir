@@ -131,6 +131,7 @@ func (m *agModule) handleAgreementEvent(event *agreementpb.Event) (*events.Event
 
 	if m.inputDone || m.currentRound != ev.Round {
 		// stale message
+		m.logger.Log(logging.LevelDebug, "discarding inputvalue", "ev.Round", ev.Round, "ev.Input", ev.Input)
 		return &events.EventList{}, nil
 	}
 
@@ -184,7 +185,7 @@ func (m *agModule) initializeRound() (*events.EventList, error) {
 	}, &abba.ModuleParams{
 		InstanceUID: instanceUID,
 		AllNodes:    m.params.AllNodes,
-	}, m.nodeID, logging.Decorate(m.logger, "[alea-ag-abba]", "agreementRound", m.currentRound))
+	}, m.nodeID, logging.Decorate(m.logger, "Abba: ", "agreementRound", m.currentRound))
 
 	return m.currentAbba.ApplyEvents((&events.EventList{}).PushBack(events.Init(abbaModuleID)))
 }

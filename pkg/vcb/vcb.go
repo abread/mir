@@ -125,6 +125,7 @@ func NewReconfigurableModule(mc *ModuleConfig, nodeID t.NodeID, logger logging.L
 						Leader:      leader,
 					},
 					nodeID,
+					logging.Decorate(logger, "Vcb: ", "leader", params.LeaderId, "id", vcbID),
 				)
 				return inst, nil
 			},
@@ -133,7 +134,7 @@ func NewReconfigurableModule(mc *ModuleConfig, nodeID t.NodeID, logger logging.L
 	)
 }
 
-func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID) modules.PassiveModule {
+func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging.Logger) modules.PassiveModule {
 	m := dsl.NewModule(mc.Self)
 
 	state := vcbModuleCommonState{

@@ -101,7 +101,7 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables,
 			queueOwner: queueOwner,
 			queueIdx:   uint32(idx),
 			nodeID:     nodeID,
-			logger:     logging.Decorate(logger, "[alea-bc]", "queueIdx", idx),
+			logger:     logging.Decorate(logger, "AleaBcQueue: ", "queueIdx", idx),
 
 			windowSizeCtrl: NewWindowSizeController(tunables.MaxConcurrentVcbPerQueue),
 			slots:          make(map[uint64]*queueSlot, tunables.MaxConcurrentVcbPerQueue),
@@ -256,6 +256,7 @@ func (m *queueBcModule) getOrTryCreateQueueSlot(slotID uint64) (*queueSlot, *eve
 					Leader:      m.queueOwner,
 				},
 				m.nodeID,
+				logging.Decorate(m.logger, "Vcb: ", "queueSlot", slotID),
 			),
 		}
 

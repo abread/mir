@@ -177,7 +177,7 @@ func newDeployment(conf *TestConfig) (*deploytest.Deployment, error) {
 			InstanceUID: []byte{0},
 			AllNodes:    nodeIDs,
 			Leader:      leader,
-		}, nodeID)
+		}, nodeID, logging.Decorate(logger, "Vcb: "))
 
 		modulesWithDefaults := map[types.ModuleID]modules.Module{
 			"app":          newCountingApp(nodeID == leader),
