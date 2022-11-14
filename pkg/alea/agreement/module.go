@@ -21,7 +21,7 @@ import (
 // ModuleConfig sets the module ids. All replicas are expected to use identical module configurations.
 type ModuleConfig struct {
 	Self         t.ModuleID // id of this module
-	Alea         t.ModuleID
+	Consumer     t.ModuleID
 	Mempool      t.ModuleID
 	Net          t.ModuleID
 	ThreshCrypto t.ModuleID
@@ -31,7 +31,7 @@ type ModuleConfig struct {
 func DefaultModuleConfig(consumer t.ModuleID) *ModuleConfig {
 	return &ModuleConfig{
 		Self:         "alea_ag",
-		Alea:         "alea",
+		Consumer:     "alea_dir",
 		Mempool:      "mempool",
 		Net:          "net",
 		ThreshCrypto: "threshcrypto",
@@ -113,7 +113,7 @@ func (m *agModule) proxyABBAEvent(event *eventpb.Event) (*events.EventList, erro
 		eventsOut.PushBack(event)
 
 		// request input value into new agreement round
-		eventsOut.PushBack(aagEvents.RequestInput(m.config.Alea, m.currentRound))
+		eventsOut.PushBack(aagEvents.RequestInput(m.config.Consumer, m.currentRound))
 
 		return eventsOut, err
 	} else {
@@ -156,7 +156,7 @@ func (m *agModule) handleABBAEvent(event *abbapb.Event) (*events.EventList, erro
 
 	// notify Alea of delivery
 	m.delivered = true
-	return (&events.EventList{}).PushBack(aagEvents.Deliver(m.config.Alea, m.currentRound, ev.Result)), nil
+	return (&events.EventList{}).PushBack(aagEvents.Deliver(m.config.Consumer, m.currentRound, ev.Result)), nil
 }
 
 func (m *agModule) abbaModuleID() t.ModuleID {
