@@ -47,7 +47,7 @@ func BenchmarkIntegrationAlea(b *testing.B) {
 }
 
 func testIntegrationWithAlea(t *testing.T) {
-	tests := []struct {
+	tests := map[int]struct {
 		Desc   string // test description
 		Config *TestConfig
 	}{
