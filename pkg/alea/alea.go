@@ -18,7 +18,6 @@ type Config struct {
 	AleaDirector  t.ModuleID
 	AleaBroadcast t.ModuleID
 	AleaAgreement t.ModuleID
-	Availability  t.ModuleID // must be the same as AleaDirector // TODO: try to decouple availability from director
 	Consumer      t.ModuleID
 	BatchDB       t.ModuleID
 	Mempool       t.ModuleID

@@ -87,9 +87,8 @@ func issSMRFactory(ownID t.NodeID, h host.Host, initialMembership map[t.NodeID]t
 }
 
 func aleaSMRFactory(ownID t.NodeID, h host.Host, initialMembership map[t.NodeID]t.NodeAddress, logger logging.Logger) (*smr.System, error) {
-	F := ((len(initialMembership) - 1) / 3)
-	thresh := 2*F + 1
-	localCrypto := deploytest.NewLocalThreshCryptoSystem("pseudo", membership.GetIDs(initialMembership), thresh, logger)
+	F := (len(initialMembership) - 1) / 3
+	localCrypto := deploytest.NewLocalThreshCryptoSystem("pseudo", membership.GetIDs(initialMembership), 2*F+1, logger)
 
 	smrParams := smr.DefaultParams(initialMembership)
 	smrParams.Mempool.MaxTransactionsInBatch = 1024
