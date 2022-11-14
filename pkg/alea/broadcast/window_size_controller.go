@@ -1,4 +1,4 @@
-package util
+package broadcast
 
 type SlotStatus uint8
 

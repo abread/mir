@@ -8,7 +8,6 @@ import (
 	"golang.org/x/exp/slices"
 
 	"github.com/filecoin-project/mir/pkg/alea/broadcast/abcevents"
-	"github.com/filecoin-project/mir/pkg/alea/util"
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/modules"
@@ -72,7 +71,7 @@ type queueBcModule struct {
 	nodeID     t.NodeID
 	logger     logging.Logger
 
-	windowSizeCtrl *util.WindowSizeController
+	windowSizeCtrl *WindowSizeController
 	slots          map[uint64]*queueSlot
 
 	locker sync.Mutex
@@ -104,7 +103,7 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables,
 			nodeID:     nodeID,
 			logger:     logging.Decorate(logger, "[alea-bc]", "queueIdx", idx),
 
-			windowSizeCtrl: util.NewWindowSizeController(tunables.MaxConcurrentVcbPerQueue),
+			windowSizeCtrl: NewWindowSizeController(tunables.MaxConcurrentVcbPerQueue),
 			slots:          make(map[uint64]*queueSlot, tunables.MaxConcurrentVcbPerQueue),
 
 			locker: sync.Mutex{},
