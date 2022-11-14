@@ -34,7 +34,7 @@ type ModuleConfig struct {
 func DefaultModuleConfig(consumer t.ModuleID) *ModuleConfig {
 	return &ModuleConfig{
 		Self:         "alea_bc",
-		Consumer:     "alea",
+		Consumer:     "alea_dir",
 		Mempool:      "mempool",
 		Net:          "net",
 		ThreshCrypto: "threshcrypto",
