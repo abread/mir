@@ -189,7 +189,7 @@ func run() error {
 	}
 
 	// Create a Mir SMR system.
-	smrSystem, err := smr.New(
+	smrSystem, err := smr.NewISS(
 		args.OwnID,
 		h,
 		genesis,

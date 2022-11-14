@@ -1,10 +1,17 @@
 package smr
 
 import (
+	"crypto"
+	"fmt"
+
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/pkg/errors"
 
+	"github.com/filecoin-project/mir/pkg/alea"
+	"github.com/filecoin-project/mir/pkg/clientprogress"
 	"github.com/filecoin-project/mir/pkg/net"
+	"github.com/filecoin-project/mir/pkg/pb/commonpb"
+	"github.com/filecoin-project/mir/pkg/threshcrypto"
 
 	"github.com/filecoin-project/mir/pkg/checkpoint"
 
@@ -68,12 +75,12 @@ func (sys *System) Stop() {
 	sys.transport.Stop()
 }
 
-// New creates a new SMR system.
+// NewISS creates a new SMR system using the ISS protocol.
 // It instantiates the various Mir modules that make up the system and configures them to work together.
 // The returned system's Start method must be called before the system can be used.
 // The returned system's Stop method should be called when the system is no longer needed.
 // The returned system's Modules method can be used to obtain the Mir modules to be passed to mir.NewNode.
-func New(
+func NewISS(
 	// The ID of this node.
 	ownID t.NodeID,
 
@@ -197,6 +204,122 @@ func New(
 		modules:            modulesWithDefaults,
 		transport:          transport,
 		initialMemberships: startingCheckpoint.Memberships(),
+	}, nil
+}
+
+// NewAlea creates a new SMR system using the Alea protocol.
+// It instantiates the various Mir modules that make up the system and configures them to work together.
+// The returned system's Start method must be called before the system can be used.
+// The returned system's Stop method should be called when the system is no longer needed.
+// The returned system's Modules method can be used to obtain the Mir modules to be passed to mir.NewNode.
+func NewAlea(
+	// The ID of this node.
+	ownID t.NodeID,
+
+	// libp2p host to be used for the network transport module.
+	h host.Host,
+
+	// Initial checkpoint of the application state and configuration.
+	// The SMR system will continue operating from this checkpoint.
+	startingCheckpoint *checkpoint.StableCheckpoint,
+
+	// Implementation of the threshold criptography primitives to be used for signing and verifying protocol messages.
+	threshCrypto threshcrypto.ThreshCrypto,
+
+	// The replicated application logic.
+	// This is what the user of the SMR system is expected to implement.
+	// If the system needs to support reconfiguration,
+	// the user is expected to implement the AppLogic interface directly.
+	// For a static application, the user can implement the StaticAppLogic interface instead and transform it into to AppLogic
+	// using AppLogicFromStatic.
+	app AppLogic,
+
+	// Parameters of the SMR system, like batch size or batch timeout.
+	params Params,
+
+	// The logger to which the system will pass all its log messages.
+	logger logging.Logger,
+) (*System, error) {
+
+	// Initialize the libp2p transport subsystem.
+	// TODO: Re-enable this check!
+	// addrIn := false
+	// for _, addr := range h.Addrs() {
+	//	// sanity-check to see if the host is configured with the
+	//	// right multiaddr.
+	//	if addr.Equal(initialMembership[ownID]) {
+	//		addrIn = true
+	//		break
+	//	}
+	// }
+	// if !addrIn {
+	//	return nil, errors.New("libp2p host provided as input not listening to multiaddr specified for node")
+	// }
+	transport, err := libp2pnet.NewTransport(params.Net, h, ownID, logger)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create libp2p transport")
+	}
+
+	// Instantiate the Alea ordering protocol with default configuration.
+	// We use the Alea's default module configuration (the expected IDs of modules it interacts with)
+	// also to configure other modules of the system.
+	aleaConfig := alea.DefaultConfig("batchfetcher")
+	aleaProtocolModules, err := alea.New(
+		ownID,
+		aleaConfig,
+		params.Alea,
+		startingCheckpoint,
+		logging.Decorate(logger, "ISS: "),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("error creating Alea protocol modules: %w", err)
+	}
+
+	// TODO: checkpointing
+
+	hasherModuleID := t.ModuleID("hasher")
+	aleaProtocolModules[hasherModuleID] = mircrypto.NewHasher(crypto.SHA256)
+
+	// Use a simple mempool for incoming requests.
+	aleaProtocolModules[aleaConfig.Mempool] = simplemempool.NewModule(
+		&simplemempool.ModuleConfig{
+			Self:   aleaConfig.Mempool,
+			Hasher: hasherModuleID,
+		},
+		params.Mempool,
+	)
+
+	// Use fake batch database that only stores batches in memory and does not persist them to disk.
+	aleaProtocolModules[aleaConfig.BatchDB] = fakebatchdb.NewModule(
+		&fakebatchdb.ModuleConfig{
+			Self: aleaConfig.BatchDB,
+		},
+	)
+
+	// Instantiate the batch fetcher module that transforms availability certificates ordered by Alea
+	// into batches of transactions that can be applied to the replicated application.
+	appID := t.ModuleID("app")
+	aleaProtocolModules[aleaConfig.Consumer] = batchfetcher.NewModule(
+		&batchfetcher.ModuleConfig{
+			Self:         aleaConfig.Consumer,
+			Availability: aleaConfig.AleaDirector,
+			Checkpoint:   "",
+			Destination:  appID,
+		},
+		t.EpochNr(0),
+		clientprogress.FromPb(&commonpb.ClientProgress{
+			Progress: make(map[string]*commonpb.DeliveredReqs, 0),
+		}, logger),
+	)
+
+	aleaProtocolModules[appID] = NewAppModule(app, transport, aleaConfig.AleaDirector)
+
+	return &System{
+		modules:   aleaProtocolModules,
+		transport: transport,
+
+		// TODO: remove this ugly hack (yes this is Alea, but the InitialMembership is right there...)
+		initialMemberships: []map[t.NodeID]t.NodeAddress{params.Iss.InitialMembership},
 	}, nil
 }
 

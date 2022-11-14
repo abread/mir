@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
 	"github.com/spf13/cobra"
@@ -39,8 +40,21 @@ var (
 	nodeCmd = &cobra.Command{
 		Use:   "node",
 		Short: "Start a Mir node",
+	}
+
+	nodeISSCmd = &cobra.Command{
+		Use:   "iss",
+		Short: "Start a Mir node using the ISS protocol",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runNode()
+			return runNode(issSMRFactory)
+		},
+	}
+
+	nodeAleaCmd = &cobra.Command{
+		Use:   "alea",
+		Short: "Start a Mir node using the Alea protocol",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runNode(aleaSMRFactory)
 		},
 	}
 )
@@ -49,9 +63,49 @@ func init() {
 	rootCmd.AddCommand(nodeCmd)
 	nodeCmd.Flags().StringVarP(&statFileName, "statFile", "o", "", "output file for statistics")
 	nodeCmd.Flags().DurationVar(&statPeriod, "statPeriod", time.Second, "statistic record period")
+
+	nodeCmd.AddCommand(nodeISSCmd)
+	nodeCmd.AddCommand(nodeAleaCmd)
 }
 
-func runNode() error {
+func issSMRFactory(ownID t.NodeID, h host.Host, initialMembership map[t.NodeID]t.NodeAddress, logger logging.Logger) (*smr.System, error) {
+	localCrypto := deploytest.NewLocalCryptoSystem("pseudo", membership.GetIDs(initialMembership), logger)
+
+	smrParams := smr.DefaultParams(initialMembership)
+	smrParams.Mempool.MaxTransactionsInBatch = 1024
+	smrParams.AdjustSpeed(100 * time.Millisecond)
+
+	return smr.NewISS(
+		ownID,
+		h,
+		smr.GenesisCheckpoint([]byte{}, smrParams),
+		localCrypto.Crypto(ownID),
+		&App{Logger: logger, Membership: initialMembership},
+		smrParams,
+		logger,
+	)
+}
+
+func aleaSMRFactory(ownID t.NodeID, h host.Host, initialMembership map[t.NodeID]t.NodeAddress, logger logging.Logger) (*smr.System, error) {
+	F := ((len(initialMembership) - 1) / 3)
+	thresh := 2*F + 1
+	localCrypto := deploytest.NewLocalThreshCryptoSystem("pseudo", membership.GetIDs(initialMembership), thresh, logger)
+
+	smrParams := smr.DefaultParams(initialMembership)
+	smrParams.Mempool.MaxTransactionsInBatch = 1024
+
+	return smr.NewAlea(
+		ownID,
+		h,
+		nil,
+		localCrypto.ThreshCrypto(ownID),
+		&App{Logger: logger, Membership: initialMembership},
+		smrParams,
+		logger,
+	)
+}
+
+func runNode(smrFactory func(ownID t.NodeID, h host.Host, initialMembership map[t.NodeID]t.NodeAddress, logger logging.Logger) (*smr.System, error)) error {
 	var logger logging.Logger
 	if verbose {
 		logger = logging.ConsoleDebugLogger
@@ -99,21 +153,7 @@ func runNode() error {
 		return fmt.Errorf("failed to create libp2p host: %w", err)
 	}
 
-	localCrypto := deploytest.NewLocalCryptoSystem("pseudo", membership.GetIDs(initialMembership), logger)
-
-	smrParams := smr.DefaultParams(initialMembership)
-	smrParams.Mempool.MaxTransactionsInBatch = 1024
-	smrParams.AdjustSpeed(100 * time.Millisecond)
-
-	benchApp, err := smr.New(
-		ownID,
-		h,
-		smr.GenesisCheckpoint([]byte{}, smrParams),
-		localCrypto.Crypto(ownID),
-		&App{Logger: logger, Membership: initialMembership},
-		smrParams,
-		logger,
-	)
+	benchApp, err := smrFactory(ownID, h, initialMembership, logger)
 	if err != nil {
 		return fmt.Errorf("could not create bench app: %w", err)
 	}
