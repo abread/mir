@@ -4,9 +4,9 @@ import (
 	"fmt"
 
 	"github.com/filecoin-project/mir/pkg/alea/broadcast"
-	bcdsl "github.com/filecoin-project/mir/pkg/alea/internal/aleadsl"
-	"github.com/filecoin-project/mir/pkg/alea/internal/common"
-	"github.com/filecoin-project/mir/pkg/alea/internal/protobuf"
+	bcdsl "github.com/filecoin-project/mir/pkg/alea/director/internal/aleadsl"
+	"github.com/filecoin-project/mir/pkg/alea/director/internal/common"
+	"github.com/filecoin-project/mir/pkg/alea/director/internal/protobuf"
 	batchdbdsl "github.com/filecoin-project/mir/pkg/availability/batchdb/dsl"
 	adsl "github.com/filecoin-project/mir/pkg/availability/dsl"
 	"github.com/filecoin-project/mir/pkg/dsl"

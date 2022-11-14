@@ -3,7 +3,7 @@ package availability
 import (
 	"fmt"
 
-	"github.com/filecoin-project/mir/pkg/alea/internal/common"
+	"github.com/filecoin-project/mir/pkg/alea/director/internal/common"
 	adsl "github.com/filecoin-project/mir/pkg/availability/dsl"
 	"github.com/filecoin-project/mir/pkg/dsl"
 	apb "github.com/filecoin-project/mir/pkg/pb/availabilitypb"

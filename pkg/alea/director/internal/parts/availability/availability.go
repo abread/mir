@@ -1,7 +1,7 @@
 package availability
 
 import (
-	"github.com/filecoin-project/mir/pkg/alea/internal/common"
+	"github.com/filecoin-project/mir/pkg/alea/director/internal/common"
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/logging"
 	t "github.com/filecoin-project/mir/pkg/types"

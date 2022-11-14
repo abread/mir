@@ -5,7 +5,7 @@ import (
 
 	"github.com/filecoin-project/mir/pkg/alea/agreement/aagdsl"
 	"github.com/filecoin-project/mir/pkg/alea/broadcast/abcdsl"
-	"github.com/filecoin-project/mir/pkg/alea/internal/common"
+	"github.com/filecoin-project/mir/pkg/alea/director/internal/common"
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/logging"
@@ -66,7 +66,7 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 		}
 		return nil
 	})
-	mempooldsl.UponNewBatch[struct{}](m, func(_txIDs []t.TxID, txs []*requestpb.Request, context *struct{}) error {
+	mempooldsl.UponNewBatch(m, func(_txIDs []t.TxID, txs []*requestpb.Request, context *struct{}) error {
 		abcdsl.StartBroadcast(m, mc.AleaBroadcast, state.bcOwnQueueHead, txs)
 		state.bcOwnQueueHead++
 		return nil
@@ -111,10 +111,13 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 			return nil // nothing to do
 		}
 
-		if slot.QueueIdx == ownQueueIdx || (slot.QueueIdx == state.stalledAgreementSlot.QueueIdx && slot.QueueSlot == state.stalledAgreementSlot.QueueSlot) {
+		recvdStalledSlotBc := slot.QueueIdx == state.stalledAgreementSlot.QueueIdx && slot.QueueSlot == state.stalledAgreementSlot.QueueSlot
+
+		if slot.QueueIdx == ownQueueIdx || recvdStalledSlotBc {
 			// input value to kickstart stalled agreement round
-			// true, because we have the
-			aagdsl.InputValue(m, mc.AleaAgreement, state.stalledAgreementRound, true)
+			// previously we did not receive the stalled slot, so we either received now and vote
+			// for delivery or vote against it
+			aagdsl.InputValue(m, mc.AleaAgreement, state.stalledAgreementRound, recvdStalledSlotBc)
 			state.stalledAgreementSlot = nil
 		}
 
