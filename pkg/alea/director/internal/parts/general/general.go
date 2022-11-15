@@ -131,6 +131,7 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 			// input value to kickstart stalled agreement round
 			// previously we did not receive the stalled slot, so we either received now and vote
 			// for delivery or vote against it
+			logger.Log(logging.LevelDebug, "resuming stalled agreement round", "agreementRound", state.stalledAgreementRound, "input", recvdStalledSlotBc)
 			aagdsl.InputValue(m, mc.AleaAgreement, state.stalledAgreementRound, recvdStalledSlotBc)
 			state.stalledAgreementSlot = nil
 		}
@@ -145,6 +146,7 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 		}
 
 		// we're here, so vcb hasn't completed for this slot yet: we must vote against delivery :(
+		logger.Log(logging.LevelDebug, "resuming stalled agreement round", "agreementRound", state.stalledAgreementRound, "input", false)
 		aagdsl.InputValue(m, mc.AleaAgreement, round, false)
 		state.stalledAgreementSlot = nil
 
@@ -169,6 +171,7 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 		}
 
 		// next round won't start until we say so, and previous rounds already delivered, so we can deliver immediately
+		logger.Log(logging.LevelDebug, "delivering cert", "agreementRound", round, "queueIdx", slot.QueueIdx, "queueSlot", slot.QueueSlot)
 		dsl.EmitEvent(m, events.DeliverCert(mc.Consumer, t.SeqNr(round), &availabilitypb.Cert{
 			Type: &availabilitypb.Cert_Alea{
 				Alea: &aleapb.Cert{

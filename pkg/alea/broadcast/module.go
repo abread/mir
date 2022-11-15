@@ -266,6 +266,7 @@ func (m *queueBcModule) getOrTryCreateQueueSlot(slotID uint64) (*queueSlot, *eve
 
 		m.slots[slotID] = newSlot
 
+		m.logger.Log(logging.LevelDebug, "Created slot/VCB instance", "queueSlot", slotID)
 		return newSlot, initOutEvents, nil
 	}
 
@@ -278,6 +279,8 @@ func (m *queueBcModule) FreeSlot(slotID uint64) {
 
 	m.windowSizeCtrl.Free(slotID)
 	delete(m.slots, slotID)
+
+	m.logger.Log(logging.LevelDebug, "Freed slot/VCB instance", "queueSlot", slotID)
 }
 
 func (m *queueBcModule) StartBroadcast(slotID uint64, txIDsPb [][]byte, txs []*requestpb.Request) (*events.EventList, error) {
@@ -302,6 +305,7 @@ func (m *queueBcModule) StartBroadcast(slotID uint64, txIDsPb [][]byte, txs []*r
 	}
 
 	// routing logic will create the vcb instance for us
+	m.logger.Log(logging.LevelDebug, "Starting broadcast", "queueSlot", slotID)
 	return (&events.EventList{}).PushBack(outEvent), nil
 }
 
