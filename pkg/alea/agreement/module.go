@@ -129,17 +129,32 @@ func (m *agModule) handleAgreementEvent(event *agreementpb.Event) (*events.Event
 	}
 	ev := evWrapped.Unwrap()
 
-	if m.inputDone || m.currentRound != ev.Round {
+	evsOut := &events.EventList{}
+
+	if ev.Round == m.currentRound+1 && m.delivered {
+		// time for a new round
+		evsOut, err := m.advanceRound()
+		m.logger.Log(logging.LevelDebug, "Advanced agreement round", "agreementRound", m.currentRound)
+		if err != nil {
+			return evsOut, err
+		}
+	} else if m.inputDone || m.currentRound != ev.Round {
 		// stale message
-		m.logger.Log(logging.LevelDebug, "discarding inputvalue", "ev.Round", ev.Round, "ev.Input", ev.Input)
+		m.logger.Log(logging.LevelDebug, "discarding stale InputValue event", "agreementRound", ev.Round, "input", ev.Input)
 		return &events.EventList{}, nil
 	}
 
 	// we skip going around the event loop, and forward this straight to the ABBA instance
 	m.inputDone = true
-	return m.currentAbba.ApplyEvents((&events.EventList{}).PushBack(
+
+	moreEvsOut, err := m.currentAbba.ApplyEvents((&events.EventList{}).PushBack(
 		abbaEvents.InputValue(m.abbaModuleID(), ev.Input),
 	))
+	if err != nil {
+		return evsOut, err
+	}
+
+	return evsOut.PushBackList(moreEvsOut), nil
 }
 
 func (m *agModule) handleABBAEvent(event *abbapb.Event) (*events.EventList, error) {
