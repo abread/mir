@@ -176,7 +176,7 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 	if nodeID == params.Leader {
 		setupVcbLeader(m, mc, params, &state)
 	} else {
-		vcbdsl.UponFinalMessageReceived(m, func(from t.NodeID, data []*requestpb.Request, signature []byte) error {
+		vcbdsl.UponFinalMessageReceived(m, func(from t.NodeID, txs []*requestpb.Request, signature []byte) error {
 			if from == params.Leader && !state.delivered && !state.recvdFinal {
 				state.recvdFinal = true
 				ctx := &handleFinalCtx{
@@ -186,8 +186,8 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 				if state.sigData != nil {
 					threshDsl.VerifyFull(m, mc.ThreshCrypto, state.sigData, signature, ctx)
 				} else {
-					state.txs = data
-					mpdsl.RequestTransactionIDs(m, mc.Mempool, data, ctx)
+					state.txs = txs
+					mpdsl.RequestTransactionIDs(m, mc.Mempool, txs, ctx)
 				}
 			}
 
@@ -219,7 +219,7 @@ func setupVcbLeader(m dsl.Module, mc *ModuleConfig, params *ModuleParams, common
 		sentFinal: false,
 
 		receivedEcho: make(map[t.NodeID]struct{}, len(params.AllNodes)),
-		sigShares:    make([][]byte, params.GetN()-params.GetF()),
+		sigShares:    make([][]byte, 0, params.GetN()-params.GetF()),
 	}
 
 	vcbdsl.UponBroadcastRequest(m, func(txIDs []t.TxID, txs []*requestpb.Request) error {
