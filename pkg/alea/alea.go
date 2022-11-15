@@ -3,6 +3,8 @@ package alea
 import (
 	"fmt"
 
+	"golang.org/x/exp/slices"
+
 	"github.com/filecoin-project/mir/pkg/alea/agreement"
 	"github.com/filecoin-project/mir/pkg/alea/broadcast"
 	"github.com/filecoin-project/mir/pkg/alea/director"
@@ -67,9 +69,13 @@ func DefaultConfig(consumer t.ModuleID) *Config {
 // A proper deployment is expected to craft a custom configuration,
 // for which DefaultParams can serve as a starting point.
 func DefaultParams(initialMembership map[t.NodeID]t.NodeAddress) *Params {
+	// ensure allNodes is the same across the system, irrelevant of map order
+	allNodes := maputil.GetKeys(initialMembership)
+	slices.Sort(allNodes)
+
 	return &Params{
 		InstanceUID:                 []byte{42},
-		AllNodes:                    maputil.GetKeys(initialMembership),
+		AllNodes:                    allNodes,
 		MaxConcurrentVcbPerQueue:    10,
 		TargetOwnUnagreedBatchCount: 1,
 	}
