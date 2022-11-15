@@ -1,8 +1,6 @@
 package general
 
 import (
-	"runtime"
-
 	"golang.org/x/exp/slices"
 
 	"github.com/filecoin-project/mir/pkg/alea/agreement/aagdsl"
@@ -13,9 +11,12 @@ import (
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/logging"
 	mempooldsl "github.com/filecoin-project/mir/pkg/mempool/dsl"
+	mempoolevents "github.com/filecoin-project/mir/pkg/mempool/events"
 	"github.com/filecoin-project/mir/pkg/pb/aleapb"
 	aleapbCommon "github.com/filecoin-project/mir/pkg/pb/aleapb/common"
 	"github.com/filecoin-project/mir/pkg/pb/availabilitypb"
+	"github.com/filecoin-project/mir/pkg/pb/eventpb"
+	"github.com/filecoin-project/mir/pkg/pb/mempoolpb"
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
@@ -64,6 +65,7 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 	// upon unagreed own slots < max, cut a new batch and broadcast it
 	dsl.UponCondition(m, func() error {
 		if !state.batchCutInProgress && state.unagreedBroadcastedOwnSlotCount < tunables.TargetOwnUnagreedBatchCount {
+			logger.Log(logging.LevelDebug, "requesting more transactions")
 			mempooldsl.RequestBatch(m, mc.Mempool, &struct{}{})
 			state.batchCutInProgress = true
 		}
@@ -71,10 +73,24 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 	})
 	mempooldsl.UponNewBatch(m, func(txIDs []t.TxID, txs []*requestpb.Request, context *struct{}) error {
 		if len(txs) == 0 {
-			// batch is empty, try again
-			// TODO: introduce timer and exponential backoff or something
-			runtime.Gosched()
-			mempooldsl.RequestBatch(m, mc.Mempool, context)
+			// batch is empty, try again after a bit
+			dsl.EmitEvent(
+				m,
+				events.TimerDelay(
+					mc.Timer,
+					[]*eventpb.Event{mempoolevents.RequestBatch(mc.Mempool, &mempoolpb.RequestBatchOrigin{
+						Module: mc.Self.Pb(),
+
+						// we don't really use it, but DSL modules demand context
+						Type: &mempoolpb.RequestBatchOrigin_Dsl{
+							Dsl: dsl.Origin(
+								m.DslHandle().StoreContext(&struct{}{}),
+							),
+						},
+					})},
+					tunables.BatchCutFailRetryDelay,
+				),
+			)
 
 			return nil
 		}

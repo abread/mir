@@ -12,6 +12,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/net"
 	"github.com/filecoin-project/mir/pkg/pb/commonpb"
 	"github.com/filecoin-project/mir/pkg/threshcrypto"
+	"github.com/filecoin-project/mir/pkg/timer"
 
 	"github.com/filecoin-project/mir/pkg/checkpoint"
 
@@ -274,7 +275,7 @@ func NewAlea(
 		aleaConfig,
 		params.Alea,
 		startingCheckpoint,
-		logging.Decorate(logger, "ISS: "),
+		logging.Decorate(logger, "Alea: "),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("error creating Alea protocol modules: %w", err)
@@ -282,6 +283,7 @@ func NewAlea(
 
 	aleaProtocolModules[aleaConfig.Net] = transport
 	aleaProtocolModules[aleaConfig.ThreshCrypto] = threshcrypto.New(threshCrypto)
+	aleaProtocolModules[aleaConfig.Timer] = timer.New()
 
 	// Use a simple mempool for incoming requests.
 	aleaProtocolModules[aleaConfig.Mempool] = simplemempool.NewModule(

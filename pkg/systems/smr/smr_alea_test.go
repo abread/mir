@@ -29,6 +29,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/pb/commonpb"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
 	"github.com/filecoin-project/mir/pkg/testsim"
+	"github.com/filecoin-project/mir/pkg/timer"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -319,6 +320,7 @@ func newDeploymentAlea(conf *TestConfig) (*deploytest.Deployment, error) {
 		moduleSet[aleaConfig.Net] = transport
 
 		moduleSet[aleaConfig.ThreshCrypto] = cryptoSystem.Module(nodeID)
+		moduleSet[aleaConfig.Timer] = timer.New()
 
 		// Use a simple mempool for incoming requests.
 		moduleSet[aleaConfig.Mempool] = simplemempool.NewModule(

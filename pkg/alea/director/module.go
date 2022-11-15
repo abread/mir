@@ -23,6 +23,7 @@ func DefaultModuleConfig(consumer t.ModuleID) *ModuleConfig {
 		Mempool:       "mempool",
 		Net:           "net",
 		ThreshCrypto:  "threshcrypto",
+		Timer:         "timer",
 	}
 }
 

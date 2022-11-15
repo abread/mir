@@ -17,6 +17,7 @@ type ModuleConfig struct {
 	Mempool       t.ModuleID
 	Net           t.ModuleID
 	ThreshCrypto  t.ModuleID
+	Timer         t.ModuleID
 }
 
 // ModuleParams sets the values for the parameters of an instance of the protocol.
@@ -35,6 +36,9 @@ type ModuleTunables struct {
 	// Number of batches that the broadcast component tries to have broadcast at all times in own queue
 	// Must be at least 1
 	TargetOwnUnagreedBatchCount int
+
+	// Time to wait before retrying batch creation
+	BatchCutFailRetryDelay t.TimeDuration
 }
 
 func FormatAleaBatchID(slot *aleapbCommon.Slot) t.BatchID {

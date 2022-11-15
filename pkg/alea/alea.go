@@ -2,6 +2,7 @@ package alea
 
 import (
 	"fmt"
+	"time"
 
 	"golang.org/x/exp/slices"
 
@@ -26,6 +27,7 @@ type Config struct {
 	Mempool       t.ModuleID
 	Net           t.ModuleID
 	ThreshCrypto  t.ModuleID
+	Timer         t.ModuleID
 }
 
 // Params sets the values for the parameters of an instance of the protocol.
@@ -45,6 +47,10 @@ type Params struct {
 	// Number of batches that the broadcast component tries to have broadcast at all times in own queue
 	// Must be at least 1
 	TargetOwnUnagreedBatchCount int
+
+	// Time to wait before retrying batch creation
+	// Must be non-negative
+	BatchCutFailRetryDelay t.TimeDuration
 }
 
 // DefaultConfig returns a valid module config with default names for all modules.
@@ -59,6 +65,7 @@ func DefaultConfig(consumer t.ModuleID) *Config {
 		Mempool:       "mempool",
 		Net:           "net",
 		ThreshCrypto:  "threshcrypto",
+		Timer:         "timer",
 	}
 }
 
@@ -78,6 +85,7 @@ func DefaultParams(initialMembership map[t.NodeID]t.NodeAddress) *Params {
 		AllNodes:                    allNodes,
 		MaxConcurrentVcbPerQueue:    10,
 		TargetOwnUnagreedBatchCount: 1,
+		BatchCutFailRetryDelay:      t.TimeDuration(500 * time.Millisecond),
 	}
 }
 
@@ -114,6 +122,7 @@ func New(ownID t.NodeID, config *Config, params *Params, startingChkp *checkpoin
 			Mempool:       config.Mempool,
 			Net:           config.Net,
 			ThreshCrypto:  config.ThreshCrypto,
+			Timer:         config.Timer,
 		},
 		&director.ModuleParams{
 			InstanceUID: params.InstanceUID,
@@ -122,6 +131,7 @@ func New(ownID t.NodeID, config *Config, params *Params, startingChkp *checkpoin
 		&director.ModuleTunables{
 			MaxConcurrentVcbPerQueue:    params.MaxConcurrentVcbPerQueue,
 			TargetOwnUnagreedBatchCount: params.TargetOwnUnagreedBatchCount,
+			BatchCutFailRetryDelay:      params.BatchCutFailRetryDelay,
 		},
 		ownID,
 		logging.Decorate(logger, "AleaDirector: "),
