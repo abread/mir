@@ -260,6 +260,11 @@ func NewAlea(
 		return nil, errors.Wrap(err, "failed to create libp2p transport")
 	}
 
+	if startingCheckpoint != nil {
+		// TODO: checkpointing
+		panic("checkpointing not supported yet")
+	}
+
 	// Instantiate the Alea ordering protocol with default configuration.
 	// We use the Alea's default module configuration (the expected IDs of modules it interacts with)
 	// also to configure other modules of the system.
@@ -276,8 +281,7 @@ func NewAlea(
 	}
 
 	aleaProtocolModules[aleaConfig.Net] = transport
-
-	// TODO: checkpointing
+	aleaProtocolModules[aleaConfig.ThreshCrypto] = threshcrypto.New(threshCrypto)
 
 	// Use a simple mempool for incoming requests.
 	aleaProtocolModules[aleaConfig.Mempool] = simplemempool.NewModule(
