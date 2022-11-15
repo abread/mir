@@ -34,38 +34,24 @@ const (
 )
 
 var (
+	protocol     string
 	statFileName string
 	statPeriod   time.Duration
 
 	nodeCmd = &cobra.Command{
 		Use:   "node",
 		Short: "Start a Mir node",
-	}
-
-	nodeISSCmd = &cobra.Command{
-		Use:   "iss",
-		Short: "Start a Mir node using the ISS protocol",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runNode(issSMRFactory)
-		},
-	}
-
-	nodeAleaCmd = &cobra.Command{
-		Use:   "alea",
-		Short: "Start a Mir node using the Alea protocol",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runNode(aleaSMRFactory)
+			return runNode()
 		},
 	}
 )
 
 func init() {
 	rootCmd.AddCommand(nodeCmd)
+	nodeCmd.Flags().StringVarP(&protocol, "protocol", "p", "iss", "protocol to use")
 	nodeCmd.Flags().StringVarP(&statFileName, "statFile", "o", "", "output file for statistics")
 	nodeCmd.Flags().DurationVar(&statPeriod, "statPeriod", time.Second, "statistic record period")
-
-	nodeCmd.AddCommand(nodeISSCmd)
-	nodeCmd.AddCommand(nodeAleaCmd)
 }
 
 func issSMRFactory(ownID t.NodeID, h host.Host, initialMembership map[t.NodeID]t.NodeAddress, logger logging.Logger) (*smr.System, error) {
@@ -104,7 +90,14 @@ func aleaSMRFactory(ownID t.NodeID, h host.Host, initialMembership map[t.NodeID]
 	)
 }
 
-func runNode(smrFactory func(ownID t.NodeID, h host.Host, initialMembership map[t.NodeID]t.NodeAddress, logger logging.Logger) (*smr.System, error)) error {
+type smrFactory func(ownID t.NodeID, h host.Host, initialMembership map[t.NodeID]t.NodeAddress, logger logging.Logger) (*smr.System, error)
+
+var smrFactories = map[string]smrFactory{
+	"iss":  issSMRFactory,
+	"alea": aleaSMRFactory,
+}
+
+func runNode() error {
 	var logger logging.Logger
 	if verbose {
 		logger = logging.ConsoleDebugLogger
@@ -152,7 +145,7 @@ func runNode(smrFactory func(ownID t.NodeID, h host.Host, initialMembership map[
 		return fmt.Errorf("failed to create libp2p host: %w", err)
 	}
 
-	benchApp, err := smrFactory(ownID, h, initialMembership, logger)
+	benchApp, err := smrFactories[protocol](ownID, h, initialMembership, logger)
 	if err != nil {
 		return fmt.Errorf("could not create bench app: %w", err)
 	}
