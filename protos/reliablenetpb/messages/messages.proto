@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package reliablenetpb;
+
+option go_package = "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/messages";
+
+// ============================================================
+// Messages
+// ============================================================
+
+message Message {
+  oneof type {
+    AckMessage ack = 1;
+  }
+}
+
+message AckMessage {
+  string msg_dest_module = 1;
+  bytes  msg_id          = 2;
+}

@@ -34,6 +34,8 @@ package protos
 //go:generate protoc-events aleapb/common/common.proto
 //go:generate protoc-events aleapb/bcpb/bcpb.proto
 //go:generate protoc-events aleapb/agreementpb/agreementpb.proto
+//go:generate protoc-events reliablenetpb/reliablenetpb.proto
+//go:generate protoc-events reliablenetpb/messages/messages.proto
 
 //go:generate protoc --proto_path=. --go_out=:../pkg/ --go_opt=paths=source_relative simplewal/simplewal.proto
 //go:generate protoc --proto_path=. --go_out=:../samples/ --go_opt=paths=source_relative chat-demo/chatdemo.proto

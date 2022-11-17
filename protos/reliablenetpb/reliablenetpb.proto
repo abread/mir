@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+package reliablenetpb;
+
+option go_package = "github.com/filecoin-project/mir/pkg/pb/reliablenetpb";
+
+import "messagepb/messagepb.proto";
+import "mir/plugin.proto";
+
+
+// ============================================================
+// Events
+// ============================================================
+
+message Event {
+  oneof type {
+    option (mir.event_type) = true;
+
+    SendMessage         send_message           = 1;
+    Ack                 ack                    = 2;
+    MarkRecvd           mark_recvd             = 3;
+    MarkModuleMsgsRecvd mark_module_msgs_recvd = 4;
+    RetransmitAll       retransmit_all         = 5;
+  }
+}
+
+message SendMessage {
+  messagepb.Message message      = 1;
+  repeated string   destinations = 2;
+  bytes             msg_id       = 3;
+}
+
+message Ack {
+  string dest_module = 1;
+  bytes  msg_id      = 2;
+  string source      = 3;
+}
+
+message MarkModuleMsgsRecvd {
+  string          dest_module  = 1;
+  repeated string destinations = 2;
+}
+
+message MarkRecvd {
+  string          dest_module  = 1;
+  bytes           msg_id       = 2;
+  repeated string destinations = 3;
+}
+
+message RetransmitAll {}

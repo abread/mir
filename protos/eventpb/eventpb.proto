@@ -29,6 +29,7 @@ import "vcbpb/vcbpb.proto";
 import "abbapb/abbapb.proto";
 import "aleapb/bcpb/bcpb.proto";
 import "aleapb/agreementpb/agreementpb.proto";
+import "reliablenetpb/reliablenetpb.proto";
 
 option go_package = "github.com/filecoin-project/mir/pkg/pb/eventpb";
 
@@ -79,6 +80,7 @@ message Event {
     abbapb.Event             abba                    = 40;
     aleapb.bcpb.Event        alea_broadcast          = 41;
     aleapb.agreementpb.Event alea_agreement          = 42;
+    reliablenetpb.Event      reliable_net            = 43;
 
     // for unit-tests
     google.protobuf.StringValue testingString = 301;

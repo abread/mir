@@ -15,6 +15,7 @@ import (
 	isspb "github.com/filecoin-project/mir/pkg/pb/isspb"
 	mempoolpb "github.com/filecoin-project/mir/pkg/pb/mempoolpb"
 	pingpongpb "github.com/filecoin-project/mir/pkg/pb/pingpongpb"
+	reliablenetpb "github.com/filecoin-project/mir/pkg/pb/reliablenetpb"
 	threshcryptopb "github.com/filecoin-project/mir/pkg/pb/threshcryptopb"
 	vcbpb "github.com/filecoin-project/mir/pkg/pb/vcbpb"
 )
@@ -188,6 +189,10 @@ func (p *Event_AleaBroadcast) Unwrap() *bcpb.Event {
 
 func (p *Event_AleaAgreement) Unwrap() *agreementpb.Event {
 	return p.AleaAgreement
+}
+
+func (p *Event_ReliableNet) Unwrap() *reliablenetpb.Event {
+	return p.ReliableNet
 }
 
 func (p *Event_TestingString) Unwrap() *wrapperspb.StringValue {

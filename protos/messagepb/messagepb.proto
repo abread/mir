@@ -16,6 +16,7 @@ import "checkpointpb/checkpointpb.proto";
 import "vcbpb/vcbpb.proto";
 import "abbapb/abbapb.proto";
 import "aleapb/aleapb.proto";
+import "reliablenetpb/messages/messages.proto";
 
 option go_package = "github.com/filecoin-project/mir/pkg/pb/messagepb";
 
@@ -30,5 +31,6 @@ message Message {
     vcbpb.Message                vcb                = 7;
     abbapb.Message               abba               = 8;
     aleapb.Message               alea               = 9;
+    reliablenetpb.Message        reliable_net       = 10;
   }
 }
