@@ -407,9 +407,10 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 
 	// still in 9. sample coin
 	threshDsl.UponRecoverResult(m, func(ok bool, fullSig []byte, err string, context *recoverCoinCtx) error {
-		if context.roundNumber != state.round.number || state.step != 9 {
-			logger.Log(logging.LevelDebug, "impossible condition on RecoverResult?")
-			// TODO: is this branch even possible?
+		if context.roundNumber != state.round.number {
+			return fmt.Errorf("impossible condition: changed round without coin toss")
+		}
+		if state.step != 9 {
 			return nil // stale result
 		}
 
@@ -426,10 +427,12 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 	})
 
 	dsl.UponOneHashResult(m, func(hash []byte, context *recoverCoinCtx) error {
-		if state.round.number != context.roundNumber || state.step != 9 {
-			logger.Log(logging.LevelDebug, "impossible condition on OneHashResult?")
-			// TODO: is this branch even possible?
+		if state.step != 9 {
 			return nil // stale result
+		}
+
+		if state.round.number != context.roundNumber {
+			return fmt.Errorf("impossible condition: changed round without coin toss")
 		}
 
 		// finishing step 9
