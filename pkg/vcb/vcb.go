@@ -12,6 +12,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/pb/factorymodulepb"
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"
+	"github.com/filecoin-project/mir/pkg/reliablenet/rnetdsl"
 	"github.com/filecoin-project/mir/pkg/serializing"
 	threshDsl "github.com/filecoin-project/mir/pkg/threshcrypto/dsl"
 	t "github.com/filecoin-project/mir/pkg/types"
@@ -23,7 +24,7 @@ import (
 type ModuleConfig struct {
 	Self         t.ModuleID // id of this module
 	Consumer     t.ModuleID // id of the module to send the "Deliver" event to
-	Net          t.ModuleID
+	ReliableNet  t.ModuleID
 	ThreshCrypto t.ModuleID
 	Mempool      t.ModuleID
 }
@@ -33,7 +34,7 @@ func DefaultModuleConfig(consumer t.ModuleID) *ModuleConfig {
 	return &ModuleConfig{
 		Self:         "vcb",
 		Consumer:     consumer,
-		Net:          "net",
+		ReliableNet:  "reliablenet",
 		ThreshCrypto: "threshcrypto",
 		Mempool:      "mempool",
 	}
@@ -169,7 +170,11 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 	})
 
 	threshDsl.UponSignShareResult(m, func(sigShare []byte, context *handleSendCtx) error {
-		dsl.SendMessage(m, mc.Net, EchoMessage(mc.Self, sigShare), []t.NodeID{params.Leader})
+		rnetdsl.SendMessage(m, mc.ReliableNet,
+			EchoMsgID(),
+			EchoMessage(mc.Self, sigShare),
+			[]t.NodeID{params.Leader},
+		)
 		return nil
 	})
 
@@ -179,6 +184,9 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 		vcbdsl.UponFinalMessageReceived(m, func(from t.NodeID, txs []*requestpb.Request, signature []byte) error {
 			if from == params.Leader && !state.delivered && !state.recvdFinal {
 				state.recvdFinal = true
+				rnetdsl.MarkModuleMsgsRecvd(m, mc.ReliableNet, mc.Self, params.AllNodes)
+				rnetdsl.Ack(m, mc.ReliableNet, mc.Self, FinalMsgID(), from)
+
 				ctx := &handleFinalCtx{
 					signature: signature,
 				}
@@ -233,7 +241,11 @@ func setupVcbLeader(m dsl.Module, mc *ModuleConfig, params *ModuleParams, common
 		commonState.txs = txs
 		commonState.sigData = SigData(params.InstanceUID, txIDs)
 
-		dsl.SendMessage(m, mc.Net, SendMessage(mc.Self, commonState.txs), params.AllNodes)
+		rnetdsl.SendMessage(m, mc.ReliableNet,
+			SendMsgID(),
+			SendMessage(mc.Self, commonState.txs),
+			params.AllNodes,
+		)
 		return nil
 	})
 
@@ -246,6 +258,7 @@ func setupVcbLeader(m dsl.Module, mc *ModuleConfig, params *ModuleParams, common
 			return nil // already received Echo from this node
 		}
 		state.receivedEcho[from] = struct{}{}
+		rnetdsl.MarkRecvd(m, mc.ReliableNet, mc.Self, SendMsgID(), []t.NodeID{from})
 
 		threshDsl.VerifyShare(m, mc.ThreshCrypto, commonState.sigData, sigShare, from, &verifyEchoMsgShareCtx{
 			sigShare: sigShare,
@@ -271,10 +284,34 @@ func setupVcbLeader(m dsl.Module, mc *ModuleConfig, params *ModuleParams, common
 		if ok && !state.sentFinal {
 			state.sentFinal = true
 
-			dsl.SendMessage(m, mc.Net, FinalMessage(mc.Self, commonState.txs, fullSig), params.AllNodes)
+			rnetdsl.MarkRecvd(m, mc.ReliableNet, mc.Self, SendMsgID(), params.AllNodes)
+			rnetdsl.SendMessage(m, mc.ReliableNet,
+				FinalMsgID(),
+				FinalMessage(mc.Self, commonState.txs, fullSig),
+				params.AllNodes,
+			)
 			vcbdsl.Deliver(m, mc.Consumer, commonState.txIDs, commonState.txs, fullSig)
 			commonState.delivered = true
 		}
 		return nil
 	})
+}
+
+const (
+	MSG_TYPE_SEND uint8 = iota
+	MSG_TYPE_ECHO
+	MSG_TYPE_FINAL
+)
+
+func SendMsgID() []byte {
+	return []byte{MSG_TYPE_SEND}
+}
+
+func EchoMsgID() []byte {
+	// each node only sends one of these messages, no other parameters are needed
+	return []byte{MSG_TYPE_ECHO}
+}
+
+func FinalMsgID() []byte {
+	return []byte{MSG_TYPE_FINAL}
 }

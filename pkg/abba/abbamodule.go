@@ -11,6 +11,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/pb/abbapb"
 	"github.com/filecoin-project/mir/pkg/pb/factorymodulepb"
+	"github.com/filecoin-project/mir/pkg/reliablenet/rnetdsl"
 	"github.com/filecoin-project/mir/pkg/serializing"
 	threshDsl "github.com/filecoin-project/mir/pkg/threshcrypto/dsl"
 	t "github.com/filecoin-project/mir/pkg/types"
@@ -21,7 +22,7 @@ import (
 type ModuleConfig struct {
 	Self         t.ModuleID // id of this module
 	Consumer     t.ModuleID // id of the module to send the "Deliver" event to
-	Net          t.ModuleID
+	ReliableNet  t.ModuleID
 	ThreshCrypto t.ModuleID
 	Hasher       t.ModuleID
 }
@@ -31,7 +32,7 @@ func DefaultModuleConfig(consumer t.ModuleID) *ModuleConfig {
 	return &ModuleConfig{
 		Self:         "abba",
 		Consumer:     consumer,
-		Net:          "net",
+		ReliableNet:  "reliablenet",
 		ThreshCrypto: "threshcrypto",
 		Hasher:       "hasher",
 	}
@@ -155,6 +156,7 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 	state.round.resetState(params)
 
 	abbadsl.UponFinishMessageReceived(m, func(from t.NodeID, value bool) error {
+		rnetdsl.Ack(m, mc.ReliableNet, mc.Self, FinishMsgID(), from)
 		if _, present := state.finishRecvd[from]; present {
 			logger.Log(logging.LevelDebug, "duplicate FINISH(v)", "v", value)
 			return nil // duplicate message
@@ -165,7 +167,11 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 		// 1. upon receiving weak support for FINISH(v), broadcast FINISH(v)
 		if !state.finishSent && state.finishRecvdValues[value] >= params.weakSupportThresh() {
 			logger.Log(logging.LevelDebug, "received weak support for FINISH(v)", "v", value)
-			dsl.SendMessage(m, mc.Net, FinishMessage(mc.Self, value), params.AllNodes)
+			rnetdsl.SendMessage(m, mc.ReliableNet,
+				FinishMsgID(),
+				FinishMessage(mc.Self, value),
+				params.AllNodes,
+			)
 			state.finishSent = true
 		}
 
@@ -192,7 +198,7 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 
 		// 4. broadcast INIT(r, est^r_i)
 		msg := InitMessage(mc.Self, state.round.number, state.round.estimate)
-		dsl.SendMessage(m, mc.Net, msg, params.AllNodes)
+		rnetdsl.SendMessage(m, mc.ReliableNet, InitMsgID(state.round.number, state.round.estimate), msg, params.AllNodes)
 
 		state.step = 5
 		return nil
@@ -207,6 +213,10 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 	// TODO: isolate coin sampling to different module to reduce complexity/noise
 
 	abbadsl.UponInitMessageReceived(m, func(from t.NodeID, r uint64, est bool) error {
+		if r <= state.round.number || state.step == math.MaxUint8 {
+			// TODO: maybe we can avoid the ACKs for r < state.round.number
+			rnetdsl.Ack(m, mc.ReliableNet, mc.Self, InitMsgID(r, est), from)
+		}
 		if r != state.round.number {
 			logger.Log(logging.LevelDebug, "wrong round for INIT(r, est)", "current", state.round.number, "got", r)
 			return nil // not ready yet or wrong round
@@ -234,7 +244,7 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 
 				state.round.values.Add(est)
 
-				dsl.SendMessage(m, mc.Net, InitMessage(mc.Self, r, est), params.AllNodes)
+				rnetdsl.SendMessage(m, mc.ReliableNet, InitMsgID(r, est), InitMessage(mc.Self, r, est), params.AllNodes)
 				state.round.initWeakSupport[est] = true
 
 				state.step = 6
@@ -243,7 +253,7 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 			// 6. upon receiving strong support for INIT(r, v), broadcast AUX(r, v) if we have not already broadcast AUX(r, _)
 			if !state.round.auxSent && state.round.initRecvdEstimates[est] >= params.strongSupportThresh() {
 				logger.Log(logging.LevelDebug, "received strong support for INIT(r, v)", "r", r, "v", est)
-				dsl.SendMessage(m, mc.Net, AuxMessage(mc.Self, r, est), params.AllNodes)
+				rnetdsl.SendMessage(m, mc.ReliableNet, AuxMsgID(r), AuxMessage(mc.Self, r, est), params.AllNodes)
 				state.round.auxSent = true
 				state.step = 7
 			}
@@ -253,6 +263,9 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 	})
 
 	abbadsl.UponAuxMessageReceived(m, func(from t.NodeID, r uint64, value bool) error {
+		if r <= state.round.number || state.step == math.MaxUint8 {
+			rnetdsl.Ack(m, mc.ReliableNet, mc.Self, AuxMsgID(r), from)
+		}
 		if r != state.round.number {
 			logger.Log(logging.LevelDebug, "wrong round for AUX(r, v)", "current", state.round.number, "got", r)
 			return nil // not processing this round
@@ -278,7 +291,7 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 		if state.round.isNiceAuxValueCount(params) {
 			r := state.round.number
 			logger.Log(logging.LevelDebug, "received enough support for AUX(r, v in values)", "r", r, "values", state.round.values)
-			dsl.SendMessage(m, mc.Net, ConfMessage(mc.Self, r, state.round.values), params.AllNodes)
+			rnetdsl.SendMessage(m, mc.ReliableNet, ConfMsgID(r), ConfMessage(mc.Self, r, state.round.values), params.AllNodes)
 			state.step = 8
 		}
 
@@ -286,6 +299,9 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 	})
 
 	abbadsl.UponConfMessageReceived(m, func(from t.NodeID, r uint64, values abbadsl.ValueSet) error {
+		if r <= state.round.number || state.step == math.MaxUint8 {
+			rnetdsl.Ack(m, mc.ReliableNet, mc.Self, ConfMsgID(r), from)
+		}
 		if r != state.round.number {
 			logger.Log(logging.LevelDebug, "wrong round for CONF(r, c)", "current", state.round.number, "got", r)
 			return nil // wrong round
@@ -322,13 +338,16 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 
 	// still in 9. sample coin
 	threshDsl.UponSignShareResult(m, func(sigShare []byte, context *signCoinShareCtx) error {
-		dsl.SendMessage(m, mc.Net, CoinMessage(mc.Self, context.roundNumber, sigShare), params.AllNodes)
+		rnetdsl.SendMessage(m, mc.ReliableNet, CoinMsgID(context.roundNumber), CoinMessage(mc.Self, context.roundNumber, sigShare), params.AllNodes)
 
 		return nil
 	})
 
 	// working in advance for 9. sample coin
 	abbadsl.UponCoinMessageReceived(m, func(from t.NodeID, r uint64, coinShare []byte) error {
+		if r <= state.round.number || state.step == math.MaxUint8 {
+			rnetdsl.Ack(m, mc.ReliableNet, mc.Self, CoinMsgID(r), from)
+		}
 		if r != state.round.number {
 			logger.Log(logging.LevelDebug, "wrong round for COIN(r, s)", "current", state.round.number, "got", r)
 			return nil // wrong round or already terminated
@@ -426,7 +445,7 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 
 			// If in fact values = { s_r }, broadcast FINISH(s_r) if we haven't broadcast FINISH(_) already
 			if v == sR && !state.finishSent {
-				dsl.SendMessage(m, mc.Net, FinishMessage(mc.Self, sR), params.AllNodes)
+				rnetdsl.SendMessage(m, mc.ReliableNet, FinishMsgID(), FinishMessage(mc.Self, sR), params.AllNodes)
 				state.finishSent = true
 			}
 		}
@@ -437,7 +456,7 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 		state.step = 4
 
 		// 4. broadcast INIT(r, est)
-		dsl.SendMessage(m, mc.Net, InitMessage(mc.Self, state.round.number, state.round.estimate), params.AllNodes)
+		rnetdsl.SendMessage(m, mc.ReliableNet, InitMsgID(state.round.number, state.round.estimate), InitMessage(mc.Self, state.round.number, state.round.estimate), params.AllNodes)
 		state.step = 5
 
 		return nil
@@ -542,4 +561,52 @@ func (rs *abbaRoundState) coinData(params *ModuleParams) [][]byte {
 		params.InstanceUID,
 		serializing.Uint64ToBytes(rs.number),
 	}
+}
+
+const (
+	MSG_TYPE_FINISH uint8 = iota
+	MSG_TYPE_INIT
+	MSG_TYPE_AUX
+	MSG_TYPE_CONF
+	MSG_TYPE_COIN
+)
+
+func FinishMsgID() []byte {
+	return []byte{MSG_TYPE_FINISH}
+}
+
+func InitMsgID(r uint64, v bool) []byte {
+	s := make([]byte, 0, 1+8+1)
+	s = append(s, MSG_TYPE_INIT)
+	s = append(s, serializing.Uint64ToBytes(r)...)
+	s = append(s, boolToNum(v))
+	return s
+}
+
+func AuxMsgID(r uint64) []byte {
+	s := make([]byte, 0, 1+8)
+	s = append(s, MSG_TYPE_AUX)
+	s = append(s, serializing.Uint64ToBytes(r)...)
+	return s
+}
+
+func ConfMsgID(r uint64) []byte {
+	s := make([]byte, 0, 1+8)
+	s = append(s, MSG_TYPE_CONF)
+	s = append(s, serializing.Uint64ToBytes(r)...)
+	return s
+}
+
+func CoinMsgID(r uint64) []byte {
+	s := make([]byte, 0, 1+8)
+	s = append(s, MSG_TYPE_COIN)
+	s = append(s, serializing.Uint64ToBytes(r)...)
+	return s
+}
+
+func boolToNum(v bool) uint8 {
+	if v {
+		return 1
+	}
+	return 0
 }

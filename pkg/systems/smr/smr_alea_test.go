@@ -28,6 +28,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/pb/commonpb"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
+	"github.com/filecoin-project/mir/pkg/reliablenet"
 	"github.com/filecoin-project/mir/pkg/testsim"
 	"github.com/filecoin-project/mir/pkg/timer"
 	t "github.com/filecoin-project/mir/pkg/types"
@@ -252,10 +253,15 @@ func runIntegrationWithAleaConfig(tb testing.TB, conf *TestConfig) (heapObjects 
 		}
 	}
 
-	// Check if all requests were delivered.
 	for _, replica := range deployment.TestReplicas {
+		// Check if all requests were delivered.
 		app := replica.Modules["app"].(*deploytest.FakeApp)
 		assert.Equal(tb, conf.NumNetRequests+conf.NumFakeRequests, int(app.RequestsProcessed))
+
+		// Check if there are no un-acked messages
+		//rnet := replica.Modules["reliablenet"].(*reliablenet.Module)
+		//pendingMsgs := rnet.GetPendingMessages()
+		//assert.Empty(tb, pendingMsgs)
 	}
 
 	// If the test failed, keep the generated data.
@@ -317,7 +323,23 @@ func newDeploymentAlea(conf *TestConfig) (*deploytest.Deployment, error) {
 		if err != nil {
 			return nil, fmt.Errorf("error initializing Mir transport: %w", err)
 		}
-		moduleSet[aleaConfig.Net] = transport
+		moduleSet["net"] = transport
+		moduleSet[aleaConfig.ReliableNet], err = reliablenet.New(
+			nodeID,
+			&reliablenet.ModuleConfig{
+				Self:  aleaConfig.ReliableNet,
+				Net:   "net",
+				Timer: aleaConfig.Timer,
+			},
+			&reliablenet.ModuleParams{
+				RetransmissionLoopInterval: 1 * time.Second,
+				AllNodes:                   aleaParams.AllNodes,
+			},
+			logging.Decorate(logger, "ReliableNet: "),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("error creating reliablenet: %w", err)
+		}
 
 		moduleSet[aleaConfig.ThreshCrypto] = cryptoSystem.Module(nodeID)
 		moduleSet[aleaConfig.Timer] = timer.New()

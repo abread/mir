@@ -13,6 +13,8 @@ import (
 	aleapbCommon "github.com/filecoin-project/mir/pkg/pb/aleapb/common"
 	apb "github.com/filecoin-project/mir/pkg/pb/availabilitypb"
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"
+	"github.com/filecoin-project/mir/pkg/reliablenet/rnetdsl"
+	"github.com/filecoin-project/mir/pkg/serializing"
 	threshDsl "github.com/filecoin-project/mir/pkg/threshcrypto/dsl"
 	t "github.com/filecoin-project/mir/pkg/types"
 	"github.com/filecoin-project/mir/pkg/vcb"
@@ -76,16 +78,17 @@ func IncludeBatchFetching(
 		// until all were tried or a response is received.
 		// It would also be nice to pass a hint in the certificate that says which nodes to try first,
 		// this could be provided by the agreement component based on INIT(v, 0) messages received by the abba instances.
-		dsl.SendMessage(m, mc.Net,
+		rnetdsl.SendMessage(m, mc.ReliableNet,
+			FillGapMsgID(slot),
 			protobuf.FillGapMessage(mc.Self, slot.Pb()),
-			params.AllNodes)
+			params.AllNodes,
+		)
 		return nil
 	})
 
 	// When receive a request for batch from another node, lookup the batch in the local storage.
 	bcdsl.UponFillGapMessageReceived(m, func(from t.NodeID, msg *aleapb.FillGapMessage) error {
 		slot := batchSlotFromPb(msg.Slot)
-
 		batchdbdsl.LookupBatch(m, mc.BatchDB, common.FormatAleaBatchID(msg.Slot), &lookupBatchOnRemoteRequestContext{from, slot})
 		return nil
 	})
@@ -97,13 +100,20 @@ func IncludeBatchFetching(
 			return nil
 		}
 
-		dsl.SendMessage(m, mc.Net, protobuf.FillerMessage(mc.Self, context.slot.Pb(), txs, signature), []t.NodeID{context.requester})
+		rnetdsl.SendMessage(m, mc.ReliableNet,
+			FillerMsgID(context.slot),
+			protobuf.FillerMessage(mc.Self, context.slot.Pb(), txs, signature),
+			[]t.NodeID{context.requester},
+		)
 		return nil
 	})
 
 	// When receive a requested batch, compute the ids of the received transactions.
 	bcdsl.UponFillerMessageReceived(m, func(from t.NodeID, msg *aleapb.FillerMessage) error {
 		slot := batchSlotFromPb(msg.Slot)
+		rnetdsl.MarkRecvd(m, mc.ReliableNet, mc.Self, FillGapMsgID(slot), []t.NodeID{from})
+		rnetdsl.Ack(m, mc.ReliableNet, mc.Self, FillerMsgID(slot), from)
+
 		reqState, present := state.RequestsState[slot]
 		if !present {
 			return nil // no request needs this message to be satisfied
@@ -149,6 +159,8 @@ func IncludeBatchFetching(
 			return nil
 		}
 
+		rnetdsl.MarkRecvd(m, mc.ReliableNet, mc.Self, FillGapMsgID(context.slot), params.AllNodes)
+
 		// store batch asynchronously
 		batchdbdsl.StoreBatch(m, mc.BatchDB, context.batchID, context.txIDs, context.txs, context.signature /*metadata*/, &storeBatchContext{})
 
@@ -183,6 +195,27 @@ func (slot *batchSlot) Pb() *aleapbCommon.Slot {
 		QueueIdx:  slot.QueueIdx,
 		QueueSlot: slot.QueueSlot,
 	}
+}
+
+const (
+	MSG_TYPE_FILLER uint8 = iota
+	MSG_TYPE_FILL_GAP
+)
+
+func FillerMsgID(slot batchSlot) []byte {
+	s := make([]byte, 0, 1+2*8)
+	s = append(s, MSG_TYPE_FILLER)
+	s = append(s, serializing.Uint64ToBytes(uint64(slot.QueueIdx))...)
+	s = append(s, serializing.Uint64ToBytes(slot.QueueSlot)...)
+	return s
+}
+
+func FillGapMsgID(slot batchSlot) []byte {
+	s := make([]byte, 0, 1+2*8)
+	s = append(s, MSG_TYPE_FILL_GAP)
+	s = append(s, serializing.Uint64ToBytes(uint64(slot.QueueIdx))...)
+	s = append(s, serializing.Uint64ToBytes(slot.QueueSlot)...)
+	return s
 }
 
 // Context data structures

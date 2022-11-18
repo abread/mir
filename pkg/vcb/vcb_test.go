@@ -27,7 +27,9 @@ import (
 	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"
+	"github.com/filecoin-project/mir/pkg/reliablenet"
 	"github.com/filecoin-project/mir/pkg/testsim"
+	"github.com/filecoin-project/mir/pkg/timer"
 	"github.com/filecoin-project/mir/pkg/types"
 	"github.com/filecoin-project/mir/pkg/vcb/vcbdsl"
 )
@@ -155,8 +157,8 @@ func newDeployment(conf *TestConfig) (*deploytest.Deployment, error) {
 
 	leader := nodeIDs[rand.New(rand.NewSource(conf.RandomSeed)).Intn(len(nodeIDs))] // nolint: gosec
 
-	for _, nodeID := range nodeIDs {
-		//nodeLogger := logging.Decorate(logger, fmt.Sprintf("Node %d: ", i))
+	for i, nodeID := range nodeIDs {
+		nodeLogger := logging.Decorate(logger, fmt.Sprintf("Node %d: ", i))
 
 		transport, err := transportLayer.Link(nodeID)
 		if err != nil {
@@ -174,19 +176,40 @@ func newDeployment(conf *TestConfig) (*deploytest.Deployment, error) {
 			},
 		)
 
-		vcb := NewModule(DefaultModuleConfig("app"), &ModuleParams{
+		vcbConfig := DefaultModuleConfig("app")
+		vcb := NewModule(vcbConfig, &ModuleParams{
 			InstanceUID: []byte{0},
 			AllNodes:    nodeIDs,
 			Leader:      leader,
-		}, nodeID, logging.Decorate(logger, "Vcb: "))
+		}, nodeID, logging.Decorate(nodeLogger, "Vcb: "))
+
+		// Use a small retransmission delay to increase likelihood of duplicate messages
+		rnetParams := reliablenet.DefaultModuleParams(nodeIDs)
+		rnetParams.RetransmissionLoopInterval = 10 * time.Millisecond
+
+		rnet, err := reliablenet.New(
+			nodeID,
+			&reliablenet.ModuleConfig{
+				Self:  vcbConfig.ReliableNet,
+				Net:   "net",
+				Timer: "timer",
+			},
+			rnetParams,
+			logging.Decorate(nodeLogger, "ReliableNet: "),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("error creating reliablenet module: %w", err)
+		}
 
 		modulesWithDefaults := map[types.ModuleID]modules.Module{
-			"app":          newCountingApp(nodeID == leader),
-			"vcb":          vcb,
-			"threshcrypto": threshCryptoSystem.Module(nodeID),
-			"hasher":       mirCrypto.NewHasher(crypto.SHA256),
-			"net":          transport,
-			"mempool":      mempool,
+			vcbConfig.Consumer:     newCountingApp(nodeID == leader),
+			vcbConfig.Self:         vcb,
+			vcbConfig.ThreshCrypto: threshCryptoSystem.Module(nodeID),
+			vcbConfig.Mempool:      mempool,
+			"hasher":               mirCrypto.NewHasher(crypto.SHA256),
+			vcbConfig.ReliableNet:  rnet,
+			"net":                  transport,
+			"timer":                timer.New(),
 		}
 
 		nodeModules[nodeID] = modulesWithDefaults

@@ -25,7 +25,9 @@ import (
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
+	"github.com/filecoin-project/mir/pkg/reliablenet"
 	"github.com/filecoin-project/mir/pkg/testsim"
+	"github.com/filecoin-project/mir/pkg/timer"
 	"github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -197,7 +199,8 @@ func newDeployment(conf *TestConfig) (*deploytest.Deployment, error) {
 			return nil, fmt.Errorf("error initializing Mir transport: %w", err)
 		}
 
-		abba := NewModule(DefaultModuleConfig("app"), &ModuleParams{
+		abbaConfig := DefaultModuleConfig("app")
+		abba := NewModule(abbaConfig, &ModuleParams{
 			InstanceUID: []byte{0},
 			AllNodes:    nodeIDs,
 		}, nodeID, nodeLogger)
@@ -207,12 +210,32 @@ func newDeployment(conf *TestConfig) (*deploytest.Deployment, error) {
 			inputValue = conf.DefaultInputValue
 		}
 
+		// Use a small retransmission delay to increase likelihood of duplicate messages
+		rnetParams := reliablenet.DefaultModuleParams(nodeIDs)
+		rnetParams.RetransmissionLoopInterval = 10 * time.Millisecond
+
+		rnet, err := reliablenet.New(
+			nodeID,
+			&reliablenet.ModuleConfig{
+				Self:  abbaConfig.ReliableNet,
+				Net:   "net",
+				Timer: "timer",
+			},
+			rnetParams,
+			logging.Decorate(nodeLogger, "ReliableNet: "),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("error creating reliablenet module: %w", err)
+		}
+
 		modulesWithDefaults := map[types.ModuleID]modules.Module{
-			"app":          newCountingApp(inputValue),
-			"abba":         abba,
-			"threshcrypto": threshCryptoSystem.Module(nodeID),
-			"hasher":       mirCrypto.NewHasher(crypto.SHA256),
-			"net":          transport,
+			abbaConfig.Consumer:     newCountingApp(inputValue),
+			abbaConfig.Self:         abba,
+			abbaConfig.ThreshCrypto: threshCryptoSystem.Module(nodeID),
+			abbaConfig.Hasher:       mirCrypto.NewHasher(crypto.SHA256),
+			abbaConfig.ReliableNet:  rnet,
+			"net":                   transport,
+			"timer":                 timer.New(),
 		}
 
 		nodeModules[nodeID] = modulesWithDefaults

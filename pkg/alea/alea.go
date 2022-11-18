@@ -26,6 +26,7 @@ type Config struct {
 	Hasher        t.ModuleID
 	Mempool       t.ModuleID
 	Net           t.ModuleID
+	ReliableNet   t.ModuleID
 	ThreshCrypto  t.ModuleID
 	Timer         t.ModuleID
 }
@@ -63,6 +64,7 @@ func DefaultConfig(consumer t.ModuleID) *Config {
 		BatchDB:       "batchdb",
 		Hasher:        "hasher",
 		Mempool:       "mempool",
+		ReliableNet:   "reliablenet",
 		Net:           "net",
 		ThreshCrypto:  "threshcrypto",
 		Timer:         "timer",
@@ -120,7 +122,7 @@ func New(ownID t.NodeID, config *Config, params *Params, startingChkp *checkpoin
 			AleaAgreement: config.AleaAgreement,
 			BatchDB:       config.BatchDB,
 			Mempool:       config.Mempool,
-			Net:           config.Net,
+			ReliableNet:   config.ReliableNet,
 			ThreshCrypto:  config.ThreshCrypto,
 			Timer:         config.Timer,
 		},
@@ -142,7 +144,7 @@ func New(ownID t.NodeID, config *Config, params *Params, startingChkp *checkpoin
 			Self:         config.AleaBroadcast,
 			Consumer:     config.AleaDirector,
 			Mempool:      config.Mempool,
-			Net:          config.Net,
+			ReliableNet:  config.ReliableNet,
 			ThreshCrypto: config.ThreshCrypto,
 		},
 		&broadcast.ModuleParams{
@@ -164,6 +166,7 @@ func New(ownID t.NodeID, config *Config, params *Params, startingChkp *checkpoin
 			Self:         config.AleaAgreement,
 			Consumer:     config.AleaDirector,
 			Hasher:       config.Hasher,
+			ReliableNet:  config.ReliableNet,
 			Net:          config.Net,
 			ThreshCrypto: config.ThreshCrypto,
 		},

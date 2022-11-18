@@ -21,7 +21,7 @@ func DefaultModuleConfig(consumer t.ModuleID) *ModuleConfig {
 		AleaAgreement: "alea_ag",
 		BatchDB:       "batchdb",
 		Mempool:       "mempool",
-		Net:           "net",
+		ReliableNet:   "reliablenet",
 		ThreshCrypto:  "threshcrypto",
 		Timer:         "timer",
 	}

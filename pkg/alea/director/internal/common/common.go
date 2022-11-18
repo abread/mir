@@ -16,6 +16,7 @@ type ModuleConfig struct {
 	BatchDB       t.ModuleID
 	Mempool       t.ModuleID
 	Net           t.ModuleID
+	ReliableNet   t.ModuleID
 	ThreshCrypto  t.ModuleID
 	Timer         t.ModuleID
 }

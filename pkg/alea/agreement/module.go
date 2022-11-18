@@ -2,6 +2,7 @@ package agreement
 
 import (
 	"fmt"
+	"strconv"
 
 	"golang.org/x/exp/slices"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/pb/abbapb"
 	"github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
+	rnEvents "github.com/filecoin-project/mir/pkg/reliablenet/events"
 	"github.com/filecoin-project/mir/pkg/serializing"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
@@ -23,6 +25,7 @@ type ModuleConfig struct {
 	Self         t.ModuleID // id of this module
 	Consumer     t.ModuleID
 	Hasher       t.ModuleID
+	ReliableNet  t.ModuleID
 	Net          t.ModuleID
 	ThreshCrypto t.ModuleID
 }
@@ -33,6 +36,7 @@ func DefaultModuleConfig(consumer t.ModuleID) *ModuleConfig {
 		Self:         "alea_ag",
 		Consumer:     "alea_dir",
 		Hasher:       "hasher",
+		ReliableNet:  "reliablenet",
 		Net:          "net",
 		ThreshCrypto: "threshcrypto",
 	}
@@ -51,6 +55,8 @@ type agModule struct {
 	nodeID t.NodeID
 	logger logging.Logger
 
+	roundDecisionHistory []bool
+
 	currentAbba modules.PassiveModule
 
 	currentRound uint64
@@ -64,6 +70,8 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 		params: params,
 		nodeID: nodeID,
 		logger: logger,
+
+		roundDecisionHistory: make([]bool, 0),
 
 		currentAbba: nil,
 
@@ -100,10 +108,25 @@ func (m *agModule) applyEvent(event *eventpb.Event) (*events.EventList, error) {
 
 func (m *agModule) proxyABBAEvent(event *eventpb.Event) (*events.EventList, error) {
 	destSub := t.ModuleID(event.DestModule).StripParent(m.config.Self)
+	r, ok := strconv.ParseUint(string(destSub.Top()), 10, 64)
+	if ok != nil {
+		return &events.EventList{}, nil // bogus message
+	}
 
-	if destSub.Top() == t.NewModuleIDFromInt(m.currentRound) {
+	if r == m.currentRound {
 		// all good, event can be safely forwarded
-	} else if m.delivered && destSub.Top() == t.NewModuleIDFromInt(m.currentRound+1) {
+	} else if ev, isMsg := event.Type.(*eventpb.Event_MessageReceived); r < m.currentRound && isMsg {
+		m.logger.Log(logging.LevelDebug, "helping old replica to catch up")
+
+		// reliable net is not needed here, we're just resending the FINISH(v) message until
+		// the other node gets up to speed
+		return events.ListOf(
+			events.SendMessage(m.config.Net, abba.FinishMessage(
+				m.config.Self.Then(t.NewModuleIDFromInt(r)),
+				m.roundDecisionHistory[r],
+			), []t.NodeID{t.NodeID(ev.MessageReceived.From)}),
+		), nil
+	} else if m.delivered && r == m.currentRound+1 {
 		// other nodes are moving to the next agreement round, follow suit
 		eventsOut, err := m.advanceRound()
 
@@ -168,9 +191,24 @@ func (m *agModule) handleABBAEvent(event *abbapb.Event) (*events.EventList, erro
 		return nil, fmt.Errorf("abba module double-delivered result")
 	}
 
+	evsOut := &events.EventList{}
+
 	// notify Alea of delivery
 	m.delivered = true
-	return (&events.EventList{}).PushBack(aagEvents.Deliver(m.config.Consumer, m.currentRound, ev.Result)), nil
+	evsOut.PushBack(aagEvents.Deliver(m.config.Consumer, m.currentRound, ev.Result))
+
+	// free up message queues for past round (we'll just re-send the FINAL message later if needed)
+	if len(m.roundDecisionHistory) != int(m.currentRound) {
+		return nil, fmt.Errorf("inconsistent agreement historical data")
+	}
+	m.roundDecisionHistory = append(m.roundDecisionHistory, ev.Result)
+	evsOut.PushBack(rnEvents.MarkModuleMsgsRecvd(
+		m.config.ReliableNet,
+		m.config.Self.Then(t.NewModuleIDFromInt(m.currentRound)),
+		m.params.AllNodes,
+	))
+
+	return evsOut, nil
 }
 
 func (m *agModule) abbaModuleID() t.ModuleID {
@@ -195,7 +233,7 @@ func (m *agModule) initializeRound() (*events.EventList, error) {
 	m.currentAbba = abba.NewModule(&abba.ModuleConfig{
 		Self:         abbaModuleID,
 		Consumer:     m.config.Self,
-		Net:          m.config.Net,
+		ReliableNet:  m.config.ReliableNet,
 		ThreshCrypto: m.config.ThreshCrypto,
 		Hasher:       m.config.Hasher,
 	}, &abba.ModuleParams{

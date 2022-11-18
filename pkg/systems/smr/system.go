@@ -3,6 +3,7 @@ package smr
 import (
 	"crypto"
 	"fmt"
+	"time"
 
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/pkg/errors"
@@ -11,6 +12,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/clientprogress"
 	"github.com/filecoin-project/mir/pkg/net"
 	"github.com/filecoin-project/mir/pkg/pb/commonpb"
+	"github.com/filecoin-project/mir/pkg/reliablenet"
 	"github.com/filecoin-project/mir/pkg/threshcrypto"
 	"github.com/filecoin-project/mir/pkg/timer"
 
@@ -281,7 +283,24 @@ func NewAlea(
 		return nil, fmt.Errorf("error creating Alea protocol modules: %w", err)
 	}
 
-	aleaProtocolModules[aleaConfig.Net] = transport
+	aleaProtocolModules["net"] = transport
+	aleaProtocolModules[aleaConfig.ReliableNet], err = reliablenet.New(
+		ownID,
+		&reliablenet.ModuleConfig{
+			Self:  aleaConfig.ReliableNet,
+			Net:   "net",
+			Timer: aleaConfig.Timer,
+		},
+		&reliablenet.ModuleParams{
+			RetransmissionLoopInterval: 1 * time.Second,
+			AllNodes:                   params.Alea.AllNodes,
+		},
+		logging.Decorate(logger, "ReliableNet: "),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("error creating reliablenet: %w", err)
+	}
+
 	aleaProtocolModules[aleaConfig.ThreshCrypto] = threshcrypto.New(threshCrypto)
 	aleaProtocolModules[aleaConfig.Timer] = timer.New()
 

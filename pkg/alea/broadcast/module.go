@@ -16,6 +16,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"
 	"github.com/filecoin-project/mir/pkg/pb/vcbpb"
+	rnEvents "github.com/filecoin-project/mir/pkg/reliablenet/events"
 	"github.com/filecoin-project/mir/pkg/serializing"
 	t "github.com/filecoin-project/mir/pkg/types"
 	"github.com/filecoin-project/mir/pkg/vcb"
@@ -26,7 +27,7 @@ type ModuleConfig struct {
 	Self         t.ModuleID // id of this module
 	Consumer     t.ModuleID
 	Mempool      t.ModuleID
-	Net          t.ModuleID
+	ReliableNet  t.ModuleID
 	ThreshCrypto t.ModuleID
 }
 
@@ -36,7 +37,7 @@ func DefaultModuleConfig(consumer t.ModuleID) *ModuleConfig {
 		Self:         "alea_bc",
 		Consumer:     "alea_dir",
 		Mempool:      "mempool",
-		Net:          "net",
+		ReliableNet:  "reliablenet",
 		ThreshCrypto: "threshcrypto",
 	}
 }
@@ -160,9 +161,7 @@ func (m *bcModule) handleFreeSlot(event *bcpb.FreeSlot) (*events.EventList, erro
 	queueIdx := int(event.Slot.QueueIdx)
 	slotID := event.Slot.QueueSlot
 
-	m.queueBcModules[queueIdx].FreeSlot(slotID)
-
-	return &events.EventList{}, nil
+	return m.queueBcModules[queueIdx].FreeSlot(slotID)
 }
 
 func (m *bcModule) handleVcbEvent(event *vcbpb.Event) (*events.EventList, error) {
@@ -245,7 +244,7 @@ func (m *queueBcModule) getOrTryCreateQueueSlot(slotID uint64) (*queueSlot, *eve
 				&vcb.ModuleConfig{
 					Self:         newSlotModuleID,
 					Consumer:     m.config.Consumer,
-					Net:          m.config.Net,
+					ReliableNet:  m.config.ReliableNet,
 					ThreshCrypto: m.config.ThreshCrypto,
 					Mempool:      m.config.Mempool,
 				},
@@ -273,7 +272,7 @@ func (m *queueBcModule) getOrTryCreateQueueSlot(slotID uint64) (*queueSlot, *eve
 	return m.slots[slotID], &events.EventList{}, nil
 }
 
-func (m *queueBcModule) FreeSlot(slotID uint64) {
+func (m *queueBcModule) FreeSlot(slotID uint64) (*events.EventList, error) {
 	m.locker.Lock()
 	defer m.locker.Unlock()
 
@@ -281,6 +280,14 @@ func (m *queueBcModule) FreeSlot(slotID uint64) {
 	delete(m.slots, slotID)
 
 	m.logger.Log(logging.LevelDebug, "Freed slot/VCB instance", "queueSlot", slotID)
+
+	return events.ListOf(
+		rnEvents.MarkModuleMsgsRecvd(
+			m.config.ReliableNet,
+			m.config.Self.Then(t.NewModuleIDFromInt(slotID)),
+			m.params.AllNodes,
+		),
+	), nil
 }
 
 func (m *queueBcModule) StartBroadcast(slotID uint64, txIDsPb [][]byte, txs []*requestpb.Request) (*events.EventList, error) {
