@@ -306,6 +306,7 @@ func newDeploymentAlea(conf *TestConfig) (*deploytest.Deployment, error) {
 		// Alea configuration
 		aleaConfig := alea.DefaultConfig("batchfetcher")
 		aleaParams := alea.DefaultParams(transportLayer.Nodes())
+		aleaParams.BatchCutFailRetryDelay = t.TimeDuration(100 * time.Millisecond)
 
 		// Alea instantiation
 		moduleSet, err := alea.New(
