@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strings"
 
+	"golang.org/x/exp/slices"
+
 	"github.com/filecoin-project/mir/pkg/eventlog"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
 	"github.com/filecoin-project/mir/pkg/pb/isspb"
@@ -66,8 +68,19 @@ func getEventList(file *os.File) (map[string]struct{}, map[string]struct{}, map[
 
 // eventName returns a string name of an Event.
 func eventName(event *eventpb.Event) string {
+	// gets the type's name i.e. Event_Tick , Event_Iss,etc
+	var name string
+	t := reflect.TypeOf(event.Type)
+	if t == nil {
+		name = "nil"
+	} else if slices.Contains([]reflect.Kind{reflect.Array, reflect.Chan, reflect.Map, reflect.Pointer, reflect.Slice}, t.Kind()) {
+		name = t.Elem().Name()
+	} else {
+		name = fmt.Sprintf("%s(could not parse type)", t.Name())
+	}
+
 	return strings.ReplaceAll(
-		reflect.TypeOf(event.Type).Elem().Name(), // gets the type's name i.e. Event_Tick , Event_Iss,etc
+		name,
 		"Event_", "")
 }
 
