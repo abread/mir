@@ -90,7 +90,7 @@ func testIntegrationWithAlea(t *testing.T) {
 				NumClients:      1,
 				Transport:       "libp2p",
 				NumFakeRequests: 10,
-				Duration:        10 * time.Second,
+				Duration:        15 * time.Second,
 			}},
 		9: {"Submit 10 requests with 1 node and libp2p networking",
 			&TestConfig{
@@ -333,7 +333,7 @@ func newDeploymentAlea(conf *TestConfig) (*deploytest.Deployment, error) {
 				Timer: aleaConfig.Timer,
 			},
 			&reliablenet.ModuleParams{
-				RetransmissionLoopInterval: 1 * time.Second,
+				RetransmissionLoopInterval: 200 * time.Millisecond,
 				AllNodes:                   aleaParams.AllNodes,
 			},
 			logging.Decorate(logger, "ReliableNet: "),
