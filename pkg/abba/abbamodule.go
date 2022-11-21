@@ -184,7 +184,7 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 			// only care about finish messages from now on
 			// eventually instances that are out-of-date will receive them and be happy
 			// TODO: do this more efficiently (by splitting the rounds into another module maybe)
-			for i := uint64(0); i < state.round.number; i++ {
+			for i := uint64(0); i <= state.round.number; i++ {
 				for _, msgID := range [][]byte{
 					InitMsgID(i, false),
 					InitMsgID(i, true),
