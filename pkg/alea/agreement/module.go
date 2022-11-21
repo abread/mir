@@ -15,6 +15,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/pb/abbapb"
 	"github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
+	"github.com/filecoin-project/mir/pkg/pb/messagepb"
 	rnEvents "github.com/filecoin-project/mir/pkg/reliablenet/events"
 	"github.com/filecoin-project/mir/pkg/serializing"
 	t "github.com/filecoin-project/mir/pkg/types"
@@ -96,6 +97,8 @@ func (m *agModule) applyEvent(event *eventpb.Event) (*events.EventList, error) {
 	case *eventpb.Event_Init:
 		m.currentRound = 0
 		return m.initializeRound() // first round is not lazy, for simplicity
+	case *eventpb.Event_MessageReceived:
+		return m.handleMessageReceived(e.MessageReceived.Msg, t.NodeID(e.MessageReceived.From))
 	case *eventpb.Event_AleaAgreement:
 		return m.handleAgreementEvent(e.AleaAgreement)
 	case *eventpb.Event_Abba:
@@ -104,6 +107,35 @@ func (m *agModule) applyEvent(event *eventpb.Event) (*events.EventList, error) {
 	default:
 		return nil, fmt.Errorf("unsupported event type: %T", e)
 	}
+}
+
+func (m *agModule) handleMessageReceived(message *messagepb.Message, from t.NodeID) (*events.EventList, error) {
+	msgWrapper, ok := message.Type.(*messagepb.Message_AleaAgreement)
+	if !ok {
+		m.logger.Log(logging.LevelDebug, "unknown message type")
+		return &events.EventList{}, nil
+	}
+
+	msg, ok := msgWrapper.AleaAgreement.Type.(*agreementpb.Message_FinishAbba)
+	if !ok {
+		m.logger.Log(logging.LevelDebug, "unknown agreement message type")
+		return &events.EventList{}, nil
+	}
+
+	if msg.FinishAbba.Round == m.currentRound {
+		// we've fallen back, and this replica is trying to help us catch up
+		destModuleID := m.abbaModuleID()
+		return m.currentAbba.ApplyEvents(events.ListOf(
+			events.MessageReceived(
+				destModuleID,
+				from,
+				abba.FinishMessage(destModuleID, msg.FinishAbba.Value),
+			),
+		))
+	}
+	// message is stale
+
+	return &events.EventList{}, nil
 }
 
 func (m *agModule) proxyABBAEvent(event *eventpb.Event) (*events.EventList, error) {
@@ -116,15 +148,17 @@ func (m *agModule) proxyABBAEvent(event *eventpb.Event) (*events.EventList, erro
 	if r == m.currentRound {
 		// all good, event can be safely forwarded
 	} else if ev, isMsg := event.Type.(*eventpb.Event_MessageReceived); r < m.currentRound && isMsg {
-		m.logger.Log(logging.LevelDebug, "helping old replica to catch up")
+		// old round: can be a replica trying to help us catch up, or one stalled in the past.
+		// we'll inform its agreement component that we're done, and help propagate the final decision
+		// see agModule::handleMessageReceived
 
-		// reliable net is not needed here, we're just resending the FINISH(v) message until
-		// the other node gets up to speed
+		from := t.NodeID(ev.MessageReceived.From)
 		return events.ListOf(
-			events.SendMessage(m.config.Net, abba.FinishMessage(
-				m.config.Self.Then(t.NewModuleIDFromInt(r)),
+			events.SendMessage(m.config.Net, aagEvents.AbbaFinishMessage(
+				m.config.Self,
+				r,
 				m.roundDecisionHistory[r],
-			), []t.NodeID{t.NodeID(ev.MessageReceived.From)}),
+			), []t.NodeID{from}),
 		), nil
 	} else if m.delivered && r == m.currentRound+1 {
 		// other nodes are moving to the next agreement round, follow suit
@@ -202,11 +236,6 @@ func (m *agModule) handleABBAEvent(event *abbapb.Event) (*events.EventList, erro
 		return nil, fmt.Errorf("inconsistent agreement historical data")
 	}
 	m.roundDecisionHistory = append(m.roundDecisionHistory, ev.Result)
-	evsOut.PushBack(rnEvents.MarkModuleMsgsRecvd(
-		m.config.ReliableNet,
-		m.config.Self.Then(t.NewModuleIDFromInt(m.currentRound)),
-		m.params.AllNodes,
-	))
 
 	return evsOut, nil
 }
@@ -216,8 +245,18 @@ func (m *agModule) abbaModuleID() t.ModuleID {
 }
 
 func (m *agModule) advanceRound() (*events.EventList, error) {
+	clearOldMessageQueue := rnEvents.MarkModuleMsgsRecvd(
+		m.config.ReliableNet,
+		m.config.Self.Then(t.NewModuleIDFromInt(m.currentRound)),
+		m.params.AllNodes,
+	)
+
 	m.currentRound++
-	return m.initializeRound()
+
+	evsOut, err := m.initializeRound()
+	evsOut.PushBack(clearOldMessageQueue)
+
+	return evsOut, err
 }
 
 func (m *agModule) initializeRound() (*events.EventList, error) {

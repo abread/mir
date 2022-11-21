@@ -34,3 +34,17 @@ message Deliver {
     uint64 round    = 1;
     bool   decision = 2;
 }
+// ============================================================
+// Messages
+// ============================================================
+
+message Message {
+    oneof type {
+        FinishAbbaMessage finish_abba = 1;
+    }
+}
+
+message FinishAbbaMessage {
+    uint64 round = 1;
+    bool   value = 2;
+}

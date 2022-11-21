@@ -3,6 +3,7 @@ package aagevents
 import (
 	"github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
+	"github.com/filecoin-project/mir/pkg/pb/messagepb"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -43,6 +44,26 @@ func Event(destModule t.ModuleID, ev *agreementpb.Event) *eventpb.Event {
 		DestModule: destModule.Pb(),
 		Type: &eventpb.Event_AleaAgreement{
 			AleaAgreement: ev,
+		},
+	}
+}
+
+func AbbaFinishMessage(destModule t.ModuleID, agreementRound uint64, value bool) *messagepb.Message {
+	return Message(destModule, &agreementpb.Message{
+		Type: &agreementpb.Message_FinishAbba{
+			FinishAbba: &agreementpb.FinishAbbaMessage{
+				Round: agreementRound,
+				Value: value,
+			},
+		},
+	})
+}
+
+func Message(destModule t.ModuleID, msg *agreementpb.Message) *messagepb.Message {
+	return &messagepb.Message{
+		DestModule: destModule.Pb(),
+		Type: &messagepb.Message_AleaAgreement{
+			AleaAgreement: msg,
 		},
 	}
 }
