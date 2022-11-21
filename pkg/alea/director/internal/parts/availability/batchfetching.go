@@ -198,13 +198,13 @@ func (slot *batchSlot) Pb() *aleapbCommon.Slot {
 }
 
 const (
-	MSG_TYPE_FILLER uint8 = iota
-	MSG_TYPE_FILL_GAP
+	MsgTypeFiller uint8 = iota
+	MsgTypeFillGap
 )
 
 func FillerMsgID(slot batchSlot) []byte {
 	s := make([]byte, 0, 1+2*8)
-	s = append(s, MSG_TYPE_FILLER)
+	s = append(s, MsgTypeFiller)
 	s = append(s, serializing.Uint64ToBytes(uint64(slot.QueueIdx))...)
 	s = append(s, serializing.Uint64ToBytes(slot.QueueSlot)...)
 	return s
@@ -212,7 +212,7 @@ func FillerMsgID(slot batchSlot) []byte {
 
 func FillGapMsgID(slot batchSlot) []byte {
 	s := make([]byte, 0, 1+2*8)
-	s = append(s, MSG_TYPE_FILL_GAP)
+	s = append(s, MsgTypeFillGap)
 	s = append(s, serializing.Uint64ToBytes(uint64(slot.QueueIdx))...)
 	s = append(s, serializing.Uint64ToBytes(slot.QueueSlot)...)
 	return s

@@ -586,20 +586,20 @@ func (rs *abbaRoundState) coinData(params *ModuleParams) [][]byte {
 }
 
 const (
-	MSG_TYPE_FINISH uint8 = iota
-	MSG_TYPE_INIT
-	MSG_TYPE_AUX
-	MSG_TYPE_CONF
-	MSG_TYPE_COIN
+	MsgTypeFinish uint8 = iota
+	MsgTypeInit
+	MsgTypeAux
+	MsgTypeConf
+	MsgTypeCoin
 )
 
 func FinishMsgID() []byte {
-	return []byte{MSG_TYPE_FINISH}
+	return []byte{MsgTypeFinish}
 }
 
 func InitMsgID(r uint64, v bool) []byte {
 	s := make([]byte, 0, 1+8+1)
-	s = append(s, MSG_TYPE_INIT)
+	s = append(s, MsgTypeInit)
 	s = append(s, serializing.Uint64ToBytes(r)...)
 	s = append(s, boolToNum(v))
 	return s
@@ -607,21 +607,21 @@ func InitMsgID(r uint64, v bool) []byte {
 
 func AuxMsgID(r uint64) []byte {
 	s := make([]byte, 0, 1+8)
-	s = append(s, MSG_TYPE_AUX)
+	s = append(s, MsgTypeAux)
 	s = append(s, serializing.Uint64ToBytes(r)...)
 	return s
 }
 
 func ConfMsgID(r uint64) []byte {
 	s := make([]byte, 0, 1+8)
-	s = append(s, MSG_TYPE_CONF)
+	s = append(s, MsgTypeConf)
 	s = append(s, serializing.Uint64ToBytes(r)...)
 	return s
 }
 
 func CoinMsgID(r uint64) []byte {
 	s := make([]byte, 0, 1+8)
-	s = append(s, MSG_TYPE_COIN)
+	s = append(s, MsgTypeCoin)
 	s = append(s, serializing.Uint64ToBytes(r)...)
 	return s
 }

@@ -298,20 +298,20 @@ func setupVcbLeader(m dsl.Module, mc *ModuleConfig, params *ModuleParams, common
 }
 
 const (
-	MSG_TYPE_SEND uint8 = iota
-	MSG_TYPE_ECHO
-	MSG_TYPE_FINAL
+	MsgTypeSend uint8 = iota
+	MsgTypeEcho
+	MsgTypeFinal
 )
 
 func SendMsgID() []byte {
-	return []byte{MSG_TYPE_SEND}
+	return []byte{MsgTypeSend}
 }
 
 func EchoMsgID() []byte {
 	// each node only sends one of these messages, no other parameters are needed
-	return []byte{MSG_TYPE_ECHO}
+	return []byte{MsgTypeEcho}
 }
 
 func FinalMsgID() []byte {
-	return []byte{MSG_TYPE_FINAL}
+	return []byte{MsgTypeFinal}
 }

@@ -42,12 +42,12 @@ func MarkModuleMsgsRecvd(destModule t.ModuleID, msgDestModule t.ModuleID, destin
 	})
 }
 
-func MarkRecvd(destModule t.ModuleID, msgDestModule t.ModuleID, msgId []byte, destinations []t.NodeID) *eventpb.Event {
+func MarkRecvd(destModule t.ModuleID, msgDestModule t.ModuleID, msgID []byte, destinations []t.NodeID) *eventpb.Event {
 	return Event(destModule, &reliablenetpb.Event{
 		Type: &reliablenetpb.Event_MarkRecvd{
 			MarkRecvd: &reliablenetpb.MarkRecvd{
 				DestModule:   msgDestModule.Pb(),
-				MsgId:        msgId,
+				MsgId:        msgID,
 				Destinations: t.NodeIDSlicePb(destinations),
 			},
 		},
