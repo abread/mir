@@ -148,14 +148,18 @@ func runTest(t *testing.T, conf *TestConfig) (result bool, heapObjects int64, he
 		}
 	}
 
-	// Check if all requests were delivered exactly once in all replicas.
 	app0 := deployment.TestReplicas[0].Modules["app"].(*countingApp)
 	assert.Equal(t, app0.firstDeliveredOrigin, types.ModuleID("abba"))
 	for _, replica := range deployment.TestReplicas {
+		// Check if all requests were delivered exactly once in all replicas.
 		app := replica.Modules["app"].(*countingApp)
 		assert.Equal(t, 1, app.deliveredCount)
 		assert.Equal(t, app0.firstDelivered, app.firstDelivered)
 		assert.Equal(t, app0.firstDeliveredOrigin, app.firstDeliveredOrigin)
+
+		// Check if all messages were ACKed
+		rnet := replica.Modules["reliablenet"].(*reliablenet.Module)
+		assert.Empty(t, rnet.GetPendingMessages())
 	}
 
 	// If the test failed, keep the generated data.

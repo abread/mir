@@ -109,16 +109,20 @@ func runTest(t *testing.T, conf *TestConfig) (heapObjects int64, heapAlloc int64
 		}
 	}
 
-	// Check if all requests were delivered exactly once in all replicas.
 	app0 := deployment.TestReplicas[0].Modules["app"].(*countingApp)
 	assert.Equal(t, app0.firstFrom, types.ModuleID("vcb"))
 	for _, replica := range deployment.TestReplicas {
+		// Check if all requests were delivered exactly once in all replicas.
 		app := replica.Modules["app"].(*countingApp)
 		assert.Equal(t, 1, app.deliveredCount)
 		// TODO: check request data
 		assert.ElementsMatch(t, app0.firstTxIDs, app.firstTxIDs)
 		assert.ElementsMatch(t, app0.firstSignature, app.firstSignature)
 		assert.Equal(t, app0.firstFrom, app.firstFrom)
+
+		// Check that all messages were properly ACKed
+		rnet := replica.Modules["reliablenet"].(*reliablenet.Module)
+		assert.Empty(t, rnet.GetPendingMessages())
 	}
 
 	// If the test failed, keep the generated data.
