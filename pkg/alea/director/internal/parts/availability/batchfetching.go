@@ -162,7 +162,7 @@ func IncludeBatchFetching(
 		rnetdsl.MarkRecvd(m, mc.ReliableNet, mc.Self, FillGapMsgID(context.slot), params.AllNodes)
 
 		// store batch asynchronously
-		batchdbdsl.StoreBatch(m, mc.BatchDB, context.batchID, context.txIDs, context.txs, context.signature /*metadata*/, &storeBatchContext{})
+		batchdbdsl.StoreBatch(m, mc.BatchDB, context.batchID, context.txIDs, context.txs, context.signature /*metadata*/, context)
 
 		// send response to requests
 		for _, origin := range requestState.ReqOrigins {
@@ -173,8 +173,8 @@ func IncludeBatchFetching(
 		return nil
 	})
 
-	batchdbdsl.UponBatchStored(m, func(_ *storeBatchContext) error {
-		// do nothing.
+	batchdbdsl.UponBatchStored(m, func(context *handleFillerContext) error {
+		// do nothing
 		return nil
 	})
 }
@@ -238,5 +238,3 @@ type handleFillerContext struct {
 	txIDs   []t.TxID
 	batchID t.BatchID
 }
-
-type storeBatchContext struct{}

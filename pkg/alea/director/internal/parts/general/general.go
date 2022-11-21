@@ -45,12 +45,23 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 	// Batch Cutting / Own Queue Broadcast Control
 	// =============================================================================================
 
-	// track unagreed own slots
 	aagdsl.UponDeliver(m, func(round uint64, decision bool) error {
 		queueIdx := uint32(round % uint64(len(params.AllNodes)))
+		queueSlot := state.agQueueHeads[queueIdx]
 
+		// track unagreed own slots
 		if queueIdx == ownQueueIdx {
 			state.unagreedBroadcastedOwnSlotCount--
+		}
+
+		// free broadcast slots
+		if decision {
+			// TODO: only free slot when broadcast/fill-gap concludes?
+			// agreement takes longer so this shouldn't be a show-stopper
+			abcdsl.FreeSlot(m, mc.AleaBroadcast, &aleapbCommon.Slot{
+				QueueIdx:  queueIdx,
+				QueueSlot: queueSlot,
+			})
 		}
 
 		return nil
