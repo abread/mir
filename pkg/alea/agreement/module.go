@@ -125,6 +125,7 @@ func (m *agModule) handleMessageReceived(message *messagepb.Message, from t.Node
 	if msg.FinishAbba.Round == m.currentRound {
 		// we've fallen back, and this replica is trying to help us catch up
 		destModuleID := m.abbaModuleID()
+
 		return m.currentAbba.ApplyEvents(events.ListOf(
 			events.MessageReceived(
 				destModuleID,
@@ -159,6 +160,14 @@ func (m *agModule) proxyABBAEvent(event *eventpb.Event) (*events.EventList, erro
 				r,
 				m.roundDecisionHistory[r],
 			), []t.NodeID{from}),
+
+			// ABBA does not mark FINISH(_) messages as received, so we must acknowledge any we may receive
+			rnEvents.Ack(
+				m.config.ReliableNet,
+				m.config.Self.Then(t.NewModuleIDFromInt(r)),
+				abba.FinishMsgID(),
+				from,
+			),
 		), nil
 	} else if m.delivered && r == m.currentRound+1 {
 		// other nodes are moving to the next agreement round, follow suit
