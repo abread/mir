@@ -83,8 +83,8 @@ func displayEvent(event *eventpb.Event, metadata eventMetadata) {
 
 // Creates and returns a prefix tag for event display using event metadata
 func getMetaTag(eventType string, metadata eventMetadata) string {
-	boldGreen := chalk.Green.NewStyle().WithTextStyle(chalk.Bold) // setting font color and style
-	boldCyan := chalk.Cyan.NewStyle().WithTextStyle(chalk.Bold)
+	boldGreen := chalk.Green.NewStyle().WithBackground(chalk.ResetColor).WithTextStyle(chalk.Bold) // setting font color and style
+	boldCyan := chalk.Cyan.NewStyle().WithBackground(chalk.ResetColor).WithTextStyle(chalk.Bold)
 	return fmt.Sprintf("%s %s",
 		boldGreen.Style(fmt.Sprintf("[ Event_%s ]", eventType)),
 		boldCyan.Style(fmt.Sprintf("[ Node #%v ] [ Time _%s ] [ Index #%s ]",
@@ -96,7 +96,7 @@ func getMetaTag(eventType string, metadata eventMetadata) string {
 
 // displays the event
 func display(eventType string, event string, metadata eventMetadata) {
-	whiteText := chalk.White.NewStyle().WithTextStyle(chalk.Bold)
+	whiteText := chalk.Bold.NewStyle().WithBackground(chalk.ResetColor).WithForeground(chalk.ResetColor)
 	metaTag := getMetaTag(eventType, metadata)
 	fmt.Printf("%s\n%s \n", metaTag, whiteText.Style(event))
 }
