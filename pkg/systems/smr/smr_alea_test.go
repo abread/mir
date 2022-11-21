@@ -333,7 +333,7 @@ func newDeploymentAlea(conf *TestConfig) (*deploytest.Deployment, error) {
 				Timer: aleaConfig.Timer,
 			},
 			&reliablenet.ModuleParams{
-				RetransmissionLoopInterval: 200 * time.Millisecond,
+				RetransmissionLoopInterval: 50 * time.Millisecond,
 				AllNodes:                   aleaParams.AllNodes,
 			},
 			logging.Decorate(logger, "ReliableNet: "),
