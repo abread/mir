@@ -180,6 +180,21 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 			logger.Log(logging.LevelDebug, "received strong support for FINISH(v)", "v", value)
 			abbadsl.Deliver(m, mc.Consumer, value)
 			state.step = math.MaxUint8 // no more progress can be made
+
+			// only care about finish messages from now on
+			// eventually instances that are out-of-date will receive them and be happy
+			// TODO: do this more efficiently (by splitting the rounds into another module maybe)
+			for i := uint64(0); i < state.round.number; i++ {
+				for _, msgID := range [][]byte{
+					InitMsgID(i, false),
+					InitMsgID(i, true),
+					AuxMsgID(i),
+					ConfMsgID(i),
+					CoinMsgID(i),
+				} {
+					rnetdsl.MarkRecvd(m, mc.ReliableNet, mc.Self, msgID, params.AllNodes)
+				}
+			}
 		}
 
 		return nil
@@ -410,7 +425,9 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 		if context.roundNumber != state.round.number {
 			return fmt.Errorf("impossible condition: changed round without coin toss")
 		}
-		if state.step != 9 {
+		if state.step < 9 {
+			return fmt.Errorf("impossible condition: changed round without coin toss")
+		} else if state.step > 9 {
 			return nil // stale result
 		}
 
@@ -427,7 +444,9 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 	})
 
 	dsl.UponOneHashResult(m, func(hash []byte, context *recoverCoinCtx) error {
-		if state.step != 9 {
+		if state.step < 9 {
+			return fmt.Errorf("impossible condition: changed round without coin toss")
+		} else if state.step > 9 {
 			return nil // stale result
 		}
 
