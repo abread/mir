@@ -40,21 +40,12 @@ func displayEvents(args *arguments) error {
 		for _, event := range entry.Events {
 			metadata.index = uint64(index)
 
-			_, validEvent := args.selectedEventNames[eventName(event)]
+			validEvent := args.selectedEventTypes.IsEventSelected(event)
 			_, validDest := args.selectedEventDests[event.DestModule]
 
 			if validEvent && validDest && index >= args.offset && (args.limit == 0 || index < args.offset+args.limit) {
 				// If event type has been selected for displaying
-
-				switch e := event.Type.(type) {
-				case *eventpb.Event_Iss:
-					// Only display selected sub-types of the ISS Event
-					if _, validIssEvent := args.selectedIssEventNames[issEventName(e.Iss)]; validIssEvent {
-						displayEvent(event, metadata)
-					}
-				default:
-					displayEvent(event, metadata)
-				}
+				displayEvent(event, metadata)
 			}
 
 			index++
@@ -72,13 +63,7 @@ func displayEvents(args *arguments) error {
 
 // Displays one event according to its type.
 func displayEvent(event *eventpb.Event, metadata eventMetadata) {
-
-	switch e := event.Type.(type) {
-	case *eventpb.Event_Iss:
-		display(fmt.Sprintf("%s : %s", eventName(event), issEventName(e.Iss)), protojson.Format(event), metadata)
-	default:
-		display(eventName(event), protojson.Format(event), metadata)
-	}
+	display(eventName(event), protojson.Format(event), metadata)
 }
 
 // Creates and returns a prefix tag for event display using event metadata

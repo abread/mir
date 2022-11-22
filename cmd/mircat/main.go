@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/pkg/errors"
@@ -31,10 +32,7 @@ type arguments struct {
 	limit int
 
 	// Events selected by the user for displaying.
-	selectedEventNames map[string]struct{}
-
-	// If ISS Events have been selected for displaying, this variable contains the types of ISS events to be displayed.
-	selectedIssEventNames map[string]struct{}
+	selectedEventTypes *evTypeTree
 
 	// Events with specific destination modules selected by the user for displaying
 	selectedEventDests map[string]struct{}
@@ -67,7 +65,7 @@ func main() {
 
 	// Scan the event log and collect all occurring event types.
 	fmt.Println("Scanning input file.")
-	allEvents, allISSEvents, allDests, totalEvents, err := getEventList(args.srcFile)
+	allEvents, allDests, totalEvents, err := getEventList(args.srcFile)
 	if err != nil {
 		kingpin.Errorf("Error parsing src file", err)
 		fmt.Printf("\n\n!!!\nContinuing after error. Event list might be incomplete!\n!!!\n\n")
@@ -76,20 +74,14 @@ func main() {
 
 	// If no event types have been selected through command-line arguments,
 	// have the user interactively select the events to include in the output.
-	if len(args.selectedEventNames) == 0 {
-
-		// Select top-level events
-		args.selectedEventNames = checkboxes("Please select the events", allEvents)
-
-		// If any ISS events occur in the event log and the user selected the ISS event type,
-		// have the user select which of those should be included in the output.
-		if _, ok := args.selectedEventNames["Iss"]; ok {
-			args.selectedIssEventNames = checkboxes("Please select the ISS events", allISSEvents)
-		}
+	if args.selectedEventTypes.IsEmpty() {
+		// Select events
+		selectedNames := checkboxes("Please select the event types", eventSelectionOptions(allEvents))
+		args.selectedEventTypes = toEvTypeTree(toList(selectedNames))
 	}
 
-	// // If no event destinations have been selected through command-line arguments,
-	// // have the user interactively select the event destinations' to include in the output.
+	// If no event destinations have been selected through command-line arguments,
+	// have the user interactively select the event destinations' to include in the output.
 	if len(args.selectedEventDests) == 0 {
 
 		// Select top-level events
@@ -98,7 +90,7 @@ func main() {
 	}
 
 	fmt.Println("Command-line arguments for selecting the chosen filters:\n" +
-		selectionArgs(args.selectedEventNames, args.selectedIssEventNames, args.selectedEventDests))
+		selectionArgs(args.selectedEventTypes, args.selectedEventDests))
 
 	// Display selected events or enter debug mode.
 	if args.debug {
@@ -124,7 +116,6 @@ func parseArgs(args []string) (*arguments, error) {
 	app := kingpin.New("mircat", "Utility for processing Mir state event logs.")
 	src := app.Flag("src", "The input file to read.").Required().File()
 	events := app.Flag("event", "Event types to be displayed.").Short('e').Strings()
-	issEvents := app.Flag("iss-event", "Types of ISS Events to be displayed if ISS events are selected.").Short('s').Strings()
 	eventDests := app.Flag("event-dest", "Event destination types to be displayed.").Short('r').Strings()
 	offset := app.Flag("offset", "The first offset events will not be displayed.").Default("0").Int()
 	limit := app.Flag("limit", "Maximum number of events to consider for display or debug").Default("0").Int()
@@ -142,16 +133,15 @@ func parseArgs(args []string) (*arguments, error) {
 	}
 
 	return &arguments{
-		srcFile:               *src,
-		debug:                 *dbg,
-		ownID:                 t.NodeID(*id),
-		membership:            t.NodeIDSlice(*membership),
-		showNodeEvents:        *showNodeEvents,
-		offset:                *offset,
-		limit:                 *limit,
-		selectedEventNames:    toSet(*events),
-		selectedIssEventNames: toSet(*issEvents),
-		selectedEventDests:    toSet(*eventDests),
+		srcFile:            *src,
+		debug:              *dbg,
+		ownID:              t.NodeID(*id),
+		membership:         t.NodeIDSlice(*membership),
+		showNodeEvents:     *showNodeEvents,
+		offset:             *offset,
+		limit:              *limit,
+		selectedEventTypes: toEvTypeTree(*events),
+		selectedEventDests: toSet(*eventDests),
 	}, nil
 }
 
@@ -172,20 +162,72 @@ func checkboxes(label string, opts map[string]struct{}) map[string]struct{} {
 	return toSet(selected)
 }
 
-func selectionArgs(events map[string]struct{}, issEvents map[string]struct{}, dests map[string]struct{}) string {
+func eventSelectionOptions(allEvents *evTypeTree) map[string]struct{} {
+	options := make(map[string]struct{})
+	allEvents.Walk(func(path string, _ bool, hasChildren bool) IterControl {
+		if path == "" {
+			return IterControlContinue
+		}
+
+		if hasChildren {
+			options[path+".*"] = struct{}{}
+		} else {
+			options[path] = struct{}{}
+		}
+
+		return IterControlContinue
+	})
+
+	return options
+}
+
+func selectionArgs(events *evTypeTree, dests map[string]struct{}) string {
 	argStr := ""
 
-	for _, eventName := range toList(events) {
-		argStr += " --event " + eventName
-	}
+	events.Walk(func(path string, allChildrenSelected, hasChildren bool) IterControl {
+		if path == "" {
+			return IterControlContinue
+		}
 
-	for _, issEventName := range toList(issEvents) {
-		argStr += " --iss-event " + issEventName
-	}
+		if allChildrenSelected {
+			argStr += " --event " + path + ".*"
+			return IterControlDontExpand
+		}
+
+		argStr += " --event " + path
+		return IterControlContinue
+	})
 
 	for _, dest := range toList(dests) {
 		argStr += " --event-dest " + dest
 	}
 
 	return argStr
+}
+
+func toEvTypeTree(eventTypeSpecs []string) *evTypeTree {
+	tt := &evTypeTree{}
+
+	for _, eventTypeSpec := range eventTypeSpecs {
+		components := strings.Split(eventTypeSpec, ".")
+		tree := tt
+		for _, comp := range components {
+			if comp == "*" || tree.allChildrenSelected {
+				tree.allChildrenSelected = true
+				break
+			}
+
+			if tree.leaves == nil {
+				tree.leaves = make(map[string]*evTypeTree)
+			}
+
+			if _, ok := tree.leaves[comp]; !ok {
+				tree.leaves[comp] = &evTypeTree{}
+			}
+
+			tree = tree.leaves[comp]
+		}
+	}
+
+	return tt
 }

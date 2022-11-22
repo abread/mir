@@ -6,14 +6,12 @@ import (
 	"io"
 	"os"
 	"reflect"
+	"regexp"
 	"sort"
 	"strings"
 
-	"golang.org/x/exp/slices"
-
 	"github.com/filecoin-project/mir/pkg/eventlog"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
-	"github.com/filecoin-project/mir/pkg/pb/isspb"
 	"github.com/filecoin-project/mir/pkg/pb/recordingpb"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
@@ -24,11 +22,17 @@ type eventMetadata struct {
 	index  uint64
 }
 
+type evTypeTree struct {
+	allChildrenSelected bool
+	leaves              map[string]*evTypeTree
+}
+
 // Returns the list of event names and destinations present in the given eventlog file,
 // along with the total number of events present in the file.
-func getEventList(file *os.File) (map[string]struct{}, map[string]struct{}, map[string]struct{}, int, error) {
-	events := make(map[string]struct{})
-	issEvents := make(map[string]struct{})
+func getEventList(file *os.File) (*evTypeTree, map[string]struct{}, int, error) {
+	events := &evTypeTree{
+		leaves: make(map[string]*evTypeTree),
+	}
 	eventDests := make(map[string]struct{})
 
 	defer func(file *os.File, offset int64, whence int) {
@@ -37,7 +41,7 @@ func getEventList(file *os.File) (map[string]struct{}, map[string]struct{}, map[
 
 	reader, err := eventlog.NewReader(file)
 	if err != nil {
-		return nil, nil, nil, 0, err
+		return nil, nil, 0, err
 	}
 
 	cnt := 0 // Counts the total number of events in the event log.
@@ -49,64 +53,135 @@ func getEventList(file *os.File) (map[string]struct{}, map[string]struct{}, map[
 			// For each Event in the entry
 			cnt++
 
-			// Add the Event name to the set of known Events.
-			events[eventName(event)] = struct{}{}
+			// Add the Event type to the set of known Events.
+			tree := events
+			walkEventTypeName(event, func(nameComponent string) bool {
+				if _, ok := tree.leaves[nameComponent]; !ok {
+					tree.leaves[nameComponent] = &evTypeTree{
+						leaves: make(map[string]*evTypeTree),
+					}
+				}
+				tree = tree.leaves[nameComponent]
+
+				return true
+			})
+
 			eventDests[event.DestModule] = struct{}{}
-			switch e := event.Type.(type) {
-			case *eventpb.Event_Iss:
-				// For ISS Events, also add the type of the ISS event to a set of known ISS events.
-				issEvents[issEventName(e.Iss)] = struct{}{}
-			}
 		}
 	}
 	if errors.Is(err, io.EOF) {
-		return events, issEvents, eventDests, cnt, fmt.Errorf("failed reading event log: %w", err)
+		return events, eventDests, cnt, fmt.Errorf("failed reading event log: %w", err)
 	}
 
-	return events, issEvents, eventDests, cnt, nil
+	return events, eventDests, cnt, nil
 }
 
-// eventName returns a string name of an Event.
+var EventPrefix = regexp.MustCompile("^Event_")
+
+func walkEventTypeName(event *eventpb.Event, f func(nameComponent string) bool) {
+	evType := reflect.ValueOf(event.Type)
+	for evType.IsValid() && evType.Kind() == reflect.Pointer {
+		name := evType.Elem().Type().Name()
+		name = EventPrefix.ReplaceAllString(name, "")
+		if !f(name) {
+			break
+		}
+
+		inner := evType.Elem()
+		if !inner.IsValid() || inner.Kind() != reflect.Struct {
+			break
+		}
+		inner = inner.FieldByName(name)
+		if !inner.IsValid() || inner.Kind() != reflect.Pointer {
+			break
+		}
+		inner = inner.Elem()
+		if !inner.IsValid() || inner.Kind() != reflect.Struct {
+			break
+		}
+
+		inner = inner.FieldByName("Type")
+		if !inner.IsValid() || inner.Kind() != reflect.Interface {
+			break
+		}
+		evType = inner.Elem()
+	}
+}
+
 func eventName(event *eventpb.Event) string {
-	// gets the type's name i.e. Event_Tick , Event_Iss,etc
-	var name string
-	t := reflect.TypeOf(event.Type)
-	if t == nil {
-		name = "nil"
-	} else if slices.Contains([]reflect.Kind{reflect.Array, reflect.Chan, reflect.Map, reflect.Pointer, reflect.Slice}, t.Kind()) {
-		name = t.Elem().Name()
-	} else {
-		name = fmt.Sprintf("%s(could not parse type)", t.Name())
-	}
+	name := make([]string, 0, 1)
+	walkEventTypeName(event, func(nameComponent string) bool {
+		name = append(name, nameComponent)
+		return true
+	})
 
-	return strings.ReplaceAll(
-		name,
-		"Event_", "")
-}
-
-// issEventName returns a string name of an ISS event.
-func issEventName(issEvent *isspb.ISSEvent) string {
-	return strings.ReplaceAll(
-		reflect.TypeOf(issEvent.Type).Elem().Name(), // gets the type's name i.e. ISSEvent_sb , ISSEvent_PersistCheckpoint,etc
-		"ISSEvent_", "") // replaces the given substring from the name
+	return strings.Join(name, ".")
 }
 
 // selected returns true if the given event has been selected by the user according to the given criteria.
-func selected(event *eventpb.Event, selectedEvents map[string]struct{}, selectedIssEvents map[string]struct{}) bool {
-	if _, ok := selectedEvents[eventName(event)]; !ok {
-		// If the basic type of the event has not been selected, return false.
-		return false
+func (tt *evTypeTree) IsEventSelected(event *eventpb.Event) bool {
+	isSelected := true
+
+	tree := tt
+	walkEventTypeName(event, func(nameComponent string) bool {
+		if tree.allChildrenSelected {
+			return false
+		}
+
+		if _, ok := tree.leaves[nameComponent]; !ok {
+			isSelected = false
+			return false
+		}
+
+		tree = tree.leaves[nameComponent]
+		return true
+	})
+
+	return isSelected
+}
+
+type IterControl uint8
+
+const (
+	IterControlStop = iota
+	IterControlContinue
+	IterControlDontExpand
+)
+
+func (tt *evTypeTree) Walk(f func(path string, allChildrenSelected bool, hasChildren bool) IterControl) {
+	tt.walk("", f)
+}
+
+func (tt *evTypeTree) walk(pathPrefix string, f func(path string, allChildrenSelected bool, hasChildren bool) IterControl) IterControl {
+	switch f(pathPrefix, tt.allChildrenSelected, len(tt.leaves) != 0) {
+	case IterControlStop:
+		return IterControlStop
+	case IterControlDontExpand:
+		return IterControlContinue
 	}
 
-	// If the basic type of the event has been selected,
-	// check whether the sub-type has been selected as well for ISS events.
-	switch e := event.Type.(type) {
-	case *eventpb.Event_Iss:
-		_, ok := selectedIssEvents[issEventName(e.Iss)]
-		return ok
-	default:
-		return true
+	if tt.leaves == nil {
+		return IterControlContinue
 	}
+
+	if pathPrefix != "" {
+		pathPrefix += "."
+	}
+
+	for subname, subtree := range tt.leaves {
+		switch subtree.walk(pathPrefix+subname, f) {
+		case IterControlStop:
+			return IterControlStop
+		case IterControlDontExpand:
+			panic("cannot stop expansion of expanded node")
+		}
+	}
+
+	return IterControlContinue
+}
+
+func (tt *evTypeTree) IsEmpty() bool {
+	return !tt.allChildrenSelected && len(tt.leaves) == 0
 }
 
 // Converts a set of strings (represented as a map) to a list.
