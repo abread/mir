@@ -126,3 +126,37 @@ var (
 	// NilLogger drops all log messages.
 	NilLogger = nilLogger{}
 )
+
+type multiLogger struct {
+	loggers []Logger
+}
+
+func NewMultiLogger(loggers []Logger) Logger {
+	return &multiLogger{loggers: loggers}
+}
+
+func (ml *multiLogger) Log(level LogLevel, text string, args ...interface{}) {
+	for _, l := range ml.loggers {
+		l.Log(level, text, args...)
+	}
+}
+
+func (ml *multiLogger) MinLevel() LogLevel {
+	min := LogLevel(math.MaxInt)
+	for _, l := range ml.loggers {
+		level := l.MinLevel()
+		if level < min {
+			min = level
+		}
+	}
+
+	return min
+}
+
+func (ml *multiLogger) IsConcurrent() bool {
+	res := true
+	for _, l := range ml.loggers {
+		res = res && l.IsConcurrent()
+	}
+	return res
+}
