@@ -90,7 +90,7 @@ func main() {
 	}
 
 	fmt.Println("Command-line arguments for selecting the chosen filters:\n" +
-		selectionArgs(args.selectedEventTypes, args.selectedEventDests))
+		selectionArgs(args.selectedEventTypes, args.selectedEventDests) + "\n")
 
 	// Display selected events or enter debug mode.
 	if args.debug {
@@ -105,6 +105,8 @@ func main() {
 		}
 	}
 
+	fmt.Println("Command-line arguments for selecting the chosen filters:\n" +
+		selectionArgs(args.selectedEventTypes, args.selectedEventDests) + "\n")
 }
 
 // parse the command line arguments
