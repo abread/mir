@@ -125,7 +125,7 @@ func (m *Module) applyRNEvent(event *reliablenetpb.Event) (*events.EventList, er
 	case *reliablenetpb.Event_RetransmitAll:
 		return m.retransmitAll()
 	case *reliablenetpb.Event_SendMessage:
-		return m.SendMessage(string(ev.SendMessage.MsgId), ev.SendMessage.Message, t.NodeIDSlice(ev.SendMessage.Destinations))
+		return m.SendMessage(string(ev.SendMessage.MsgId), ev.SendMessage.Msg, t.NodeIDSlice(ev.SendMessage.Destinations))
 	case *reliablenetpb.Event_MarkModuleMsgsRecvd:
 		return m.MarkModuleMsgsRecvd(t.ModuleID(ev.MarkModuleMsgsRecvd.DestModule), t.NodeIDSlice(ev.MarkModuleMsgsRecvd.Destinations))
 	case *reliablenetpb.Event_MarkRecvd:

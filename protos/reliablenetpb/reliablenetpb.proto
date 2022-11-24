@@ -25,7 +25,7 @@ message Event {
 }
 
 message SendMessage {
-  messagepb.Message message      = 1;
+  messagepb.Message msg          = 1;
   repeated string   destinations = 2;
   bytes             msg_id       = 3;
 }

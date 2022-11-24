@@ -12,7 +12,7 @@ func SendMessage(destModule t.ModuleID, id []byte, message *messagepb.Message, d
 		Type: &reliablenetpb.Event_SendMessage{
 			SendMessage: &reliablenetpb.SendMessage{
 				MsgId:        id,
-				Message:      message,
+				Msg:          message,
 				Destinations: t.NodeIDSlicePb(destinations),
 			},
 		},

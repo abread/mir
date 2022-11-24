@@ -46,7 +46,7 @@ func UponEvent[EvWrapper reliablenetpb.Event_TypeWrapper[Ev], Ev any](m dsl.Modu
 
 func UponSendMessage(m dsl.Module, handler func(id []byte, msg *messagepb.Message, destinations []t.NodeID) error) {
 	UponEvent[*reliablenetpb.Event_SendMessage](m, func(ev *reliablenetpb.SendMessage) error {
-		return handler(ev.MsgId, ev.Message, t.NodeIDSlice(ev.Destinations))
+		return handler(ev.MsgId, ev.Msg, t.NodeIDSlice(ev.Destinations))
 	})
 }
 
