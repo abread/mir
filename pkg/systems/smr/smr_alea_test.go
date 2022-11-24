@@ -1,3 +1,4 @@
+//nolint:dupl
 package smr
 
 import (
@@ -143,7 +144,7 @@ func testIntegrationWithAlea(t *testing.T) {
 		createDeploymentDir(t, test.Config)
 
 		t.Run(fmt.Sprintf("%03d", i), func(t *testing.T) {
-			simMode := (test.Config.Transport == "sim")
+			simMode := (test.Config.Transport == "sim") //nolint:goconst
 			if testing.Short() && !simMode {
 				t.SkipNow()
 			}
