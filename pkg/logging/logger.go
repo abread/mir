@@ -57,7 +57,7 @@ func (l streamLogger) Log(level LogLevel, text string, args ...interface{}) {
 		return
 	}
 
-	fmt.Print(text)
+	fmt.Fprint(l.writer, text)
 	for i := 0; i < len(args); i++ {
 		if i+1 < len(args) {
 			switch args[i+1].(type) {
@@ -101,10 +101,10 @@ func (nl nilLogger) IsConcurrent() bool {
 }
 
 func NewStreamLogger(level LogLevel, writer io.Writer) Logger {
-	return &streamLogger{
+	return Synchronize(&streamLogger{
 		level:  level,
 		writer: writer,
-	}
+	})
 }
 
 var (
