@@ -190,7 +190,7 @@ func selectionArgs(events *evTypeTree, dests map[string]struct{}) string {
 		}
 
 		if allChildrenSelected {
-			argStr += " --event " + path + ".*"
+			argStr += " --event " + path + ".\\*"
 			return IterControlDontExpand
 		}
 
