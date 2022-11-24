@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"testing"
@@ -284,6 +285,18 @@ func newDeploymentAlea(conf *TestConfig) (*deploytest.Deployment, error) {
 	nodeIDs := deploytest.NewNodeIDs(conf.NumReplicas)
 	logger := deploytest.NewLogger(conf.Logger)
 
+	logFile, err := os.OpenFile(path.Join(conf.Directory, "common.log"), os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
+	if err != nil {
+		return nil, err
+	}
+	commonLogger := logging.NewMultiLogger([]logging.Logger{
+		logger,
+		logging.NewStreamLogger(
+			logging.LevelDebug,
+			logFile,
+		),
+	})
+
 	var simulation *deploytest.Simulation
 	if conf.Transport == "sim" {
 		r := rand.New(rand.NewSource(conf.RandomSeed)) // nolint: gosec
@@ -293,15 +306,27 @@ func newDeploymentAlea(conf *TestConfig) (*deploytest.Deployment, error) {
 		}
 		simulation = deploytest.NewSimulation(r, nodeIDs, eventDelayFn)
 	}
-	transportLayer := deploytest.NewLocalTransportLayer(simulation, conf.Transport, nodeIDs, logger)
+	transportLayer := deploytest.NewLocalTransportLayer(simulation, conf.Transport, nodeIDs, logging.Decorate(commonLogger, "LocalTransport: "))
 
 	F := (conf.NumReplicas - 1) / 3
-	cryptoSystem := deploytest.NewLocalThreshCryptoSystem("pseudo", nodeIDs, 2*F+1, logger)
+	cryptoSystem := deploytest.NewLocalThreshCryptoSystem("pseudo", nodeIDs, 2*F+1, logging.Decorate(commonLogger, "ThreshCrypto: "))
 
 	nodeModules := make(map[t.NodeID]modules.Modules)
 
 	for i, nodeID := range nodeIDs {
-		nodeLogger := logging.Decorate(logger, fmt.Sprintf("Node %d: ", i))
+		logFile, err := os.OpenFile(path.Join(conf.Directory, fmt.Sprintf("node%d.log", i)), os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
+		if err != nil {
+			return nil, err
+		}
+		nodeLogger := logging.NewMultiLogger([]logging.Logger{
+			logger,
+			logging.NewStreamLogger(
+				logging.LevelDebug,
+				logFile,
+			),
+		})
+
+		nodeLogger = logging.Decorate(nodeLogger, fmt.Sprintf("Node %d: ", i))
 
 		// Alea configuration
 		aleaConfig := alea.DefaultConfig("batchfetcher")
@@ -333,10 +358,10 @@ func newDeploymentAlea(conf *TestConfig) (*deploytest.Deployment, error) {
 				Timer: aleaConfig.Timer,
 			},
 			&reliablenet.ModuleParams{
-				RetransmissionLoopInterval: 50 * time.Millisecond,
+				RetransmissionLoopInterval: 10 * time.Millisecond,
 				AllNodes:                   aleaParams.AllNodes,
 			},
-			logging.Decorate(logger, "ReliableNet: "),
+			logging.Decorate(nodeLogger, "ReliableNet: "),
 		)
 		if err != nil {
 			return nil, fmt.Errorf("error creating reliablenet: %w", err)
@@ -376,7 +401,7 @@ func newDeploymentAlea(conf *TestConfig) (*deploytest.Deployment, error) {
 			t.EpochNr(0),
 			clientprogress.FromPb(&commonpb.ClientProgress{
 				Progress: make(map[string]*commonpb.DeliveredReqs, 0),
-			}, logger),
+			}, nodeLogger),
 		)
 
 		// Dummy application
