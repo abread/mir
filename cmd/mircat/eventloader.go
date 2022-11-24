@@ -87,29 +87,38 @@ func walkEventTypeName(event *eventpb.Event, f func(nameComponent string) bool) 
 			break
 		}
 
-		inner := evType.Elem()
-		if !inner.IsValid() || inner.Kind() != reflect.Struct {
-			break
-		}
-		inner = inner.FieldByName(name)
-		if !inner.IsValid() || inner.Kind() != reflect.Pointer {
-			break
-		}
-		inner = inner.Elem()
-		if !inner.IsValid() || inner.Kind() != reflect.Struct {
-			break
+		inner := derefGetFieldByName(evType, name)
+
+		evType = derefGetFieldByName(inner, "Type")
+		if !evType.IsValid() {
+			// try to parse it as a message event
+			msg := derefGetFieldByName(inner, "Msg")
+			evType = derefGetFieldByName(msg, "Type")
 		}
 
-		innerSub := inner.FieldByName("Type")
-		if !innerSub.IsValid() {
-			innerSub = inner.FieldByName("Msg")
+		if evType.Kind() == reflect.Interface {
+			evType = evType.Elem()
 		}
-
-		if !innerSub.IsValid() || innerSub.Kind() != reflect.Interface {
-			break
-		}
-		evType = innerSub.Elem()
 	}
+}
+
+func autoderef(val reflect.Value) reflect.Value {
+	for val.IsValid() && (val.Kind() == reflect.Pointer || val.Kind() == reflect.Interface) {
+		val = val.Elem()
+	}
+
+	return val
+}
+
+func derefGetFieldByName(val reflect.Value, fieldName string) reflect.Value {
+	val = autoderef(val)
+
+	if val.Kind() != reflect.Struct {
+		var zero reflect.Value
+		return zero
+	}
+
+	return val.FieldByName(fieldName)
 }
 
 func eventName(event *eventpb.Event) string {
