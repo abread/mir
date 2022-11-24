@@ -76,7 +76,7 @@ func getEventList(file *os.File) (*evTypeTree, map[string]struct{}, int, error) 
 	return events, eventDests, cnt, nil
 }
 
-var EventPrefix = regexp.MustCompile("^Event_")
+var EventPrefix = regexp.MustCompile("^[^_]+_")
 
 func walkEventTypeName(event *eventpb.Event, f func(nameComponent string) bool) {
 	evType := reflect.ValueOf(event.Type)
@@ -100,11 +100,15 @@ func walkEventTypeName(event *eventpb.Event, f func(nameComponent string) bool) 
 			break
 		}
 
-		inner = inner.FieldByName("Type")
-		if !inner.IsValid() || inner.Kind() != reflect.Interface {
+		innerSub := inner.FieldByName("Type")
+		if !innerSub.IsValid() {
+			innerSub = inner.FieldByName("Msg")
+		}
+
+		if !innerSub.IsValid() || innerSub.Kind() != reflect.Interface {
 			break
 		}
-		evType = inner.Elem()
+		evType = innerSub.Elem()
 	}
 }
 
