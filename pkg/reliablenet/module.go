@@ -175,10 +175,14 @@ func (m *Module) SendAck(msgDestModule t.ModuleID, msgID []byte, msgSource t.Nod
 
 func (m *Module) retransmitAll() (*events.EventList, error) {
 	evsOut, probablyEmptyQueues, err := m.retransmitNoDeleteQueues()
+	if err != nil {
+		return evsOut, err
+	}
+
 	shouldScheduleLoop := true
 
 	// clean up empty queues
-	if err != nil && len(probablyEmptyQueues) > 0 {
+	if len(probablyEmptyQueues) > 0 {
 		m.locker.Lock()
 		defer m.locker.Unlock()
 
@@ -208,7 +212,7 @@ func (m *Module) retransmitAll() (*events.EventList, error) {
 		))
 	}
 
-	return evsOut, err
+	return evsOut, nil
 }
 
 func (m *Module) retransmitNoDeleteQueues() (*events.EventList, []t.ModuleID, error) { // TODO: name
@@ -219,7 +223,7 @@ func (m *Module) retransmitNoDeleteQueues() (*events.EventList, []t.ModuleID, er
 	probablyEmptyQueues := make([]t.ModuleID, 0)
 
 	for moduleID, queue := range m.queues {
-		msgCount := 0
+		queueMsgCount := 0
 
 		var err error
 		queue.Range(func(key, value any) bool {
@@ -247,14 +251,18 @@ func (m *Module) retransmitNoDeleteQueues() (*events.EventList, []t.ModuleID, er
 			if len(dests) > 0 {
 				m.logger.Log(logging.LevelDebug, "Retransmitting message", "dests", dests, "msg", qmsg.msg)
 				evsOut.PushBack(events.SendMessage(m.config.Net, qmsg.msg, dests))
-				msgCount++
+				queueMsgCount++
 			} else {
 				queue.Delete(key)
 			}
 			return true
 		})
 
-		if msgCount == 0 {
+		if err != nil {
+			return nil, nil, err
+		}
+
+		if queueMsgCount == 0 {
 			probablyEmptyQueues = append(probablyEmptyQueues, moduleID)
 		}
 	}
