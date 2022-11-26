@@ -176,7 +176,7 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 		}
 
 		// 2. upon receiving strong support for FINISH(v), output v and terminate
-		if state.step <= 10 && state.finishRecvdValues[value] >= params.strongSupportThresh() {
+		if state.step <= MaxStep && state.finishRecvdValues[value] >= params.strongSupportThresh() {
 			logger.Log(logging.LevelDebug, "received strong support for FINISH(v)", "v", value)
 			abbadsl.Deliver(m, mc.Consumer, value)
 			state.step = math.MaxUint8 // no more progress can be made
@@ -228,7 +228,7 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 	// TODO: isolate coin sampling to different module to reduce complexity/noise
 
 	abbadsl.UponInitMessageReceived(m, func(from t.NodeID, r uint64, est bool) error {
-		if r <= state.round.number || state.step == math.MaxUint8 {
+		if r <= state.round.number || state.step > MaxStep {
 			// TODO: maybe we can avoid the ACKs for r < state.round.number
 			rnetdsl.Ack(m, mc.ReliableNet, mc.Self, InitMsgID(r, est), from)
 		}
@@ -278,7 +278,7 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 	})
 
 	abbadsl.UponAuxMessageReceived(m, func(from t.NodeID, r uint64, value bool) error {
-		if r <= state.round.number || state.step == math.MaxUint8 {
+		if r <= state.round.number || state.step > MaxStep {
 			rnetdsl.Ack(m, mc.ReliableNet, mc.Self, AuxMsgID(r), from)
 		}
 		if r != state.round.number {
@@ -314,7 +314,7 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 	})
 
 	abbadsl.UponConfMessageReceived(m, func(from t.NodeID, r uint64, values abbadsl.ValueSet) error {
-		if r <= state.round.number || state.step == math.MaxUint8 {
+		if r <= state.round.number || state.step > MaxStep {
 			rnetdsl.Ack(m, mc.ReliableNet, mc.Self, ConfMsgID(r), from)
 		}
 		if r != state.round.number {
@@ -360,7 +360,7 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 
 	// working in advance for 9. sample coin
 	abbadsl.UponCoinMessageReceived(m, func(from t.NodeID, r uint64, coinShare []byte) error {
-		if r <= state.round.number || state.step == math.MaxUint8 {
+		if r <= state.round.number || state.step > MaxStep {
 			rnetdsl.Ack(m, mc.ReliableNet, mc.Self, CoinMsgID(r), from)
 		}
 		if r != state.round.number {
