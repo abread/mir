@@ -205,7 +205,8 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 	// 3. upon P_i providing input value v_in, set est^r_i=v_in, r=0
 	abbadsl.UponInputValue(m, func(input bool) error {
 		if state.step > 3 {
-			return fmt.Errorf("input value already provided for ABBA instance")
+			logger.Log(logging.LevelDebug, "input already provided to this ABBA instance (or it terminated before we could have input a value to it)")
+			return nil
 		}
 
 		state.round.number = 0
