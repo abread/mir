@@ -143,6 +143,8 @@ func NewReconfigurableModule(mc *ModuleConfig, nodeID t.NodeID, logger logging.L
 func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging.Logger) modules.PassiveModule {
 	m := dsl.NewModule(mc.Self)
 	state := &abbaModuleState{
+		step: 0,
+
 		round: abbaRoundState{
 			number: 0,
 		},
@@ -179,7 +181,7 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 		if state.step <= MaxStep && state.finishRecvdValues[value] >= params.strongSupportThresh() {
 			logger.Log(logging.LevelDebug, "received strong support for FINISH(v)", "v", value)
 			abbadsl.Deliver(m, mc.Consumer, value)
-			state.step = math.MaxUint8 // no more progress can be made
+			state.updateStep(math.MaxUint8) // no more progress can be made
 
 			// only care about finish messages from now on
 			// eventually instances that are out-of-date will receive them and be happy
@@ -200,7 +202,7 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 		return nil
 	})
 
-	state.step = 3
+	state.updateStep(3)
 
 	// 3. upon P_i providing input value v_in, set est^r_i=v_in, r=0
 	abbadsl.UponInputValue(m, func(input bool) error {
@@ -217,7 +219,7 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 		rnetdsl.SendMessage(m, mc.ReliableNet, InitMsgID(state.round.number, state.round.estimate), msg, params.AllNodes)
 		state.round.initSent[state.round.estimate] = true
 
-		state.step = 5
+		state.updateStep(5)
 		return nil
 	})
 
@@ -264,7 +266,7 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 				rnetdsl.SendMessage(m, mc.ReliableNet, InitMsgID(r, est), InitMessage(mc.Self, r, est), params.AllNodes)
 				state.round.initSent[est] = true
 
-				state.step = 6
+				state.updateStep(6)
 			}
 
 			// 6. upon receiving strong support for INIT(r, v), broadcast AUX(r, v) if we have not already broadcast AUX(r, _)
@@ -272,7 +274,7 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 				logger.Log(logging.LevelDebug, "received strong support for INIT(r, v)", "r", r, "v", est)
 				rnetdsl.SendMessage(m, mc.ReliableNet, AuxMsgID(r), AuxMessage(mc.Self, r, est), params.AllNodes)
 				state.round.auxSent = true
-				state.step = 7
+				state.updateStep(7)
 			}
 		}
 
@@ -309,7 +311,7 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 			r := state.round.number
 			logger.Log(logging.LevelDebug, "received enough support for AUX(r, v in values)", "r", r, "values", state.round.values)
 			rnetdsl.SendMessage(m, mc.ReliableNet, ConfMsgID(r), ConfMessage(mc.Self, r, state.round.values), params.AllNodes)
-			state.step = 8
+			state.updateStep(8)
 		}
 
 		return nil
@@ -344,7 +346,7 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 			logger.Log(logging.LevelDebug, "received enough support for CONF(r, C subset of values)", "r", r, "values", state.round.values)
 
 			// 9. sample coin
-			state.step = 9
+			state.updateStep(9)
 			threshDsl.SignShare(m, mc.ThreshCrypto, state.round.coinData(params), &signCoinShareCtx{
 				roundNumber: r,
 			})
@@ -458,7 +460,7 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 
 		// finishing step 9
 		sR := (hash[0] & 1) == 1 // TODO: this is ok, right?
-		state.step = 10
+		state.updateStep(10)
 
 		// 10.
 		if state.round.values.Len() == 2 {
@@ -477,11 +479,11 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 		// (still 10.) Set r = r + 1, and return to step 4
 		state.round.number++
 		state.round.resetState(params)
-		state.step = 4
+		state.step = 4 // can't use updateStep, must go backwards
 
 		// 4. broadcast INIT(r, est)
 		rnetdsl.SendMessage(m, mc.ReliableNet, InitMsgID(state.round.number, state.round.estimate), InitMessage(mc.Self, state.round.number, state.round.estimate), params.AllNodes)
-		state.step = 5
+		state.updateStep(5)
 
 		return nil
 	})
@@ -545,6 +547,12 @@ func (params *ModuleParams) weakSupportThresh() int {
 
 func (params *ModuleParams) strongSupportThresh() int {
 	return params.GetN() - params.GetF()
+}
+
+func (s *abbaModuleState) updateStep(newStep uint8) {
+	if newStep > s.step {
+		s.step = newStep
+	}
 }
 
 // Check if there exists a subset of nodes with size >= q_S(= N-F/strong support),
