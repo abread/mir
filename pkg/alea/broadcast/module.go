@@ -58,8 +58,8 @@ type ModuleTunables struct {
 }
 
 type bcModule struct {
-	selfID         t.ModuleID
-	consumer       t.ModuleID
+	config         *ModuleConfig
+	ownNodeID      t.NodeID
 	ownQueueIdx    int
 	queueBcModules []queueBcModule
 }
@@ -112,8 +112,8 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables,
 	}
 
 	return &bcModule{
-		selfID:         mc.Self,
-		consumer:       mc.Consumer,
+		config:         mc,
+		ownNodeID:      nodeID,
 		ownQueueIdx:    ownQueueIdx,
 		queueBcModules: queueBcModules,
 	}, nil
@@ -126,7 +126,7 @@ func (m *bcModule) ApplyEvents(evs *events.EventList) (*events.EventList, error)
 func (m *bcModule) ImplementsModule() {}
 
 func (m *bcModule) applyEvent(event *eventpb.Event) (*events.EventList, error) {
-	if event.DestModule != string(m.selfID) {
+	if event.DestModule != string(m.config.Self) {
 		return m.routeEventToQueue(event)
 	}
 
@@ -172,7 +172,7 @@ func (m *bcModule) handleVcbEvent(event *vcbpb.Event) (*events.EventList, error)
 	ev := evWrapped.Unwrap()
 
 	// TODO: try to decouple this from queue internal module hierarchy
-	originModuleSuffix := t.ModuleID(ev.OriginModule).StripParent(m.selfID)
+	originModuleSuffix := t.ModuleID(ev.OriginModule).StripParent(m.config.Self)
 	queueIdx, err1 := strconv.ParseUint(string(originModuleSuffix.Top()), 10, 32)
 	if err1 != nil {
 		return nil, fmt.Errorf("could not parse queue idx: %w", err1)
@@ -187,13 +187,14 @@ func (m *bcModule) handleVcbEvent(event *vcbpb.Event) (*events.EventList, error)
 		QueueSlot: queueSlot,
 	}
 
-	outEvent := abcevents.Deliver(m.consumer, slot, t.TxIDSlice(ev.TxIds), ev.Txs, ev.Signature)
-
-	return (&events.EventList{}).PushBack(outEvent), nil
+	return events.ListOf(
+		abcevents.Deliver(m.config.Consumer, slot, t.TxIDSlice(ev.TxIds), ev.Txs, ev.Signature),
+		rnEvents.MarkModuleMsgsRecvd(m.config.ReliableNet, t.ModuleID(ev.OriginModule), []t.NodeID{m.ownNodeID}),
+	), nil
 }
 
 func (m *bcModule) routeEventToQueue(event *eventpb.Event) (*events.EventList, error) {
-	destSub := t.ModuleID(event.DestModule).StripParent(m.selfID)
+	destSub := t.ModuleID(event.DestModule).StripParent(m.config.Self)
 	idx, err := strconv.Atoi(string(destSub.Top()))
 	if err != nil || idx < 0 || idx >= len(m.queueBcModules) {
 		// bogus message
