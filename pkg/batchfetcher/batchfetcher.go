@@ -2,14 +2,11 @@ package batchfetcher
 
 import (
 	availabilitydsl "github.com/filecoin-project/mir/pkg/availability/dsl"
-	bfdsl "github.com/filecoin-project/mir/pkg/batchfetcher/dsl"
 	bfevents "github.com/filecoin-project/mir/pkg/batchfetcher/events"
 	"github.com/filecoin-project/mir/pkg/clientprogress"
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/modules"
-	bfpb "github.com/filecoin-project/mir/pkg/pb/batchfetcherpb"
-	"github.com/filecoin-project/mir/pkg/pb/commonpb"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"
 	t "github.com/filecoin-project/mir/pkg/types"
@@ -44,13 +41,6 @@ func NewModule(mc *ModuleConfig, epochNr t.EpochNr, clientProgress *clientprogre
 			event: events.NewEpoch(mc.Destination, t.EpochNr(newEpoch.EpochNr)),
 		})
 		output.Flush(m)
-		return nil
-	})
-
-	// The ClientProgress handler restores the module's view of the client progress.
-	// This happens when state is being loaded from a checkpoint.
-	bfdsl.UponEvent[*bfpb.Event_ClientProgress](m, func(cp *commonpb.ClientProgress) error {
-		clientProgress.LoadPb(cp)
 		return nil
 	})
 
@@ -105,6 +95,26 @@ func NewModule(mc *ModuleConfig, epochNr t.EpochNr, clientProgress *clientprogre
 			},
 		})
 		output.Flush(m)
+
+		return nil
+	})
+
+	// The AppRestoreState handler restores the batch fetcher's state from a checkpoint
+	// and forwards the event to the application, so it can restore its state too.
+	dsl.UponEvent[*eventpb.Event_AppRestoreState](m, func(restoreState *eventpb.AppRestoreState) error {
+
+		// Load client progress from checkpoint.
+		clientProgress.LoadPb(restoreState.Checkpoint.Snapshot.EpochData.ClientProgress)
+
+		// Reset output event queue.
+		// This is necessary to prune any pending output to the application
+		// that pertains to the epochs before this checkpoint.
+		output = outputQueue{}
+
+		// Forward the RestoreState event to the application.
+		// We can output it directly without passing through the queue,
+		// since we've just reset it and know this would be its first and only item.
+		dsl.EmitEvent(m, events.AppRestoreState(mc.Destination, restoreState.Checkpoint))
 
 		return nil
 	})
