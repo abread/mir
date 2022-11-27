@@ -259,12 +259,12 @@ func runIntegrationWithAleaConfig(tb testing.TB, conf *TestConfig) (heapObjects 
 	for _, replica := range deployment.TestReplicas {
 		// Check if all requests were delivered.
 		app := replica.Modules["app"].(*deploytest.FakeApp)
-		assert.Equal(tb, conf.NumNetRequests+conf.NumFakeRequests, int(app.RequestsProcessed))
+		assert.Equalf(tb, conf.NumNetRequests+conf.NumFakeRequests, int(app.RequestsProcessed), "replica %v missed requests", replica.ID)
 
 		// Check if there are no un-acked messages
-		//rnet := replica.Modules["reliablenet"].(*reliablenet.Module)
-		//pendingMsgs := rnet.GetPendingMessages()
-		//assert.Empty(tb, pendingMsgs)
+		rnet := replica.Modules["reliablenet"].(*reliablenet.Module)
+		pendingMsgs := rnet.GetPendingMessages()
+		assert.Emptyf(tb, pendingMsgs, "replica %v has pending messages", replica.ID)
 	}
 
 	// If the test failed, keep the generated data.
@@ -369,7 +369,7 @@ func newDeploymentAlea(conf *TestConfig) (*deploytest.Deployment, error) {
 				Timer: aleaConfig.Timer,
 			},
 			&reliablenet.ModuleParams{
-				RetransmissionLoopInterval: 10 * time.Millisecond,
+				RetransmissionLoopInterval: 100 * time.Millisecond,
 				AllNodes:                   aleaParams.AllNodes,
 			},
 			logging.Decorate(nodeLogger, "ReliableNet: "),

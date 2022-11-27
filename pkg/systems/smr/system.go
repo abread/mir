@@ -283,16 +283,16 @@ func NewAlea(
 		return nil, fmt.Errorf("error creating Alea protocol modules: %w", err)
 	}
 
-	aleaProtocolModules["net"] = transport
+	aleaProtocolModules[aleaConfig.Net] = transport
 	aleaProtocolModules[aleaConfig.ReliableNet], err = reliablenet.New(
 		ownID,
 		&reliablenet.ModuleConfig{
 			Self:  aleaConfig.ReliableNet,
-			Net:   "net",
+			Net:   aleaConfig.Net,
 			Timer: aleaConfig.Timer,
 		},
 		&reliablenet.ModuleParams{
-			RetransmissionLoopInterval: 1 * time.Second,
+			RetransmissionLoopInterval: 100 * time.Millisecond,
 			AllNodes:                   params.Alea.AllNodes,
 		},
 		logging.Decorate(logger, "ReliableNet: "),
