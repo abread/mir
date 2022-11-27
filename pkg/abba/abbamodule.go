@@ -83,7 +83,7 @@ type abbaRoundState struct {
 	coinRecvd         recvTracker
 	coinRecvdOkShares [][]byte
 
-	initSent                 map[bool]bool
+	initWeakSupportReached   map[bool]bool
 	auxSent                  bool
 	coinRecoverInProgress    bool
 	coinRecoverMinShareCount int
@@ -217,7 +217,6 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 		// 4. broadcast INIT(r, est^r_i)
 		msg := InitMessage(mc.Self, state.round.number, state.round.estimate)
 		rnetdsl.SendMessage(m, mc.ReliableNet, InitMsgID(state.round.number, state.round.estimate), msg, params.AllNodes)
-		state.round.initSent[state.round.estimate] = true
 
 		state.updateStep(5)
 		return nil
@@ -258,13 +257,17 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 		r := state.round.number
 		for _, est := range []bool{false, true} {
 			// 5. upon receiving weak support for INIT(r, v), add v to values and broadcast INIT(r, v)
-			if !state.round.initSent[est] && state.round.initRecvdEstimates[est] >= params.weakSupportThresh() {
+			if !state.round.initWeakSupportReached[est] && state.round.initRecvdEstimates[est] >= params.weakSupportThresh() {
 				logger.Log(logging.LevelDebug, "received weak support for INIT(r, v)", "r", r, "v", est)
 
 				state.round.values.Add(est)
 
-				rnetdsl.SendMessage(m, mc.ReliableNet, InitMsgID(r, est), InitMessage(mc.Self, r, est), params.AllNodes)
-				state.round.initSent[est] = true
+				// if we're in round 0, and our round.estimate is r, then we already sent this message
+				if !(state.round.number == 0 && state.round.estimate == est) {
+					rnetdsl.SendMessage(m, mc.ReliableNet, InitMsgID(r, est), InitMessage(mc.Self, r, est), params.AllNodes)
+				}
+
+				state.round.initWeakSupportReached[est] = true
 
 				state.updateStep(6)
 			}
@@ -509,7 +512,7 @@ func (rs *abbaRoundState) resetState(params *ModuleParams) {
 	rs.coinRecvd = make(recvTracker, params.strongSupportThresh())
 	rs.coinRecvdOkShares = make([][]byte, 0, params.GetN()-params.GetF())
 
-	rs.initSent = makeBoolBoolMap()
+	rs.initWeakSupportReached = makeBoolBoolMap()
 	rs.auxSent = false
 	rs.coinRecoverInProgress = false
 	rs.coinRecoverMinShareCount = params.strongSupportThresh() - 1
