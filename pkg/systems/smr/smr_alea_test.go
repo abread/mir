@@ -43,6 +43,9 @@ func TestIntegrationAlea(t *testing.T) {
 	defer goleak.VerifyNone(t,
 		goleak.IgnoreTopFunction("github.com/filecoin-project/mir/pkg/deploytest.newSimModule"),
 		goleak.IgnoreTopFunction("github.com/filecoin-project/mir/pkg/testsim.(*Chan).recv"),
+
+		// If an observable is not exhausted when checking an event trace...
+		goleak.IgnoreTopFunction("github.com/reactivex/rxgo/v2.Item.SendContext"),
 	)
 	t.Run("Alea", testIntegrationWithAlea)
 }
@@ -255,6 +258,9 @@ func runIntegrationWithAleaConfig(tb testing.TB, conf *TestConfig) (heapObjects 
 			assert.Equal(tb, mir.ErrStopped, err)
 		}
 	}
+
+	// Check event logs
+	require.NoError(tb, checkEventTraces(deployment.EventLogFiles(), conf.NumNetRequests+conf.NumFakeRequests))
 
 	for _, replica := range deployment.TestReplicas {
 		// Check if all requests were delivered.

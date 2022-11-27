@@ -129,7 +129,14 @@ func checkEventTraces(eventLogFiles map[t.NodeID]string, requestsSubmitted int) 
 		if cnt.Error() {
 			return fmt.Errorf("could not read number of delivered batches: %w", cnt.E)
 		}
-		if cnt.V.(int64) != int64(requestsSubmitted) {
+
+		var count int64
+		if cnt.V != nil {
+			// protocols that don't deliver any batches have a nil counter value
+			count = cnt.V.(int64)
+		}
+
+		if count != int64(requestsSubmitted) {
 			return fmt.Errorf("different number of submitted and delivered transactions: %v and %v",
 				int64(requestsSubmitted), cnt.V)
 		}
