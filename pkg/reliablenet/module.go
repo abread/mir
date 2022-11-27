@@ -152,6 +152,11 @@ func (m *Module) applyMessage(message *messagepb.Message, from t.NodeID) (*event
 }
 
 func (m *Module) SendAck(msgDestModule t.ModuleID, msgID []byte, msgSource t.NodeID) (*events.EventList, error) {
+	if msgSource == m.ownID {
+		// fast path for local messages
+		return m.MarkRecvd(msgDestModule, string(msgID), []t.NodeID{msgSource})
+	}
+
 	return events.ListOf(
 		events.SendMessage(
 			m.config.Net,
@@ -273,9 +278,7 @@ func (m *Module) retransmitNoDeleteQueues() (*events.EventList, []t.ModuleID, er
 func (m *Module) SendMessage(id string, msg *messagepb.Message, destinations []t.NodeID) (*events.EventList, error) {
 	destinationSet := &sync.Map{}
 	for _, nodeID := range destinations {
-		if nodeID != m.ownID {
-			destinationSet.Store(nodeID, struct{}{})
-		}
+		destinationSet.Store(nodeID, struct{}{})
 	}
 
 	qmsg := queuedMsg{
