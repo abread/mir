@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"
+	"golang.org/x/exp/slices"
 
 	"github.com/filecoin-project/mir"
 	"github.com/filecoin-project/mir/pkg/alea"
@@ -282,21 +283,38 @@ func runIntegrationWithAleaConfig(tb testing.TB, conf *TestConfig) (heapObjects 
 	return heapObjects, heapAlloc
 }
 
-func newDeploymentAlea(conf *TestConfig) (*deploytest.Deployment, error) {
-	nodeIDs := deploytest.NewNodeIDs(conf.NumReplicas)
-	logger := deploytest.NewLogger(conf.Logger)
-
-	logFile, err := os.OpenFile(path.Join(conf.Directory, "common.log"), os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
+func fileLogger(conf *TestConfig, name string) (logging.Logger, error) {
+	logFile, err := os.OpenFile(path.Join(conf.Directory, name), os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
 	if err != nil {
 		return nil, err
 	}
-	commonLogger := logging.NewMultiLogger([]logging.Logger{
-		logger,
-		logging.NewStreamLogger(
-			logging.LevelDebug,
-			logFile,
-		),
-	})
+
+	return logging.NewStreamLogger(logging.LevelDebug, logFile), nil
+}
+
+func newDeploymentAlea(conf *TestConfig) (*deploytest.Deployment, error) {
+	nodeIDs := deploytest.NewNodeIDs(conf.NumReplicas)
+	testCommonLogger := deploytest.NewLogger(conf.Logger)
+
+	commonFileLogger, err := fileLogger(conf, "common.log")
+	if err != nil {
+		return nil, err
+	}
+
+	nodeFileLoggers := make([]logging.Logger, len(nodeIDs))
+	for i, nodeID := range nodeIDs {
+		nodeFileLoggers[i], err = fileLogger(conf, fmt.Sprintf("node-%s.log", nodeID))
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	commonLoggers := []logging.Logger{
+		testCommonLogger,
+		commonFileLogger,
+	}
+	allLoggers := append(slices.Clone(commonLoggers), nodeFileLoggers...)
+	everythingLogger := logging.NewMultiLogger(allLoggers)
 
 	var simulation *deploytest.Simulation
 	if conf.Transport == "sim" {
@@ -307,32 +325,24 @@ func newDeploymentAlea(conf *TestConfig) (*deploytest.Deployment, error) {
 		}
 		simulation = deploytest.NewSimulation(r, nodeIDs, eventDelayFn)
 	}
-	transportLayer := deploytest.NewLocalTransportLayer(simulation, conf.Transport, nodeIDs, logging.Decorate(commonLogger, "LocalTransport: "))
+	transportLayer := deploytest.NewLocalTransportLayer(simulation, conf.Transport, nodeIDs, logging.Decorate(everythingLogger, "LocalTransport: "))
 
 	F := (conf.NumReplicas - 1) / 3
-	cryptoSystem := deploytest.NewLocalThreshCryptoSystem("pseudo", nodeIDs, 2*F+1, logging.Decorate(commonLogger, "ThreshCrypto: "))
+	cryptoSystem := deploytest.NewLocalThreshCryptoSystem("pseudo", nodeIDs, 2*F+1, logging.Decorate(everythingLogger, "ThreshCrypto: "))
 
 	nodeModules := make(map[t.NodeID]modules.Modules)
 
 	for i, nodeID := range nodeIDs {
-		logFile, err := os.OpenFile(path.Join(conf.Directory, fmt.Sprintf("node%d.log", i)), os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
-		if err != nil {
-			return nil, err
-		}
-		nodeLogger := logging.NewMultiLogger([]logging.Logger{
-			logger,
-			logging.NewStreamLogger(
-				logging.LevelDebug,
-				logFile,
-			),
-		})
-
-		nodeLogger = logging.Decorate(nodeLogger, fmt.Sprintf("Node %d: ", i))
-
 		// Alea configuration
 		aleaConfig := alea.DefaultConfig("batchfetcher")
 		aleaParams := alea.DefaultParams(transportLayer.Nodes())
 		aleaParams.BatchCutFailRetryDelay = t.TimeDuration(100 * time.Millisecond)
+
+		nodeLogger := logging.NewMultiLogger(append(
+			[]logging.Logger{nodeFileLoggers[i]},
+			commonLoggers...,
+		))
+		nodeLogger = logging.Decorate(nodeLogger, fmt.Sprintf("Node %s: ", nodeID))
 
 		// Alea instantiation
 		moduleSet, err := alea.New(
@@ -423,7 +433,7 @@ func newDeploymentAlea(conf *TestConfig) (*deploytest.Deployment, error) {
 		NumNetRequests:         conf.NumNetRequests,
 		FakeRequestsDestModule: t.ModuleID("mempool"),
 		Directory:              conf.Directory,
-		Logger:                 logger,
+		Logger:                 everythingLogger,
 	}
 
 	return deploytest.NewDeployment(deployConf)
