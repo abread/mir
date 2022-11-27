@@ -2,6 +2,7 @@ package availability
 
 import (
 	"github.com/filecoin-project/mir/pkg/alea/broadcast"
+	"github.com/filecoin-project/mir/pkg/alea/broadcast/abcdsl"
 	bcdsl "github.com/filecoin-project/mir/pkg/alea/director/internal/aleadsl"
 	"github.com/filecoin-project/mir/pkg/alea/director/internal/common"
 	"github.com/filecoin-project/mir/pkg/alea/director/internal/protobuf"
@@ -89,6 +90,7 @@ func IncludeBatchFetching(
 	// When receive a request for batch from another node, lookup the batch in the local storage.
 	bcdsl.UponFillGapMessageReceived(m, func(from t.NodeID, msg *aleapb.FillGapMessage) error {
 		slot := batchSlotFromPb(msg.Slot)
+		rnetdsl.Ack(m, mc.ReliableNet, mc.Self, FillGapMsgID(slot), from)
 		batchdbdsl.LookupBatch(m, mc.BatchDB, common.FormatAleaBatchID(msg.Slot), &lookupBatchOnRemoteRequestContext{from, slot})
 		return nil
 	})
@@ -111,13 +113,13 @@ func IncludeBatchFetching(
 	// When receive a requested batch, compute the ids of the received transactions.
 	bcdsl.UponFillerMessageReceived(m, func(from t.NodeID, msg *aleapb.FillerMessage) error {
 		slot := batchSlotFromPb(msg.Slot)
-		rnetdsl.MarkRecvd(m, mc.ReliableNet, mc.Self, FillGapMsgID(slot), []t.NodeID{from})
 		rnetdsl.Ack(m, mc.ReliableNet, mc.Self, FillerMsgID(slot), from)
 
 		reqState, present := state.RequestsState[slot]
 		if !present {
 			return nil // no request needs this message to be satisfied
 		}
+		rnetdsl.MarkRecvd(m, mc.ReliableNet, mc.Self, FillGapMsgID(slot), []t.NodeID{from})
 
 		if _, alreadyAnswered := reqState.Replies[from]; alreadyAnswered {
 			return nil // already processed a reply from this node
@@ -163,6 +165,8 @@ func IncludeBatchFetching(
 
 		// store batch asynchronously
 		batchdbdsl.StoreBatch(m, mc.BatchDB, context.batchID, context.txIDs, context.txs, context.signature /*metadata*/, context)
+
+		abcdsl.FreeSlot(m, mc.AleaBroadcast, context.slot.Pb())
 
 		// send response to requests
 		for _, origin := range requestState.ReqOrigins {
