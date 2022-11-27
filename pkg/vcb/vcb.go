@@ -284,12 +284,16 @@ func setupVcbLeader(m dsl.Module, mc *ModuleConfig, params *ModuleParams, common
 		if ok && !state.sentFinal {
 			state.sentFinal = true
 
-			rnetdsl.MarkRecvd(m, mc.ReliableNet, mc.Self, SendMsgID(), params.AllNodes)
 			rnetdsl.SendMessage(m, mc.ReliableNet,
 				FinalMsgID(),
 				FinalMessage(mc.Self, commonState.txs, fullSig),
 				params.AllNodes,
 			)
+
+			// no need to send SEND messages, or any message to ourselves
+			rnetdsl.MarkRecvd(m, mc.ReliableNet, mc.Self, SendMsgID(), params.AllNodes)
+			rnetdsl.MarkModuleMsgsRecvd(m, mc.ReliableNet, mc.Self, []t.NodeID{params.Leader})
+
 			vcbdsl.Deliver(m, mc.Consumer, commonState.txIDs, commonState.txs, fullSig)
 			commonState.delivered = true
 		}
