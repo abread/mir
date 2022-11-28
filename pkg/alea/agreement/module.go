@@ -60,9 +60,9 @@ type agModule struct {
 
 	currentAbba modules.PassiveModule
 
-	currentRound uint64
-	inputDone    bool
-	delivered    bool
+	currentRound   uint64
+	inputRequested bool
+	delivered      bool
 }
 
 func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging.Logger) modules.PassiveModule {
@@ -76,9 +76,9 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 
 		currentAbba: nil,
 
-		currentRound: 0,
-		inputDone:    false,
-		delivered:    false,
+		currentRound:   0,
+		inputRequested: false,
+		delivered:      false,
 	}
 }
 
@@ -176,16 +176,21 @@ func (m *agModule) proxyABBAEvent(event *eventpb.Event) (*events.EventList, erro
 		// only process the original event later, to allow the new ABBA instance to initialize
 		eventsOut.PushBack(event)
 
-		// request input value into new agreement round
-		eventsOut.PushBack(aagEvents.RequestInput(m.config.Consumer, m.currentRound))
-
 		return eventsOut, err
 	} else {
 		// stray event (stale and we shouldn't touch it or from the future and we can't handle it yet)
 		return &events.EventList{}, nil
 	}
 
-	return m.currentAbba.ApplyEvents((&events.EventList{}).PushBack(event))
+	evsOut, err := m.currentAbba.ApplyEvents((&events.EventList{}).PushBack(event))
+
+	if err != nil && !m.inputRequested {
+		// request input value into new agreement round
+		evsOut.PushBack(aagEvents.RequestInput(m.config.Consumer, m.currentRound))
+		m.inputRequested = true
+	}
+
+	return evsOut, err
 }
 
 func (m *agModule) handleAgreementEvent(event *agreementpb.Event) (*events.EventList, error) {
@@ -204,14 +209,14 @@ func (m *agModule) handleAgreementEvent(event *agreementpb.Event) (*events.Event
 		if err != nil {
 			return evsOut, err
 		}
-	} else if m.inputDone || m.currentRound != ev.Round {
+	} else if m.inputRequested || m.currentRound != ev.Round {
 		// stale message
 		m.logger.Log(logging.LevelDebug, "discarding stale InputValue event", "agreementRound", ev.Round, "input", ev.Input)
 		return &events.EventList{}, nil
 	}
 
-	// we skip going around the event loop, and forward this straight to the ABBA instance
-	m.inputDone = true
+	// sometimes we get input without it being requested, so flag it anyway
+	m.inputRequested = true
 
 	moreEvsOut, err := m.currentAbba.ApplyEvents((&events.EventList{}).PushBack(
 		abbaEvents.InputValue(m.abbaModuleID(), ev.Input),
@@ -270,7 +275,7 @@ func (m *agModule) advanceRound() (*events.EventList, error) {
 
 func (m *agModule) initializeRound() (*events.EventList, error) {
 	m.delivered = false
-	m.inputDone = false
+	m.inputRequested = false
 
 	abbaModuleID := m.abbaModuleID()
 
