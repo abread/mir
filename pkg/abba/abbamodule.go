@@ -158,11 +158,11 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 	state.round.resetState(params)
 
 	abbadsl.UponFinishMessageReceived(m, func(from t.NodeID, value bool) error {
-		rnetdsl.Ack(m, mc.ReliableNet, mc.Self, FinishMsgID(), from)
 		if _, present := state.finishRecvd[from]; present {
 			logger.Log(logging.LevelDebug, "duplicate FINISH(v)", "v", value)
 			return nil // duplicate message
 		}
+		rnetdsl.Ack(m, mc.ReliableNet, mc.Self, FinishMsgID(), from)
 		state.finishRecvd[from] = struct{}{}
 		state.finishRecvdValues[value]++
 
@@ -231,10 +231,6 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 	// TODO: isolate coin sampling to different module to reduce complexity/noise
 
 	abbadsl.UponInitMessageReceived(m, func(from t.NodeID, r uint64, est bool) error {
-		if r <= state.round.number || state.step > MaxStep {
-			// TODO: maybe we can avoid the ACKs for r < state.round.number
-			rnetdsl.Ack(m, mc.ReliableNet, mc.Self, InitMsgID(r, est), from)
-		}
 		if r != state.round.number {
 			logger.Log(logging.LevelDebug, "wrong round for INIT(r, est)", "current", state.round.number, "got", r)
 			return nil // not ready yet or wrong round
@@ -243,6 +239,7 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 			logger.Log(logging.LevelDebug, "duplicate INIT(r, _)", "r", r)
 			return nil // duplicate message
 		}
+		rnetdsl.Ack(m, mc.ReliableNet, mc.Self, InitMsgID(r, est), from)
 		state.round.initRecvd[est][from] = struct{}{}
 		state.round.initRecvdEstimates[est]++
 
@@ -285,9 +282,6 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 	})
 
 	abbadsl.UponAuxMessageReceived(m, func(from t.NodeID, r uint64, value bool) error {
-		if r <= state.round.number || state.step > MaxStep {
-			rnetdsl.Ack(m, mc.ReliableNet, mc.Self, AuxMsgID(r), from)
-		}
 		if r != state.round.number {
 			logger.Log(logging.LevelDebug, "wrong round for AUX(r, v)", "current", state.round.number, "got", r)
 			return nil // not processing this round
@@ -296,6 +290,7 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 			logger.Log(logging.LevelDebug, "duplicate AUX(r, _)", "r", r)
 			return nil // duplicate message
 		}
+		rnetdsl.Ack(m, mc.ReliableNet, mc.Self, AuxMsgID(r), from)
 		state.round.auxRecvd[from] = struct{}{}
 		state.round.auxRecvdValues[value]++
 
@@ -321,9 +316,6 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 	})
 
 	abbadsl.UponConfMessageReceived(m, func(from t.NodeID, r uint64, values abbadsl.ValueSet) error {
-		if r <= state.round.number || state.step > MaxStep {
-			rnetdsl.Ack(m, mc.ReliableNet, mc.Self, ConfMsgID(r), from)
-		}
 		if r != state.round.number {
 			logger.Log(logging.LevelDebug, "wrong round for CONF(r, c)", "current", state.round.number, "got", r)
 			return nil // wrong round
@@ -332,6 +324,7 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 			logger.Log(logging.LevelDebug, "duplicate CONF(r, _)", "r", r)
 			return nil // duplicate message
 		}
+		rnetdsl.Ack(m, mc.ReliableNet, mc.Self, ConfMsgID(r), from)
 		state.round.confRecvd[from] = struct{}{}
 		state.round.confRecvdValues[values]++
 
@@ -367,9 +360,6 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 
 	// working in advance for 9. sample coin
 	abbadsl.UponCoinMessageReceived(m, func(from t.NodeID, r uint64, coinShare []byte) error {
-		if r <= state.round.number || state.step > MaxStep {
-			rnetdsl.Ack(m, mc.ReliableNet, mc.Self, CoinMsgID(r), from)
-		}
 		if r != state.round.number {
 			logger.Log(logging.LevelDebug, "wrong round for COIN(r, s)", "current", state.round.number, "got", r)
 			return nil // wrong round or already terminated
@@ -382,6 +372,8 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 			logger.Log(logging.LevelDebug, "duplicate COIN(r, _)", "r", r)
 			return nil // duplicate message
 		}
+
+		rnetdsl.Ack(m, mc.ReliableNet, mc.Self, CoinMsgID(r), from)
 		logger.Log(logging.LevelDebug, "recvd COIN(r, share)", "r", r)
 		state.round.coinRecvd[from] = struct{}{}
 
