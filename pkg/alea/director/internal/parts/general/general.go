@@ -99,10 +99,10 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 		return nil
 	})
 	aagdsl.UponDeliver(m, func(round uint64, decision bool) error {
-		queueIdx := uint32(round % uint64(len(params.AllNodes)))
-		queueSlot := state.agQueueHeads[queueIdx]
-
 		if decision {
+			queueIdx := uint32(round % uint64(len(params.AllNodes)))
+			queueSlot := state.agQueueHeads[queueIdx] - 1 // queueSlot before delivery
+
 			// track unagreed own slots
 			if queueIdx == ownQueueIdx {
 				state.unagreedBroadcastedOwnSlotCount--
