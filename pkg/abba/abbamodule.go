@@ -353,6 +353,10 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 
 	// still in 9. sample coin
 	threshDsl.UponSignShareResult(m, func(sigShare []byte, context *signCoinShareCtx) error {
+		if state.step > MaxStep { // TODO: state.step != 9 => early return?
+			return nil // already over
+		}
+
 		rnetdsl.SendMessage(m, mc.ReliableNet, CoinMsgID(context.roundNumber), CoinMessage(mc.Self, context.roundNumber, sigShare), params.AllNodes)
 
 		return nil
