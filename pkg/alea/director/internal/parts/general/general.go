@@ -42,20 +42,73 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 	// TODO: split sections into different parts (with independent state)
 
 	// =============================================================================================
+	// Delivery
+	// =============================================================================================
+
+	// upon broadcast completion, save transactions
+	abcdsl.UponDeliver(m, func(slot *aleapbCommon.Slot, txIDs []t.TxID, txs []*requestpb.Request, signature []byte) error {
+		batchdbdsl.StoreBatch(m, mc.BatchDB, common.FormatAleaBatchID(slot), txIDs, txs, signature, slot)
+		return nil
+	})
+	batchdbdsl.UponBatchStored(m, func(slot *aleapbCommon.Slot) error {
+		// track vcb completion (needed for other ops in agreement round control)
+		state.slotsReadyToDeliver[slot.QueueIdx][slot.QueueSlot] = struct{}{}
+		return nil
+	})
+
+	// upon agreement round completion, deliver if it was decided to do so
+	aagdsl.UponDeliver(m, func(round uint64, decision bool) error {
+		if !decision {
+			// nothing to deliver
+			return nil
+		}
+
+		queueIdx := uint32(round % uint64(len(params.AllNodes)))
+		slot := &aleapbCommon.Slot{
+			QueueIdx:  queueIdx,
+			QueueSlot: state.agQueueHeads[queueIdx],
+		}
+
+		// next round won't start until we say so, and previous rounds already delivered, so we can deliver immediately
+		logger.Log(logging.LevelDebug, "delivering cert", "agreementRound", round, "queueIdx", slot.QueueIdx, "queueSlot", slot.QueueSlot)
+		dsl.EmitEvent(m, events.DeliverCert(mc.Consumer, t.SeqNr(round), &availabilitypb.Cert{
+			Type: &availabilitypb.Cert_Alea{
+				Alea: &aleapb.Cert{
+					Slot: slot,
+				},
+			},
+		}))
+
+		// pop queue
+		state.agQueueHeads[queueIdx]++
+
+		// remove tracked slot readyness (don't want to run out of memory)
+		delete(state.slotsReadyToDeliver[slot.QueueIdx], slot.QueueSlot)
+
+		return nil
+	})
+
+	// =============================================================================================
 	// Batch Cutting / Own Queue Broadcast Control
 	// =============================================================================================
 
+	abcdsl.UponDeliver(m, func(slot *aleapbCommon.Slot, _txIDs []t.TxID, _txs []*requestpb.Request, _signature []byte) error {
+		if slot.QueueIdx == ownQueueIdx {
+			state.unagreedBroadcastedOwnSlotCount++
+		}
+		return nil
+	})
 	aagdsl.UponDeliver(m, func(round uint64, decision bool) error {
 		queueIdx := uint32(round % uint64(len(params.AllNodes)))
 		queueSlot := state.agQueueHeads[queueIdx]
 
-		// track unagreed own slots
-		if queueIdx == ownQueueIdx {
-			state.unagreedBroadcastedOwnSlotCount--
-		}
-
-		// free broadcast slots
 		if decision {
+			// track unagreed own slots
+			if queueIdx == ownQueueIdx {
+				state.unagreedBroadcastedOwnSlotCount--
+			}
+
+			// free broadcast slots
 			// TODO: only free slot when broadcast/fill-gap concludes?
 			// agreement takes longer so this shouldn't be a show-stopper
 			abcdsl.FreeSlot(m, mc.AleaBroadcast, &aleapbCommon.Slot{
@@ -64,12 +117,6 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 			})
 		}
 
-		return nil
-	})
-	abcdsl.UponDeliver(m, func(slot *aleapbCommon.Slot, _txIDs []t.TxID, _txs []*requestpb.Request, _signature []byte) error {
-		if slot.QueueIdx == ownQueueIdx {
-			state.unagreedBroadcastedOwnSlotCount++
-		}
 		return nil
 	})
 
@@ -177,53 +224,6 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 		aagdsl.InputValue(m, mc.AleaAgreement, round, false)
 		state.stalledAgreementSlot = nil
 
-		return nil
-	})
-
-	// =============================================================================================
-	// Delivery
-	// =============================================================================================
-
-	// upon agreement round completion, deliver if it was decided to do so
-	aagdsl.UponDeliver(m, func(round uint64, decision bool) error {
-		if !decision {
-			// nothing to deliver
-			return nil
-		}
-
-		queueIdx := uint32(round % uint64(len(params.AllNodes)))
-		slot := &aleapbCommon.Slot{
-			QueueIdx:  queueIdx,
-			QueueSlot: state.agQueueHeads[queueIdx],
-		}
-
-		// next round won't start until we say so, and previous rounds already delivered, so we can deliver immediately
-		logger.Log(logging.LevelDebug, "delivering cert", "agreementRound", round, "queueIdx", slot.QueueIdx, "queueSlot", slot.QueueSlot)
-		dsl.EmitEvent(m, events.DeliverCert(mc.Consumer, t.SeqNr(round), &availabilitypb.Cert{
-			Type: &availabilitypb.Cert_Alea{
-				Alea: &aleapb.Cert{
-					Slot: slot,
-				},
-			},
-		}))
-
-		// pop queue
-		state.agQueueHeads[queueIdx]++
-
-		// remove tracked slot readyness (don't want to run out of memory)
-		delete(state.slotsReadyToDeliver[slot.QueueIdx], slot.QueueSlot)
-
-		return nil
-	})
-
-	// upon broadcast completion, save transactions
-	abcdsl.UponDeliver(m, func(slot *aleapbCommon.Slot, txIDs []t.TxID, txs []*requestpb.Request, signature []byte) error {
-		batchdbdsl.StoreBatch(m, mc.BatchDB, common.FormatAleaBatchID(slot), txIDs, txs, signature, slot)
-		return nil
-	})
-	batchdbdsl.UponBatchStored(m, func(slot *aleapbCommon.Slot) error {
-		// track vcb completion (needed for other ops in agreement round control)
-		state.slotsReadyToDeliver[slot.QueueIdx][slot.QueueSlot] = struct{}{}
 		return nil
 	})
 
