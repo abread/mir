@@ -35,6 +35,7 @@ const (
 
 var (
 	protocol     string
+	batchSize    int
 	statFileName string
 	statPeriod   time.Duration
 
@@ -50,6 +51,7 @@ var (
 func init() {
 	rootCmd.AddCommand(nodeCmd)
 	nodeCmd.Flags().StringVarP(&protocol, "protocol", "p", "iss", "protocol to use")
+	nodeCmd.Flags().IntVarP(&batchSize, "batchSize", "b", 1024, "maximum number of transactions in a batch (mempool module)")
 	nodeCmd.Flags().StringVarP(&statFileName, "statFile", "o", "", "output file for statistics")
 	nodeCmd.Flags().DurationVar(&statPeriod, "statPeriod", time.Second, "statistic record period")
 }
@@ -58,7 +60,7 @@ func issSMRFactory(ownID t.NodeID, h host.Host, initialMembership map[t.NodeID]t
 	localCrypto := deploytest.NewLocalCryptoSystem("pseudo", membership.GetIDs(initialMembership), logger)
 
 	smrParams := smr.DefaultParams(initialMembership)
-	smrParams.Mempool.MaxTransactionsInBatch = 1024
+	smrParams.Mempool.MaxTransactionsInBatch = batchSize
 	smrParams.AdjustSpeed(100 * time.Millisecond)
 
 	return smr.NewISS(
@@ -77,7 +79,7 @@ func aleaSMRFactory(ownID t.NodeID, h host.Host, initialMembership map[t.NodeID]
 	localCrypto := deploytest.NewLocalThreshCryptoSystem("pseudo", membership.GetIDs(initialMembership), 2*F+1, logger)
 
 	smrParams := smr.DefaultParams(initialMembership)
-	smrParams.Mempool.MaxTransactionsInBatch = 1024
+	smrParams.Mempool.MaxTransactionsInBatch = batchSize
 
 	return smr.NewAlea(
 		ownID,
