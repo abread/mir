@@ -7,6 +7,7 @@ package stats
 import (
 	"encoding/csv"
 	"fmt"
+	"runtime"
 	"strconv"
 	"sync"
 	"time"
@@ -15,10 +16,11 @@ import (
 )
 
 type Stats struct {
-	lock                sync.RWMutex
+	lock                sync.Mutex
 	reqTimestamps       map[reqKey]time.Time
 	avgLatency          float64
 	timestampedRequests int
+	recvdRequests       int
 	deliveredRequests   int
 }
 
@@ -37,6 +39,7 @@ func (s *Stats) NewRequest(req *requestpb.Request) {
 	s.lock.Lock()
 	k := reqKey{req.ClientId, req.ReqNo}
 	s.reqTimestamps[k] = time.Now()
+	s.recvdRequests++
 	s.lock.Unlock()
 }
 
@@ -55,46 +58,58 @@ func (s *Stats) Delivered(req *requestpb.Request) {
 	s.lock.Unlock()
 }
 
-func (s *Stats) AvgLatency() time.Duration {
-	s.lock.RLock()
-	defer s.lock.RUnlock()
-
-	return time.Duration(s.avgLatency)
-}
-
-func (s *Stats) DeliveredRequests() int {
-	s.lock.RLock()
-	defer s.lock.RUnlock()
-
-	return s.deliveredRequests
-}
-
-func (s *Stats) Reset() {
-	s.lock.Lock()
-	s.avgLatency = 0
-	s.timestampedRequests = 0
-	s.deliveredRequests = 0
-	s.lock.Unlock()
-}
-
 func (s *Stats) WriteCSVHeader(w *csv.Writer) {
 	record := []string{
+		"ts",
+		"nrReceived",
+		"loadtps",
 		"nrDelivered",
 		"tps",
 		"avgLatency",
+		"memSys",
+		"memStackInUse",
+		"memHeapAlloc",
+		"memTotalAlloc",
+		"memPauseTotalNs",
+		"memNumGC",
 	}
 	_ = w.Write(record)
 }
 
-func (s *Stats) WriteCSVRecord(w *csv.Writer, d time.Duration) {
-	s.lock.RLock()
-	defer s.lock.RUnlock()
+func (s *Stats) WriteCSVRecordAndReset(w *csv.Writer, d time.Duration) {
+	var memStats runtime.MemStats
 
-	tps := float64(s.deliveredRequests) / (float64(d) / float64(time.Second))
+	s.lock.Lock()
+
+	now := time.Now().UnixMilli()
+	runtime.ReadMemStats(&memStats)
+
+	deliveredReqs := s.deliveredRequests
+	recvdReqs := s.recvdRequests
+	avgLatency := s.avgLatency
+
+	s.avgLatency = 0
+	s.timestampedRequests = 0
+	s.recvdRequests = 0
+	s.deliveredRequests = 0
+
+	s.lock.Unlock()
+
+	loadTps := float64(recvdReqs) / (float64(d) / float64(time.Second))
+	tps := float64(deliveredReqs) / (float64(d) / float64(time.Second))
 	record := []string{
-		strconv.Itoa(s.deliveredRequests),
-		strconv.Itoa(int(tps)),
-		fmt.Sprintf("%.2f", time.Duration(s.avgLatency).Seconds()),
+		strconv.FormatInt(now, 10),
+		strconv.Itoa(recvdReqs),
+		fmt.Sprintf("%.3f", loadTps),
+		strconv.Itoa(deliveredReqs),
+		fmt.Sprintf("%.3f", tps),
+		fmt.Sprintf("%.3f", time.Duration(avgLatency).Seconds()),
+		strconv.FormatUint(memStats.Sys, 10),
+		strconv.FormatUint(memStats.StackInuse, 10),
+		strconv.FormatUint(memStats.HeapAlloc, 10),
+		strconv.FormatUint(memStats.TotalAlloc, 10),
+		strconv.FormatUint(memStats.PauseTotalNs, 10),
+		strconv.FormatUint(uint64(memStats.NumGC), 10),
 	}
 	_ = w.Write(record)
 }

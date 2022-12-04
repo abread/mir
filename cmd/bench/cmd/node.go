@@ -196,10 +196,9 @@ func runNode() error {
 				return
 			case ts := <-ticker.C:
 				d := ts.Sub(timestamp)
-				stat.WriteCSVRecord(statCSV, d)
+				stat.WriteCSVRecordAndReset(statCSV, d)
 				statCSV.Flush()
 				timestamp = ts
-				stat.Reset()
 			}
 		}
 	}()
