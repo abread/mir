@@ -192,8 +192,13 @@ func (m *Module) retransmitAll() (*events.EventList, error) {
 		defer m.locker.Unlock()
 
 		for _, moduleID := range probablyEmptyQueues {
+			queue, ok := m.queues[moduleID]
+			if !ok {
+				continue
+			}
+
 			msgCount := 0
-			m.queues[moduleID].Range(func(_, _ any) bool {
+			queue.Range(func(_, _ any) bool {
 				msgCount++
 				return true
 			})
