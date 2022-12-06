@@ -1,5 +1,5 @@
 //nolint:dupl
-package smr
+package trantor
 
 import (
 	"context"

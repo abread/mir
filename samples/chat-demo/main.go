@@ -16,7 +16,6 @@ package main
 import (
 	"bufio"
 	"context"
-	"crypto"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -30,12 +29,12 @@ import (
 
 	"github.com/filecoin-project/mir"
 	"github.com/filecoin-project/mir/pkg/checkpoint"
-	"github.com/filecoin-project/mir/pkg/deploytest"
+	mircrypto "github.com/filecoin-project/mir/pkg/crypto"
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/membership"
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"
-	"github.com/filecoin-project/mir/pkg/systems/smr"
+	"github.com/filecoin-project/mir/pkg/systems/trantor"
 	t "github.com/filecoin-project/mir/pkg/types"
 	"github.com/filecoin-project/mir/pkg/util/errstack"
 	"github.com/filecoin-project/mir/pkg/util/libp2p"
@@ -148,7 +147,8 @@ func run() error {
 	}
 
 	// Create a dummy crypto implementation that locally generates all keys in a pseudo-random manner.
-	localCrypto := deploytest.NewLocalCryptoSystem("pseudo", membership.GetIDs(initialMembership), logger)
+	//localCrypto := deploytest.NewLocalCryptoSystem("pseudo", membership.GetIDs(initialMembership), logger)
+	crypto := &mircrypto.DummyCrypto{DummySig: []byte{0}}
 
 	// Assemble checkpoint directory name and instantiate the chat app logic.
 	chkpDir := ""
@@ -163,7 +163,7 @@ func run() error {
 
 	// We use the default SMR parameters. The initial membership is, regardless of the starting checkpoint,
 	// always the very first membership at sequence number 0. It is part of the system configuration.
-	smrParams := smr.DefaultParams(initialMembership)
+	smrParams := trantor.DefaultParams(initialMembership)
 
 	if args.InitChkpFile != "" {
 
@@ -174,10 +174,10 @@ func run() error {
 		}
 
 		// Verify that the starting checkpoint is valid.
-		err = genesis.VerifyCert(crypto.SHA256, localCrypto.Crypto(args.OwnID), smrParams.Iss.InitialMembership)
-		if err != nil {
-			return errors.Wrap(err, "starting checkpoint invalid")
-		}
+		//err = genesis.VerifyCert(crypto.SHA256, localCrypto.Crypto(args.OwnID), smrParams.Iss.InitialMembership)
+		//if err != nil {
+		//	return errors.Wrap(err, "starting checkpoint invalid")
+		//}
 
 	} else {
 		// If no starting checkpoint is given, we create a new one from the initial membership.
@@ -185,15 +185,15 @@ func run() error {
 		if err != nil {
 			return errors.Wrap(err, "could not create initial snapshot")
 		}
-		genesis = smr.GenesisCheckpoint(initialSnapshot, smrParams)
+		genesis = trantor.GenesisCheckpoint(initialSnapshot, smrParams)
 	}
 
 	// Create a Mir SMR system.
-	smrSystem, err := smr.NewISS(
+	smrSystem, err := trantor.NewISS(
 		args.OwnID,
 		h,
 		genesis,
-		localCrypto.Crypto(args.OwnID),
+		crypto,
 		chatApp,
 		smrParams,
 		logger,

@@ -22,6 +22,7 @@ import (
 	"github.com/multiformats/go-multiaddr"
 
 	"github.com/filecoin-project/mir/pkg/checkpoint"
+	"github.com/filecoin-project/mir/pkg/membership"
 	"github.com/filecoin-project/mir/pkg/pb/commonpb"
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"
 	t "github.com/filecoin-project/mir/pkg/types"
@@ -30,7 +31,7 @@ import (
 
 // ChatApp and its methods implement the application logic of the small chat demo application
 // showcasing the usage of the Mir library.
-// An initialized instance of this struct needs to be passed to the smr.New() method when instantiating an SMR system.
+// An initialized instance of this struct needs to be passed to the trantor.New() method when instantiating an SMR system.
 type ChatApp struct {
 
 	// The only state of the application is the chat message history,
@@ -110,10 +111,15 @@ func (chat *ChatApp) applyConfigTX(configMsg string) {
 
 		// Parse out the node ID and address
 		nodeID := t.NodeID(tokens[1])
-		nodeAddr, err := multiaddr.NewMultiaddr(tokens[2])
+		netAddr, err := multiaddr.NewMultiaddr(tokens[2])
 		if err != nil {
 			fmt.Printf("Adding node failed. Invalid address: %v\n", err)
 		}
+		nodeAddrs, err := membership.DummyMultiAddrs(map[t.NodeID]t.NodeAddress{nodeID: netAddr})
+		if err != nil {
+			fmt.Printf("Adding node failed. Could not construct dummy multiaddress: %v\n", err)
+		}
+		nodeAddr := nodeAddrs[nodeID]
 
 		// Add the node to the next membership.
 		fmt.Printf("Adding node: %v (%v)\n", nodeID, nodeAddr)

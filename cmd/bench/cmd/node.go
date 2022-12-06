@@ -24,7 +24,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/membership"
 	"github.com/filecoin-project/mir/pkg/requestreceiver"
-	"github.com/filecoin-project/mir/pkg/systems/smr"
+	"github.com/filecoin-project/mir/pkg/systems/trantor"
 	t "github.com/filecoin-project/mir/pkg/types"
 	"github.com/filecoin-project/mir/pkg/util/libp2p"
 )
@@ -56,17 +56,17 @@ func init() {
 	nodeCmd.Flags().DurationVar(&statPeriod, "statPeriod", time.Second, "statistic record period")
 }
 
-func issSMRFactory(ownID t.NodeID, h host.Host, initialMembership map[t.NodeID]t.NodeAddress, logger logging.Logger) (*smr.System, error) {
+func issSMRFactory(ownID t.NodeID, h host.Host, initialMembership map[t.NodeID]t.NodeAddress, logger logging.Logger) (*trantor.System, error) {
 	localCrypto := deploytest.NewLocalCryptoSystem("pseudo", membership.GetIDs(initialMembership), logger)
 
-	smrParams := smr.DefaultParams(initialMembership)
+	smrParams := trantor.DefaultParams(initialMembership)
 	smrParams.Mempool.MaxTransactionsInBatch = batchSize
 	smrParams.AdjustSpeed(100 * time.Millisecond)
 
-	return smr.NewISS(
+	return trantor.NewISS(
 		ownID,
 		h,
-		smr.GenesisCheckpoint([]byte{}, smrParams),
+		trantor.GenesisCheckpoint([]byte{}, smrParams),
 		localCrypto.Crypto(ownID),
 		&App{Logger: logger, Membership: initialMembership},
 		smrParams,
@@ -74,14 +74,14 @@ func issSMRFactory(ownID t.NodeID, h host.Host, initialMembership map[t.NodeID]t
 	)
 }
 
-func aleaSMRFactory(ownID t.NodeID, h host.Host, initialMembership map[t.NodeID]t.NodeAddress, logger logging.Logger) (*smr.System, error) {
+func aleaSMRFactory(ownID t.NodeID, h host.Host, initialMembership map[t.NodeID]t.NodeAddress, logger logging.Logger) (*trantor.System, error) {
 	F := (len(initialMembership) - 1) / 3
 	localCrypto := deploytest.NewLocalThreshCryptoSystem("pseudo", membership.GetIDs(initialMembership), 2*F+1, logger)
 
-	smrParams := smr.DefaultParams(initialMembership)
+	smrParams := trantor.DefaultParams(initialMembership)
 	smrParams.Mempool.MaxTransactionsInBatch = batchSize
 
-	return smr.NewAlea(
+	return trantor.NewAlea(
 		ownID,
 		h,
 		nil,
@@ -92,7 +92,7 @@ func aleaSMRFactory(ownID t.NodeID, h host.Host, initialMembership map[t.NodeID]
 	)
 }
 
-type smrFactory func(ownID t.NodeID, h host.Host, initialMembership map[t.NodeID]t.NodeAddress, logger logging.Logger) (*smr.System, error)
+type smrFactory func(ownID t.NodeID, h host.Host, initialMembership map[t.NodeID]t.NodeAddress, logger logging.Logger) (*trantor.System, error)
 
 var smrFactories = map[string]smrFactory{
 	"iss":  issSMRFactory,
