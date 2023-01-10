@@ -10,6 +10,8 @@ import (
 	"sort"
 	"strings"
 
+	"gopkg.in/alecthomas/kingpin.v2"
+
 	"github.com/filecoin-project/mir/pkg/eventlog"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
 	"github.com/filecoin-project/mir/pkg/pb/recordingpb"
@@ -29,51 +31,70 @@ type evTypeTree struct {
 
 // Returns the list of event names and destinations present in the given eventlog file,
 // along with the total number of events present in the file.
-func getEventList(file *os.File) (*evTypeTree, map[string]struct{}, int, error) {
+func getEventList(filenames *[]string) (*evTypeTree, map[string]struct{}, int, error) {
 	events := &evTypeTree{
 		leaves: make(map[string]*evTypeTree),
 	}
 	eventDests := make(map[string]struct{})
 
-	defer func(file *os.File, offset int64, whence int) {
-		_, _ = file.Seek(offset, whence) // resets the file offset for successive reading
-	}(file, 0, 0)
-
-	reader, err := eventlog.NewReader(file)
-	if err != nil {
-		return nil, nil, 0, err
-	}
-
-	cnt := 0 // Counts the total number of events in the event log.
-	var entry *recordingpb.Entry
-	for entry, err = reader.ReadEntry(); err == nil; entry, err = reader.ReadEntry() {
-		// For each entry of the event log
-
-		for _, event := range entry.Events {
-			// For each Event in the entry
-			cnt++
-
-			// Add the Event type to the set of known Events.
-			tree := events
-			walkEventTypeName(event, func(nameComponent string) bool {
-				if _, ok := tree.leaves[nameComponent]; !ok {
-					tree.leaves[nameComponent] = &evTypeTree{
-						leaves: make(map[string]*evTypeTree),
-					}
-				}
-				tree = tree.leaves[nameComponent]
-
-				return true
-			})
-
-			eventDests[event.DestModule] = struct{}{}
+	totalCount := 0
+	for _, filename := range *filenames {
+		// Open the file
+		file, err := os.Open(filename)
+		if err != nil {
+			kingpin.Errorf("Error opening src file", filename, ": ", err)
+			fmt.Printf("\n\n!!!\nContinuing after error with new file. Event list might be incomplete!\n!!!\n\n")
+			continue
 		}
-	}
-	if errors.Is(err, io.EOF) {
-		return events, eventDests, cnt, fmt.Errorf("failed reading event log: %w", err)
+
+		defer func(file *os.File, offset int64, whence int) {
+			_, _ = file.Seek(offset, whence) // resets the file offset for successive reading
+			if err = file.Close(); err != nil {
+				kingpin.Errorf("Error closing src file", filename, ": ", err)
+			}
+		}(file, 0, 0)
+
+		reader, err := eventlog.NewReader(file)
+		if err != nil {
+			kingpin.Errorf("Error creating new reader of src file", filename, ": ", err)
+			fmt.Printf("\n\n!!!\nContinuing after error with new file. Event list might be incomplete!\n!!!\n\n")
+			continue
+		}
+
+		cnt := 0 // Counts the total number of events in the event log.
+		var entry *recordingpb.Entry
+		for entry, err = reader.ReadEntry(); err == nil; entry, err = reader.ReadEntry() {
+			// For each entry of the event log
+
+			for _, event := range entry.Events {
+				// For each Event in the entry
+				cnt++
+
+				// Add the Event type to the set of known Events.
+				tree := events
+				walkEventTypeName(event, func(nameComponent string) bool {
+					if _, ok := tree.leaves[nameComponent]; !ok {
+						tree.leaves[nameComponent] = &evTypeTree{
+							leaves: make(map[string]*evTypeTree),
+						}
+					}
+					tree = tree.leaves[nameComponent]
+
+					return true
+				})
+
+				eventDests[event.DestModule] = struct{}{}
+			}
+		}
+
+		if !errors.Is(err, io.EOF) {
+			kingpin.Errorf("Error reading src file", filename, ": ", err)
+			fmt.Printf("\n\n!!!\nContinuing after error. Event list might be incomplete!\n!!!\n\n")
+		}
+		totalCount += cnt
 	}
 
-	return events, eventDests, cnt, nil
+	return events, eventDests, totalCount, nil // TODO wrap non-blocking errors and return them here
 }
 
 var EventPrefix = regexp.MustCompile("^[^_]+_")

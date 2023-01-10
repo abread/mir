@@ -27,6 +27,7 @@ type Event struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to Type:
+	//
 	//	*Event_PingTime
 	Type isEvent_Type `protobuf_oneof:"type"`
 }
@@ -131,6 +132,7 @@ type Message struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to Type:
+	//
 	//	*Message_Ping
 	//	*Message_Pong
 	Type isMessage_Type `protobuf_oneof:"type"`

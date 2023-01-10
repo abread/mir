@@ -13,26 +13,36 @@ import "bcbpb/bcbpb.proto";
 import "availabilitypb/mscpb/mscpb.proto";
 import "pingpongpb/pingpongpb.proto";
 import "checkpointpb/checkpointpb.proto";
+import "ordererspb/ordererspb.proto";
 import "vcbpb/vcbpb.proto";
 import "abbapb/abbapb.proto";
 import "aleapb/aleapb.proto";
 import "aleapb/agreementpb/agreementpb.proto";
 import "reliablenetpb/messages/messages.proto";
 
+import "mir/codegen_extensions.proto";
+import "net/codegen_extensions.proto";
+
 option go_package = "github.com/filecoin-project/mir/pkg/pb/messagepb";
 
 message Message {
-  string dest_module = 1;
+  option (net.message_root) = true;
+
+  string dest_module = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.ModuleID"];
+
   oneof type {
+    option (net.message_type) = true;
+
     isspb.ISSMessage             iss                = 2;
     bcbpb.Message                bcb                = 3;
     availabilitypb.mscpb.Message multisig_collector = 4;
     pingpongpb.Message           pingpong           = 5;
     checkpointpb.Message         checkpoint         = 6;
-    vcbpb.Message                vcb                = 7;
-    abbapb.Message               abba               = 8;
-    aleapb.Message               alea               = 9;
-    aleapb.agreementpb.Message   alea_agreement     = 10;
-    reliablenetpb.Message        reliable_net       = 11;
+    ordererspb.SBInstanceMessage  sb_message         = 7;
+    vcbpb.Message                vcb                = 8;
+    abbapb.Message               abba               = 9;
+    aleapb.Message               alea               = 10;
+    aleapb.agreementpb.Message   alea_agreement     = 11;
+    reliablenetpb.Message        reliable_net       = 12;
   }
 }

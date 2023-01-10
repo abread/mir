@@ -5,8 +5,9 @@ package reliablenetpb;
 option go_package = "github.com/filecoin-project/mir/pkg/pb/reliablenetpb";
 
 import "messagepb/messagepb.proto";
-import "mir/plugin.proto";
 
+// TODO: use DSL codegen
+import "mir/codegen_extensions.proto";
 
 // ============================================================
 // Events

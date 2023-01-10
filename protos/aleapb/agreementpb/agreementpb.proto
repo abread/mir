@@ -4,7 +4,9 @@ package aleapb.agreementpb;
 
 option go_package = "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb";
 
-import "mir/plugin.proto";
+
+// TODO: use DSL codegen
+import "mir/codegen_extensions.proto";
 
 
 // ============================================================

@@ -27,6 +27,7 @@ type Message struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to Type:
+	//
 	//	*Message_Ack
 	Type isMessage_Type `protobuf_oneof:"type"`
 }

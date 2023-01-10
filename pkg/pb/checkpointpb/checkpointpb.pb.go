@@ -29,6 +29,7 @@ type Message struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to Type:
+	//
 	//	*Message_Checkpoint
 	Type isMessage_Type `protobuf_oneof:"type"`
 }
@@ -166,6 +167,7 @@ type Event struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to Type:
+	//
 	//	*Event_EpochConfig
 	//	*Event_StableCheckpoint
 	//	*Event_EpochProgress

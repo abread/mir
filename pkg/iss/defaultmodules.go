@@ -1,11 +1,8 @@
 package iss
 
 import (
-	"crypto"
-
 	"github.com/pkg/errors"
 
-	mirCrypto "github.com/filecoin-project/mir/pkg/crypto"
 	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/timer"
 	t "github.com/filecoin-project/mir/pkg/types"
@@ -23,18 +20,8 @@ func DefaultModules(orig modules.Modules, moduleConfig *ModuleConfig) (modules.M
 		m[moduleID] = module
 	}
 
-	// If no hasher module has been specified, use default SHA256 hasher.
-	if m[moduleConfig.Hasher] == nil {
-		m[moduleConfig.Hasher] = mirCrypto.NewHasher(crypto.SHA256)
-	}
-
 	if m[moduleConfig.App] == nil {
 		return nil, errors.New("no default ISS app implementation")
-	}
-
-	if m[moduleConfig.Crypto] == nil {
-		// TODO: Use default crypto once implemented and tested.
-		return nil, errors.New("no default crypto implementation")
 	}
 
 	if m[moduleConfig.Self] == nil {
@@ -48,12 +35,6 @@ func DefaultModules(orig modules.Modules, moduleConfig *ModuleConfig) (modules.M
 	if m[moduleConfig.Net] == nil {
 		// TODO: Change this when a Net implementation exists.
 		return nil, errors.New("no default Net implementation")
-	}
-
-	// If the WAL is not specified, no write-ahead log will be written
-	// and the node will not be able to restart.
-	if m[moduleConfig.Wal] == nil {
-		m[moduleConfig.Wal] = modules.NullPassive{}
 	}
 
 	return m, nil

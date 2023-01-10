@@ -22,6 +22,8 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/filecoin-project/mir/pkg/eventlog"
+
 	"github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
 	"github.com/pkg/errors"
@@ -33,6 +35,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/membership"
+	libp2p2 "github.com/filecoin-project/mir/pkg/net/libp2p"
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"
 	"github.com/filecoin-project/mir/pkg/systems/trantor"
 	t "github.com/filecoin-project/mir/pkg/types"
@@ -137,6 +140,10 @@ func run() error {
 		return fmt.Errorf("could not create listen address: %w", err)
 	}
 
+	// We use the default SMR parameters. The initial membership is, regardless of the starting checkpoint,
+	// always the very first membership at sequence number 0. It is part of the system configuration.
+	smrParams := trantor.DefaultParams(initialMembership)
+
 	// Create a dummy libp2p host for network communication (this is why we need a numeric ID)
 	h, err := libp2p.NewDummyHostWithPrivKey(
 		t.NodeAddress(libp2p.NewDummyMultiaddr(ownNumericID, listenAddr)),
@@ -144,6 +151,12 @@ func run() error {
 	)
 	if err != nil {
 		return errors.Wrap(err, "failed to create libp2p host")
+	}
+
+	// Initialize the libp2p transport subsystem.
+	transport, err := libp2p2.NewTransport(smrParams.Net, h, args.OwnID, logger)
+	if err != nil {
+		return errors.Wrap(err, "failed to create libp2p transport")
 	}
 
 	// Create a dummy crypto implementation that locally generates all keys in a pseudo-random manner.
@@ -160,10 +173,6 @@ func run() error {
 	// genesis is s stable checkpoint (as given to the app's Checkpoint callback)
 	// defining the initial state and configuration of the system.
 	var genesis *checkpoint.StableCheckpoint
-
-	// We use the default SMR parameters. The initial membership is, regardless of the starting checkpoint,
-	// always the very first membership at sequence number 0. It is part of the system configuration.
-	smrParams := trantor.DefaultParams(initialMembership)
 
 	if args.InitChkpFile != "" {
 
@@ -191,7 +200,7 @@ func run() error {
 	// Create a Mir SMR system.
 	smrSystem, err := trantor.NewISS(
 		args.OwnID,
-		h,
+		transport,
 		genesis,
 		crypto,
 		chatApp,
@@ -202,8 +211,20 @@ func run() error {
 		return errors.Wrap(err, "could not create SMR system")
 	}
 
+	ownIDInt, _ := strconv.Atoi(string(args.OwnID))
+
+	//Initialize recording of events
+	interceptor, err := eventlog.NewRecorder(
+		args.OwnID,
+		fmt.Sprintf("node%d", ownIDInt),
+		logging.Decorate(logging.ConsoleTraceLogger, "Interceptor: "),
+		eventlog.FileSplitterOpt(eventlog.EventNewEpochLogger()),
+	)
+	if err != nil {
+		return errors.Wrap(err, "could not create new recorder")
+	}
 	// Create a Mir node, passing it all the modules of the SMR system.
-	node, err := mir.NewNode(args.OwnID, mir.DefaultNodeConfig().WithLogger(logger), smrSystem.Modules(), nil, nil)
+	node, err := mir.NewNode(args.OwnID, mir.DefaultNodeConfig().WithLogger(logger), smrSystem.Modules(), nil, interceptor)
 	if err != nil {
 		return errors.Wrap(err, "could not create node")
 	}

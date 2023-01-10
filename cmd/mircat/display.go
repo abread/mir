@@ -5,7 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strconv"
+	"strings"
+
+	"gopkg.in/alecthomas/kingpin.v2"
 
 	"github.com/ttacon/chalk"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -21,44 +25,65 @@ import (
 func displayEvents(args *arguments) error {
 
 	// new reader
-	reader, err := eventlog.NewReader(args.srcFile)
-
-	if err != nil {
-		return err
-	}
 
 	// Keep track of the position of events in the recorded log.
 	index := 0
 
-	var entry *recordingpb.Entry
-	for entry, err = reader.ReadEntry(); err == nil; entry, err = reader.ReadEntry() {
-		metadata := eventMetadata{
-			nodeID: t.NodeID(entry.NodeId),
-			time:   entry.Time,
+	filenames := strings.Split(*args.src, " ")
+
+	// Create a reader for the input event log file.
+	for _, filename := range filenames {
+		file, err := os.Open(filename)
+		if err != nil {
+			kingpin.Errorf("Error opening src file", filename, ": ", err)
+			continue
 		}
-		// getting events from entry
-		for _, event := range entry.Events {
-			metadata.index = uint64(index)
 
-			validEvent := args.selectedEventTypes.IsEventSelected(event)
-			_, validDest := args.selectedEventDests[event.DestModule]
-
-			if validEvent && validDest && index >= args.offset && (args.limit == 0 || index < args.offset+args.limit) {
-				// If event type has been selected for displaying
-				displayEvent(event, metadata)
+		defer func(file *os.File, offset int64, whence int) {
+			_, _ = file.Seek(offset, whence) // resets the file offset for successive reading
+			if err = file.Close(); err != nil {
+				kingpin.Errorf("Error closing src file", filename, ": ", err)
 			}
+		}(file, 0, 0)
+		reader, err := eventlog.NewReader(file)
 
-			index++
+		if err != nil {
+			kingpin.Errorf("Error opening new reader for src file", filename, ": ", err)
+			fmt.Printf("\n\n!!!\nContinuing after error with next file\n!!!\n\n")
+			continue
+		}
+
+		var entry *recordingpb.Entry
+		for entry, err = reader.ReadEntry(); err == nil; entry, err = reader.ReadEntry() {
+			metadata := eventMetadata{
+				nodeID: t.NodeID(entry.NodeId),
+				time:   entry.Time,
+			}
+			// getting events from entry
+			for _, event := range entry.Events {
+				metadata.index = uint64(index)
+
+				validEvent := args.selectedEventTypes.IsEventSelected(event)
+				_, validDest := args.selectedEventDests[event.DestModule]
+
+				if validEvent && validDest && index >= args.offset && (args.limit == 0 || index < args.offset+args.limit) {
+					// If event type has been selected for displaying
+					displayEvent(event, metadata)
+				}
+
+				index++
+			}
+		}
+
+		if !errors.Is(err, io.EOF) {
+			kingpin.Errorf("Error reading event log for src file", filename, ": ", err)
+			fmt.Printf("\n\n!!!\nContinuing after error with next file\n!!!\n\n")
+			continue
 		}
 	}
-
-	if errors.Is(err, io.EOF) {
-		return fmt.Errorf("error reading event log: %w", err)
-	}
-
 	fmt.Println("End of trace.")
 
-	return nil
+	return nil //TODO Wrap non-blocking errors and return here
 }
 
 // Displays one event according to its type.

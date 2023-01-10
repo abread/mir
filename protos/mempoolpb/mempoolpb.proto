@@ -6,7 +6,7 @@ option go_package = "github.com/filecoin-project/mir/pkg/pb/mempoolpb";
 
 import "contextstorepb/contextstorepb.proto";
 import "dslpb/dslpb.proto";
-import "mir/plugin.proto";
+import "mir/codegen_extensions.proto";
 import "requestpb/requestpb.proto";
 
 // ============================================================
@@ -14,8 +14,11 @@ import "requestpb/requestpb.proto";
 // ============================================================
 
 message Event {
+  option (mir.event_class) = true;
+
   oneof Type {
     option (mir.event_type) = true;
+
     RequestBatch           request_batch            = 1;
     NewBatch               new_batch                = 2;
     RequestTransactions    request_transactions     = 3;
@@ -29,54 +32,70 @@ message Event {
 
 // RequestBatch is used by the availability layer to request a new batch of transactions from the mempool.
 message RequestBatch {
-  RequestBatchOrigin origin = 1;
+  option (mir.event) = true;
+
+  RequestBatchOrigin origin = 1 [(mir.origin_request) = true];
 }
 
 // NewBatch is a response to a RequestBatch event.
 message NewBatch {
+  option (mir.event) = true;
+
   repeated bytes             tx_ids = 1;
   repeated requestpb.Request txs    = 2;
-  RequestBatchOrigin         origin = 3;
+  RequestBatchOrigin         origin = 3 [(mir.origin_response) = true];
 }
 
 // RequestTransactions allows the availability layer to request transactions from the mempool by their IDs.
 // It is possible that some of these transactions are not present in the mempool.
 message RequestTransactions {
+  option (mir.event) = true;
+
   repeated bytes            tx_ids = 1;
-  RequestTransactionsOrigin origin = 2;
+  RequestTransactionsOrigin origin = 2 [(mir.origin_request) = true];
 }
 
 // TransactionsResponse is a response to a RequestTransactions event.
 message TransactionsResponse {
+  option (mir.event) = true;
+
   repeated bool              present = 1;
   repeated requestpb.Request txs     = 2;
-  RequestTransactionsOrigin  origin  = 3;
+  RequestTransactionsOrigin  origin  = 3 [(mir.origin_response) = true];
 }
 
 // RequestTransactionIDs allows other modules to request the mempool module to compute IDs for the given transactions.
 // It is possible that some of these transactions are not present in the mempool.
 message RequestTransactionIDs {
+  option (mir.event) = true;
+
   repeated requestpb.Request  txs    = 1;
-  RequestTransactionIDsOrigin origin = 2;
+  RequestTransactionIDsOrigin origin = 2 [(mir.origin_request) = true];
 }
 
 // TransactionIDsResponse is a response to a RequestTransactionIDs event.
 message TransactionIDsResponse {
+  option (mir.event) = true;
+
   repeated bytes              tx_ids = 1;
-  RequestTransactionIDsOrigin origin = 2;
+  RequestTransactionIDsOrigin origin = 2 [(mir.origin_response) = true];
 }
 
 // RequestBatchID allows other modules to request the mempool module to compute the ID of a batch.
 // It is possible that some transactions in the batch are not present in the mempool.
 message RequestBatchID {
+  option (mir.event) = true;
+
   repeated bytes        tx_ids = 1;
-  RequestBatchIDOrigin origin = 2;
+  RequestBatchIDOrigin origin = 2 [(mir.origin_request) = true];
 }
 
 // BatchIDResponse is a response to a RequestBatchID event.
 message BatchIDResponse {
+  option (mir.event) = true;
+
   bytes                batch_id = 1;
-  RequestBatchIDOrigin origin   = 2;
+  RequestBatchIDOrigin origin   = 2 [(mir.origin_response) = true];
 }
 
 // TODO: add events related to garbage collection.
@@ -86,7 +105,9 @@ message BatchIDResponse {
 // ============================================================
 
 message RequestBatchOrigin {
-  string module = 1;
+  option (mir.struct) = true;
+
+  string module = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.ModuleID"];
   oneof Type {
     contextstorepb.Origin context_store = 2;
     dslpb.Origin          dsl           = 3;
@@ -94,7 +115,9 @@ message RequestBatchOrigin {
 }
 
 message RequestTransactionsOrigin {
-  string module = 1;
+  option (mir.struct) = true;
+
+  string module = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.ModuleID"];
   oneof Type {
     contextstorepb.Origin context_store = 2;
     dslpb.Origin          dsl           = 3;
@@ -102,7 +125,9 @@ message RequestTransactionsOrigin {
 }
 
 message RequestTransactionIDsOrigin {
-  string module = 1;
+  option (mir.struct) = true;
+
+  string module = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.ModuleID"];
   oneof Type {
     contextstorepb.Origin context_store = 2;
     dslpb.Origin          dsl           = 3;
@@ -110,7 +135,9 @@ message RequestTransactionIDsOrigin {
 }
 
 message RequestBatchIDOrigin {
-  string module = 1;
+  option (mir.struct) = true;
+
+  string module = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.ModuleID"];
   oneof Type {
     contextstorepb.Origin context_store = 2;
     dslpb.Origin          dsl           = 3;

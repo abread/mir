@@ -8,21 +8,26 @@ import (
 	"context"
 	"encoding/csv"
 	"fmt"
-	"net"
+	gonet "net"
 	"os"
 	"strconv"
 	"time"
 
-	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
 	"github.com/filecoin-project/mir"
 	"github.com/filecoin-project/mir/cmd/bench/stats"
 	"github.com/filecoin-project/mir/pkg/deploytest"
+	"github.com/filecoin-project/mir/pkg/eventlog"
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/membership"
+	"github.com/filecoin-project/mir/pkg/net"
+	libp2p2 "github.com/filecoin-project/mir/pkg/net/libp2p"
+	"github.com/filecoin-project/mir/pkg/pb/batchfetcherpb"
+	"github.com/filecoin-project/mir/pkg/pb/eventpb"
 	"github.com/filecoin-project/mir/pkg/requestreceiver"
 	"github.com/filecoin-project/mir/pkg/systems/trantor"
 	t "github.com/filecoin-project/mir/pkg/types"
@@ -56,7 +61,7 @@ func init() {
 	nodeCmd.Flags().DurationVar(&statPeriod, "statPeriod", time.Second, "statistic record period")
 }
 
-func issSMRFactory(ownID t.NodeID, h host.Host, initialMembership map[t.NodeID]t.NodeAddress, logger logging.Logger) (*trantor.System, error) {
+func issSMRFactory(ownID t.NodeID, transport net.Transport, initialMembership map[t.NodeID]t.NodeAddress, logger logging.Logger) (*trantor.System, error) {
 	localCrypto := deploytest.NewLocalCryptoSystem("pseudo", membership.GetIDs(initialMembership), logger)
 
 	smrParams := trantor.DefaultParams(initialMembership)
@@ -65,7 +70,7 @@ func issSMRFactory(ownID t.NodeID, h host.Host, initialMembership map[t.NodeID]t
 
 	return trantor.NewISS(
 		ownID,
-		h,
+		transport,
 		trantor.GenesisCheckpoint([]byte{}, smrParams),
 		localCrypto.Crypto(ownID),
 		&App{Logger: logger, Membership: initialMembership},
@@ -74,7 +79,7 @@ func issSMRFactory(ownID t.NodeID, h host.Host, initialMembership map[t.NodeID]t
 	)
 }
 
-func aleaSMRFactory(ownID t.NodeID, h host.Host, initialMembership map[t.NodeID]t.NodeAddress, logger logging.Logger) (*trantor.System, error) {
+func aleaSMRFactory(ownID t.NodeID, transport net.Transport, initialMembership map[t.NodeID]t.NodeAddress, logger logging.Logger) (*trantor.System, error) {
 	F := (len(initialMembership) - 1) / 3
 	localCrypto := deploytest.NewLocalThreshCryptoSystem("pseudo", membership.GetIDs(initialMembership), 2*F+1, logger)
 
@@ -83,7 +88,7 @@ func aleaSMRFactory(ownID t.NodeID, h host.Host, initialMembership map[t.NodeID]
 
 	return trantor.NewAlea(
 		ownID,
-		h,
+		transport,
 		nil,
 		localCrypto.ThreshCrypto(ownID),
 		&App{Logger: logger, Membership: initialMembership},
@@ -92,7 +97,7 @@ func aleaSMRFactory(ownID t.NodeID, h host.Host, initialMembership map[t.NodeID]
 	)
 }
 
-type smrFactory func(ownID t.NodeID, h host.Host, initialMembership map[t.NodeID]t.NodeAddress, logger logging.Logger) (*trantor.System, error)
+type smrFactory func(ownID t.NodeID, transport net.Transport, initialMembership map[t.NodeID]t.NodeAddress, logger logging.Logger) (*trantor.System, error)
 
 var smrFactories = map[string]smrFactory{
 	"iss":  issSMRFactory,
@@ -128,6 +133,10 @@ func runNode() error {
 	}
 	ownID := t.NodeID(id)
 
+	// Set Trantor parameters.
+	smrParams := trantor.DefaultParams(initialMembership)
+	smrParams.Mempool.MaxTransactionsInBatch = 1024
+
 	// Assemble listening address.
 	// In this benchmark code, we always listen on tha address 0.0.0.0.
 	portStr, err := getPortStr(initialMembership[ownID])
@@ -147,13 +156,43 @@ func runNode() error {
 		return fmt.Errorf("failed to create libp2p host: %w", err)
 	}
 
-	benchApp, err := smrFactories[protocol](ownID, h, initialMembership, logger)
+	// Initialize the libp2p transport subsystem.
+	transport, err := libp2p2.NewTransport(smrParams.Net, h, ownID, logger)
+	if err != nil {
+		return errors.Wrap(err, "failed to create libp2p transport")
+	}
+
+	benchApp, err := smrFactories[protocol](ownID, transport, initialMembership, logger)
+
 	if err != nil {
 		return fmt.Errorf("could not create bench app: %w", err)
 	}
 
+	recorder, err := eventlog.NewRecorder(
+		ownID,
+		"bench-output",
+		logging.Decorate(logger, "EVTLOG: "),
+		eventlog.EventFilterOpt(func(e *eventpb.Event) bool {
+			switch e := e.Type.(type) {
+			case *eventpb.Event_NewRequests:
+				return true
+			case *eventpb.Event_BatchFetcher:
+				switch e.BatchFetcher.Type.(type) {
+				case *batchfetcherpb.Event_NewOrderedBatch:
+					return true
+				}
+			}
+			return false
+		}),
+	)
+	if err != nil {
+		return fmt.Errorf("cannot create event recorder: %w", err)
+	}
 	stat := stats.NewStats()
-	interceptor := stats.NewStatInterceptor(stat, "app")
+	interceptor := eventlog.MultiInterceptor(
+		stats.NewStatInterceptor(stat, "app"),
+		recorder,
+	)
 
 	nodeConfig := mir.DefaultNodeConfig().WithLogger(logger)
 	node, err := mir.NewNode(t.NodeID(id), nodeConfig, benchApp.Modules(), nil, interceptor)
@@ -213,7 +252,7 @@ func getPortStr(address t.NodeAddress) (string, error) {
 		return "", err
 	}
 
-	_, portStr, err := net.SplitHostPort(addrStr)
+	_, portStr, err := gonet.SplitHostPort(addrStr)
 	if err != nil {
 		return "", err
 	}

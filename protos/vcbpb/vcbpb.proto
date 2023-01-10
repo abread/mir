@@ -6,7 +6,9 @@ option go_package = "github.com/filecoin-project/mir/pkg/pb/vcbpb";
 
 import "commonpb/commonpb.proto";
 import "requestpb/requestpb.proto";
-import "mir/plugin.proto";
+
+// TODO: use DSL codegen
+import "mir/codegen_extensions.proto";
 
 
 // ============================================================

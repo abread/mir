@@ -11,17 +11,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/filecoin-project/mir/pkg/net/libp2p"
+	"github.com/filecoin-project/mir/pkg/util/issutil"
+
 	"github.com/otiai10/copy"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"
 
 	"github.com/filecoin-project/mir"
-	"github.com/filecoin-project/mir/pkg/availability/batchdb/fakebatchdb"
-	"github.com/filecoin-project/mir/pkg/availability/multisigcollector"
-	"github.com/filecoin-project/mir/pkg/batchfetcher"
 	"github.com/filecoin-project/mir/pkg/checkpoint"
-	"github.com/filecoin-project/mir/pkg/clientprogress"
 	"github.com/filecoin-project/mir/pkg/deploytest"
 	"github.com/filecoin-project/mir/pkg/iss"
 	"github.com/filecoin-project/mir/pkg/logging"
@@ -109,33 +108,7 @@ func testIntegrationWithISS(t *testing.T) {
 				Duration:            20 * time.Second,
 				SlowProposeReplicas: map[int]bool{0: true},
 			}},
-
-		5: {"Submit 10 fake requests with 4 nodes and gRPC networking",
-			&TestConfig{
-				NumReplicas:     4,
-				NumClients:      1,
-				Transport:       "grpc",
-				NumFakeRequests: 10,
-				Duration:        4 * time.Second,
-			}},
-		6: {"Submit 10 requests with 1 node and gRPC networking",
-			&TestConfig{
-				NumReplicas:    1,
-				NumClients:     1,
-				Transport:      "grpc",
-				NumNetRequests: 10,
-				Duration:       4 * time.Second,
-			}},
-		7: {"Submit 10 requests with 4 nodes and gRPC networking",
-			&TestConfig{
-				Info:           "grpc 10 requests and 4 nodes",
-				NumReplicas:    4,
-				NumClients:     1,
-				Transport:      "grpc",
-				NumNetRequests: 10,
-				Duration:       4 * time.Second,
-			}},
-		8: {"Submit 10 fake requests with 4 nodes and libp2p networking",
+		5: {"Submit 10 fake requests with 4 nodes and libp2p networking",
 			&TestConfig{
 				NumReplicas:     4,
 				NumClients:      1,
@@ -143,7 +116,7 @@ func testIntegrationWithISS(t *testing.T) {
 				NumFakeRequests: 10,
 				Duration:        10 * time.Second,
 			}},
-		9: {"Submit 10 requests with 1 node and libp2p networking",
+		6: {"Submit 10 requests with 1 node and libp2p networking",
 			&TestConfig{
 				NumReplicas:    1,
 				NumClients:     1,
@@ -151,7 +124,7 @@ func testIntegrationWithISS(t *testing.T) {
 				NumNetRequests: 10,
 				Duration:       10 * time.Second,
 			}},
-		10: {"Submit 10 requests with 4 nodes and libp2p networking",
+		7: {"Submit 10 requests with 4 nodes and libp2p networking",
 			&TestConfig{
 				Info:           "libp2p 10 requests and 4 nodes",
 				NumReplicas:    4,
@@ -160,21 +133,21 @@ func testIntegrationWithISS(t *testing.T) {
 				NumNetRequests: 10,
 				Duration:       15 * time.Second,
 			}},
-		11: {"Do nothing with 1 node in simulation",
+		8: {"Do nothing with 1 node in simulation",
 			&TestConfig{
 				NumReplicas: 1,
 				Transport:   "sim",
 				Duration:    4 * time.Second,
 			}},
 
-		12: {"Do nothing with 4 nodes in simulation, one of them slow",
+		9: {"Do nothing with 4 nodes in simulation, one of them slow",
 			&TestConfig{
 				NumReplicas:         4,
 				Transport:           "sim",
 				Duration:            20 * time.Second,
 				SlowProposeReplicas: map[int]bool{0: true},
 			}},
-		13: {"Submit 10 fake requests with 1 node in simulation",
+		10: {"Submit 10 fake requests with 1 node in simulation",
 			&TestConfig{
 				NumReplicas:     1,
 				Transport:       "sim",
@@ -182,7 +155,7 @@ func testIntegrationWithISS(t *testing.T) {
 				Directory:       "mirbft-deployment-test",
 				Duration:        4 * time.Second,
 			}},
-		14: {"Submit 10 fake requests with 1 node in simulation, loading WAL",
+		11: {"Submit 10 fake requests with 1 node in simulation, loading WAL",
 			&TestConfig{
 				NumReplicas:     1,
 				NumClients:      1,
@@ -191,7 +164,7 @@ func testIntegrationWithISS(t *testing.T) {
 				Directory:       "mirbft-deployment-test",
 				Duration:        4 * time.Second,
 			}},
-		15: {"Submit 100 fake requests with 1 node in simulation",
+		12: {"Submit 100 fake requests with 1 node in simulation",
 			&TestConfig{
 				NumReplicas:     1,
 				NumClients:      0,
@@ -199,7 +172,7 @@ func testIntegrationWithISS(t *testing.T) {
 				NumFakeRequests: 100,
 				Duration:        20 * time.Second,
 			}},
-		16: {"Submit 100 fake requests with 4 nodes in simulation, one of them slow",
+		13: {"Submit 100 fake requests with 4 nodes in simulation, one of them slow",
 			&TestConfig{
 				NumReplicas:         4,
 				NumClients:          0,
@@ -334,7 +307,7 @@ func runIntegrationWithISSConfig(tb testing.TB, conf *TestConfig) (heapObjects i
 
 	// Check if all requests were delivered.
 	for _, replica := range deployment.TestReplicas {
-		app := replica.Modules["app"].(*deploytest.FakeApp)
+		app := deployment.TestConfig.FakeApps[replica.ID]
 		assert.Equal(tb, conf.NumNetRequests+conf.NumFakeRequests, int(app.RequestsProcessed))
 	}
 
@@ -393,14 +366,19 @@ func newDeployment(conf *TestConfig) (*deploytest.Deployment, error) {
 	cryptoSystem := deploytest.NewLocalCryptoSystem("pseudo", nodeIDs, logger)
 
 	nodeModules := make(map[t.NodeID]modules.Modules)
+	fakeApps := make(map[t.NodeID]*deploytest.FakeApp)
 
 	for i, nodeID := range nodeIDs {
 		nodeLogger := logging.Decorate(logger, fmt.Sprintf("Node %d: ", i))
 		// Dummy application
-		fakeApp := deploytest.NewFakeApp("iss", transportLayer.Nodes())
+		fakeApp := deploytest.NewFakeApp()
+		initialSnapshot, err := fakeApp.Snapshot()
+		if err != nil {
+			return nil, err
+		}
 
 		// ISS configuration
-		issConfig := iss.DefaultParams(transportLayer.Nodes())
+		issConfig := issutil.DefaultParams(transportLayer.Nodes())
 		if conf.SlowProposeReplicas[i] {
 			// Increase MaxProposeDelay such that it is likely to trigger view change by the SN timeout.
 			// Since a sensible value for the segment timeout needs to be stricter than the SN timeout,
@@ -408,82 +386,32 @@ func newDeployment(conf *TestConfig) (*deploytest.Deployment, error) {
 			issConfig.MaxProposeDelay = issConfig.PBFTViewChangeSNTimeout
 		}
 
-		// ISS instantiation
-		issProtocol, err := iss.New(
-			nodeID,
-			iss.DefaultModuleConfig(),
-			issConfig,
-			checkpoint.Genesis(iss.InitialStateSnapshot(fakeApp.Snapshot(), issConfig)),
-			logging.Decorate(nodeLogger, "ISS: "),
-		)
-		if err != nil {
-			return nil, fmt.Errorf("error creating ISS protocol module: %w", err)
-		}
-
-		checkpointing := checkpoint.Factory(
-			checkpoint.DefaultModuleConfig(),
-			nodeID,
-			logging.Decorate(nodeLogger, "CHKP: "),
-		)
-
 		transport, err := transportLayer.Link(nodeID)
 		if err != nil {
 			return nil, fmt.Errorf("error initializing Mir transport: %w", err)
 		}
 
-		// Use a simple mempool for incoming requests.
-		mempool := simplemempool.NewModule(
-			&simplemempool.ModuleConfig{
-				Self:   "mempool",
-				Hasher: "hasher",
-			},
-			&simplemempool.ModuleParams{
-				MaxTransactionsInBatch: 10,
-			},
-		)
-
-		// Use fake batch database.
-		batchdb := fakebatchdb.NewModule(
-			&fakebatchdb.ModuleConfig{
-				Self: "batchdb",
-			},
-		)
-
-		// Instantiate the availability layer.
-		availability := multisigcollector.NewReconfigurableModule(
-			&multisigcollector.ModuleConfig{
-				Self:    "availability",
-				Mempool: "mempool",
-				BatchDB: "batchdb",
-				Net:     "net",
-				Crypto:  "crypto",
-			},
+		system, err := New(
 			nodeID,
+			transport,
+			checkpoint.Genesis(iss.InitialStateSnapshot(initialSnapshot, issConfig)),
+			cryptoSystem.Crypto(nodeID),
+			AppLogicFromStatic(fakeApp, transportLayer.Nodes()),
+			Params{
+				Mempool: &simplemempool.ModuleParams{
+					MaxTransactionsInBatch: 10,
+				},
+				Iss: issConfig,
+				Net: libp2p.Params{},
+			},
 			nodeLogger,
 		)
-
-		batchFetcher := batchfetcher.NewModule(
-			batchfetcher.DefaultModuleConfig(),
-			0,
-			clientprogress.NewClientProgress(nodeLogger),
-		)
-
-		modulesWithDefaults, err := iss.DefaultModules(map[t.ModuleID]modules.Module{
-			"app":          fakeApp,
-			"crypto":       cryptoSystem.Module(nodeID),
-			"iss":          issProtocol,
-			"checkpoint":   checkpointing,
-			"batchfetcher": batchFetcher,
-			"net":          transport,
-			"mempool":      mempool,
-			"batchdb":      batchdb,
-			"availability": availability,
-		}, iss.DefaultModuleConfig())
 		if err != nil {
-			return nil, fmt.Errorf("error initializing the Mir modules: %w", err)
+			return nil, err
 		}
 
-		nodeModules[nodeID] = modulesWithDefaults
+		nodeModules[nodeID] = system.Modules()
+		fakeApps[nodeID] = fakeApp
 	}
 
 	deployConf := &deploytest.TestConfig{
@@ -499,6 +427,7 @@ func newDeployment(conf *TestConfig) (*deploytest.Deployment, error) {
 		FakeRequestsDestModule: t.ModuleID("mempool"),
 		Directory:              conf.Directory,
 		Logger:                 logger,
+		FakeApps:               fakeApps,
 	}
 
 	return deploytest.NewDeployment(deployConf)

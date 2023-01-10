@@ -14,7 +14,6 @@ import "messagepb/messagepb.proto";
 import "isspb/isspb.proto";
 import "google/protobuf/wrappers.proto";
 import "bcbpb/bcbpb.proto";
-import "mir/plugin.proto";
 import "contextstorepb/contextstorepb.proto";
 import "dslpb/dslpb.proto";
 import "mempoolpb/mempoolpb.proto";
@@ -25,62 +24,68 @@ import "batchfetcherpb/batchfetcherpb.proto";
 import "threshcryptopb/threshcryptopb.proto";
 import "pingpongpb/pingpongpb.proto";
 import "checkpointpb/checkpointpb.proto";
+import "ordererspb/ordererspb.proto";
 import "vcbpb/vcbpb.proto";
 import "abbapb/abbapb.proto";
 import "aleapb/bcpb/bcpb.proto";
 import "aleapb/agreementpb/agreementpb.proto";
 import "reliablenetpb/reliablenetpb.proto";
 
+import "mir/codegen_extensions.proto";
+
 option go_package = "github.com/filecoin-project/mir/pkg/pb/eventpb";
 
 // Event represents a state event to be injected into the state machine
 message Event {
+  option (mir.event_root) = true;
+
   // TODO, normalize naming, for instance Complete/Completed
   oneof type {
     option (mir.event_type) = true;
 
-    Init                     init                    = 1;
-    Tick                     tick                    = 2;
-    WALAppend                wal_append              = 3;
-    WALEntry                 wal_entry               = 4;
-    WALTruncate              wal_truncate            = 5;
-    NewRequests              new_requests            = 7;
-    HashRequest              hash_request            = 8;
-    HashResult               hash_result             = 9;
-    SignRequest              sign_request            = 10;
-    SignResult               sign_result             = 11;
-    VerifyNodeSigs           verify_node_sigs        = 12;
-    NodeSigsVerified         node_sigs_verified      = 13;
-    RequestReady             request_ready           = 14;
-    SendMessage              send_message            = 15;
-    MessageReceived          message_received        = 16;
-    DeliverCert              deliver_cert            = 17;
-    isspb.ISSEvent           iss                     = 18;
-    VerifyRequestSig         verify_request_sig      = 19;
-    RequestSigVerified       request_sig_verified    = 20;
-    StoreVerifiedRequest     store_verified_request  = 21;
-    AppSnapshotRequest       app_snapshot_request    = 22;
-    AppSnapshot              app_snapshot            = 23;
-    AppRestoreState          app_restore_state       = 24;
-    TimerDelay               timer_delay             = 25;
-    TimerRepeat              timer_repeat            = 26;
-    TimerGarbageCollect      timer_garbage_collect   = 27;
-    bcbpb.Event              bcb                     = 28;
-    mempoolpb.Event          mempool                 = 29;
-    availabilitypb.Event     availability            = 30;
-    NewEpoch                 new_epoch               = 31;
-    NewConfig                new_config              = 32;
-    factorymodulepb.Factory  factory                 = 33;
-    batchdbpb.Event          batch_db                = 34;
-    batchfetcherpb.Event     batch_fetcher           = 35;
-    threshcryptopb.Event     thresh_crypto           = 36;
-    pingpongpb.Event         ping_pong               = 37;
-    checkpointpb.Event       checkpoint              = 38;
-    vcbpb.Event              vcb                     = 39;
-    abbapb.Event             abba                    = 40;
-    aleapb.bcpb.Event        alea_broadcast          = 41;
-    aleapb.agreementpb.Event alea_agreement          = 42;
-    reliablenetpb.Event      reliable_net            = 43;
+    Init                    init                    = 1;
+    Tick                    tick                    = 2;
+    WALAppend               wal_append              = 3;
+    WALEntry                wal_entry               = 4;
+    WALTruncate             wal_truncate            = 5;
+    NewRequests             new_requests            = 7;
+    HashRequest             hash_request            = 8;
+    HashResult              hash_result             = 9;
+    SignRequest             sign_request            = 10;
+    SignResult              sign_result             = 11;
+    VerifyNodeSigs          verify_node_sigs        = 12;
+    NodeSigsVerified        node_sigs_verified      = 13;
+    RequestReady            request_ready           = 14;
+    SendMessage             send_message            = 15;
+    MessageReceived         message_received        = 16;
+    DeliverCert             deliver_cert            = 17;
+    isspb.ISSEvent          iss                     = 18;
+    VerifyRequestSig        verify_request_sig      = 19;
+    RequestSigVerified      request_sig_verified    = 20;
+    StoreVerifiedRequest    store_verified_request  = 21;
+    AppSnapshotRequest      app_snapshot_request    = 22;
+    AppSnapshot             app_snapshot            = 23;
+    AppRestoreState         app_restore_state       = 24;
+    TimerDelay              timer_delay             = 25;
+    TimerRepeat             timer_repeat            = 26;
+    TimerGarbageCollect     timer_garbage_collect   = 27;
+    bcbpb.Event             bcb                     = 28;
+    mempoolpb.Event         mempool                 = 29;
+    availabilitypb.Event    availability            = 30;
+    NewEpoch                new_epoch               = 31;
+    NewConfig               new_config              = 32;
+    factorymodulepb.Factory factory                 = 33;
+    batchdbpb.Event         batch_db                = 34;
+    batchfetcherpb.Event    batch_fetcher           = 35;
+    threshcryptopb.Event    thresh_crypto           = 36;
+    pingpongpb.Event        ping_pong               = 37;
+    checkpointpb.Event      checkpoint              = 38;
+    ordererspb.SBInstanceEvent sb_event             = 39;
+    vcbpb.Event             vcb                     = 40;
+    abbapb.Event            abba                    = 41;
+    aleapb.bcpb.Event       alea_broadcast          = 42;
+    aleapb.agreementpb.Event alea_agreement          = 43;
+    reliablenetpb.Event     reliable_net            = 44;
 
     // for unit-tests
     google.protobuf.StringValue testingString = 301;
@@ -93,9 +98,9 @@ message Event {
   // after the corresponding entry has been persisted in the write-ahead log (WAL).
   // In this case, the WAL append event would be this event
   // and the next field would contain the message sending event.
-  repeated Event next = 100;
+  repeated Event next = 100 [(mir.omit_in_event_constructors) = true];
 
-  string dest_module = 200;
+  string dest_module = 200 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.ModuleID"];
 }
 
 message Init {}
@@ -117,62 +122,80 @@ message HashResult {
 }
 
 message HashOrigin {
-  string module = 1;
+  string module = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.ModuleID"];
   oneof type {
     contextstorepb.Origin   context_store = 2;
     requestpb.Request       request       = 3;
     isspb.ISSHashOrigin     iss           = 4;
     dslpb.Origin            dsl           = 5;
     checkpointpb.HashOrigin checkpoint    = 6;
+    ordererspb.SBInstanceHashOrigin sb    = 7;
   }
 }
 
 message SignRequest {
+  option (mir.event) = true;
+
   repeated bytes data = 1;
-  SignOrigin origin = 2;
+  SignOrigin origin = 2 [(mir.origin_request) = true];
 }
 
 message SignResult {
+  option (mir.event) = true;
+
   bytes signature = 1;
-  SignOrigin origin = 2;
+  SignOrigin origin = 2 [(mir.origin_response) = true];
 }
 
 message SignOrigin {
-  string module = 1;
+  option (mir.struct) = true;
+
+  string module = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.ModuleID"];
   oneof type {
     contextstorepb.Origin   context_store = 2;
-    isspb.ISSSignOrigin     iss           = 3;
+    // isspb.ISSSignOrigin     iss           = 3;
     dslpb.Origin            dsl           = 4;
     checkpointpb.SignOrigin checkpoint    = 5;
+    ordererspb.SBInstanceSignOrigin sb    = 6;
   }
 }
 
 message SigVerData {
+  option (mir.struct) = true;
+
   repeated bytes data = 1;
 }
 
 message VerifyNodeSigs {
+  option (mir.event) = true;
+
   repeated SigVerData data       = 1;
   repeated bytes      signatures = 2;
-  SigVerOrigin        origin     = 3;
-  repeated string     node_ids   = 4;
+  SigVerOrigin        origin     = 3 [(mir.origin_request) = true];
+  repeated string     node_ids   = 4 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.NodeID"];
 }
 
 message NodeSigsVerified {
-  SigVerOrigin    origin   = 1;
-  repeated string node_ids = 2;
+  option (mir.event) = true;
+
+  SigVerOrigin    origin   = 1 [(mir.origin_response) = true];
+  repeated string node_ids = 2 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.NodeID"];
   repeated bool   valid    = 3;
-  repeated string errors   = 4;
+  repeated string errors   = 4 [(mir.type) = "error"];
   bool            all_ok   = 5;
 }
 
 message SigVerOrigin {
-  string module = 1;
+  option (mir.struct) = true;
+
+  string module = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.ModuleID"];
+
   oneof type {
     contextstorepb.Origin     context_store = 2;
     isspb.ISSSigVerOrigin     iss           = 3;
     dslpb.Origin              dsl           = 4;
     checkpointpb.SigVerOrigin checkpoint    = 5;
+    ordererspb.SBInstanceSigVerOrigin sb    = 6;
   }
 }
 
@@ -181,12 +204,16 @@ message RequestReady {
 }
 
 message SendMessage {
-  repeated string destinations = 1;
-  messagepb.Message msg = 2;
+  option (mir.event) = true;
+
+  messagepb.Message msg = 1;
+  repeated string destinations = 2 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.NodeID"];
 }
 
 message MessageReceived {
-  string from = 1;
+  option (mir.event) = true;
+
+  string from = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.NodeID"];
   messagepb.Message msg = 2;
 }
 

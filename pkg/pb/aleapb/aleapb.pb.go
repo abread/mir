@@ -30,6 +30,7 @@ type Message struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to Type:
+	//
 	//	*Message_FillGapMessage
 	//	*Message_FillerMessage
 	Type isMessage_Type `protobuf_oneof:"type"`

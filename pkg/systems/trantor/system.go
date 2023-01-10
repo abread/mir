@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/pkg/errors"
 
 	"github.com/filecoin-project/mir/pkg/alea"
@@ -26,7 +25,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/mempool/simplemempool"
 	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/net"
-	libp2pnet "github.com/filecoin-project/mir/pkg/net/libp2p"
+	"github.com/filecoin-project/mir/pkg/orderers"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -109,15 +108,15 @@ func NewISS(
 	// The ID of this node.
 	ownID t.NodeID,
 
-	// libp2p host to be used for the network transport module.
-	h host.Host,
+	// Network transport system to be used by Trantor to send and receive messages.
+	transport net.Transport,
 
 	// Initial checkpoint of the application state and configuration.
 	// The SMR system will continue operating from this checkpoint.
 	startingCheckpoint *checkpoint.StableCheckpoint,
 
 	// Implementation of the cryptographic primitives to be used for signing and verifying protocol messages.
-	crypto mircrypto.Crypto,
+	cryptoImpl mircrypto.Crypto,
 
 	// The replicated application logic.
 	// This is what the user of the SMR system is expected to implement.
@@ -134,24 +133,8 @@ func NewISS(
 	logger logging.Logger,
 ) (*System, error) {
 
-	// Initialize the libp2p transport subsystem.
-	// TODO: Re-enable this check!
-	// addrIn := false
-	// for _, addr := range h.Addrs() {
-	//	// sanity-check to see if the host is configured with the
-	//	// right multiaddr.
-	//	if addr.Equal(initialMembership[ownID]) {
-	//		addrIn = true
-	//		break
-	//	}
-	// }
-	// if !addrIn {
-	//	return nil, errors.New("libp2p host provided as input not listening to multiaddr specified for node")
-	// }
-	transport, err := libp2pnet.NewTransport(params.Net, h, ownID, logger)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to create libp2p transport")
-	}
+	// Hash function to be used by all modules of the system.
+	hashImpl := crypto.SHA256
 
 	// Instantiate the ISS ordering protocol with default configuration.
 	// We use the ISS' default module configuration (the expected IDs of modules it interacts with)
@@ -162,6 +145,8 @@ func NewISS(
 		issModuleConfig,
 		params.Iss,
 		startingCheckpoint,
+		hashImpl,
+		cryptoImpl,
 		logging.Decorate(logger, "ISS: "),
 	)
 	if err != nil {
@@ -171,11 +156,14 @@ func NewISS(
 	// Factory module with instances of the checkpointing protocol.
 	checkpointing := checkpoint.Factory(checkpoint.DefaultModuleConfig(), ownID, logging.Decorate(logger, "CHKP: "))
 
+	// PBFT module with instances of the pbft protocol as segments to be called by ISS.
+	ordering := orderers.Factory(orderers.DefaultModuleConfig(), params.Iss, ownID, logging.Decorate(logger, "PBFT: "))
+
 	// Use a simple mempool for incoming requests.
 	mempool := simplemempool.NewModule(
 		&simplemempool.ModuleConfig{
 			Self:   "mempool",
-			Hasher: issModuleConfig.Hasher,
+			Hasher: "hasher",
 		},
 		params.Mempool,
 	)
@@ -192,7 +180,7 @@ func NewISS(
 		&multisigcollector.ModuleConfig{
 			Self:    issModuleConfig.Availability,
 			Net:     issModuleConfig.Net,
-			Crypto:  issModuleConfig.Crypto,
+			Crypto:  "crypto",
 			Mempool: "mempool",
 			BatchDB: "batchdb",
 		},
@@ -212,14 +200,17 @@ func NewISS(
 	// that it needs but that have not been specified explicitly.
 	modulesWithDefaults, err := iss.DefaultModules(map[t.ModuleID]modules.Module{
 		issModuleConfig.App:          batchFetcher,
-		issModuleConfig.Crypto:       mircrypto.New(crypto),
 		issModuleConfig.Self:         issProtocol,
 		issModuleConfig.Net:          transport,
 		issModuleConfig.Availability: availability,
 		issModuleConfig.Checkpoint:   checkpointing,
+		issModuleConfig.Ordering:     ordering,
 		"batchdb":                    batchdb,
 		"mempool":                    mempool,
 		"app":                        NewAppModule(app, transport, issModuleConfig.Self),
+		"hasher":                     mircrypto.NewHasher(hashImpl),
+		"crypto":                     mircrypto.New(cryptoImpl),
+		"null":                       modules.NullPassive{},
 	}, issModuleConfig)
 	if err != nil {
 		return nil, errors.Wrap(err, "error initializing the Mir modules")
@@ -241,8 +232,8 @@ func NewAlea(
 	// The ID of this node.
 	ownID t.NodeID,
 
-	// libp2p host to be used for the network transport module.
-	h host.Host,
+	// Network transport system to be used by Trantor to send and receive messages.
+	transport net.Transport,
 
 	// Initial checkpoint of the application state and configuration.
 	// The SMR system will continue operating from this checkpoint.
@@ -266,24 +257,8 @@ func NewAlea(
 	logger logging.Logger,
 ) (*System, error) {
 
-	// Initialize the libp2p transport subsystem.
-	// TODO: Re-enable this check!
-	// addrIn := false
-	// for _, addr := range h.Addrs() {
-	//	// sanity-check to see if the host is configured with the
-	//	// right multiaddr.
-	//	if addr.Equal(initialMembership[ownID]) {
-	//		addrIn = true
-	//		break
-	//	}
-	// }
-	// if !addrIn {
-	//	return nil, errors.New("libp2p host provided as input not listening to multiaddr specified for node")
-	// }
-	transport, err := libp2pnet.NewTransport(params.Net, h, ownID, logger)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to create libp2p transport")
-	}
+	// Hash function to be used by all modules of the system.
+	hashImpl := crypto.SHA256
 
 	if startingCheckpoint != nil {
 		// TODO: checkpointing
@@ -342,7 +317,7 @@ func NewAlea(
 		},
 	)
 
-	aleaProtocolModules[aleaConfig.Hasher] = mircrypto.NewHasher(crypto.SHA256)
+	aleaProtocolModules[aleaConfig.Hasher] = mircrypto.NewHasher(hashImpl)
 
 	// Instantiate the batch fetcher module that transforms availability certificates ordered by Alea
 	// into batches of transactions that can be applied to the replicated application.

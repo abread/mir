@@ -30,6 +30,7 @@ type Message struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to Type:
+	//
 	//	*Message_RequestSig
 	//	*Message_Sig
 	//	*Message_RequestBatch
