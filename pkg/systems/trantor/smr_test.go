@@ -391,7 +391,7 @@ func newDeployment(conf *TestConfig) (*deploytest.Deployment, error) {
 			return nil, fmt.Errorf("error initializing Mir transport: %w", err)
 		}
 
-		system, err := New(
+		system, err := NewISS(
 			nodeID,
 			transport,
 			checkpoint.Genesis(iss.InitialStateSnapshot(initialSnapshot, issConfig)),

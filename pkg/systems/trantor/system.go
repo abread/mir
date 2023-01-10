@@ -290,7 +290,7 @@ func NewAlea(
 		},
 		&reliablenet.ModuleParams{
 			RetransmissionLoopInterval: 100 * time.Millisecond,
-			AllNodes:                   params.Alea.AllNodes,
+			AllNodes:                   params.Alea.AllNodes(),
 		},
 		logging.Decorate(logger, "ReliableNet: "),
 	)
@@ -342,7 +342,7 @@ func NewAlea(
 		transport: transport,
 
 		// TODO: remove this ugly hack (yes this is Alea, but the InitialMembership is right there...)
-		initialMemberships: []map[t.NodeID]t.NodeAddress{params.Iss.InitialMembership},
+		initialMemberships: []map[t.NodeID]t.NodeAddress{},
 	}, nil
 }
 

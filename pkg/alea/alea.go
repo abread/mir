@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"time"
 
-	"golang.org/x/exp/slices"
-
 	"github.com/filecoin-project/mir/pkg/alea/agreement"
 	"github.com/filecoin-project/mir/pkg/alea/broadcast"
 	"github.com/filecoin-project/mir/pkg/alea/director"
@@ -37,9 +35,9 @@ type Params struct {
 	// Must be the same across all replicas.
 	InstanceUID []byte
 
-	// The list of participating nodes, which must be the same as the set of nodes in the threshcrypto module.
-	// Must not be empty, and must be the same across all replicas.
-	AllNodes []t.NodeID
+	// The identities of all nodes that execute the protocol.
+	// Must not be empty.
+	Membership map[t.NodeID]t.NodeAddress
 
 	// Maximum number of concurrent VCB instances per queue
 	// Must be at least 1
@@ -77,14 +75,10 @@ func DefaultConfig(consumer t.ModuleID) *Config {
 // DefaultParams is intended for use during testing and hello-world examples.
 // A proper deployment is expected to craft a custom configuration,
 // for which DefaultParams can serve as a starting point.
-func DefaultParams(initialMembership map[t.NodeID]t.NodeAddress) *Params {
-	// ensure allNodes is the same across the system, irrelevant of map order
-	allNodes := maputil.GetKeys(initialMembership)
-	slices.Sort(allNodes)
-
+func DefaultParams(membership map[t.NodeID]t.NodeAddress) *Params {
 	return &Params{
 		InstanceUID:                 []byte{42},
-		AllNodes:                    allNodes,
+		Membership:                  membership,
 		MaxConcurrentVcbPerQueue:    10,
 		TargetOwnUnagreedBatchCount: 1,
 		BatchCutFailRetryDelay:      t.TimeDuration(500 * time.Millisecond),
@@ -114,6 +108,8 @@ func New(ownID t.NodeID, config *Config, params *Params, startingChkp *checkpoin
 		return nil, fmt.Errorf("alea checkpointing not implemented")
 	}
 
+	allNodes := params.AllNodes()
+
 	aleaDir := director.NewModule(
 		&director.ModuleConfig{
 			Self:          config.AleaDirector,
@@ -128,7 +124,7 @@ func New(ownID t.NodeID, config *Config, params *Params, startingChkp *checkpoin
 		},
 		&director.ModuleParams{
 			InstanceUID: params.InstanceUID,
-			AllNodes:    params.AllNodes,
+			AllNodes:    allNodes,
 		},
 		&director.ModuleTunables{
 			MaxConcurrentVcbPerQueue:    params.MaxConcurrentVcbPerQueue,
@@ -149,7 +145,7 @@ func New(ownID t.NodeID, config *Config, params *Params, startingChkp *checkpoin
 		},
 		&broadcast.ModuleParams{
 			InstanceUID: params.InstanceUID,
-			AllNodes:    params.AllNodes,
+			AllNodes:    allNodes,
 		},
 		&broadcast.ModuleTunables{
 			MaxConcurrentVcbPerQueue: params.MaxConcurrentVcbPerQueue,
@@ -172,7 +168,7 @@ func New(ownID t.NodeID, config *Config, params *Params, startingChkp *checkpoin
 		},
 		&agreement.ModuleParams{
 			InstanceUID: params.InstanceUID,
-			AllNodes:    params.AllNodes,
+			AllNodes:    allNodes,
 		},
 		ownID,
 		logging.Decorate(logger, "AleaAgreement: "),
@@ -189,7 +185,7 @@ func New(ownID t.NodeID, config *Config, params *Params, startingChkp *checkpoin
 }
 
 func (p *Params) Check() error {
-	if len(p.AllNodes) == 0 {
+	if len(p.Membership) == 0 {
 		return fmt.Errorf("cannot start Alea with an empty membership")
 	}
 
@@ -202,4 +198,8 @@ func (p *Params) Check() error {
 	}
 
 	return nil
+}
+
+func (p *Params) AllNodes() []t.NodeID {
+	return maputil.GetSortedKeys(p.Membership)
 }

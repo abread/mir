@@ -3,7 +3,6 @@ package trantor
 
 import (
 	"context"
-	"crypto"
 	"fmt"
 	"math/rand"
 	"os"
@@ -21,19 +20,14 @@ import (
 
 	"github.com/filecoin-project/mir"
 	"github.com/filecoin-project/mir/pkg/alea"
-	"github.com/filecoin-project/mir/pkg/availability/batchdb/fakebatchdb"
-	"github.com/filecoin-project/mir/pkg/batchfetcher"
-	"github.com/filecoin-project/mir/pkg/clientprogress"
-	mircrypto "github.com/filecoin-project/mir/pkg/crypto"
 	"github.com/filecoin-project/mir/pkg/deploytest"
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/mempool/simplemempool"
 	"github.com/filecoin-project/mir/pkg/modules"
-	"github.com/filecoin-project/mir/pkg/pb/commonpb"
+	"github.com/filecoin-project/mir/pkg/net/libp2p"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
 	"github.com/filecoin-project/mir/pkg/reliablenet"
 	"github.com/filecoin-project/mir/pkg/testsim"
-	"github.com/filecoin-project/mir/pkg/timer"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -264,7 +258,7 @@ func runIntegrationWithAleaConfig(tb testing.TB, conf *TestConfig) (heapObjects 
 
 	for _, replica := range deployment.TestReplicas {
 		// Check if all requests were delivered.
-		app := replica.Modules["app"].(*deploytest.FakeApp)
+		app := deployment.TestConfig.FakeApps[replica.ID]
 		assert.Equalf(tb, conf.NumNetRequests+conf.NumFakeRequests, int(app.RequestsProcessed), "replica %v missed requests", replica.ID)
 
 		// Check if there are no un-acked messages
@@ -337,94 +331,43 @@ func newDeploymentAlea(conf *TestConfig) (*deploytest.Deployment, error) {
 	cryptoSystem := deploytest.NewLocalThreshCryptoSystem("pseudo", nodeIDs, 2*F+1, logging.Decorate(everythingLogger, "ThreshCrypto: "))
 
 	nodeModules := make(map[t.NodeID]modules.Modules)
+	fakeApps := make(map[t.NodeID]*deploytest.FakeApp)
 
 	for i, nodeID := range nodeIDs {
 		// Alea configuration
-		aleaConfig := alea.DefaultConfig("batchfetcher")
-		aleaParams := alea.DefaultParams(transportLayer.Nodes())
-		aleaParams.BatchCutFailRetryDelay = t.TimeDuration(100 * time.Millisecond)
+		aleaConfig := alea.DefaultParams(transportLayer.Nodes())
+		aleaConfig.BatchCutFailRetryDelay = t.TimeDuration(100 * time.Millisecond)
 
 		nodeLogger := logging.NewMultiLogger(append(
 			[]logging.Logger{nodeFileLoggers[i]},
 			commonLoggers...,
 		))
 		nodeLogger = logging.Decorate(nodeLogger, fmt.Sprintf("Node %s: ", nodeID))
-
-		// Alea instantiation
-		moduleSet, err := alea.New(
-			nodeID,
-			aleaConfig,
-			aleaParams,
-			nil,
-			logging.Decorate(nodeLogger, "Alea: "),
-		)
-		if err != nil {
-			return nil, fmt.Errorf("error creating Alea protocol modules: %w", err)
-		}
+		fakeApp := deploytest.NewFakeApp()
 
 		transport, err := transportLayer.Link(nodeID)
 		if err != nil {
 			return nil, fmt.Errorf("error initializing Mir transport: %w", err)
 		}
-		moduleSet["net"] = transport
-		moduleSet[aleaConfig.ReliableNet], err = reliablenet.New(
+
+		system, err := NewAlea(
 			nodeID,
-			&reliablenet.ModuleConfig{
-				Self:  aleaConfig.ReliableNet,
-				Net:   "net",
-				Timer: aleaConfig.Timer,
+			transport,
+			nil,
+			cryptoSystem.ThreshCrypto(nodeID),
+			AppLogicFromStatic(fakeApp, transportLayer.Nodes()),
+			Params{
+				Mempool: &simplemempool.ModuleParams{
+					MaxTransactionsInBatch: 10,
+				},
+				Alea: aleaConfig,
+				Net:  libp2p.Params{},
 			},
-			&reliablenet.ModuleParams{
-				RetransmissionLoopInterval: 100 * time.Millisecond,
-				AllNodes:                   aleaParams.AllNodes,
-			},
-			logging.Decorate(nodeLogger, "ReliableNet: "),
-		)
-		if err != nil {
-			return nil, fmt.Errorf("error creating reliablenet: %w", err)
-		}
-
-		moduleSet[aleaConfig.ThreshCrypto] = cryptoSystem.Module(nodeID)
-		moduleSet[aleaConfig.Timer] = timer.New()
-
-		// Use a simple mempool for incoming requests.
-		moduleSet[aleaConfig.Mempool] = simplemempool.NewModule(
-			&simplemempool.ModuleConfig{
-				Self:   aleaConfig.Mempool,
-				Hasher: aleaConfig.Hasher,
-			},
-			&simplemempool.ModuleParams{
-				MaxTransactionsInBatch: 10,
-			},
+			nodeLogger,
 		)
 
-		moduleSet[aleaConfig.Hasher] = mircrypto.NewHasher(crypto.SHA256)
-
-		// Use fake batch database.
-		moduleSet[aleaConfig.BatchDB] = fakebatchdb.NewModule(
-			&fakebatchdb.ModuleConfig{
-				Self: aleaConfig.BatchDB,
-			},
-		)
-
-		appID := t.ModuleID("app")
-		moduleSet[aleaConfig.Consumer] = batchfetcher.NewModule(
-			&batchfetcher.ModuleConfig{
-				Self:         aleaConfig.Consumer,
-				Availability: aleaConfig.AleaDirector,
-				Checkpoint:   "",
-				Destination:  appID,
-			},
-			t.EpochNr(0),
-			clientprogress.FromPb(&commonpb.ClientProgress{
-				Progress: make(map[string]*commonpb.DeliveredReqs, 0),
-			}, nodeLogger),
-		)
-
-		// Dummy application
-		moduleSet[appID] = deploytest.NewFakeApp(aleaConfig.AleaDirector, transportLayer.Nodes())
-
-		nodeModules[nodeID] = moduleSet
+		nodeModules[nodeID] = system.Modules()
+		fakeApps[nodeID] = fakeApp
 	}
 
 	deployConf := &deploytest.TestConfig{
@@ -440,6 +383,7 @@ func newDeploymentAlea(conf *TestConfig) (*deploytest.Deployment, error) {
 		FakeRequestsDestModule: t.ModuleID("mempool"),
 		Directory:              conf.Directory,
 		Logger:                 everythingLogger,
+		FakeApps:               fakeApps,
 	}
 
 	return deploytest.NewDeployment(deployConf)
