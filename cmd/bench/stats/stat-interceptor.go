@@ -6,13 +6,17 @@ package stats
 
 import (
 	"github.com/filecoin-project/mir/pkg/events"
+	"github.com/filecoin-project/mir/pkg/logging"
 	bfpb "github.com/filecoin-project/mir/pkg/pb/batchfetcherpb"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
+	"github.com/filecoin-project/mir/pkg/reliablenet"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
 type StatInterceptor struct {
 	*Stats
+
+	fakeRNet *reliablenet.Module
 
 	// ID of the module that is consuming the transactions.
 	// Statistics will only be performed on transactions destined to this module
@@ -20,12 +24,17 @@ type StatInterceptor struct {
 	txConsumerModule t.ModuleID
 }
 
-func NewStatInterceptor(s *Stats, txConsumer t.ModuleID) *StatInterceptor {
-	return &StatInterceptor{s, txConsumer}
+func NewStatInterceptor(s *Stats, txConsumer t.ModuleID, ownID t.NodeID, allNodes []t.NodeID) *StatInterceptor {
+	fakeRNet, err := reliablenet.New(ownID, reliablenet.DefaultModuleConfig(), reliablenet.DefaultModuleParams(allNodes), logging.NilLogger)
+	if err != nil {
+		panic(err)
+	}
+
+	return &StatInterceptor{s, fakeRNet, txConsumer}
 }
 
-func (i *StatInterceptor) Intercept(events *events.EventList) error {
-	it := events.Iterator()
+func (i *StatInterceptor) Intercept(evts *events.EventList) error {
+	it := evts.Iterator()
 	for evt := it.Next(); evt != nil; evt = it.Next() {
 
 		switch e := evt.Type.(type) {
@@ -45,6 +54,12 @@ func (i *StatInterceptor) Intercept(events *events.EventList) error {
 				for _, req := range e.NewOrderedBatch.Txs {
 					i.Stats.Delivered(req)
 				}
+			}
+		case *eventpb.Event_ReliableNet:
+			_, _ = i.fakeRNet.ApplyEvents(events.ListOf(evt))
+		case *eventpb.Event_MessageReceived:
+			if e.MessageReceived.Msg.DestModule == "reliablenet" {
+				_, _ = i.fakeRNet.ApplyEvents(events.ListOf(evt))
 			}
 		}
 	}

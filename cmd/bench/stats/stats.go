@@ -13,10 +13,12 @@ import (
 	"time"
 
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"
+	"github.com/filecoin-project/mir/pkg/reliablenet"
 )
 
 type Stats struct {
 	lock                sync.Mutex
+	fakeRNet            *reliablenet.Module
 	reqTimestamps       map[reqKey]time.Time
 	avgLatency          float64
 	timestampedRequests int
@@ -66,6 +68,7 @@ func (s *Stats) WriteCSVHeader(w *csv.Writer) {
 		"nrDelivered",
 		"tps",
 		"avgLatency",
+		"msgRetransQueueSize",
 		"memSys",
 		"memStackInUse",
 		"memHeapAlloc",
@@ -95,6 +98,8 @@ func (s *Stats) WriteCSVRecordAndReset(w *csv.Writer, d time.Duration) {
 
 	s.lock.Unlock()
 
+	msgRetransQueueSize := s.fakeRNet.CountPendingMessages()
+
 	loadTps := float64(recvdReqs) / (float64(d) / float64(time.Second))
 	tps := float64(deliveredReqs) / (float64(d) / float64(time.Second))
 	record := []string{
@@ -104,6 +109,7 @@ func (s *Stats) WriteCSVRecordAndReset(w *csv.Writer, d time.Duration) {
 		strconv.Itoa(deliveredReqs),
 		fmt.Sprintf("%.3f", tps),
 		fmt.Sprintf("%.3f", time.Duration(avgLatency).Seconds()),
+		strconv.FormatUint(uint64(msgRetransQueueSize), 10),
 		strconv.FormatUint(memStats.Sys, 10),
 		strconv.FormatUint(memStats.StackInuse, 10),
 		strconv.FormatUint(memStats.HeapAlloc, 10),

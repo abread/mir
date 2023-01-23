@@ -101,6 +101,27 @@ func (m *Module) GetPendingMessages() []*eventpb.SendMessage {
 	return pendingMsgs
 }
 
+func (m *Module) CountPendingMessages() int {
+	count := 0
+
+	m.locker.Lock()
+	defer m.locker.Unlock()
+
+	for _, queue := range m.queues {
+		queue.Range(func(key, value any) bool {
+			qmsg := value.(queuedMsg)
+			qmsg.destinations.Range(func(key, value any) bool {
+				count++
+				return true
+			})
+
+			return true
+		})
+	}
+
+	return count
+}
+
 func (m *Module) ApplyEvents(evs *events.EventList) (*events.EventList, error) {
 	return modules.ApplyEventsConcurrently(evs, m.applyEvent)
 }
