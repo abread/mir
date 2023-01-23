@@ -248,8 +248,8 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 
 				state.round.values.Add(est)
 
-				// if we're in round 0, and our round.estimate is r, then we already sent this message
-				if !(state.round.number == 0 && state.round.estimate == est) {
+				// if our round.estimate is r, then we already sent this message
+				if state.round.estimate != est {
 					rnetdsl.SendMessage(m, mc.ReliableNet, InitMsgID(est), InitMessage(mc.Self, r, est), params.AllNodes)
 				}
 
