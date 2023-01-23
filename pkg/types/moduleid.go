@@ -44,6 +44,10 @@ func (mid ModuleID) StripParent(parent ModuleID) ModuleID {
 	return ModuleID(stripped)
 }
 
+func (mid ModuleID) IsSubOf(parent ModuleID) bool {
+	return strings.HasPrefix(string(mid), string(parent))
+}
+
 // Then combines the module ID with a relative path to its submodule in a single module ID.
 func (mid ModuleID) Then(submodule ModuleID) ModuleID {
 	return ModuleID(string(mid) + Separator + string(submodule))

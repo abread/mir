@@ -53,7 +53,7 @@ type Module struct {
 	retransmitLoopScheduled uint32 // TODO: atomic.Bool in Go 1.19
 
 	queues map[t.ModuleID]*sync.Map // ModuleID -> msgID ([]byte) -> queuedMsg
-	locker sync.RWMutex
+	locker sync.RWMutex             // protects map in m.queues
 }
 
 type queuedMsg struct {
@@ -344,33 +344,46 @@ func (m *Module) MarkModuleMsgsRecvd(destModule t.ModuleID, destinations []t.Nod
 		m.locker.Lock()
 		defer m.locker.Unlock()
 
-		delete(m.queues, destModule)
+		toDelete := make([]t.ModuleID, 0, 1)
+		for id := range m.queues {
+			if id.IsSubOf(destModule) || id == destModule {
+				toDelete = append(toDelete, id)
+			}
+		}
+		for _, k := range toDelete {
+			delete(m.queues, k)
+		}
+
 		return &events.EventList{}, nil
 	}
 
 	m.locker.RLock()
 	defer m.locker.RUnlock()
 
-	queue, queueExists := m.queues[destModule]
-	if !queueExists {
-		// queue doesn't event exist anymore, no pending messages to clean up
-		return &events.EventList{}, nil
-	}
-
 	var err error
-	queue.Range(func(key, value any) bool {
-		qmsg, ok := value.(queuedMsg)
-		if !ok {
-			err = fmt.Errorf("inconsistent message queue (expected queuedMsg, found something else)")
-			return false
+	for id, queue := range m.queues {
+		if !id.IsSubOf(destModule) && id != destModule {
+			continue
 		}
 
-		for _, nodeID := range destinations {
-			qmsg.destinations.Delete(nodeID)
-		}
+		queue.Range(func(key, value any) bool {
+			qmsg, ok := value.(queuedMsg)
+			if !ok {
+				err = fmt.Errorf("inconsistent message queue (expected queuedMsg, found something else)")
+				return false
+			}
 
-		return true
-	})
+			for _, nodeID := range destinations {
+				qmsg.destinations.Delete(nodeID)
+			}
+
+			return true
+		})
+
+		if err != nil {
+			break
+		}
+	}
 
 	return &events.EventList{}, err
 }
