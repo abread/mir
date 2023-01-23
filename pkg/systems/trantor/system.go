@@ -3,7 +3,6 @@ package trantor
 import (
 	"crypto"
 	"fmt"
-	"time"
 
 	"github.com/pkg/errors"
 
@@ -280,6 +279,9 @@ func NewAlea(
 		return nil, fmt.Errorf("error creating Alea protocol modules: %w", err)
 	}
 
+	reliablenetParams := &*params.ReliableNet
+	reliablenetParams.AllNodes = params.Alea.AllNodes()
+
 	aleaProtocolModules[aleaConfig.Net] = transport
 	aleaProtocolModules[aleaConfig.ReliableNet], err = reliablenet.New(
 		ownID,
@@ -288,10 +290,7 @@ func NewAlea(
 			Net:   aleaConfig.Net,
 			Timer: aleaConfig.Timer,
 		},
-		&reliablenet.ModuleParams{
-			RetransmissionLoopInterval: 100 * time.Millisecond,
-			AllNodes:                   params.Alea.AllNodes(),
-		},
+		reliablenetParams,
 		logging.Decorate(logger, "ReliableNet: "),
 	)
 	if err != nil {

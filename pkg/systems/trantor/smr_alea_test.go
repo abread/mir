@@ -19,12 +19,9 @@ import (
 	"golang.org/x/exp/slices"
 
 	"github.com/filecoin-project/mir"
-	"github.com/filecoin-project/mir/pkg/alea"
 	"github.com/filecoin-project/mir/pkg/deploytest"
 	"github.com/filecoin-project/mir/pkg/logging"
-	"github.com/filecoin-project/mir/pkg/mempool/simplemempool"
 	"github.com/filecoin-project/mir/pkg/modules"
-	"github.com/filecoin-project/mir/pkg/net/libp2p"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
 	"github.com/filecoin-project/mir/pkg/reliablenet"
 	"github.com/filecoin-project/mir/pkg/testsim"
@@ -334,9 +331,9 @@ func newDeploymentAlea(conf *TestConfig) (*deploytest.Deployment, error) {
 	fakeApps := make(map[t.NodeID]*deploytest.FakeApp)
 
 	for i, nodeID := range nodeIDs {
-		// Alea configuration
-		aleaConfig := alea.DefaultParams(transportLayer.Nodes())
-		aleaConfig.BatchCutFailRetryDelay = t.TimeDuration(100 * time.Millisecond)
+		smrParams := DefaultParams(transportLayer.Nodes())
+		smrParams.Mempool.MaxTransactionsInBatch = 16
+		smrParams.Alea.BatchCutFailRetryDelay = t.TimeDuration(100 * time.Millisecond)
 
 		nodeLogger := logging.NewMultiLogger(append(
 			[]logging.Logger{nodeFileLoggers[i]},
@@ -356,13 +353,7 @@ func newDeploymentAlea(conf *TestConfig) (*deploytest.Deployment, error) {
 			nil,
 			cryptoSystem.ThreshCrypto(nodeID),
 			AppLogicFromStatic(fakeApp, transportLayer.Nodes()),
-			Params{
-				Mempool: &simplemempool.ModuleParams{
-					MaxTransactionsInBatch: 10,
-				},
-				Alea: aleaConfig,
-				Net:  libp2p.Params{},
-			},
+			smrParams,
 			nodeLogger,
 		)
 
