@@ -164,7 +164,7 @@ func (m *agModule) proxyABBAEvent(event *eventpb.Event) (*events.EventList, erro
 			// ABBA does not mark FINISH(_) messages as received, so we must acknowledge any we may receive
 			rnEvents.Ack(
 				m.config.ReliableNet,
-				m.config.Self.Then(t.NewModuleIDFromInt(r)),
+				m.config.Self.Then(t.NewModuleIDFromInt(r)).Then(t.ModuleID("__global")), // TODO: use constant from abba
 				abba.FinishMsgID(),
 				from,
 			),

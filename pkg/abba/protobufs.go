@@ -7,6 +7,11 @@ import (
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
+const (
+	GlobalMsgsNs = t.ModuleID("__global")
+	RoundMsgsNs  = t.ModuleID("__round")
+)
+
 func Message(moduleID t.ModuleID, msg *abbapb.Message) *messagepb.Message {
 	return &messagepb.Message{
 		DestModule: moduleID.Pb(),
@@ -17,7 +22,7 @@ func Message(moduleID t.ModuleID, msg *abbapb.Message) *messagepb.Message {
 }
 
 func FinishMessage(moduleID t.ModuleID, value bool) *messagepb.Message {
-	return Message(moduleID, &abbapb.Message{
+	return Message(moduleID.Then(GlobalMsgsNs), &abbapb.Message{
 		Type: &abbapb.Message_FinishMessage{
 			FinishMessage: &abbapb.FinishMessage{
 				Value: value,
@@ -27,7 +32,7 @@ func FinishMessage(moduleID t.ModuleID, value bool) *messagepb.Message {
 }
 
 func InitMessage(moduleID t.ModuleID, roundNumber uint64, estimate bool) *messagepb.Message {
-	return Message(moduleID, &abbapb.Message{
+	return Message(subidForRoundMsg(moduleID, roundNumber), &abbapb.Message{
 		Type: &abbapb.Message_InitMessage{
 			InitMessage: &abbapb.InitMessage{
 				RoundNumber: roundNumber,
@@ -38,7 +43,7 @@ func InitMessage(moduleID t.ModuleID, roundNumber uint64, estimate bool) *messag
 }
 
 func AuxMessage(moduleID t.ModuleID, roundNumber uint64, value bool) *messagepb.Message {
-	return Message(moduleID, &abbapb.Message{
+	return Message(subidForRoundMsg(moduleID, roundNumber), &abbapb.Message{
 		Type: &abbapb.Message_AuxMessage{
 			AuxMessage: &abbapb.AuxMessage{
 				RoundNumber: roundNumber,
@@ -49,7 +54,7 @@ func AuxMessage(moduleID t.ModuleID, roundNumber uint64, value bool) *messagepb.
 }
 
 func ConfMessage(moduleID t.ModuleID, roundNumber uint64, values abbadsl.ValueSet) *messagepb.Message {
-	return Message(moduleID, &abbapb.Message{
+	return Message(subidForRoundMsg(moduleID, roundNumber), &abbapb.Message{
 		Type: &abbapb.Message_ConfMessage{
 			ConfMessage: &abbapb.ConfMessage{
 				RoundNumber: roundNumber,
@@ -60,7 +65,7 @@ func ConfMessage(moduleID t.ModuleID, roundNumber uint64, values abbadsl.ValueSe
 }
 
 func CoinMessage(moduleID t.ModuleID, roundNumber uint64, coinShare []byte) *messagepb.Message {
-	return Message(moduleID, &abbapb.Message{
+	return Message(subidForRoundMsg(moduleID, roundNumber), &abbapb.Message{
 		Type: &abbapb.Message_CoinMessage{
 			CoinMessage: &abbapb.CoinMessage{
 				RoundNumber: roundNumber,
@@ -68,4 +73,8 @@ func CoinMessage(moduleID t.ModuleID, roundNumber uint64, coinShare []byte) *mes
 			},
 		},
 	})
+}
+
+func subidForRoundMsg(moduleID t.ModuleID, roundNumber uint64) t.ModuleID {
+	return moduleID.Then(RoundMsgsNs).Then(t.NewModuleIDFromInt(roundNumber))
 }

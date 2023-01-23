@@ -162,7 +162,7 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 			logger.Log(logging.LevelDebug, "duplicate FINISH(v)", "v", value)
 			return nil // duplicate message
 		}
-		rnetdsl.Ack(m, mc.ReliableNet, mc.Self, FinishMsgID(), from)
+		rnetdsl.Ack(m, mc.ReliableNet, mc.Self.Then(GlobalMsgsNs), FinishMsgID(), from)
 		state.finishRecvd[from] = struct{}{}
 		state.finishRecvdValues[value]++
 
@@ -185,18 +185,7 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 
 			// only care about finish messages from now on
 			// eventually instances that are out-of-date will receive them and be happy
-			// TODO: do this more efficiently (by splitting the rounds into another module maybe)
-			for i := uint64(0); i <= state.round.number; i++ {
-				for _, msgID := range [][]byte{
-					InitMsgID(i, false),
-					InitMsgID(i, true),
-					AuxMsgID(i),
-					ConfMsgID(i),
-					CoinMsgID(i),
-				} {
-					rnetdsl.MarkRecvd(m, mc.ReliableNet, mc.Self, msgID, params.AllNodes)
-				}
-			}
+			rnetdsl.MarkModuleMsgsRecvd(m, mc.ReliableNet, mc.Self.Then(RoundMsgsNs), params.AllNodes)
 		}
 
 		return nil
@@ -216,7 +205,7 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 
 		// 4. broadcast INIT(r, est^r_i)
 		msg := InitMessage(mc.Self, state.round.number, state.round.estimate)
-		rnetdsl.SendMessage(m, mc.ReliableNet, InitMsgID(state.round.number, state.round.estimate), msg, params.AllNodes)
+		rnetdsl.SendMessage(m, mc.ReliableNet, InitMsgID(state.round.estimate), msg, params.AllNodes)
 
 		state.updateStep(5)
 		return nil
@@ -239,7 +228,7 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 			logger.Log(logging.LevelDebug, "duplicate INIT(r, _)", "r", r)
 			return nil // duplicate message
 		}
-		rnetdsl.Ack(m, mc.ReliableNet, mc.Self, InitMsgID(r, est), from)
+		rnetdsl.Ack(m, mc.ReliableNet, subidForRoundMsg(mc.Self, r), InitMsgID(est), from)
 		state.round.initRecvd[est][from] = struct{}{}
 		state.round.initRecvdEstimates[est]++
 
@@ -261,7 +250,7 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 
 				// if we're in round 0, and our round.estimate is r, then we already sent this message
 				if !(state.round.number == 0 && state.round.estimate == est) {
-					rnetdsl.SendMessage(m, mc.ReliableNet, InitMsgID(r, est), InitMessage(mc.Self, r, est), params.AllNodes)
+					rnetdsl.SendMessage(m, mc.ReliableNet, InitMsgID(est), InitMessage(mc.Self, r, est), params.AllNodes)
 				}
 
 				state.round.initWeakSupportReached[est] = true
@@ -272,7 +261,7 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 			// 6. upon receiving strong support for INIT(r, v), broadcast AUX(r, v) if we have not already broadcast AUX(r, _)
 			if !state.round.auxSent && state.round.initRecvdEstimates[est] >= params.strongSupportThresh() {
 				logger.Log(logging.LevelDebug, "received strong support for INIT(r, v)", "r", r, "v", est)
-				rnetdsl.SendMessage(m, mc.ReliableNet, AuxMsgID(r), AuxMessage(mc.Self, r, est), params.AllNodes)
+				rnetdsl.SendMessage(m, mc.ReliableNet, AuxMsgID(), AuxMessage(mc.Self, r, est), params.AllNodes)
 				state.round.auxSent = true
 				state.updateStep(7)
 			}
@@ -290,7 +279,7 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 			logger.Log(logging.LevelDebug, "duplicate AUX(r, _)", "r", r)
 			return nil // duplicate message
 		}
-		rnetdsl.Ack(m, mc.ReliableNet, mc.Self, AuxMsgID(r), from)
+		rnetdsl.Ack(m, mc.ReliableNet, subidForRoundMsg(mc.Self, r), AuxMsgID(), from)
 		state.round.auxRecvd[from] = struct{}{}
 		state.round.auxRecvdValues[value]++
 
@@ -308,7 +297,7 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 		if state.round.isNiceAuxValueCount(params) {
 			r := state.round.number
 			logger.Log(logging.LevelDebug, "received enough support for AUX(r, v in values)", "r", r, "values", state.round.values)
-			rnetdsl.SendMessage(m, mc.ReliableNet, ConfMsgID(r), ConfMessage(mc.Self, r, state.round.values), params.AllNodes)
+			rnetdsl.SendMessage(m, mc.ReliableNet, ConfMsgID(), ConfMessage(mc.Self, r, state.round.values), params.AllNodes)
 			state.updateStep(8)
 		}
 
@@ -324,7 +313,7 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 			logger.Log(logging.LevelDebug, "duplicate CONF(r, _)", "r", r)
 			return nil // duplicate message
 		}
-		rnetdsl.Ack(m, mc.ReliableNet, mc.Self, ConfMsgID(r), from)
+		rnetdsl.Ack(m, mc.ReliableNet, subidForRoundMsg(mc.Self, r), ConfMsgID(), from)
 		state.round.confRecvd[from] = struct{}{}
 		state.round.confRecvdValues[values]++
 
@@ -357,7 +346,7 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 			return nil // already over
 		}
 
-		rnetdsl.SendMessage(m, mc.ReliableNet, CoinMsgID(context.roundNumber), CoinMessage(mc.Self, context.roundNumber, sigShare), params.AllNodes)
+		rnetdsl.SendMessage(m, mc.ReliableNet, CoinMsgID(), CoinMessage(mc.Self, context.roundNumber, sigShare), params.AllNodes)
 
 		return nil
 	})
@@ -377,7 +366,7 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 			return nil // duplicate message
 		}
 
-		rnetdsl.Ack(m, mc.ReliableNet, mc.Self, CoinMsgID(r), from)
+		rnetdsl.Ack(m, mc.ReliableNet, subidForRoundMsg(mc.Self, r), CoinMsgID(), from)
 		logger.Log(logging.LevelDebug, "recvd COIN(r, share)", "r", r)
 		state.round.coinRecvd[from] = struct{}{}
 
@@ -481,7 +470,7 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 		state.step = 4 // can't use updateStep, must go backwards
 
 		// 4. broadcast INIT(r, est)
-		rnetdsl.SendMessage(m, mc.ReliableNet, InitMsgID(state.round.number, state.round.estimate), InitMessage(mc.Self, state.round.number, state.round.estimate), params.AllNodes)
+		rnetdsl.SendMessage(m, mc.ReliableNet, InitMsgID(state.round.estimate), InitMessage(mc.Self, state.round.number, state.round.estimate), params.AllNodes)
 		state.updateStep(5)
 
 		return nil
@@ -606,33 +595,20 @@ func FinishMsgID() []byte {
 	return []byte{MsgTypeFinish}
 }
 
-func InitMsgID(r uint64, v bool) []byte {
-	s := make([]byte, 0, 1+8+1)
-	s = append(s, MsgTypeInit)
-	s = append(s, serializing.Uint64ToBytes(r)...)
-	s = append(s, boolToNum(v))
-	return s
+func InitMsgID(v bool) []byte {
+	return []byte{MsgTypeInit, boolToNum(v)}
 }
 
-func AuxMsgID(r uint64) []byte {
-	s := make([]byte, 0, 1+8)
-	s = append(s, MsgTypeAux)
-	s = append(s, serializing.Uint64ToBytes(r)...)
-	return s
+func AuxMsgID() []byte {
+	return []byte{MsgTypeAux}
 }
 
-func ConfMsgID(r uint64) []byte {
-	s := make([]byte, 0, 1+8)
-	s = append(s, MsgTypeConf)
-	s = append(s, serializing.Uint64ToBytes(r)...)
-	return s
+func ConfMsgID() []byte {
+	return []byte{MsgTypeConf}
 }
 
-func CoinMsgID(r uint64) []byte {
-	s := make([]byte, 0, 1+8)
-	s = append(s, MsgTypeCoin)
-	s = append(s, serializing.Uint64ToBytes(r)...)
-	return s
+func CoinMsgID() []byte {
+	return []byte{MsgTypeCoin}
 }
 
 func boolToNum(v bool) uint8 {
