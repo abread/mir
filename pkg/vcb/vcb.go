@@ -290,12 +290,21 @@ func setupVcbLeader(m dsl.Module, mc *ModuleConfig, params *ModuleParams, common
 				params.AllNodes,
 			)
 
-			// no need to send SEND messages, or any message to ourselves
+			// no need to send SEND messages anymore (or any message to ourselves)
 			rnetdsl.MarkRecvd(m, mc.ReliableNet, mc.Self, SendMsgID(), params.AllNodes)
 			rnetdsl.MarkModuleMsgsRecvd(m, mc.ReliableNet, mc.Self, []t.NodeID{params.Leader})
+			// this is running concurrently with the SendMessage above, so the FINISH() message may remain in queue
 
 			vcbdsl.Deliver(m, mc.Consumer, commonState.txIDs, commonState.txs, fullSig)
 			commonState.delivered = true
+		}
+		return nil
+	})
+
+	vcbdsl.UponFinalMessageReceived(m, func(from t.NodeID, data []*requestpb.Request, signature []byte) error {
+		if from == params.Leader {
+			// ack ourselves to free up the queue
+			rnetdsl.Ack(m, mc.ReliableNet, mc.Self, FinalMsgID(), from)
 		}
 		return nil
 	})
