@@ -204,10 +204,13 @@ func runNode() error {
 		return fmt.Errorf("could not create node: %w", err)
 	}
 
-	reqReceiver := requestreceiver.NewRequestReceiver(node, "mempool", logger)
-	if err := reqReceiver.Start(ReqReceiverBasePort + ownNumericID); err != nil {
-		return fmt.Errorf("could not start request receiver: %w", err)
+	reqReceiverListener, err := gonet.Listen("tcp", fmt.Sprintf(":%v", ReqReceiverBasePort+ownNumericID))
+	if err != nil {
+		return fmt.Errorf("could not create request receiver listener: %w", err)
 	}
+
+	reqReceiver := requestreceiver.NewRequestReceiver(node, "mempool", logger)
+	reqReceiver.Start(reqReceiverListener)
 	defer reqReceiver.Stop()
 
 	if err := benchApp.Start(); err != nil {

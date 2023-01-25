@@ -3,9 +3,9 @@ package deploytest
 import (
 	"context"
 	"fmt"
+	gonet "net"
 	"os"
 	"path/filepath"
-	"strconv"
 	"sync"
 
 	"github.com/filecoin-project/mir"
@@ -65,8 +65,7 @@ func (tr *TestReplica) EventLogFile() string {
 // The function blocks until the replica stops.
 // The replica stops when stopC is closed.
 // Run returns the error returned by the run of the underlying Mir node.
-func (tr *TestReplica) Run(ctx context.Context) error {
-
+func (tr *TestReplica) Run(ctx context.Context, requestReceiverListener gonet.Listener) error {
 	// Initialize the write-ahead log.
 	walPath := filepath.Join(tr.Dir, "wal")
 	if err := os.MkdirAll(walPath, 0700); err != nil {
@@ -117,16 +116,7 @@ func (tr *TestReplica) Run(ctx context.Context) error {
 
 	// Create a RequestReceiver for request coming over the network.
 	requestReceiver := requestreceiver.NewRequestReceiver(node, tr.FakeRequestsDestModule, logging.Decorate(tr.Config.Logger, "ReqRec: "))
-
-	// TODO: do not assume that node IDs are integers.
-	p, err := strconv.Atoi(tr.ID.Pb())
-	if err != nil {
-		return fmt.Errorf("error converting node ID %s: %w", tr.ID, err)
-	}
-	err = requestReceiver.Start(RequestListenPort + p)
-	if err != nil {
-		return fmt.Errorf("error starting request receiver: %w", err)
-	}
+	requestReceiver.Start(requestReceiverListener)
 
 	// Initialize WaitGroup for the replica's request submission thread.
 	var wg sync.WaitGroup

@@ -9,7 +9,6 @@ package requestreceiver
 import (
 	"fmt"
 	"net"
-	"strconv"
 	"sync"
 
 	"google.golang.org/grpc"
@@ -110,32 +109,22 @@ func (rr *RequestReceiver) Listen(srv RequestReceiver_ListenServer) error {
 }
 
 // Start starts the RequestReceiver by initializing and starting the internal gRPC server,
-// listening on the passed port.
+// listening on the passed net.Listener.
 // Before ths method is called, no client connections are accepted.
-func (rr *RequestReceiver) Start(port int) error {
-
-	rr.logger.Log(logging.LevelInfo, fmt.Sprintf("Listening for request connections on port %d", port))
+func (rr *RequestReceiver) Start(listener net.Listener) {
+	rr.logger.Log(logging.LevelInfo, fmt.Sprintf("Listening for request connections on %v", listener.Addr().String()))
 
 	// Create a gRPC server and assign it the logic of this RequestReceiver.
 	rr.grpcServer = grpc.NewServer()
 	RegisterRequestReceiverServer(rr.grpcServer, rr)
 
-	// Start listening on the network
-	conn, err := net.Listen("tcp", ":"+strconv.Itoa(port))
-	if err != nil {
-		return fmt.Errorf("failed to listen for connections on port %d: %w", port, err)
-	}
-
 	// Start the gRPC server in a separate goroutine.
 	// When the server stops, it will write its exit error into gt.grpcServerError.
 	rr.grpcServerWg.Add(1)
 	go func() {
-		rr.grpcServerError = rr.grpcServer.Serve(conn)
+		rr.grpcServerError = rr.grpcServer.Serve(listener)
 		rr.grpcServerWg.Done()
 	}()
-
-	// If we got all the way here, no error occurred.
-	return nil
 }
 
 // Stop stops the own gRPC server (preventing further incoming connections).

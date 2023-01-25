@@ -10,6 +10,7 @@ import (
 	"context"
 	"crypto"
 	"fmt"
+	"net"
 	"path/filepath"
 	"runtime"
 	"sync"
@@ -178,8 +179,16 @@ func (d *Deployment) Run(ctx context.Context) (nodeErrors []error, heapObjects i
 
 	// Start the Mir nodes.
 	nodeWg.Add(len(d.TestReplicas))
+	rrAddrs := make(map[t.NodeID]string, len(d.TestReplicas))
 	for i, testReplica := range d.TestReplicas {
 		i, testReplica := i, testReplica
+
+		rrListener, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			nodeErrors[i] = err
+			return
+		}
+		rrAddrs[testReplica.ID] = fmt.Sprintf("127.0.0.1:%v", rrListener.Addr().(*net.TCPAddr).Port)
 
 		// Start the replica in a separate goroutine.
 		start := make(chan struct{})
@@ -188,7 +197,7 @@ func (d *Deployment) Run(ctx context.Context) (nodeErrors []error, heapObjects i
 
 			<-start
 			testReplica.Config.Logger.Log(logging.LevelDebug, "running")
-			nodeErrors[i] = testReplica.Run(ctx2)
+			nodeErrors[i] = testReplica.Run(ctx2, rrListener)
 			if err := nodeErrors[i]; err != nil {
 				testReplica.Config.Logger.Log(logging.LevelError, "exit with error", "err", err)
 			} else {
@@ -215,7 +224,7 @@ func (d *Deployment) Run(ctx context.Context) (nodeErrors []error, heapObjects i
 		go func(c *dummyclient.DummyClient) {
 			defer clientWg.Done()
 
-			c.Connect(ctx2, d.localRequestReceiverAddrs())
+			c.Connect(ctx2, rrAddrs)
 			submitDummyRequests(ctx2, c, d.TestConfig.NumNetRequests)
 			c.Disconnect()
 		}(client)
@@ -251,20 +260,6 @@ func (d *Deployment) EventLogFiles() map[t.NodeID]string {
 		logFiles[r.ID] = r.EventLogFile()
 	}
 	return logFiles
-}
-
-// localRequestReceiverAddrs computes network addresses and ports for the RequestReceivers at all replicas and returns
-// an address map.
-// It is assumed that node ID strings must be parseable to decimal numbers.
-// Each test replica is on the local machine - 127.0.0.1
-func (d *Deployment) localRequestReceiverAddrs() map[t.NodeID]string {
-
-	addrs := make(map[t.NodeID]string, len(d.TestReplicas))
-	for i, tr := range d.TestReplicas {
-		addrs[tr.ID] = fmt.Sprintf("127.0.0.1:%d", RequestListenPort+i)
-	}
-
-	return addrs
 }
 
 // submitDummyRequests submits n dummy requests using client.
