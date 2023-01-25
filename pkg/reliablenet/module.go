@@ -2,9 +2,9 @@ package reliablenet
 
 import (
 	"fmt"
-	"sync"
-	"sync/atomic"
 	"time"
+
+	"golang.org/x/exp/slices"
 
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/logging"
@@ -15,6 +15,7 @@ import (
 	rnpbmsg "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/messages"
 	rnEvents "github.com/filecoin-project/mir/pkg/reliablenet/events"
 	t "github.com/filecoin-project/mir/pkg/types"
+	"github.com/filecoin-project/mir/pkg/util/sliceutil"
 )
 
 type ModuleConfig struct {
@@ -50,15 +51,9 @@ type Module struct {
 	ownID  t.NodeID
 	logger logging.Logger
 
-	retransmitLoopScheduled uint32 // TODO: atomic.Bool in Go 1.19
+	retransmitLoopScheduled bool // TODO: atomic.Bool in Go 1.19
 
-	queues map[t.ModuleID]*sync.Map // ModuleID -> msgID ([]byte) -> queuedMsg
-	locker sync.RWMutex             // protects map in m.queues
-}
-
-type queuedMsg struct {
-	msg          *messagepb.Message
-	destinations *sync.Map // NodeID -> struct{}
+	queues map[t.ModuleID]map[string]*eventpb.SendMessage // ModuleID -> msgID ([]byte) -> queuedMsg
 }
 
 func New(ownID t.NodeID, mc *ModuleConfig, params *ModuleParams, logger logging.Logger) (*Module, error) {
@@ -68,34 +63,18 @@ func New(ownID t.NodeID, mc *ModuleConfig, params *ModuleParams, logger logging.
 		ownID:  ownID,
 		logger: logger,
 
-		retransmitLoopScheduled: 0,
+		retransmitLoopScheduled: false,
 
-		queues: make(map[t.ModuleID]*sync.Map),
+		queues: make(map[t.ModuleID]map[string]*eventpb.SendMessage),
 	}, nil
 }
 
 func (m *Module) GetPendingMessages() []*eventpb.SendMessage {
-	m.locker.Lock()
-	defer m.locker.Unlock()
-
-	pendingMsgs := make([]*eventpb.SendMessage, 0)
+	pendingMsgs := make([]*eventpb.SendMessage, 0, len(m.queues))
 	for _, queue := range m.queues {
-		queue.Range(func(key, value any) bool {
-			qmsg := value.(queuedMsg)
-			dests := make([]t.NodeID, 0)
-			qmsg.destinations.Range(func(key, value any) bool {
-				d := key.(t.NodeID)
-				dests = append(dests, d)
-				return true
-			})
-
-			pendingMsgs = append(pendingMsgs, &eventpb.SendMessage{
-				Msg:          qmsg.msg,
-				Destinations: t.NodeIDSlicePb(dests),
-			})
-
-			return true
-		})
+		for _, qmsg := range queue {
+			pendingMsgs = append(pendingMsgs, qmsg)
+		}
 	}
 
 	return pendingMsgs
@@ -104,26 +83,15 @@ func (m *Module) GetPendingMessages() []*eventpb.SendMessage {
 func (m *Module) CountPendingMessages() int {
 	count := 0
 
-	m.locker.Lock()
-	defer m.locker.Unlock()
-
 	for _, queue := range m.queues {
-		queue.Range(func(key, value any) bool {
-			qmsg := value.(queuedMsg)
-			qmsg.destinations.Range(func(key, value any) bool {
-				count++
-				return true
-			})
-
-			return true
-		})
+		count += len(queue)
 	}
 
 	return count
 }
 
 func (m *Module) ApplyEvents(evs *events.EventList) (*events.EventList, error) {
-	return modules.ApplyEventsConcurrently(evs, m.applyEvent)
+	return modules.ApplyEventsSequentially(evs, m.applyEvent)
 }
 
 func (m *Module) ImplementsModule() {}
@@ -200,171 +168,75 @@ func (m *Module) SendAck(msgDestModule t.ModuleID, msgID []byte, msgSource t.Nod
 }
 
 func (m *Module) retransmitAll() (*events.EventList, error) {
-	evsOut, probablyEmptyQueues, err := m.retransmitNoDeleteQueues()
-	if err != nil {
-		return evsOut, err
+	evsOut := &events.EventList{}
+
+	if len(m.queues) == 0 {
+		m.retransmitLoopScheduled = false
+		return evsOut, nil
 	}
 
-	shouldScheduleLoop := true
-
-	// clean up empty queues
-	if len(probablyEmptyQueues) > 0 {
-		m.locker.Lock()
-		defer m.locker.Unlock()
-
-		for _, moduleID := range probablyEmptyQueues {
-			queue, ok := m.queues[moduleID]
-			if !ok {
-				continue
-			}
-
-			msgCount := 0
-			queue.Range(func(_, _ any) bool {
-				msgCount++
-				return true
-			})
-
-			if msgCount == 0 {
-				delete(m.queues, moduleID)
+	for moduleID, queue := range m.queues {
+		for _, qmsg := range queue {
+			if len(qmsg.Destinations) > 0 {
+				m.logger.Log(logging.LevelDebug, "Retransmitting message", "msg", qmsg)
+				evsOut.PushBack(
+					&eventpb.Event{
+						Type: &eventpb.Event_SendMessage{
+							SendMessage: qmsg,
+						},
+						DestModule: m.config.Net.Pb(),
+					})
+			} else {
+				return evsOut, fmt.Errorf("queued message for module %v has no destinations", moduleID)
 			}
 		}
 
-		if len(m.queues) == 0 {
-			atomic.StoreUint32(&m.retransmitLoopScheduled, 0)
-			shouldScheduleLoop = false
+		if len(queue) == 0 {
+			return evsOut, fmt.Errorf("queue for module %v has no messages", moduleID)
 		}
 	}
 
-	if shouldScheduleLoop {
-		evsOut.PushBack(events.TimerDelay(
-			m.config.Timer,
-			[]*eventpb.Event{rnEvents.RetransmitAll(m.config.Self)},
-			t.TimeDuration(m.params.RetransmissionLoopInterval),
-		))
-	}
+	evsOut.PushBack(events.TimerDelay(
+		m.config.Timer,
+		[]*eventpb.Event{rnEvents.RetransmitAll(m.config.Self)},
+		t.TimeDuration(m.params.RetransmissionLoopInterval),
+	))
 
 	return evsOut, nil
 }
 
-func (m *Module) retransmitNoDeleteQueues() (*events.EventList, []t.ModuleID, error) { // TODO: name
-	m.locker.RLock()
-	defer m.locker.RUnlock()
-
-	evsOut := &events.EventList{}
-	probablyEmptyQueues := make([]t.ModuleID, 0)
-
-	for moduleID, queue := range m.queues {
-		queueMsgCount := 0
-
-		var err error
-		queue.Range(func(key, value any) bool {
-			qmsg, ok := value.(queuedMsg)
-			if !ok {
-				err = fmt.Errorf("inconsistent message queue (expected queuedMsg, found something else)")
-				return false
-			}
-
-			dests := make([]t.NodeID, 0, len(m.params.AllNodes))
-			qmsg.destinations.Range(func(key, _ any) bool {
-				dest, ok := key.(t.NodeID)
-				if !ok {
-					err = fmt.Errorf("inconsistent message queue (expected t.NodeID, found something else)")
-					return false
-				}
-
-				dests = append(dests, dest)
-				return true
-			})
-			if err != nil {
-				return false
-			}
-
-			if len(dests) > 0 {
-				m.logger.Log(logging.LevelDebug, "Retransmitting message", "dests", dests, "msg", qmsg.msg)
-				evsOut.PushBack(events.SendMessage(m.config.Net, qmsg.msg, dests))
-				queueMsgCount++
-			} else {
-				queue.Delete(key)
-			}
-			return true
-		})
-
-		if err != nil {
-			return nil, nil, err
-		}
-
-		if queueMsgCount == 0 {
-			probablyEmptyQueues = append(probablyEmptyQueues, moduleID)
-		}
-	}
-
-	return evsOut, probablyEmptyQueues, nil
-}
-
 func (m *Module) SendMessage(id string, msg *messagepb.Message, destinations []t.NodeID) (*events.EventList, error) {
-	destinationSet := &sync.Map{}
-	for _, nodeID := range destinations {
-		destinationSet.Store(nodeID, struct{}{})
+	m.ensureQueueExists(t.ModuleID(msg.DestModule))
+	m.queues[t.ModuleID(msg.DestModule)][id] = &eventpb.SendMessage{
+		Msg:          msg,
+		Destinations: t.NodeIDSlicePb(destinations),
 	}
-
-	qmsg := queuedMsg{
-		msg:          msg,
-		destinations: destinationSet,
-	}
-
-	locker := m.ensureQueueExistsAndLock(t.ModuleID(msg.DestModule))
-	m.queues[t.ModuleID(msg.DestModule)].Store(id, qmsg)
-	shouldScheduleLoop := atomic.CompareAndSwapUint32(&m.retransmitLoopScheduled, 0, 1)
-	locker.Unlock()
 
 	evsOut := events.ListOf(
 		events.SendMessage(m.config.Net, msg, destinations),
 	)
 
-	if shouldScheduleLoop {
+	if !m.retransmitLoopScheduled {
 		evsOut.PushBack(events.TimerDelay(
 			m.config.Timer,
 			[]*eventpb.Event{rnEvents.RetransmitAll(m.config.Self)},
 			t.TimeDuration(m.params.RetransmissionLoopInterval),
 		))
+		m.retransmitLoopScheduled = true
 	}
 
 	return evsOut, nil
 }
 
-func (m *Module) ensureQueueExistsAndLock(destModule t.ModuleID) sync.Locker {
-	locker := m.locker.RLocker()
-	locker.Lock()
-
-	if _, present := m.queues[destModule]; present {
-		return locker
+func (m *Module) ensureQueueExists(destModule t.ModuleID) {
+	if _, present := m.queues[destModule]; !present {
+		m.queues[destModule] = make(map[string]*eventpb.SendMessage)
 	}
-
-	// does not exist, reacquire lock with write privileges
-	locker.Unlock()
-	locker = &m.locker
-	locker.Lock()
-
-	// we dropped the lock, the queue may have been created in the meantime
-	if _, present := m.queues[destModule]; present {
-		return locker
-	}
-
-	// must create queue
-	m.queues[destModule] = &sync.Map{}
-
-	// we could try to downgrade the lock to a read lock, but another routine could delete the queue
-	// so it could lead to a livelock situation
-	// the critical section will be small anyway
-	return locker
 }
 
 func (m *Module) MarkModuleMsgsRecvd(destModule t.ModuleID, destinations []t.NodeID) (*events.EventList, error) {
 	// optimization for all destinations
 	if len(destinations) == len(m.params.AllNodes) {
-		m.locker.Lock()
-		defer m.locker.Unlock()
-
 		toDelete := make([]t.ModuleID, 0, 1)
 		for id := range m.queues {
 			if id.IsSubOf(destModule) || id == destModule {
@@ -378,56 +250,70 @@ func (m *Module) MarkModuleMsgsRecvd(destModule t.ModuleID, destinations []t.Nod
 		return &events.EventList{}, nil
 	}
 
-	m.locker.RLock()
-	defer m.locker.RUnlock()
-
-	var err error
-	for id, queue := range m.queues {
-		if !id.IsSubOf(destModule) && id != destModule {
+	queuesToDelete := make([]t.ModuleID, 0)
+	for queueID, queue := range m.queues {
+		if !queueID.IsSubOf(destModule) && queueID != destModule {
 			continue
 		}
 
-		queue.Range(func(key, value any) bool {
-			qmsg, ok := value.(queuedMsg)
-			if !ok {
-				err = fmt.Errorf("inconsistent message queue (expected queuedMsg, found something else)")
-				return false
+		msgsToDelete := make([]string, 0)
+		for msgID, qmsg := range queue {
+			newDests := sliceutil.Filter(qmsg.Destinations, func(_ int, d string) bool {
+				return !slices.Contains(destinations, t.NodeID(d))
+			})
+
+			if len(newDests) == 0 {
+				msgsToDelete = append(msgsToDelete, msgID)
+			} else {
+				// don't modify the underlying message to avoid data races
+				queue[msgID] = &eventpb.SendMessage{
+					Msg:          qmsg.Msg,
+					Destinations: newDests,
+				}
 			}
+		}
 
-			for _, nodeID := range destinations {
-				qmsg.destinations.Delete(nodeID)
-			}
+		for _, msgID := range msgsToDelete {
+			delete(queue, msgID)
+		}
 
-			return true
-		})
-
-		if err != nil {
-			break
+		if len(queue) == 0 {
+			queuesToDelete = append(queuesToDelete, queueID)
 		}
 	}
 
-	return &events.EventList{}, err
+	for _, queueID := range queuesToDelete {
+		delete(m.queues, queueID)
+	}
+
+	return &events.EventList{}, nil
 }
 
-func (m *Module) MarkRecvd(destModule t.ModuleID, id string, destinations []t.NodeID) (*events.EventList, error) {
-	m.locker.RLock()
-	defer m.locker.RUnlock()
-
+func (m *Module) MarkRecvd(destModule t.ModuleID, messageID string, destinations []t.NodeID) (*events.EventList, error) {
 	queue, queueExists := m.queues[destModule]
 	if !queueExists {
 		// queue doesn't event exist anymore, no pending messages to clean up
 		return &events.EventList{}, nil
 	}
 
-	if val, present := queue.Load(id); present {
-		qmsg, ok := val.(queuedMsg)
-		if !ok {
-			return nil, fmt.Errorf("inconsistent message queue (expected queueMsg, found something else)")
-		}
+	if qmsg, present := queue[messageID]; present {
+		newDests := sliceutil.Filter(qmsg.Destinations, func(_ int, d string) bool {
+			return !slices.Contains(destinations, t.NodeID(d))
+		})
 
-		for _, d := range destinations {
-			qmsg.destinations.Delete(d)
+		if len(newDests) == 0 {
+			delete(queue, messageID)
+		} else {
+			// don't modify the underlying message to avoid data races
+			queue[messageID] = &eventpb.SendMessage{
+				Msg:          qmsg.Msg,
+				Destinations: newDests,
+			}
 		}
+	}
+
+	if len(queue) == 0 {
+		delete(m.queues, destModule)
 	}
 
 	return &events.EventList{}, nil
