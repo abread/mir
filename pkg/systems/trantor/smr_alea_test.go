@@ -356,6 +356,9 @@ func newDeploymentAlea(conf *TestConfig) (*deploytest.Deployment, error) {
 			smrParams,
 			nodeLogger,
 		)
+		if err != nil {
+			return nil, fmt.Errorf("error initializing Alea: %w", err)
+		}
 
 		nodeModules[nodeID] = system.Modules()
 		fakeApps[nodeID] = fakeApp

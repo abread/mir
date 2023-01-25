@@ -279,7 +279,7 @@ func NewAlea(
 		return nil, fmt.Errorf("error creating Alea protocol modules: %w", err)
 	}
 
-	reliablenetParams := &*params.ReliableNet
+	reliablenetParams := *params.ReliableNet
 	reliablenetParams.AllNodes = params.Alea.AllNodes()
 
 	aleaProtocolModules[aleaConfig.Net] = transport
@@ -290,7 +290,7 @@ func NewAlea(
 			Net:   aleaConfig.Net,
 			Timer: aleaConfig.Timer,
 		},
-		reliablenetParams,
+		&reliablenetParams,
 		logging.Decorate(logger, "ReliableNet: "),
 	)
 	if err != nil {
