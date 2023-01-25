@@ -58,7 +58,13 @@ func SnapshotForHash(snapshot *commonpb.StateSnapshot) [][]byte {
 }
 
 func EpochDataForHash(epochData *commonpb.EpochData) [][]byte {
-	return append(EpochConfigForHash(epochData.EpochConfig), ClientProgressForHash(epochData.ClientProgress)...)
+	data := append(EpochConfigForHash(epochData.EpochConfig), epochData.LeaderPolicy)
+	data = append(data, ClientProgressForHash(epochData.ClientProgress)...)
+	if epochData.PreviousMembership != nil {
+		// In the initial checkpoint the PreviousMembership is nil.
+		data = append(data, MembershipsForHash([]*commonpb.Membership{epochData.PreviousMembership})...)
+	}
+	return data
 }
 
 func EpochConfigForHash(epochConfig *commonpb.EpochConfig) [][]byte {

@@ -22,8 +22,6 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/filecoin-project/mir/pkg/eventlog"
-
 	"github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
 	"github.com/pkg/errors"
@@ -32,7 +30,9 @@ import (
 	"github.com/filecoin-project/mir"
 	"github.com/filecoin-project/mir/pkg/checkpoint"
 	mircrypto "github.com/filecoin-project/mir/pkg/crypto"
+	"github.com/filecoin-project/mir/pkg/eventlog"
 	"github.com/filecoin-project/mir/pkg/events"
+	lsp "github.com/filecoin-project/mir/pkg/iss/leaderselectionpolicy"
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/membership"
 	libp2p2 "github.com/filecoin-project/mir/pkg/net/libp2p"
@@ -142,7 +142,8 @@ func run() error {
 
 	// We use the default SMR parameters. The initial membership is, regardless of the starting checkpoint,
 	// always the very first membership at sequence number 0. It is part of the system configuration.
-	smrParams := trantor.DefaultParams(initialMembership)
+	trantorParams := trantor.DefaultParams(initialMembership)
+	trantorParams.Iss.LeaderSelectionPolicy = lsp.Simple
 
 	// Create a dummy libp2p host for network communication (this is why we need a numeric ID)
 	h, err := libp2p.NewDummyHostWithPrivKey(
@@ -154,7 +155,7 @@ func run() error {
 	}
 
 	// Initialize the libp2p transport subsystem.
-	transport, err := libp2p2.NewTransport(smrParams.Net, h, args.OwnID, logger)
+	transport, err := libp2p2.NewTransport(trantorParams.Net, h, args.OwnID, logger)
 	if err != nil {
 		return errors.Wrap(err, "failed to create libp2p transport")
 	}
@@ -183,7 +184,7 @@ func run() error {
 		}
 
 		// Verify that the starting checkpoint is valid.
-		//err = genesis.VerifyCert(crypto.SHA256, localCrypto.Crypto(args.OwnID), smrParams.Iss.InitialMembership)
+		//err = genesis.VerifyCert(crypto.SHA256, localCrypto.Crypto(args.OwnID), trantorParams.Iss.InitialMembership)
 		//if err != nil {
 		//	return errors.Wrap(err, "starting checkpoint invalid")
 		//}
@@ -194,17 +195,20 @@ func run() error {
 		if err != nil {
 			return errors.Wrap(err, "could not create initial snapshot")
 		}
-		genesis = trantor.GenesisCheckpoint(initialSnapshot, smrParams)
+		genesis, err = trantor.GenesisCheckpoint(initialSnapshot, trantorParams)
+		if err != nil {
+			return errors.Wrap(err, "could not create genesis checkpoint")
+		}
 	}
 
 	// Create a Mir SMR system.
-	smrSystem, err := trantor.NewISS(
+	trantorSystem, err := trantor.NewISS(
 		args.OwnID,
 		transport,
 		genesis,
 		crypto,
 		chatApp,
-		smrParams,
+		trantorParams,
 		logger,
 	)
 	if err != nil {
@@ -224,7 +228,7 @@ func run() error {
 		return errors.Wrap(err, "could not create new recorder")
 	}
 	// Create a Mir node, passing it all the modules of the SMR system.
-	node, err := mir.NewNode(args.OwnID, mir.DefaultNodeConfig().WithLogger(logger), smrSystem.Modules(), nil, interceptor)
+	node, err := mir.NewNode(args.OwnID, mir.DefaultNodeConfig().WithLogger(logger), trantorSystem.Modules(), nil, interceptor)
 	if err != nil {
 		return errors.Wrap(err, "could not create node")
 	}
@@ -237,14 +241,14 @@ func run() error {
 	// This will start all the goroutines that need to run within the modules of the SMR system.
 	// For example, the network module will start listening for incoming connections and create outgoing ones.
 	// The modules will become ready to be used by the node (but the node itself is not yet started).
-	if err := smrSystem.Start(); err != nil {
+	if err := trantorSystem.Start(); err != nil {
 		return errors.Wrap(err, "could not start SMR system")
 	}
 
 	// Start the node in a separate goroutine
-	var nodeErr error // The error returned from running the Node will be stored here.
+	nodeErr := make(chan error) // The error returned from running the Node will be written here.
 	go func() {
-		nodeErr = node.Run(ctx)
+		nodeErr <- node.Run(ctx)
 	}()
 
 	// ================================================================================
@@ -286,7 +290,7 @@ func run() error {
 	if args.Verbose {
 		fmt.Println("Stopping SMR system.")
 	}
-	smrSystem.Stop()
+	trantorSystem.Stop()
 
 	// Stop the node.
 	if args.Verbose {
@@ -294,7 +298,7 @@ func run() error {
 	}
 	node.Stop()
 
-	return nodeErr
+	return <-nodeErr
 }
 
 // Parses the command-line arguments and returns them in a params struct.

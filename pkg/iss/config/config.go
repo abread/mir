@@ -4,14 +4,14 @@ Copyright IBM Corp. All Rights Reserved.
 SPDX-License-Identifier: Apache-2.0
 */
 
-package issutil
+package config
 
 import (
 	"fmt"
 	"time"
 
+	lsp "github.com/filecoin-project/mir/pkg/iss/leaderselectionpolicy"
 	t "github.com/filecoin-project/mir/pkg/types"
-	"github.com/filecoin-project/mir/pkg/util/maputil"
 )
 
 // The ModuleParams type defines all the ISS configuration parameters.
@@ -59,12 +59,6 @@ type ModuleParams struct {
 	// Must be greater than 0.
 	NumBuckets int
 
-	// The logic for selecting leader nodes in each epoch.
-	// For details see the documentation of the LeaderSelectionPolicy type.
-	// ATTENTION: The leader selection policy is stateful!
-	// Must not be nil.
-	LeaderPolicy LeaderSelectionPolicy
-
 	// Number of logical time ticks to wait until demanding retransmission of missing requests.
 	// If a node receives a proposal containing requests that are not in the node's buckets,
 	// it cannot accept the proposal.
@@ -94,6 +88,11 @@ type ModuleParams struct {
 
 	// Time interval for repeated retransmission of checkpoint messages.
 	CheckpointResendPeriod time.Duration
+
+	// Leader selection policy to use for generating the initial state snapshot. See type for possible options.
+	// This field is only used for initialization of the state snapshot that might be provided to a new instance of ISS.
+	// It is the state snapshot (and not this value) that determines the protocol instance's leader selection policy.
+	LeaderSelectionPolicy lsp.LeaderPolicyType
 
 	// View change timeout for the PBFT sub-protocol, in ticks.
 	// TODO: Separate this in a sub-group of the ISS params, maybe even use a field of type PBFTConfig in ModuleParams.
@@ -139,11 +138,6 @@ func CheckParams(c *ModuleParams) error {
 		return fmt.Errorf("non-positive number of buckets: %d", c.NumBuckets)
 	}
 
-	// There must be a leader selection policy.
-	if c.LeaderPolicy == nil {
-		return fmt.Errorf("missing leader selection policy")
-	}
-
 	// RequestNackTimeout must be positive.
 	if c.RequestNAckTimeout <= 0 {
 		return fmt.Errorf("non-positive RequestNAckTimeout: %d", c.RequestNAckTimeout)
@@ -171,16 +165,15 @@ func DefaultParams(initialMembership map[t.NodeID]t.NodeAddress) *ModuleParams {
 
 	// Define auxiliary variables for segment length and maximal propose delay.
 	// PBFT view change timeouts can then be computed relative to those.
-
 	return (&ModuleParams{
-		InitialMembership:  initialMembership,
-		ConfigOffset:       2,
-		SegmentLength:      4,
-		NumBuckets:         len(initialMembership),
-		LeaderPolicy:       &SimpleLeaderPolicy{Membership: maputil.GetSortedKeys(initialMembership)},
-		RequestNAckTimeout: 16,
-		MsgBufCapacity:     32 * 1024 * 1024, // 32 MiB
-		RetainedEpochs:     1,
+		InitialMembership:     initialMembership,
+		ConfigOffset:          2,
+		SegmentLength:         4,
+		NumBuckets:            len(initialMembership),
+		RequestNAckTimeout:    16,
+		MsgBufCapacity:        32 * 1024 * 1024, // 32 MiB
+		RetainedEpochs:        1,
+		LeaderSelectionPolicy: lsp.Simple,
 	}).AdjustSpeed(time.Second)
 }
 
@@ -202,4 +195,23 @@ func (mp *ModuleParams) AdjustSpeed(maxProposeDelay time.Duration) *ModuleParams
 	// TODO: Adapt this if needed when PBFT configuration is specified separately.
 
 	return mp
+}
+
+func StrongQuorum(n int) int {
+	// assuming n > 3f:
+	//   return min q: 2q > n+f
+	f := MaxFaulty(n)
+	return (n+f)/2 + 1
+}
+
+func WeakQuorum(n int) int {
+	// assuming n > 3f:
+	//   return min q: q > f
+	return MaxFaulty(n) + 1
+}
+
+func MaxFaulty(n int) int {
+	// assuming n > 3f:
+	//   return max f
+	return (n - 1) / 3
 }

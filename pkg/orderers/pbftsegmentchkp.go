@@ -4,6 +4,7 @@ import (
 	"bytes"
 
 	"github.com/filecoin-project/mir/pkg/events"
+	"github.com/filecoin-project/mir/pkg/iss/config"
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
 	"github.com/filecoin-project/mir/pkg/pb/ordererspbftpb"
@@ -90,7 +91,7 @@ func (chkp *pbftSegmentChkp) Stable(numNodes int) bool {
 
 	// Return true if a strong quorum of nodes sent the same Done message.
 	for _, nodeIDs := range chkp.doneMsgIndex {
-		if len(nodeIDs) >= strongQuorum(numNodes) {
+		if len(nodeIDs) >= config.StrongQuorum(numNodes) {
 			return true
 		}
 	}
@@ -114,7 +115,7 @@ func (chkp *pbftSegmentChkp) NodeDone(nodeID t.NodeID, doneMsg *ordererspbftpb.D
 	chkp.doneMsgIndex[strKey] = append(chkp.doneMsgIndex[strKey], nodeID)
 
 	// If a quorum of nodes has sent a Done message
-	if len(chkp.doneMsgIndex[strKey]) >= weakQuorum(len(segment.Membership)) {
+	if len(chkp.doneMsgIndex[strKey]) >= config.WeakQuorum(len(segment.Membership)) {
 
 		// Save the IDs of the nodes that are done with the segment
 		chkp.doneNodes = chkp.doneMsgIndex[strKey]

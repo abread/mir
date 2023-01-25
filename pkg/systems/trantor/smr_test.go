@@ -11,9 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/filecoin-project/mir/pkg/net/libp2p"
-	"github.com/filecoin-project/mir/pkg/util/issutil"
-
 	"github.com/otiai10/copy"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -23,9 +20,11 @@ import (
 	"github.com/filecoin-project/mir/pkg/checkpoint"
 	"github.com/filecoin-project/mir/pkg/deploytest"
 	"github.com/filecoin-project/mir/pkg/iss"
+	issconfig "github.com/filecoin-project/mir/pkg/iss/config"
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/mempool/simplemempool"
 	"github.com/filecoin-project/mir/pkg/modules"
+	"github.com/filecoin-project/mir/pkg/net/libp2p"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
 	"github.com/filecoin-project/mir/pkg/testsim"
 	t "github.com/filecoin-project/mir/pkg/types"
@@ -378,7 +377,7 @@ func newDeployment(conf *TestConfig) (*deploytest.Deployment, error) {
 		}
 
 		// ISS configuration
-		issConfig := issutil.DefaultParams(transportLayer.Nodes())
+		issConfig := issconfig.DefaultParams(transportLayer.Nodes())
 		if conf.SlowProposeReplicas[i] {
 			// Increase MaxProposeDelay such that it is likely to trigger view change by the SN timeout.
 			// Since a sensible value for the segment timeout needs to be stricter than the SN timeout,
@@ -390,11 +389,15 @@ func newDeployment(conf *TestConfig) (*deploytest.Deployment, error) {
 		if err != nil {
 			return nil, fmt.Errorf("error initializing Mir transport: %w", err)
 		}
+		stateSnapshotpb, err := iss.InitialStateSnapshot(initialSnapshot, issConfig)
+		if err != nil {
+			return nil, fmt.Errorf("error initializing Mir state snapshot: %w", err)
+		}
 
 		system, err := NewISS(
 			nodeID,
 			transport,
-			checkpoint.Genesis(iss.InitialStateSnapshot(initialSnapshot, issConfig)),
+			checkpoint.Genesis(stateSnapshotpb),
 			cryptoSystem.Crypto(nodeID),
 			AppLogicFromStatic(fakeApp, transportLayer.Nodes()),
 			Params{

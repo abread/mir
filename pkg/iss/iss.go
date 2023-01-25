@@ -23,6 +23,8 @@ import (
 	"github.com/filecoin-project/mir/pkg/crypto"
 	"github.com/filecoin-project/mir/pkg/events"
 	factoryevents "github.com/filecoin-project/mir/pkg/factorymodule/events"
+	issconfig "github.com/filecoin-project/mir/pkg/iss/config"
+	lsp "github.com/filecoin-project/mir/pkg/iss/leaderselectionpolicy"
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/orderers"
@@ -36,7 +38,6 @@ import (
 	"github.com/filecoin-project/mir/pkg/pb/messagepb"
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"
 	t "github.com/filecoin-project/mir/pkg/types"
-	"github.com/filecoin-project/mir/pkg/util/issutil"
 	"github.com/filecoin-project/mir/pkg/util/maputil"
 )
 
@@ -53,7 +54,7 @@ type ISS struct {
 
 	// The ISS configuration parameters (e.g. Segment length, proposal frequency etc...)
 	// passed to New() when creating an ISS protocol instance.
-	Params *issutil.ModuleParams
+	Params *issconfig.ModuleParams
 
 	// Implementation of the hash function to use by ISS for computing all hashes.
 	hashImpl crypto.HashImpl
@@ -105,6 +106,12 @@ type ISS struct {
 	// If no stable checkpoint has been observed yet, lastStableCheckpoint is initialized to a stable checkpoint value
 	// corresponding to the initial state and associated with sequence number 0.
 	lastStableCheckpoint *checkpoint.StableCheckpoint
+
+	// The logic for selecting leader nodes in each epoch.
+	// For details see the documentation of the LeaderSelectionPolicy type.
+	// ATTENTION: The leader selection policy is stateful!
+	// Must not be nil.
+	LeaderPolicy lsp.LeaderSelectionPolicy
 }
 
 // New returns a new initialized instance of the ISS protocol module to be used when instantiating a mir.Node.
@@ -118,7 +125,7 @@ func New(
 
 	// ISS protocol-specific configuration (e.g. segment length, proposal frequency etc...).
 	// See the documentation of the issutil.ModuleParams type for details.
-	params *issutil.ModuleParams,
+	params *issconfig.ModuleParams,
 
 	// Stable checkpoint defining the initial state of the protocol.
 	startingChkp *checkpoint.StableCheckpoint,
@@ -132,18 +139,23 @@ func New(
 
 	// Logger the ISS implementation uses to output log messages.
 	logger logging.Logger,
+
 ) (*ISS, error) {
 	if logger == nil {
 		logger = logging.ConsoleErrorLogger
 	}
 
 	// Check whether the passed configuration is valid.
-	if err := issutil.CheckParams(params); err != nil {
+	if err := issconfig.CheckParams(params); err != nil {
 		return nil, fmt.Errorf("invalid ISS configuration: %w", err)
 	}
 
 	// TODO: Make sure that startingChkp is consistent with params.
 
+	leaderPolicy, err := lsp.LeaderPolicyFromBytes(startingChkp.Snapshot.EpochData.LeaderPolicy)
+	if err != nil {
+		return nil, fmt.Errorf("invalid leader policy in starting checkpoint: %w", err)
+	}
 	// Initialize a new ISS object.
 	iss := &ISS{
 		ownID:                ownID,
@@ -161,6 +173,7 @@ func New(
 		nextDeliveredSN:      startingChkp.SeqNr(),
 		newEpochSN:           startingChkp.SeqNr(),
 		lastStableCheckpoint: startingChkp,
+		LeaderPolicy:         leaderPolicy,
 		// TODO: Make sure that verification of the stable checkpoint certificate for epoch 0 is handled properly.
 		//       (Probably "always valid", if the membership is right.) There is no epoch -1 with nodes to sign it.
 	}
@@ -181,8 +194,8 @@ func New(
 // repeated for all the params.ConfigOffset following epochs.
 func InitialStateSnapshot(
 	appState []byte,
-	params *issutil.ModuleParams,
-) *commonpb.StateSnapshot {
+	params *issconfig.ModuleParams,
+) (*commonpb.StateSnapshot, error) {
 
 	// Create the first membership and all ConfigOffset following ones (by using the initial one).
 	memberships := make([]map[t.NodeID]t.NodeAddress, params.ConfigOffset+1)
@@ -190,16 +203,36 @@ func InitialStateSnapshot(
 		memberships[i] = params.InitialMembership
 	}
 
-	// TODO: This assumes the simple leader selection policy. Generalize!
-	firstEpochLength := params.SegmentLength * len(params.InitialMembership)
+	// Create the initial leader selection policy.
+	var leaderPolicyData []byte
+	var err error
+	switch params.LeaderSelectionPolicy {
+	case lsp.Simple:
+		leaderPolicyData, err = lsp.NewSimpleLeaderPolicy(
+			maputil.GetSortedKeys(params.InitialMembership),
+		).Bytes()
+	case lsp.Blacklist:
+		leaderPolicyData, err = lsp.NewBlackListLeaderPolicy(
+			maputil.GetSortedKeys(params.InitialMembership),
+			issconfig.StrongQuorum(len(params.InitialMembership)),
+		).Bytes()
+	default:
+		return nil, fmt.Errorf("unknown leader selection policy type: %v", params.LeaderSelectionPolicy)
+	}
+	if err != nil {
+		return nil, err
+	}
 
+	firstEpochLength := params.SegmentLength * len(params.InitialMembership)
 	return &commonpb.StateSnapshot{
 		AppData: appState,
 		EpochData: &commonpb.EpochData{
-			EpochConfig:    events.EpochConfig(0, 0, firstEpochLength, memberships),
-			ClientProgress: clientprogress.NewClientProgress(nil).Pb(),
+			EpochConfig:        events.EpochConfig(0, 0, firstEpochLength, memberships),
+			ClientProgress:     clientprogress.NewClientProgress(nil).Pb(),
+			LeaderPolicy:       leaderPolicyData,
+			PreviousMembership: nil,
 		},
-	}
+	}, nil
 }
 
 // ============================================================
@@ -264,7 +297,7 @@ func (iss *ISS) applyInit() (*events.EventList, error) {
 	eventsOut.PushBack(events.AppRestoreState(iss.moduleConfig.App, iss.lastStableCheckpoint.Pb()))
 
 	// Start the first epoch (not necessarily epoch 0, depending on the starting checkpoint).
-	eventsOut.PushBackList(iss.startEpoch(iss.lastStableCheckpoint.Epoch(), iss.Params.LeaderPolicy))
+	eventsOut.PushBackList(iss.startEpoch(iss.lastStableCheckpoint.Epoch()))
 
 	return eventsOut, nil
 }
@@ -335,20 +368,6 @@ func (iss *ISS) applyNewConfig(config *eventpb.NewConfig) (*events.EventList, er
 		"forEpoch", newMembershipEpoch,
 		"currentEpoch", iss.epoch.Nr(),
 		"newConfigNodes", maputil.GetSortedKeys(iss.nextNewMembership))
-
-	// Submit configurations to the corresponding instance of the checkpoint protocol.
-	if !iss.hasEpochCheckpoint() {
-		chkpModuleID := iss.moduleConfig.Checkpoint.Then(t.NewModuleIDFromInt(iss.epoch.Nr()))
-		eventsOut.PushBack(chkpprotos.EpochConfigEvent(
-			chkpModuleID,
-			events.EpochConfig(
-				iss.epoch.Nr(),
-				iss.epoch.FirstSN(),
-				iss.epoch.Len(),
-				iss.memberships,
-			),
-		))
-	}
 
 	// Advance to the next epoch if this configuration was the last missing bit.
 	if iss.epochFinished() {
@@ -516,7 +535,7 @@ func (iss *ISS) applyStableCheckpointMessage(chkpPb *checkpointpb.StableCheckpoi
 	//       The memberhips information in the checkpint is used to verify the checkpoint itself.
 	//       This makes it possible to construct an arbitrary valid checkpoint.
 	//       Use an independent local source of memberhip information instead.
-	if err := chkp.VerifyCert(iss.hashImpl, iss.chkpVerifier, chkp.Memberships()[0]); err != nil {
+	if err := chkp.VerifyCert(iss.hashImpl, iss.chkpVerifier, chkp.PreviousMembership()); err != nil {
 		iss.logger.Log(logging.LevelWarn, "Ignoring stable checkpoint. Certificate don walid.",
 			"localEpoch", iss.epoch.Nr(),
 			"chkpEpoch", chkp.Epoch(),
@@ -539,7 +558,16 @@ func (iss *ISS) applyStableCheckpointMessage(chkpPb *checkpointpb.StableCheckpoi
 		return events.EmptyList(), nil
 	}
 
-	iss.logger.Log(logging.LevelDebug, "Installing state snapshot.", "epoch", chkp.Epoch())
+	// Deserialize received leader selection policy. If deserialization fails, ignore the whole message.
+	result, err := lsp.LeaderPolicyFromBytes(chkp.Snapshot.EpochData.LeaderPolicy)
+	if err != nil {
+		iss.logger.Log(logging.LevelWarn, "Error deserializing leader selection policy from checkpoint", err)
+		return events.EmptyList(), nil
+	}
+	iss.LeaderPolicy = result
+
+	iss.logger.Log(logging.LevelWarn, "Installing state snapshot.",
+		"epoch", chkp.Epoch(), "nodes", chkp.Memberships(), "leaders", iss.LeaderPolicy.Leaders())
 
 	// Clean up global ISS state that belongs to the current epoch
 	// instance that local replica got stuck with.
@@ -553,10 +581,8 @@ func (iss *ISS) applyStableCheckpointMessage(chkpPb *checkpointpb.StableCheckpoi
 	// and initialize the corresponding availability submodules.
 	iss.memberships = chkp.Memberships()
 	iss.nextNewMembership = nil
-
 	// Update the last stable checkpoint stored in the global ISS structure.
 	iss.lastStableCheckpoint = chkp
-
 	// Create an event to request the application module for
 	// restoring its state from the snapshot received in the new
 	// stable checkpoint message.
@@ -565,11 +591,7 @@ func (iss *ISS) applyStableCheckpointMessage(chkpPb *checkpointpb.StableCheckpoi
 	// Start executing the current epoch (the one the checkpoint corresponds to).
 	// This must happen after the state is restored,
 	// so the application has the correct state for returning the next configuration.
-	// TODO: Properly serialize and deserialize the leader selection policy and pass it here.
-	eventsOut.PushBackList(iss.startEpoch(
-		chkp.Epoch(),
-		iss.Params.LeaderPolicy.Reconfigure(maputil.GetSortedKeys(iss.memberships[0])),
-	))
+	eventsOut.PushBackList(iss.startEpoch(chkp.Epoch()))
 
 	// Prune the old state of all related modules.
 	// Since we are loading the complete state from a checkpoint,
@@ -591,15 +613,15 @@ func (iss *ISS) applyStableCheckpointMessage(chkpPb *checkpointpb.StableCheckpoi
 // startEpoch emits the events necessary for a new epoch to start operating.
 // This includes informing the application about the new epoch and initializing all the necessary external modules
 // such as availability and orderers.
-func (iss *ISS) startEpoch(epochNr t.EpochNr, leaderPolicy issutil.LeaderSelectionPolicy) *events.EventList {
+func (iss *ISS) startEpoch(epochNr t.EpochNr) *events.EventList {
 	eventsOut := events.EmptyList()
 
 	// Initialize the internal data structures for the new epoch.
 	nodeIDs := maputil.GetSortedKeys(iss.memberships[0])
-	epoch := newEpochInfo(epochNr, iss.newEpochSN, nodeIDs, leaderPolicy)
+	epoch := newEpochInfo(epochNr, iss.newEpochSN, nodeIDs, iss.LeaderPolicy)
 	iss.epochs[epochNr] = &epoch
 	iss.epoch = &epoch
-	iss.logger.Log(logging.LevelInfo, "Initializing new epoch", "epochNr", epochNr, "nodes", nodeIDs, "leaders", leaderPolicy.Leaders(epochNr))
+	iss.logger.Log(logging.LevelInfo, "Initializing new epoch", "epochNr", epochNr, "nodes", nodeIDs, "leaders", iss.LeaderPolicy.Leaders())
 
 	// Signal the new epoch to the application.
 	eventsOut.PushBack(events.NewEpoch(iss.moduleConfig.App, iss.epoch.Nr()))
@@ -631,7 +653,7 @@ func (iss *ISS) initOrderers() *events.EventList {
 
 	eventsOut := events.EmptyList()
 
-	leaders := iss.epoch.leaderPolicy.Leaders(iss.epoch.Nr())
+	leaders := iss.epoch.leaderPolicy.Leaders()
 	for i, leader := range leaders {
 
 		// Create segment.
@@ -707,6 +729,9 @@ func (iss *ISS) processCommitted() (*events.EventList, error) {
 			}
 		}
 
+		if iss.commitLog[iss.nextDeliveredSN].Aborted {
+			iss.LeaderPolicy.Suspect(iss.epoch.Nr(), iss.commitLog[iss.nextDeliveredSN].Suspect)
+		}
 		// Create a new DeliverCert event.
 		eventsOut.PushBack(events.DeliverCert(iss.moduleConfig.App, iss.nextDeliveredSN, &cert))
 
@@ -750,19 +775,23 @@ func (iss *ISS) advanceEpoch() (*events.EventList, error) {
 	)
 
 	// Advance the membership pipeline
-	oldNodeIDs := maputil.GetSortedKeys(iss.memberships[0])
+	oldMembership := iss.memberships[0]
 	iss.memberships = append(iss.memberships[1:], iss.nextNewMembership)
 	iss.nextNewMembership = nil
+	iss.LeaderPolicy = iss.LeaderPolicy.Reconfigure(maputil.GetSortedKeys(iss.memberships[0]))
 
 	// Start executing the new epoch.
 	// This must happen before starting the checkpoint protocol, since the application
 	// must already be in the new epoch when processing the state snapshot request
 	// emitted by the checkpoint sub-protocol
 	// (startEpoch emits an event for the application making it transition to the new epoch).
-	eventsOut.PushBackList(iss.startEpoch(
-		newEpochNr,
-		iss.epoch.leaderPolicy.Reconfigure(maputil.GetSortedKeys(iss.memberships[0])),
-	))
+	eventsOut.PushBackList(iss.startEpoch(newEpochNr))
+
+	// Serialize current leader selection policy.
+	leaderPolicyData, err := iss.LeaderPolicy.Bytes()
+	if err != nil {
+		return nil, fmt.Errorf("could not serialize leader selection policy: %w", err)
+	}
 
 	// Create a new checkpoint tracker to start the checkpointing protocol.
 	// This must happen after initialization of the new epoch,
@@ -777,10 +806,10 @@ func (iss *ISS) advanceEpoch() (*events.EventList, error) {
 		chkpModuleID,
 		t.RetentionIndex(newEpochNr),
 		chkpprotos.InstanceParams(
-			oldNodeIDs,
-			newEpochNr,
-			iss.nextDeliveredSN,
+			oldMembership,
 			checkpoint.DefaultResendPeriod,
+			leaderPolicyData,
+			events.EpochConfig(iss.epoch.Nr(), iss.epoch.FirstSN(), iss.epoch.Len(), iss.memberships),
 		),
 	))
 

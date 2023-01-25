@@ -349,6 +349,10 @@ func NewAlea(
 // It is a special checkpoint for epoch 0, corresponding to the state of the application
 // (the serialization of which is passed as the initialAppState parameter) before applying any transactions.
 // The associated certificate is empty (and should still be considered valid, as a special case).
-func GenesisCheckpoint(initialAppState []byte, params Params) *checkpoint.StableCheckpoint {
-	return checkpoint.Genesis(iss.InitialStateSnapshot(initialAppState, params.Iss))
+func GenesisCheckpoint(initialAppState []byte, params Params) (*checkpoint.StableCheckpoint, error) {
+	stateSnapshotpb, err := iss.InitialStateSnapshot(initialAppState, params.Iss)
+	if err != nil {
+		return nil, err
+	}
+	return checkpoint.Genesis(stateSnapshotpb), nil
 }

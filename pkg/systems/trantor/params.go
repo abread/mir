@@ -4,28 +4,27 @@ import (
 	"time"
 
 	"github.com/filecoin-project/mir/pkg/alea"
-	"github.com/filecoin-project/mir/pkg/reliablenet"
-	"github.com/filecoin-project/mir/pkg/util/issutil"
-
+	issconfig "github.com/filecoin-project/mir/pkg/iss/config"
 	"github.com/filecoin-project/mir/pkg/mempool/simplemempool"
 	"github.com/filecoin-project/mir/pkg/net/libp2p"
+	"github.com/filecoin-project/mir/pkg/reliablenet"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
 type Params struct {
 	Mempool     *simplemempool.ModuleParams
-	Iss         *issutil.ModuleParams
-	Alea        *alea.Params // TODO: extract protocol parameters away or figure out a better way to handle this
+	Iss         *issconfig.ModuleParams
 	Net         libp2p.Params
+	Alea        *alea.Params // TODO: extract protocol parameters away or figure out a better way to handle this
 	ReliableNet *reliablenet.ModuleParams
 }
 
 func DefaultParams(initialMembership map[t.NodeID]t.NodeAddress) Params {
 	return Params{
 		Mempool:     simplemempool.DefaultModuleParams(),
-		Iss:         issutil.DefaultParams(initialMembership),
-		Alea:        alea.DefaultParams(initialMembership),
+		Iss:         issconfig.DefaultParams(initialMembership),
 		Net:         libp2p.DefaultParams(),
+		Alea:        alea.DefaultParams(initialMembership),
 		ReliableNet: reliablenet.DefaultModuleParams(nil),
 	}
 }

@@ -68,10 +68,15 @@ func issSMRFactory(ownID t.NodeID, transport net.Transport, initialMembership ma
 	smrParams.Mempool.MaxTransactionsInBatch = batchSize
 	smrParams.AdjustSpeed(100 * time.Millisecond)
 
+	genesisCheckpoint, err := trantor.GenesisCheckpoint([]byte{}, smrParams)
+	if err != nil {
+		return nil, fmt.Errorf("could not create genesis checkpoint: %w", err)
+	}
+
 	return trantor.NewISS(
 		ownID,
 		transport,
-		trantor.GenesisCheckpoint([]byte{}, smrParams),
+		genesisCheckpoint,
 		localCrypto.Crypto(ownID),
 		&App{Logger: logger, Membership: initialMembership},
 		smrParams,
@@ -163,7 +168,6 @@ func runNode() error {
 	}
 
 	benchApp, err := smrFactories[protocol](ownID, transport, initialMembership, logger)
-
 	if err != nil {
 		return fmt.Errorf("could not create bench app: %w", err)
 	}
