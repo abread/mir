@@ -12,8 +12,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"
 	"github.com/filecoin-project/mir/pkg/reliablenet"
+	t "github.com/filecoin-project/mir/pkg/types"
 )
 
 type Stats struct {
@@ -32,8 +34,14 @@ type reqKey struct {
 }
 
 func NewStats() *Stats {
+	fakeRNet, err := reliablenet.New(t.NodeID(""), reliablenet.DefaultModuleConfig(), reliablenet.DefaultModuleParams([]t.NodeID{}), logging.NilLogger)
+	if err != nil {
+		panic(err)
+	}
+
 	return &Stats{
 		reqTimestamps: make(map[reqKey]time.Time),
+		fakeRNet:      fakeRNet,
 	}
 }
 
