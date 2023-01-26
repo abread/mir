@@ -337,11 +337,9 @@ func NewAlea(
 	aleaProtocolModules[appID] = NewAppModule(app, transport, aleaConfig.AleaDirector)
 
 	return &System{
-		modules:   aleaProtocolModules,
-		transport: transport,
-
-		// TODO: remove this ugly hack (yes this is Alea, but the InitialMembership is right there...)
-		initialMemberships: []map[t.NodeID]t.NodeAddress{},
+		modules:            aleaProtocolModules,
+		transport:          transport,
+		initialMemberships: []map[t.NodeID]t.NodeAddress{params.Alea.Membership},
 	}, nil
 }
 
