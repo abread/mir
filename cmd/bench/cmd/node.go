@@ -26,8 +26,8 @@ import (
 	"github.com/filecoin-project/mir/pkg/membership"
 	"github.com/filecoin-project/mir/pkg/net"
 	libp2p2 "github.com/filecoin-project/mir/pkg/net/libp2p"
-	"github.com/filecoin-project/mir/pkg/pb/batchfetcherpb"
-	"github.com/filecoin-project/mir/pkg/pb/eventpb"
+	//"github.com/filecoin-project/mir/pkg/pb/batchfetcherpb"
+	//"github.com/filecoin-project/mir/pkg/pb/eventpb"
 	"github.com/filecoin-project/mir/pkg/requestreceiver"
 	"github.com/filecoin-project/mir/pkg/systems/trantor"
 	t "github.com/filecoin-project/mir/pkg/types"
@@ -172,7 +172,7 @@ func runNode() error {
 		return fmt.Errorf("could not create bench app: %w", err)
 	}
 
-	recorder, err := eventlog.NewRecorder(
+	/*recorder, err := eventlog.NewRecorder(
 		ownID,
 		"bench-output",
 		logging.Decorate(logger, "EVTLOG: "),
@@ -191,11 +191,11 @@ func runNode() error {
 	)
 	if err != nil {
 		return fmt.Errorf("cannot create event recorder: %w", err)
-	}
+	}*/
 	stat := stats.NewStats()
 	interceptor := eventlog.MultiInterceptor(
 		stats.NewStatInterceptor(stat, "app", ownID, smrParams.ReliableNet.AllNodes),
-		recorder,
+		//recorder,
 	)
 
 	nodeConfig := mir.DefaultNodeConfig().WithLogger(logger)
