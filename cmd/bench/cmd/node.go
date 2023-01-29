@@ -26,6 +26,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/membership"
 	"github.com/filecoin-project/mir/pkg/net"
 	libp2p2 "github.com/filecoin-project/mir/pkg/net/libp2p"
+
 	//"github.com/filecoin-project/mir/pkg/pb/batchfetcherpb"
 	//"github.com/filecoin-project/mir/pkg/pb/eventpb"
 	"github.com/filecoin-project/mir/pkg/requestreceiver"
@@ -61,12 +62,8 @@ func init() {
 	nodeCmd.Flags().DurationVar(&statPeriod, "statPeriod", time.Second, "statistic record period")
 }
 
-func issSMRFactory(ownID t.NodeID, transport net.Transport, initialMembership map[t.NodeID]t.NodeAddress, logger logging.Logger) (*trantor.System, error) {
+func issSMRFactory(ownID t.NodeID, transport net.Transport, initialMembership map[t.NodeID]t.NodeAddress, smrParams trantor.Params, logger logging.Logger) (*trantor.System, error) {
 	localCrypto := deploytest.NewLocalCryptoSystem("pseudo", membership.GetIDs(initialMembership), logger)
-
-	smrParams := trantor.DefaultParams(initialMembership)
-	smrParams.Mempool.MaxTransactionsInBatch = batchSize
-	smrParams.AdjustSpeed(100 * time.Millisecond)
 
 	genesisCheckpoint, err := trantor.GenesisCheckpoint([]byte{}, smrParams)
 	if err != nil {
@@ -84,12 +81,9 @@ func issSMRFactory(ownID t.NodeID, transport net.Transport, initialMembership ma
 	)
 }
 
-func aleaSMRFactory(ownID t.NodeID, transport net.Transport, initialMembership map[t.NodeID]t.NodeAddress, logger logging.Logger) (*trantor.System, error) {
+func aleaSMRFactory(ownID t.NodeID, transport net.Transport, initialMembership map[t.NodeID]t.NodeAddress, smrParams trantor.Params, logger logging.Logger) (*trantor.System, error) {
 	F := (len(initialMembership) - 1) / 3
 	localCrypto := deploytest.NewLocalThreshCryptoSystem("pseudo", membership.GetIDs(initialMembership), 2*F+1, logger)
-
-	smrParams := trantor.DefaultParams(initialMembership)
-	smrParams.Mempool.MaxTransactionsInBatch = batchSize
 
 	return trantor.NewAlea(
 		ownID,
@@ -102,7 +96,7 @@ func aleaSMRFactory(ownID t.NodeID, transport net.Transport, initialMembership m
 	)
 }
 
-type smrFactory func(ownID t.NodeID, transport net.Transport, initialMembership map[t.NodeID]t.NodeAddress, logger logging.Logger) (*trantor.System, error)
+type smrFactory func(ownID t.NodeID, transport net.Transport, initialMembership map[t.NodeID]t.NodeAddress, smrParams trantor.Params, logger logging.Logger) (*trantor.System, error)
 
 var smrFactories = map[string]smrFactory{
 	"iss":  issSMRFactory,
@@ -140,7 +134,8 @@ func runNode() error {
 
 	// Set Trantor parameters.
 	smrParams := trantor.DefaultParams(initialMembership)
-	smrParams.Mempool.MaxTransactionsInBatch = 1024
+	smrParams.Mempool.MaxTransactionsInBatch = batchSize
+	smrParams.AdjustSpeed(100 * time.Millisecond)
 
 	// Assemble listening address.
 	// In this benchmark code, we always listen on tha address 0.0.0.0.
@@ -167,7 +162,7 @@ func runNode() error {
 		return errors.Wrap(err, "failed to create libp2p transport")
 	}
 
-	benchApp, err := smrFactories[protocol](ownID, transport, initialMembership, logger)
+	benchApp, err := smrFactories[protocol](ownID, transport, initialMembership, smrParams, logger)
 	if err != nil {
 		return fmt.Errorf("could not create bench app: %w", err)
 	}
