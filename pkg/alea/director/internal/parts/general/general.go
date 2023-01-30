@@ -53,6 +53,7 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 	batchdbdsl.UponBatchStored(m, func(slot *aleapbCommon.Slot) error {
 		// track vcb completion (needed for other ops in agreement round control)
 		state.slotsReadyToDeliver[slot.QueueIdx][slot.QueueSlot] = struct{}{}
+		abcdsl.FreeSlot(m, mc.AleaBroadcast, slot)
 		return nil
 	})
 
@@ -101,20 +102,11 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 	aagdsl.UponDeliver(m, func(round uint64, decision bool) error {
 		if decision {
 			queueIdx := uint32(round % uint64(len(params.AllNodes)))
-			queueSlot := state.agQueueHeads[queueIdx] - 1 // queueSlot before delivery
 
 			// track unagreed own slots
 			if queueIdx == ownQueueIdx {
 				state.unagreedBroadcastedOwnSlotCount--
 			}
-
-			// free broadcast slots
-			// TODO: only free slot when broadcast/fill-gap concludes?
-			// agreement takes longer so this shouldn't be a show-stopper
-			abcdsl.FreeSlot(m, mc.AleaBroadcast, &aleapbCommon.Slot{
-				QueueIdx:  queueIdx,
-				QueueSlot: queueSlot,
-			})
 		}
 
 		return nil
