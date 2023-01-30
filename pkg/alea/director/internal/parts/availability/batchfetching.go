@@ -9,6 +9,7 @@ import (
 	batchdbdsl "github.com/filecoin-project/mir/pkg/availability/batchdb/dsl"
 	adsl "github.com/filecoin-project/mir/pkg/availability/dsl"
 	"github.com/filecoin-project/mir/pkg/dsl"
+	"github.com/filecoin-project/mir/pkg/logging"
 	mempooldsl "github.com/filecoin-project/mir/pkg/mempool/dsl"
 	"github.com/filecoin-project/mir/pkg/pb/aleapb"
 	aleapbCommon "github.com/filecoin-project/mir/pkg/pb/aleapb/common"
@@ -45,6 +46,7 @@ func IncludeBatchFetching(
 	mc *common.ModuleConfig,
 	params *common.ModuleParams,
 	nodeID t.NodeID,
+	logger logging.Logger,
 ) {
 	state := batchFetchingState{
 		RequestsState: make(map[batchSlot]*RequestsState),
@@ -79,6 +81,7 @@ func IncludeBatchFetching(
 		// until all were tried or a response is received.
 		// It would also be nice to pass a hint in the certificate that says which nodes to try first,
 		// this could be provided by the agreement component based on INIT(v, 0) messages received by the abba instances.
+		logger.Log(logging.LevelDebug, "broadcast component fell behind. requesting slot from other replicas with FILL-GAP", "slot", slot)
 		rnetdsl.SendMessage(m, mc.ReliableNet,
 			FillGapMsgID(slot),
 			protobuf.FillGapMessage(mc.Self, slot.Pb()),
@@ -90,7 +93,9 @@ func IncludeBatchFetching(
 	// When receive a request for batch from another node, lookup the batch in the local storage.
 	bcdsl.UponFillGapMessageReceived(m, func(from t.NodeID, msg *aleapb.FillGapMessage) error {
 		slot := batchSlotFromPb(msg.Slot)
-		rnetdsl.Ack(m, mc.ReliableNet, mc.Self, FillGapMsgID(slot), from)
+		// do not ACK message - acknowledging means sending a FILLER reply
+
+		logger.Log(logging.LevelDebug, "satisfying FILL-GAP request", "slot", slot, "from", from)
 		batchdbdsl.LookupBatch(m, mc.BatchDB, common.FormatAleaBatchID(msg.Slot), &lookupBatchOnRemoteRequestContext{from, slot})
 		return nil
 	})
@@ -102,8 +107,7 @@ func IncludeBatchFetching(
 			return nil
 		}
 
-		rnetdsl.SendMessage(m, mc.ReliableNet,
-			FillerMsgID(context.slot),
+		dsl.SendMessage(m, mc.Net,
 			protobuf.FillerMessage(mc.Self, context.slot.Pb(), txs, signature),
 			[]t.NodeID{context.requester},
 		)
@@ -113,18 +117,19 @@ func IncludeBatchFetching(
 	// When receive a requested batch, compute the ids of the received transactions.
 	bcdsl.UponFillerMessageReceived(m, func(from t.NodeID, msg *aleapb.FillerMessage) error {
 		slot := batchSlotFromPb(msg.Slot)
-		rnetdsl.Ack(m, mc.ReliableNet, mc.Self, FillerMsgID(slot), from)
+		rnetdsl.MarkRecvd(m, mc.ReliableNet, mc.Self, FillGapMsgID(slot), []t.NodeID{from})
 
 		reqState, present := state.RequestsState[slot]
 		if !present {
 			return nil // no request needs this message to be satisfied
 		}
-		rnetdsl.MarkRecvd(m, mc.ReliableNet, mc.Self, FillGapMsgID(slot), []t.NodeID{from})
 
 		if _, alreadyAnswered := reqState.Replies[from]; alreadyAnswered {
 			return nil // already processed a reply from this node
 		}
 		reqState.Replies[from] = struct{}{}
+
+		logger.Log(logging.LevelDebug, "got FILLER for missing slot!", "slot", slot, "from", from)
 
 		mempooldsl.RequestTransactionIDs(m, mc.Mempool, msg.Txs, &handleFillerContext{
 			slot:      slot,
@@ -161,6 +166,7 @@ func IncludeBatchFetching(
 			return nil
 		}
 
+		// stop asking other nodes to send us stuff
 		rnetdsl.MarkRecvd(m, mc.ReliableNet, mc.Self, FillGapMsgID(context.slot), params.AllNodes)
 
 		// store batch asynchronously
@@ -169,6 +175,7 @@ func IncludeBatchFetching(
 		abcdsl.FreeSlot(m, mc.AleaBroadcast, context.slot.Pb())
 
 		// send response to requests
+		logger.Log(logging.LevelDebug, "satisfying delayed requests with FILLER", "slot", context.slot)
 		for _, origin := range requestState.ReqOrigins {
 			adsl.ProvideTransactions(m, t.ModuleID(origin.Module), context.txs, origin)
 		}
@@ -202,17 +209,8 @@ func (slot *batchSlot) Pb() *aleapbCommon.Slot {
 }
 
 const (
-	MsgTypeFiller uint8 = iota
-	MsgTypeFillGap
+	MsgTypeFillGap uint8 = iota
 )
-
-func FillerMsgID(slot batchSlot) []byte {
-	s := make([]byte, 0, 1+2*8)
-	s = append(s, MsgTypeFiller)
-	s = append(s, serializing.Uint64ToBytes(uint64(slot.QueueIdx))...)
-	s = append(s, serializing.Uint64ToBytes(slot.QueueSlot)...)
-	return s
-}
 
 func FillGapMsgID(slot batchSlot) []byte {
 	s := make([]byte, 0, 1+2*8)

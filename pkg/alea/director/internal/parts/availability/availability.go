@@ -8,7 +8,7 @@ import (
 )
 
 func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams, tunables *common.ModuleTunables, nodeID t.NodeID, logger logging.Logger) {
-	IncludeBatchFetching(m, mc, params, nodeID)
+	IncludeBatchFetching(m, mc, params, nodeID, logging.Decorate(logger, "Batch Feching: "))
 	IncludeCreatingCertificates(m, mc, params, nodeID)
 	IncludeVerificationOfCertificates(m, mc, params, nodeID)
 }
