@@ -26,6 +26,7 @@ type Stats struct {
 	timestampedRequests int
 	recvdRequests       int
 	deliveredRequests   int
+	pendingMessageCount int
 }
 
 type reqKey struct {
@@ -68,6 +69,12 @@ func (s *Stats) Delivered(req *requestpb.Request) {
 	s.lock.Unlock()
 }
 
+func (s *Stats) UpdatePendingMessageCount(n int) {
+	s.lock.Lock()
+	s.pendingMessageCount = n
+	s.lock.Unlock()
+}
+
 func (s *Stats) WriteCSVHeader(w *csv.Writer) {
 	record := []string{
 		"ts",
@@ -98,6 +105,7 @@ func (s *Stats) WriteCSVRecordAndReset(w *csv.Writer, d time.Duration) {
 	deliveredReqs := s.deliveredRequests
 	recvdReqs := s.recvdRequests
 	avgLatency := s.avgLatency
+	pendingMessages := s.pendingMessageCount
 
 	s.avgLatency = 0
 	s.timestampedRequests = 0
@@ -105,8 +113,6 @@ func (s *Stats) WriteCSVRecordAndReset(w *csv.Writer, d time.Duration) {
 	s.deliveredRequests = 0
 
 	s.lock.Unlock()
-
-	msgRetransQueueSize := s.fakeRNet.CountPendingMessages()
 
 	loadTps := float64(recvdReqs) / (float64(d) / float64(time.Second))
 	tps := float64(deliveredReqs) / (float64(d) / float64(time.Second))
@@ -117,7 +123,7 @@ func (s *Stats) WriteCSVRecordAndReset(w *csv.Writer, d time.Duration) {
 		strconv.Itoa(deliveredReqs),
 		fmt.Sprintf("%.3f", tps),
 		fmt.Sprintf("%.3f", time.Duration(avgLatency).Seconds()),
-		strconv.FormatUint(uint64(msgRetransQueueSize), 10),
+		strconv.FormatUint(uint64(pendingMessages), 10),
 		strconv.FormatUint(memStats.Sys, 10),
 		strconv.FormatUint(memStats.StackInuse, 10),
 		strconv.FormatUint(memStats.HeapAlloc, 10),

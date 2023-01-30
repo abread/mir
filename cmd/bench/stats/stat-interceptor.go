@@ -34,8 +34,16 @@ func NewStatInterceptor(s *Stats, txConsumer t.ModuleID, ownID t.NodeID, allNode
 }
 
 func (i *StatInterceptor) Intercept(evts *events.EventList) error {
+	pendingMessagesOrig := i.fakeRNet.CountPendingMessages()
+
 	it := evts.Iterator()
 	for evt := it.Next(); evt != nil; evt = it.Next() {
+		if evt.DestModule == "reliablenet" {
+			_, err := i.fakeRNet.ApplyEvents(events.ListOf(evt))
+			if err != nil {
+				return err
+			}
+		}
 
 		switch e := evt.Type.(type) {
 		case *eventpb.Event_NewRequests:
@@ -55,13 +63,13 @@ func (i *StatInterceptor) Intercept(evts *events.EventList) error {
 					i.Stats.Delivered(req)
 				}
 			}
-		case *eventpb.Event_ReliableNet:
-			_, _ = i.fakeRNet.ApplyEvents(events.ListOf(evt))
-		case *eventpb.Event_MessageReceived:
-			if e.MessageReceived.Msg.DestModule == "reliablenet" {
-				_, _ = i.fakeRNet.ApplyEvents(events.ListOf(evt))
-			}
 		}
 	}
+
+	pendingMessageCount := i.fakeRNet.CountPendingMessages()
+	if pendingMessageCount != pendingMessagesOrig {
+		i.Stats.UpdatePendingMessageCount(pendingMessageCount)
+	}
+
 	return nil
 }
