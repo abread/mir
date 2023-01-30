@@ -189,7 +189,7 @@ func runNode() error {
 	}*/
 	stat := stats.NewStats()
 	interceptor := eventlog.MultiInterceptor(
-		stats.NewStatInterceptor(stat, "app", ownID, smrParams.ReliableNet.AllNodes),
+		stats.NewStatInterceptor(stat, "app"),
 		//recorder,
 	)
 

@@ -10,7 +10,6 @@ import (
 	"runtime"
 	"strconv"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"
@@ -23,8 +22,6 @@ type Stats struct {
 	timestampedRequests int
 	recvdRequests       int
 	deliveredRequests   int
-
-	pendingMessageCount uint64 // must be accessed with atomics
 }
 
 type reqKey struct {
@@ -71,7 +68,6 @@ func (s *Stats) WriteCSVHeader(w *csv.Writer) {
 		"nrDelivered",
 		"tps",
 		"avgLatency",
-		"msgRetransQueueSize",
 		"memSys",
 		"memStackInUse",
 		"memHeapAlloc",
@@ -93,7 +89,6 @@ func (s *Stats) WriteCSVRecordAndReset(w *csv.Writer, d time.Duration) {
 	deliveredReqs := s.deliveredRequests
 	recvdReqs := s.recvdRequests
 	avgLatency := s.avgLatency
-	pendingMessages := atomic.LoadUint64(&s.pendingMessageCount)
 
 	s.avgLatency = 0
 	s.timestampedRequests = 0
@@ -111,7 +106,6 @@ func (s *Stats) WriteCSVRecordAndReset(w *csv.Writer, d time.Duration) {
 		strconv.Itoa(deliveredReqs),
 		fmt.Sprintf("%.3f", tps),
 		fmt.Sprintf("%.3f", time.Duration(avgLatency).Seconds()),
-		strconv.FormatUint(uint64(pendingMessages), 10),
 		strconv.FormatUint(memStats.Sys, 10),
 		strconv.FormatUint(memStats.StackInuse, 10),
 		strconv.FormatUint(memStats.HeapAlloc, 10),
