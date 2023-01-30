@@ -62,6 +62,8 @@ type bcModule struct {
 	ownNodeID      t.NodeID
 	ownQueueIdx    int
 	queueBcModules []queueBcModule
+
+	logger logging.Logger
 }
 
 type queueBcModule struct {
@@ -116,6 +118,7 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables,
 		ownNodeID:      nodeID,
 		ownQueueIdx:    ownQueueIdx,
 		queueBcModules: queueBcModules,
+		logger:         logger,
 	}, nil
 }
 
@@ -186,6 +189,8 @@ func (m *bcModule) handleVcbEvent(event *vcbpb.Event) (*events.EventList, error)
 		QueueIdx:  uint32(queueIdx),
 		QueueSlot: queueSlot,
 	}
+
+	m.logger.Log(logging.LevelInfo, "Delivered BC slot", "queueIdx", queueIdx, "queueSlot", queueSlot)
 
 	return events.ListOf(
 		abcevents.Deliver(m.config.Consumer, slot, t.TxIDSlice(ev.TxIds), ev.Txs, ev.Signature),
