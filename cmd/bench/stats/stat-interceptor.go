@@ -5,6 +5,8 @@
 package stats
 
 import (
+	"sync/atomic"
+
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/logging"
 	bfpb "github.com/filecoin-project/mir/pkg/pb/batchfetcherpb"
@@ -16,7 +18,7 @@ import (
 type StatInterceptor struct {
 	*Stats
 
-	fakeRNet *reliablenet.Module
+	rnetChan chan *eventpb.Event
 
 	// ID of the module that is consuming the transactions.
 	// Statistics will only be performed on transactions destined to this module
@@ -25,24 +27,35 @@ type StatInterceptor struct {
 }
 
 func NewStatInterceptor(s *Stats, txConsumer t.ModuleID, ownID t.NodeID, allNodes []t.NodeID) *StatInterceptor {
-	fakeRNet, err := reliablenet.New(ownID, reliablenet.DefaultModuleConfig(), reliablenet.DefaultModuleParams(allNodes), logging.NilLogger)
-	if err != nil {
-		panic(err)
-	}
+	rnetChan := make(chan *eventpb.Event, 1024)
+	interceptor := &StatInterceptor{s, rnetChan, txConsumer}
 
-	return &StatInterceptor{s, fakeRNet, txConsumer}
+	go func(rnetChan chan *eventpb.Event, pendingMessageCountAddr *uint64, ownID t.NodeID, allNodes []t.NodeID) {
+		rnet, err := reliablenet.New(ownID, reliablenet.DefaultModuleConfig(), reliablenet.DefaultModuleParams(allNodes), logging.NilLogger)
+		if err != nil {
+			panic(err)
+		}
+
+		for {
+			select {
+			case ev := <-rnetChan:
+				if ev == nil {
+					atomic.StoreUint64(pendingMessageCountAddr, uint64(rnet.CountPendingMessages()))
+				} else if _, err := rnet.ApplyEvents(events.ListOf(ev)); err != nil {
+					panic(err)
+				}
+			}
+		}
+	}(rnetChan, &interceptor.pendingMessageCount, ownID, allNodes)
+
+	return interceptor
 }
 
 func (i *StatInterceptor) Intercept(evts *events.EventList) error {
-	pendingMessagesOrig := i.fakeRNet.CountPendingMessages()
-
 	it := evts.Iterator()
 	for evt := it.Next(); evt != nil; evt = it.Next() {
 		if evt.DestModule == "reliablenet" {
-			_, err := i.fakeRNet.ApplyEvents(events.ListOf(evt))
-			if err != nil {
-				return err
-			}
+			i.rnetChan <- evt
 		}
 
 		switch e := evt.Type.(type) {
@@ -64,11 +77,6 @@ func (i *StatInterceptor) Intercept(evts *events.EventList) error {
 				}
 			}
 		}
-	}
-
-	pendingMessageCount := i.fakeRNet.CountPendingMessages()
-	if pendingMessageCount != pendingMessagesOrig {
-		i.Stats.UpdatePendingMessageCount(pendingMessageCount)
 	}
 
 	return nil

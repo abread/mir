@@ -10,23 +10,21 @@ import (
 	"runtime"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
-	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"
-	"github.com/filecoin-project/mir/pkg/reliablenet"
-	t "github.com/filecoin-project/mir/pkg/types"
 )
 
 type Stats struct {
 	lock                sync.Mutex
-	fakeRNet            *reliablenet.Module
 	reqTimestamps       map[reqKey]time.Time
 	avgLatency          float64
 	timestampedRequests int
 	recvdRequests       int
 	deliveredRequests   int
-	pendingMessageCount int
+
+	pendingMessageCount uint64 // must be accessed with atomics
 }
 
 type reqKey struct {
@@ -35,15 +33,11 @@ type reqKey struct {
 }
 
 func NewStats() *Stats {
-	fakeRNet, err := reliablenet.New(t.NodeID(""), reliablenet.DefaultModuleConfig(), reliablenet.DefaultModuleParams([]t.NodeID{}), logging.NilLogger)
-	if err != nil {
-		panic(err)
+	stats := &Stats{
+		reqTimestamps: make(map[reqKey]time.Time),
 	}
 
-	return &Stats{
-		reqTimestamps: make(map[reqKey]time.Time),
-		fakeRNet:      fakeRNet,
-	}
+	return stats
 }
 
 func (s *Stats) NewRequest(req *requestpb.Request) {
@@ -66,12 +60,6 @@ func (s *Stats) Delivered(req *requestpb.Request) {
 		// $CA_{n+1} = CA_n + {x_{n+1} - CA_n \over n + 1}$
 		s.avgLatency += (float64(d) - s.avgLatency) / float64(s.timestampedRequests)
 	}
-	s.lock.Unlock()
-}
-
-func (s *Stats) UpdatePendingMessageCount(n int) {
-	s.lock.Lock()
-	s.pendingMessageCount = n
 	s.lock.Unlock()
 }
 
@@ -105,7 +93,7 @@ func (s *Stats) WriteCSVRecordAndReset(w *csv.Writer, d time.Duration) {
 	deliveredReqs := s.deliveredRequests
 	recvdReqs := s.recvdRequests
 	avgLatency := s.avgLatency
-	pendingMessages := s.pendingMessageCount
+	pendingMessages := atomic.LoadUint64(&s.pendingMessageCount)
 
 	s.avgLatency = 0
 	s.timestampedRequests = 0
