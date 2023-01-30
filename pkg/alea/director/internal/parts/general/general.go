@@ -48,12 +48,16 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 	// upon broadcast completion, save transactions
 	abcdsl.UponDeliver(m, func(slot *aleapbCommon.Slot, txIDs []t.TxID, txs []*requestpb.Request, signature []byte) error {
 		batchdbdsl.StoreBatch(m, mc.BatchDB, common.FormatAleaBatchID(slot), txIDs, txs, signature, slot)
+
+		// if we have already agreed to deliver this slot, free it
+		if state.agQueueHeads[slot.QueueIdx] > slot.QueueSlot {
+			abcdsl.FreeSlot(m, mc.AleaBroadcast, slot)
+		}
 		return nil
 	})
 	batchdbdsl.UponBatchStored(m, func(slot *aleapbCommon.Slot) error {
 		// track vcb completion (needed for other ops in agreement round control)
 		state.slotsReadyToDeliver[slot.QueueIdx][slot.QueueSlot] = struct{}{}
-		abcdsl.FreeSlot(m, mc.AleaBroadcast, slot)
 		return nil
 	})
 
@@ -84,6 +88,10 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 		state.agQueueHeads[queueIdx]++
 
 		// remove tracked slot readyness (don't want to run out of memory)
+		// also free broadcast slot to allow broadcast component to make progress
+		if _, ready := state.slotsReadyToDeliver[slot.QueueIdx][slot.QueueSlot]; ready {
+			abcdsl.FreeSlot(m, mc.AleaBroadcast, slot)
+		}
 		delete(state.slotsReadyToDeliver[slot.QueueIdx], slot.QueueSlot)
 
 		return nil
