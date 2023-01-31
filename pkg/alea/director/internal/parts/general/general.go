@@ -46,7 +46,8 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 
 	abcdsl.UponDeliver(m, func(slot *aleapbCommon.Slot) error {
 		if slot.QueueSlot >= state.agQueueHeads[slot.QueueIdx] {
-			// slot wasn't delivered yet
+			// slot wasn't delivered yet by agreement component
+			logger.Log(logging.LevelDebug, "marking slot as ready for delivery", "queueIdx", slot.QueueIdx, "queueSlot", slot.QueueSlot)
 			state.slotsReadyToDeliver[slot.QueueIdx][slot.QueueSlot] = struct{}{}
 		}
 

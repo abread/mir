@@ -199,6 +199,7 @@ func (m *bcModule) handleVcbEvent(event *vcbpb.Event) (*events.EventList, error)
 	}
 
 	// store delivered slot
+	m.logger.Log(logging.LevelDebug, "storing batch", "queueIdx", queueIdx, "queueSlot", queueSlot)
 	return events.ListOf(
 		batchdbpbevents.StoreBatch(
 			m.config.BatchDB,
