@@ -172,8 +172,8 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 		// otherwise stall until vcb completes (for this slot or one of ours) or another node starts the round
 		// TODO: don't stall if *any* queue can deliver
 		if _, bcDone := state.slotsReadyToDeliver[nextQueueIdx][nextQueueSlot]; bcDone || state.unagreedBroadcastedOwnSlotCount > 0 { // TODO: track unagreedBcOwnSlotCount separately
-			logger.Log(logging.LevelDebug, "progressing to next round", "agreementRound", round+1, "input", true)
-			aagdsl.InputValue(m, mc.AleaAgreement, round+1, true)
+			logger.Log(logging.LevelDebug, "progressing to next round", "agreementRound", round+1, "input", bcDone)
+			aagdsl.InputValue(m, mc.AleaAgreement, round+1, bcDone)
 			state.stalledAgreementSlot = nil
 		} else {
 			logger.Log(logging.LevelDebug, "stalling next round", "agreementRound", round+1)
