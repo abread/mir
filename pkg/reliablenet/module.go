@@ -172,6 +172,7 @@ func (m *Module) retransmitAll() (*events.EventList, error) {
 
 	if len(m.queues) == 0 {
 		m.retransmitLoopScheduled = false
+		m.logger.Log(logging.LevelDebug, "stopping retransmission loop: no more messages")
 		return evsOut, nil
 	}
 
@@ -217,6 +218,7 @@ func (m *Module) SendMessage(id string, msg *messagepb.Message, destinations []t
 	)
 
 	if !m.retransmitLoopScheduled {
+		m.logger.Log(logging.LevelDebug, "rescheduling retransmission loop")
 		evsOut.PushBack(events.TimerDelay(
 			m.config.Timer,
 			[]*eventpb.Event{rnEvents.RetransmitAll(m.config.Self)},
