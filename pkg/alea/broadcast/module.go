@@ -236,7 +236,7 @@ func (m *bcModule) handleBatchDBEvent(event *batchdbpb.Event) (*events.EventList
 
 	slot := origin.AleaBroadcast.Slot
 
-	m.logger.Log(logging.LevelInfo, "Delivered BC slot", "slot", slot)
+	m.logger.Log(logging.LevelInfo, "Delivered BC slot", "queueIdx", slot.QueueIdx, "queueSlot", slot.QueueSlot)
 
 	return events.ListOf(
 		abcevents.Deliver(m.config.Consumer, slot),

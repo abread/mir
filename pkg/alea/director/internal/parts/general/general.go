@@ -44,6 +44,15 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 	// Delivery
 	// =============================================================================================
 
+	abcdsl.UponDeliver(m, func(slot *aleapbCommon.Slot) error {
+		if slot.QueueSlot >= state.agQueueHeads[slot.QueueIdx] {
+			// slot wasn't delivered yet
+			state.slotsReadyToDeliver[slot.QueueIdx][slot.QueueSlot] = struct{}{}
+		}
+
+		return nil
+	})
+
 	// upon agreement round completion, deliver if it was decided to do so
 	aagdsl.UponDeliver(m, func(round uint64, decision bool) error {
 		if !decision {
@@ -72,10 +81,8 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 
 		// remove tracked slot readyness (don't want to run out of memory)
 		// also free broadcast slot to allow broadcast component to make progress
-		if _, ready := state.slotsReadyToDeliver[slot.QueueIdx][slot.QueueSlot]; ready {
-			abcdsl.FreeSlot(m, mc.AleaBroadcast, slot)
-		}
 		delete(state.slotsReadyToDeliver[slot.QueueIdx], slot.QueueSlot)
+		abcdsl.FreeSlot(m, mc.AleaBroadcast, slot)
 
 		return nil
 	})
@@ -105,6 +112,7 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 	})
 
 	// upon unagreed own slots < max, cut a new batch and broadcast it
+	// TODO: move to bc component
 	dsl.UponCondition(m, func() error {
 		if !state.batchCutInProgress && state.unagreedBroadcastedOwnSlotCount < tunables.TargetOwnUnagreedBatchCount {
 			logger.Log(logging.LevelDebug, "requesting more transactions")
@@ -161,6 +169,7 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 
 		// start next round if corresponding slot's broadcast is complete (or if we have pending requests)
 		// otherwise stall until vcb completes (for this slot or one of ours) or another node starts the round
+		// TODO: don't stall if *any* queue can deliver
 		if _, bcDone := state.slotsReadyToDeliver[nextQueueIdx][nextQueueSlot]; bcDone || state.unagreedBroadcastedOwnSlotCount > 0 { // TODO: track unagreedBcOwnSlotCount separately
 			logger.Log(logging.LevelDebug, "progressing to next round", "agreementRound", round+1, "input", true)
 			aagdsl.InputValue(m, mc.AleaAgreement, round+1, true)
