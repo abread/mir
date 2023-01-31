@@ -82,7 +82,7 @@ func IncludeBatchFetching(
 		// until all were tried or a response is received.
 		// It would also be nice to pass a hint in the certificate that says which nodes to try first,
 		// this could be provided by the agreement component based on INIT(v, 0) messages received by the abba instances.
-		logger.Log(logging.LevelDebug, "broadcast component fell behind. requesting slot from other replicas with FILL-GAP", "slot", slot)
+		logger.Log(logging.LevelDebug, "broadcast component fell behind. requesting slot from other replicas with FILL-GAP", "queueIdx", slot.QueueIdx, "queueSlot", slot.QueueSlot)
 		rnetdsl.SendMessage(m, mc.ReliableNet,
 			FillGapMsgID(slot),
 			protobuf.FillGapMessage(mc.Self, slot.Pb()),
@@ -96,7 +96,7 @@ func IncludeBatchFetching(
 		slot := batchSlotFromPb(msg.Slot)
 		// do not ACK message - acknowledging means sending a FILLER reply
 
-		logger.Log(logging.LevelDebug, "satisfying FILL-GAP request", "slot", slot, "from", from)
+		logger.Log(logging.LevelDebug, "satisfying FILL-GAP request", "queueIdx", slot.QueueIdx, "queueSlot", slot.QueueSlot, "from", from)
 		batchdbdsl.LookupBatch(m, mc.BatchDB, common.FormatAleaBatchID(msg.Slot), &lookupBatchOnRemoteRequestContext{from, slot})
 		return nil
 	})
@@ -130,7 +130,7 @@ func IncludeBatchFetching(
 		}
 		reqState.Replies[from] = struct{}{}
 
-		logger.Log(logging.LevelDebug, "got FILLER for missing slot!", "slot", slot, "from", from)
+		logger.Log(logging.LevelDebug, "got FILLER for missing slot!", "queueIdx", slot.QueueIdx, "queueSlot", slot.QueueSlot, "from", from)
 
 		mempooldsl.RequestTransactionIDs(m, mc.Mempool, msg.Txs, &handleFillerContext{
 			slot:      slot,
@@ -173,10 +173,8 @@ func IncludeBatchFetching(
 		// store batch asynchronously
 		batchdbdsl.StoreBatch(m, mc.BatchDB, context.batchID, context.txIDs, context.txs, context.signature /*metadata*/, context)
 
-		abcdsl.FreeSlot(m, mc.AleaBroadcast, context.slot.Pb())
-
 		// send response to requests
-		logger.Log(logging.LevelDebug, "satisfying delayed requests with FILLER", "slot", context.slot)
+		logger.Log(logging.LevelDebug, "satisfying delayed requests with FILLER", "queueIdx", context.slot.QueueIdx, "queueSlot", context.slot.QueueSlot)
 		for _, origin := range requestState.ReqOrigins {
 			adsl.ProvideTransactions(m, t.ModuleID(origin.Module), context.txs, origin)
 		}
@@ -186,7 +184,7 @@ func IncludeBatchFetching(
 	})
 
 	batchdbdsl.UponBatchStored(m, func(context *handleFillerContext) error {
-		// do nothing
+		abcdsl.FreeSlot(m, mc.AleaBroadcast, context.slot.Pb())
 		return nil
 	})
 }
