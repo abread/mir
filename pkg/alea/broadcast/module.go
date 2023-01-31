@@ -8,11 +8,15 @@ import (
 	"golang.org/x/exp/slices"
 
 	"github.com/filecoin-project/mir/pkg/alea/broadcast/abcevents"
+	"github.com/filecoin-project/mir/pkg/alea/common"
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb"
-	"github.com/filecoin-project/mir/pkg/pb/aleapb/common"
+	aleaCommonPb "github.com/filecoin-project/mir/pkg/pb/aleapb/common"
+	"github.com/filecoin-project/mir/pkg/pb/availabilitypb/batchdbpb"
+	batchdbpbevents "github.com/filecoin-project/mir/pkg/pb/availabilitypb/batchdbpb/events"
+	batchdbpbtypes "github.com/filecoin-project/mir/pkg/pb/availabilitypb/batchdbpb/types"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"
 	"github.com/filecoin-project/mir/pkg/pb/vcbpb"
@@ -26,6 +30,7 @@ import (
 type ModuleConfig struct {
 	Self         t.ModuleID // id of this module
 	Consumer     t.ModuleID
+	BatchDB      t.ModuleID
 	Mempool      t.ModuleID
 	ReliableNet  t.ModuleID
 	ThreshCrypto t.ModuleID
@@ -36,6 +41,7 @@ func DefaultModuleConfig(consumer t.ModuleID) *ModuleConfig {
 	return &ModuleConfig{
 		Self:         "alea_bc",
 		Consumer:     "alea_dir",
+		BatchDB:      "batchdb",
 		Mempool:      "mempool",
 		ReliableNet:  "reliablenet",
 		ThreshCrypto: "threshcrypto",
@@ -140,6 +146,8 @@ func (m *bcModule) applyEvent(event *eventpb.Event) (*events.EventList, error) {
 		return m.handleBroadcastEvent(e.AleaBroadcast)
 	case *eventpb.Event_Vcb:
 		return m.handleVcbEvent(e.Vcb)
+	case *eventpb.Event_BatchDb:
+		return m.handleBatchDBEvent(e.BatchDb)
 	default:
 		return nil, fmt.Errorf("unsupported event type: %T", e)
 	}
@@ -185,16 +193,53 @@ func (m *bcModule) handleVcbEvent(event *vcbpb.Event) (*events.EventList, error)
 		return nil, fmt.Errorf("could not parse queue slot: %w", err2)
 	}
 
-	slot := &common.Slot{
+	slot := &aleaCommonPb.Slot{
 		QueueIdx:  uint32(queueIdx),
 		QueueSlot: queueSlot,
 	}
 
-	m.logger.Log(logging.LevelInfo, "Delivered BC slot", "queueIdx", queueIdx, "queueSlot", queueSlot)
+	// store delivered slot
+	return events.ListOf(
+		batchdbpbevents.StoreBatch(
+			m.config.BatchDB,
+			common.FormatAleaBatchID(slot).Pb(),
+			ev.TxIds,
+			ev.Txs,
+			ev.Signature,
+			AleaBcStoreBatchOrigin(m.config.Self, slot),
+		).Pb(),
+	), nil
+}
+
+func AleaBcStoreBatchOrigin(module t.ModuleID, slot *aleaCommonPb.Slot) *batchdbpbtypes.StoreBatchOrigin {
+	return &batchdbpbtypes.StoreBatchOrigin{
+		Module: module,
+		Type: &batchdbpbtypes.StoreBatchOrigin_AleaBroadcast{
+			AleaBroadcast: &bcpb.StoreBatchOrigin{
+				Slot: slot,
+			},
+		},
+	}
+}
+
+func (m *bcModule) handleBatchDBEvent(event *batchdbpb.Event) (*events.EventList, error) {
+	evWrapped, ok := event.Type.(*batchdbpb.Event_Stored)
+	if !ok {
+		return nil, fmt.Errorf("unexpected batchdb event: %v", event)
+	}
+	ev := evWrapped.Unwrap()
+
+	origin, ok := ev.Origin.Type.(*batchdbpb.StoreBatchOrigin_AleaBroadcast)
+	if !ok {
+		return nil, fmt.Errorf("unexpected batchdb event (unknown origin): %v", event)
+	}
+
+	slot := origin.AleaBroadcast.Slot
+
+	m.logger.Log(logging.LevelInfo, "Delivered BC slot", "slot", slot)
 
 	return events.ListOf(
-		abcevents.Deliver(m.config.Consumer, slot, t.TxIDSlice(ev.TxIds), ev.Txs, ev.Signature),
-		rnEvents.MarkModuleMsgsRecvd(m.config.ReliableNet, t.ModuleID(ev.OriginModule), []t.NodeID{m.ownNodeID}),
+		abcevents.Deliver(m.config.Consumer, slot),
 	), nil
 }
 

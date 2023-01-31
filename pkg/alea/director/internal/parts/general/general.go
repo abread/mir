@@ -6,7 +6,6 @@ import (
 	"github.com/filecoin-project/mir/pkg/alea/agreement/aagdsl"
 	"github.com/filecoin-project/mir/pkg/alea/broadcast/abcdsl"
 	"github.com/filecoin-project/mir/pkg/alea/director/internal/common"
-	batchdbdsl "github.com/filecoin-project/mir/pkg/availability/batchdb/dsl"
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/logging"
@@ -44,22 +43,6 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 	// =============================================================================================
 	// Delivery
 	// =============================================================================================
-
-	// upon broadcast completion, save transactions
-	abcdsl.UponDeliver(m, func(slot *aleapbCommon.Slot, txIDs []t.TxID, txs []*requestpb.Request, signature []byte) error {
-		batchdbdsl.StoreBatch(m, mc.BatchDB, common.FormatAleaBatchID(slot), txIDs, txs, signature, slot)
-
-		// if we have already agreed to deliver this slot, free it
-		if state.agQueueHeads[slot.QueueIdx] > slot.QueueSlot {
-			abcdsl.FreeSlot(m, mc.AleaBroadcast, slot)
-		}
-		return nil
-	})
-	batchdbdsl.UponBatchStored(m, func(slot *aleapbCommon.Slot) error {
-		// track vcb completion (needed for other ops in agreement round control)
-		state.slotsReadyToDeliver[slot.QueueIdx][slot.QueueSlot] = struct{}{}
-		return nil
-	})
 
 	// upon agreement round completion, deliver if it was decided to do so
 	aagdsl.UponDeliver(m, func(round uint64, decision bool) error {
@@ -101,10 +84,11 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 	// Batch Cutting / Own Queue Broadcast Control
 	// =============================================================================================
 
-	abcdsl.UponDeliver(m, func(slot *aleapbCommon.Slot, _txIDs []t.TxID, _txs []*requestpb.Request, _signature []byte) error {
+	abcdsl.UponDeliver(m, func(slot *aleapbCommon.Slot) error {
 		if slot.QueueIdx == ownQueueIdx {
 			state.unagreedBroadcastedOwnSlotCount++
 		}
+
 		return nil
 	})
 	aagdsl.UponDeliver(m, func(round uint64, decision bool) error {
@@ -157,7 +141,7 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 		state.bcOwnQueueHead++
 		return nil
 	})
-	abcdsl.UponDeliver(m, func(slot *aleapbCommon.Slot, _txIDs []t.TxID, _txs []*requestpb.Request, _signature []byte) error {
+	abcdsl.UponDeliver(m, func(slot *aleapbCommon.Slot) error {
 		if slot.QueueIdx == ownQueueIdx && slot.QueueSlot == state.bcOwnQueueHead-1 {
 			// new batch was delivered
 			state.batchCutInProgress = false
@@ -194,7 +178,7 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 	})
 
 	// upon vcb completion for the stalled agreement slot or one of ours, start the stalled agreement round
-	abcdsl.UponDeliver(m, func(slot *aleapbCommon.Slot, _txIDs []t.TxID, _txs []*requestpb.Request, _signature []byte) error {
+	abcdsl.UponDeliver(m, func(slot *aleapbCommon.Slot) error {
 		if state.stalledAgreementSlot == nil {
 			return nil // nothing to do
 		}

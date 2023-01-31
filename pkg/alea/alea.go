@@ -139,6 +139,7 @@ func New(ownID t.NodeID, config *Config, params *Params, startingChkp *checkpoin
 		&broadcast.ModuleConfig{
 			Self:         config.AleaBroadcast,
 			Consumer:     config.AleaDirector,
+			BatchDB:      config.BatchDB,
 			Mempool:      config.Mempool,
 			ReliableNet:  config.ReliableNet,
 			ThreshCrypto: config.ThreshCrypto,

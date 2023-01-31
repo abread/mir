@@ -3,8 +3,9 @@ package availability
 import (
 	"github.com/filecoin-project/mir/pkg/alea/broadcast"
 	"github.com/filecoin-project/mir/pkg/alea/broadcast/abcdsl"
+	"github.com/filecoin-project/mir/pkg/alea/common"
 	bcdsl "github.com/filecoin-project/mir/pkg/alea/director/internal/aleadsl"
-	"github.com/filecoin-project/mir/pkg/alea/director/internal/common"
+	director "github.com/filecoin-project/mir/pkg/alea/director/internal/common"
 	"github.com/filecoin-project/mir/pkg/alea/director/internal/protobuf"
 	batchdbdsl "github.com/filecoin-project/mir/pkg/availability/batchdb/dsl"
 	adsl "github.com/filecoin-project/mir/pkg/availability/dsl"
@@ -43,8 +44,8 @@ type RequestsState struct {
 // IncludeBatchFetching registers event handlers for processing availabilitypb.RequestTransactions events.
 func IncludeBatchFetching(
 	m dsl.Module,
-	mc *common.ModuleConfig,
-	params *common.ModuleParams,
+	mc *director.ModuleConfig,
+	params *director.ModuleParams,
 	nodeID t.NodeID,
 	logger logging.Logger,
 ) {
@@ -190,7 +191,7 @@ func IncludeBatchFetching(
 	})
 }
 
-func certSigData(params *common.ModuleParams, slot batchSlot, txIDs []t.TxID) [][]byte {
+func certSigData(params *director.ModuleParams, slot batchSlot, txIDs []t.TxID) [][]byte {
 	return vcb.SigData(broadcast.VCBInstanceUID(params.InstanceUID, slot.QueueIdx, slot.QueueSlot), txIDs)
 }
 

@@ -35,11 +35,12 @@ message StartBroadcast {
 
 message Deliver {
     common.Slot                slot      = 1;
-    repeated bytes             tx_ids    = 2;
-    repeated requestpb.Request txs       = 3;
-    bytes                      signature = 4;
 }
 
 message FreeSlot {
+    common.Slot slot = 1;
+}
+
+message StoreBatchOrigin {
     common.Slot slot = 1;
 }
