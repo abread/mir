@@ -1,9 +1,9 @@
 package abba
 
 import (
-	"github.com/filecoin-project/mir/pkg/abba/abbadsl"
-	"github.com/filecoin-project/mir/pkg/pb/abbapb"
-	"github.com/filecoin-project/mir/pkg/pb/messagepb"
+	abbat "github.com/filecoin-project/mir/pkg/abba/abbatypes"
+	abbapbmsgs "github.com/filecoin-project/mir/pkg/pb/abbapb/msgs"
+	messagepbtypes "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -12,67 +12,24 @@ const (
 	RoundMsgsNs  = t.ModuleID("__round")
 )
 
-func Message(moduleID t.ModuleID, msg *abbapb.Message) *messagepb.Message {
-	return &messagepb.Message{
-		DestModule: moduleID.Pb(),
-		Type: &messagepb.Message_Abba{
-			Abba: msg,
-		},
-	}
+func FinishMessage(moduleID t.ModuleID, value bool) *messagepbtypes.Message {
+	return abbapbmsgs.FinishMessage(moduleID.Then(GlobalMsgsNs), value)
 }
 
-func FinishMessage(moduleID t.ModuleID, value bool) *messagepb.Message {
-	return Message(moduleID.Then(GlobalMsgsNs), &abbapb.Message{
-		Type: &abbapb.Message_FinishMessage{
-			FinishMessage: &abbapb.FinishMessage{
-				Value: value,
-			},
-		},
-	})
+func InitMessage(moduleID t.ModuleID, roundNumber uint64, estimate bool) *messagepbtypes.Message {
+	return abbapbmsgs.InitMessage(subidForRoundMsg(moduleID, roundNumber), roundNumber, estimate)
 }
 
-func InitMessage(moduleID t.ModuleID, roundNumber uint64, estimate bool) *messagepb.Message {
-	return Message(subidForRoundMsg(moduleID, roundNumber), &abbapb.Message{
-		Type: &abbapb.Message_InitMessage{
-			InitMessage: &abbapb.InitMessage{
-				RoundNumber: roundNumber,
-				Estimate:    estimate,
-			},
-		},
-	})
+func AuxMessage(moduleID t.ModuleID, roundNumber uint64, value bool) *messagepbtypes.Message {
+	return abbapbmsgs.AuxMessage(subidForRoundMsg(moduleID, roundNumber), roundNumber, value)
 }
 
-func AuxMessage(moduleID t.ModuleID, roundNumber uint64, value bool) *messagepb.Message {
-	return Message(subidForRoundMsg(moduleID, roundNumber), &abbapb.Message{
-		Type: &abbapb.Message_AuxMessage{
-			AuxMessage: &abbapb.AuxMessage{
-				RoundNumber: roundNumber,
-				Value:       value,
-			},
-		},
-	})
+func ConfMessage(moduleID t.ModuleID, roundNumber uint64, values abbat.ValueSet) *messagepbtypes.Message {
+	return abbapbmsgs.ConfMessage(subidForRoundMsg(moduleID, roundNumber), roundNumber, values)
 }
 
-func ConfMessage(moduleID t.ModuleID, roundNumber uint64, values abbadsl.ValueSet) *messagepb.Message {
-	return Message(subidForRoundMsg(moduleID, roundNumber), &abbapb.Message{
-		Type: &abbapb.Message_ConfMessage{
-			ConfMessage: &abbapb.ConfMessage{
-				RoundNumber: roundNumber,
-				Values:      values.Pb(),
-			},
-		},
-	})
-}
-
-func CoinMessage(moduleID t.ModuleID, roundNumber uint64, coinShare []byte) *messagepb.Message {
-	return Message(subidForRoundMsg(moduleID, roundNumber), &abbapb.Message{
-		Type: &abbapb.Message_CoinMessage{
-			CoinMessage: &abbapb.CoinMessage{
-				RoundNumber: roundNumber,
-				CoinShare:   coinShare,
-			},
-		},
-	})
+func CoinMessage(moduleID t.ModuleID, roundNumber uint64, coinShare []byte) *messagepbtypes.Message {
+	return abbapbmsgs.CoinMessage(subidForRoundMsg(moduleID, roundNumber), roundNumber, coinShare)
 }
 
 func subidForRoundMsg(moduleID t.ModuleID, roundNumber uint64) t.ModuleID {

@@ -2,7 +2,7 @@ package messagepbtypes
 
 import (
 	mirreflect "github.com/filecoin-project/mir/codegen/mirreflect"
-	abbapb "github.com/filecoin-project/mir/pkg/pb/abbapb"
+	types2 "github.com/filecoin-project/mir/pkg/pb/abbapb/types"
 	aleapb "github.com/filecoin-project/mir/pkg/pb/aleapb"
 	agreementpb "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb"
 	mscpb "github.com/filecoin-project/mir/pkg/pb/availabilitypb/mscpb"
@@ -51,7 +51,7 @@ func Message_TypeFromPb(pb messagepb.Message_Type) Message_Type {
 	case *messagepb.Message_Vcb:
 		return &Message_Vcb{Vcb: pb.Vcb}
 	case *messagepb.Message_Abba:
-		return &Message_Abba{Abba: pb.Abba}
+		return &Message_Abba{Abba: types2.MessageFromPb(pb.Abba)}
 	case *messagepb.Message_Alea:
 		return &Message_Alea{Alea: pb.Alea}
 	case *messagepb.Message_AleaAgreement:
@@ -189,17 +189,17 @@ func (*Message_Vcb) MirReflect() mirreflect.Type {
 }
 
 type Message_Abba struct {
-	Abba *abbapb.Message
+	Abba *types2.Message
 }
 
 func (*Message_Abba) isMessage_Type() {}
 
-func (w *Message_Abba) Unwrap() *abbapb.Message {
+func (w *Message_Abba) Unwrap() *types2.Message {
 	return w.Abba
 }
 
 func (w *Message_Abba) Pb() messagepb.Message_Type {
-	return &messagepb.Message_Abba{Abba: w.Abba}
+	return &messagepb.Message_Abba{Abba: (w.Abba).Pb()}
 }
 
 func (*Message_Abba) MirReflect() mirreflect.Type {

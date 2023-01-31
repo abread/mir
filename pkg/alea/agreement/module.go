@@ -7,12 +7,12 @@ import (
 	"golang.org/x/exp/slices"
 
 	"github.com/filecoin-project/mir/pkg/abba"
-	abbaEvents "github.com/filecoin-project/mir/pkg/abba/abbaevents"
 	aagEvents "github.com/filecoin-project/mir/pkg/alea/agreement/aagevents"
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/pb/abbapb"
+	abbaEvents "github.com/filecoin-project/mir/pkg/pb/abbapb/events"
 	"github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
 	"github.com/filecoin-project/mir/pkg/pb/messagepb"
@@ -130,7 +130,7 @@ func (m *agModule) handleMessageReceived(message *messagepb.Message, from t.Node
 			events.MessageReceived(
 				destModuleID,
 				from,
-				abba.FinishMessage(destModuleID, msg.FinishAbba.Value),
+				abba.FinishMessage(destModuleID, msg.FinishAbba.Value).Pb(),
 			),
 		))
 	}
@@ -218,7 +218,7 @@ func (m *agModule) handleAgreementEvent(event *agreementpb.Event) (*events.Event
 	m.inputDone = true
 
 	moreEvsOut, err := m.currentAbba.ApplyEvents((&events.EventList{}).PushBack(
-		abbaEvents.InputValue(m.abbaModuleID(), ev.Input),
+		abbaEvents.InputValue(m.abbaModuleID(), ev.Input).Pb(),
 	))
 	if err != nil {
 		return evsOut, err

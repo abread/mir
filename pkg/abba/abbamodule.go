@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/filecoin-project/mir/pkg/abba/abbadsl"
+	abbat "github.com/filecoin-project/mir/pkg/abba/abbatypes"
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/factorymodule"
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/modules"
-	"github.com/filecoin-project/mir/pkg/pb/abbapb"
+	abbadsl "github.com/filecoin-project/mir/pkg/pb/abbapb/dsl"
 	"github.com/filecoin-project/mir/pkg/pb/factorymodulepb"
 	"github.com/filecoin-project/mir/pkg/reliablenet/rnetdsl"
 	"github.com/filecoin-project/mir/pkg/serializing"
@@ -69,7 +69,7 @@ type abbaModuleState struct {
 type abbaRoundState struct {
 	number   uint64
 	estimate bool
-	values   abbadsl.ValueSet
+	values   abbat.ValueSet
 
 	initRecvd          map[bool]recvTracker
 	initRecvdEstimates map[bool]int
@@ -78,7 +78,7 @@ type abbaRoundState struct {
 	auxRecvdValues map[bool]int
 
 	confRecvd       recvTracker
-	confRecvdValues map[abbadsl.ValueSet]int
+	confRecvdValues map[abbat.ValueSet]int
 
 	coinRecvd         recvTracker
 	coinRecvdOkShares [][]byte
@@ -171,7 +171,7 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 			logger.Log(logging.LevelDebug, "received weak support for FINISH(v)", "v", value)
 			rnetdsl.SendMessage(m, mc.ReliableNet,
 				FinishMsgID(),
-				FinishMessage(mc.Self, value),
+				FinishMessage(mc.Self, value).Pb(),
 				params.AllNodes,
 			)
 			state.finishSent = true
@@ -180,7 +180,7 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 		// 2. upon receiving strong support for FINISH(v), output v and terminate
 		if state.step <= MaxStep && state.finishRecvdValues[value] >= params.strongSupportThresh() {
 			logger.Log(logging.LevelDebug, "received strong support for FINISH(v)", "v", value)
-			abbadsl.Deliver(m, mc.Consumer, value)
+			abbadsl.Deliver(m, mc.Consumer, value, mc.Self)
 			state.updateStep(math.MaxUint8) // no more progress can be made
 
 			// only care about finish messages from now on
@@ -204,8 +204,11 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 		state.round.estimate = input
 
 		// 4. broadcast INIT(r, est^r_i)
-		msg := InitMessage(mc.Self, state.round.number, state.round.estimate)
-		rnetdsl.SendMessage(m, mc.ReliableNet, InitMsgID(state.round.estimate), msg, params.AllNodes)
+		rnetdsl.SendMessage(m, mc.ReliableNet,
+			InitMsgID(state.round.estimate),
+			InitMessage(mc.Self, state.round.number, state.round.estimate).Pb(),
+			params.AllNodes,
+		)
 
 		state.updateStep(5)
 		return nil
@@ -250,7 +253,11 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 
 				// if our round.estimate is r, then we already sent this message
 				if state.round.estimate != est {
-					rnetdsl.SendMessage(m, mc.ReliableNet, InitMsgID(est), InitMessage(mc.Self, r, est), params.AllNodes)
+					rnetdsl.SendMessage(m, mc.ReliableNet,
+						InitMsgID(est),
+						InitMessage(mc.Self, r, est).Pb(),
+						params.AllNodes,
+					)
 				}
 
 				state.round.initWeakSupportReached[est] = true
@@ -261,7 +268,11 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 			// 6. upon receiving strong support for INIT(r, v), broadcast AUX(r, v) if we have not already broadcast AUX(r, _)
 			if !state.round.auxSent && state.round.initRecvdEstimates[est] >= params.strongSupportThresh() {
 				logger.Log(logging.LevelDebug, "received strong support for INIT(r, v)", "r", r, "v", est)
-				rnetdsl.SendMessage(m, mc.ReliableNet, AuxMsgID(), AuxMessage(mc.Self, r, est), params.AllNodes)
+				rnetdsl.SendMessage(m, mc.ReliableNet,
+					AuxMsgID(),
+					AuxMessage(mc.Self, r, est).Pb(),
+					params.AllNodes,
+				)
 				state.round.auxSent = true
 				state.updateStep(7)
 			}
@@ -297,14 +308,18 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 		if state.round.isNiceAuxValueCount(params) {
 			r := state.round.number
 			logger.Log(logging.LevelDebug, "received enough support for AUX(r, v in values)", "r", r, "values", state.round.values)
-			rnetdsl.SendMessage(m, mc.ReliableNet, ConfMsgID(), ConfMessage(mc.Self, r, state.round.values), params.AllNodes)
+			rnetdsl.SendMessage(m, mc.ReliableNet,
+				ConfMsgID(),
+				ConfMessage(mc.Self, r, state.round.values).Pb(),
+				params.AllNodes,
+			)
 			state.updateStep(8)
 		}
 
 		return nil
 	})
 
-	abbadsl.UponConfMessageReceived(m, func(from t.NodeID, r uint64, values abbadsl.ValueSet) error {
+	abbadsl.UponConfMessageReceived(m, func(from t.NodeID, r uint64, values abbat.ValueSet) error {
 		if r != state.round.number {
 			logger.Log(logging.LevelDebug, "wrong round for CONF(r, c)", "current", state.round.number, "got", r)
 			return nil // wrong round
@@ -346,7 +361,11 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 			return nil // already over
 		}
 
-		rnetdsl.SendMessage(m, mc.ReliableNet, CoinMsgID(), CoinMessage(mc.Self, context.roundNumber, sigShare), params.AllNodes)
+		rnetdsl.SendMessage(m, mc.ReliableNet,
+			CoinMsgID(),
+			CoinMessage(mc.Self, context.roundNumber, sigShare).Pb(),
+			params.AllNodes,
+		)
 
 		return nil
 	})
@@ -459,7 +478,11 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 
 			// If in fact values = { s_r }, broadcast FINISH(s_r) if we haven't broadcast FINISH(_) already
 			if v == sR && !state.finishSent {
-				rnetdsl.SendMessage(m, mc.ReliableNet, FinishMsgID(), FinishMessage(mc.Self, sR), params.AllNodes)
+				rnetdsl.SendMessage(m, mc.ReliableNet,
+					FinishMsgID(),
+					FinishMessage(mc.Self, sR).Pb(),
+					params.AllNodes,
+				)
 				state.finishSent = true
 			}
 		}
@@ -470,7 +493,11 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 		state.step = 4 // can't use updateStep, must go backwards
 
 		// 4. broadcast INIT(r, est)
-		rnetdsl.SendMessage(m, mc.ReliableNet, InitMsgID(state.round.estimate), InitMessage(mc.Self, state.round.number, state.round.estimate), params.AllNodes)
+		rnetdsl.SendMessage(m, mc.ReliableNet,
+			InitMsgID(state.round.estimate),
+			InitMessage(mc.Self, state.round.number, state.round.estimate).Pb(),
+			params.AllNodes,
+		)
 		state.updateStep(5)
 
 		return nil
@@ -479,7 +506,7 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 
 // resets round state, apart from the round number and estimate
 func (rs *abbaRoundState) resetState(params *ModuleParams) {
-	rs.values = abbadsl.EmptyValueSet()
+	rs.values = abbat.VSetEmpty
 
 	rs.initRecvd = make(map[bool]recvTracker, 2)
 	for _, v := range []bool{false, true} {
@@ -511,11 +538,11 @@ func makeBoolCounterMap() map[bool]int {
 	return m
 }
 
-func makeValueSetCounterMap() map[abbadsl.ValueSet]int {
-	m := make(map[abbadsl.ValueSet]int, 4)
+func makeValueSetCounterMap() map[abbat.ValueSet]int {
+	m := make(map[abbat.ValueSet]int, 4)
 
-	for _, v := range []abbapb.ValueSet{abbapb.ValueSet_EMPTY, abbapb.ValueSet_ONE, abbapb.ValueSet_ZERO, abbapb.ValueSet_ZERO_AND_ONE} {
-		m[abbadsl.ValueSet(v)] = 0
+	for _, v := range []abbat.ValueSet{abbat.VSetEmpty, abbat.VSetZero, abbat.VSetOne, abbat.VSetZeroAndOne} {
+		m[v] = 0
 	}
 
 	return m
