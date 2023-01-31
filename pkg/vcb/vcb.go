@@ -3,20 +3,15 @@ package vcb
 import (
 	"fmt"
 
-	"golang.org/x/exp/slices"
-
 	"github.com/filecoin-project/mir/pkg/dsl"
-	"github.com/filecoin-project/mir/pkg/factorymodule"
 	"github.com/filecoin-project/mir/pkg/logging"
 	mpdsl "github.com/filecoin-project/mir/pkg/mempool/dsl"
 	"github.com/filecoin-project/mir/pkg/modules"
-	"github.com/filecoin-project/mir/pkg/pb/factorymodulepb"
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"
 	"github.com/filecoin-project/mir/pkg/reliablenet/rnetdsl"
 	"github.com/filecoin-project/mir/pkg/serializing"
 	threshDsl "github.com/filecoin-project/mir/pkg/threshcrypto/dsl"
 	t "github.com/filecoin-project/mir/pkg/types"
-	"github.com/filecoin-project/mir/pkg/util/maputil"
 	"github.com/filecoin-project/mir/pkg/vcb/vcbdsl"
 )
 
@@ -96,48 +91,6 @@ func SigData(instanceUID []byte, txIDs []t.TxID) [][]byte {
 	}
 
 	return res
-}
-
-func NewReconfigurableModule(mc *ModuleConfig, nodeID t.NodeID, logger logging.Logger) *factorymodule.FactoryModule {
-	return factorymodule.New(
-		mc.Self,
-		factorymodule.DefaultParams(
-
-			// This function will be called whenever the factory module
-			// is asked to create a new instance of the vcb protocol.
-			func(vcbID t.ModuleID, genericParams *factorymodulepb.GeneratorParams) (modules.PassiveModule, error) {
-				params := genericParams.Type.(*factorymodulepb.GeneratorParams_Vcb).Vcb
-
-				// Extract the IDs of the nodes in the membership associated with this instance
-				allNodes := maputil.GetSortedKeys(t.Membership(params.Membership))
-				leader := t.NodeID(params.LeaderId)
-
-				if !slices.Contains(allNodes, leader) {
-					return nil, fmt.Errorf("leader must be part of the node set")
-				}
-
-				// Crate a copy of basic module config with an adapted ID for the submodule.
-				submc := *mc
-				submc.Self = vcbID
-
-				// Create a new instance of the vcb protocol.
-				inst := NewModule(
-					&submc,
-					&ModuleParams{
-						// TODO: Use InstanceUIDs properly.
-						//       (E.g., concatenate this with the instantiating protocol's InstanceUID when introduced.)
-						InstanceUID: []byte(vcbID),
-						AllNodes:    allNodes,
-						Leader:      leader,
-					},
-					nodeID,
-					logging.Decorate(logger, "Vcb: ", "leader", params.LeaderId, "id", vcbID),
-				)
-				return inst, nil
-			},
-		),
-		logger,
-	)
 }
 
 func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging.Logger) modules.PassiveModule {

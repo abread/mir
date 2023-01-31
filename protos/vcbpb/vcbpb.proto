@@ -4,7 +4,6 @@ package vcbpb;
 
 option go_package = "github.com/filecoin-project/mir/pkg/pb/vcbpb";
 
-import "commonpb/commonpb.proto";
 import "requestpb/requestpb.proto";
 
 // TODO: use DSL codegen
@@ -59,14 +58,4 @@ message EchoMessage {
 message FinalMessage {
   repeated requestpb.Request txs       = 1;
   bytes                      signature = 2;
-}
-
-
-// ============================================================
-// Instantiation parameters
-// ============================================================
-
-message InstanceParams {
-  commonpb.Membership membership = 1;
-  string              leader_id  = 2;
 }

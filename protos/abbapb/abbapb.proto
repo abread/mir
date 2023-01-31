@@ -4,8 +4,6 @@ package abbapb;
 
 option go_package = "github.com/filecoin-project/mir/pkg/pb/abbapb";
 
-import "commonpb/commonpb.proto";
-
 import "mir/codegen_extensions.proto";
 import "net/codegen_extensions.proto";
 
@@ -88,13 +86,4 @@ message CoinMessage {
 
   uint64 round_number = 1;
   bytes  coin_share   = 2;
-}
-
-
-// ============================================================
-// Instantiation parameters
-// ============================================================
-
-message InstanceParams {
-  commonpb.Membership membership = 1;
 }
