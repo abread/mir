@@ -16,6 +16,7 @@ import (
 	factorymodulepb "github.com/filecoin-project/mir/pkg/pb/factorymodulepb"
 	isspb "github.com/filecoin-project/mir/pkg/pb/isspb"
 	mempoolpb "github.com/filecoin-project/mir/pkg/pb/mempoolpb"
+	modringpb "github.com/filecoin-project/mir/pkg/pb/modringpb"
 	ordererspb "github.com/filecoin-project/mir/pkg/pb/ordererspb"
 	pingpongpb "github.com/filecoin-project/mir/pkg/pb/pingpongpb"
 	reliablenetpb "github.com/filecoin-project/mir/pkg/pb/reliablenetpb"
@@ -180,6 +181,10 @@ func (w *Event_Checkpoint) Unwrap() *checkpointpb.Event {
 
 func (w *Event_SbEvent) Unwrap() *ordererspb.SBInstanceEvent {
 	return w.SbEvent
+}
+
+func (w *Event_Modring) Unwrap() *modringpb.Event {
+	return w.Modring
 }
 
 func (w *Event_Vcb) Unwrap() *vcbpb.Event {
