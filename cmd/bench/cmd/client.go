@@ -77,7 +77,7 @@ func runClient() error {
 		// The break statement causes the client to send its transactions to only one single node.
 		// Remove it for the client to send its transactions to all nodes.
 		// TODO: Make this properly configurable and remove the hack.
-		break
+		// break // sending to all nodes is more reproducible
 	}
 
 	ctx, stop := context.WithCancel(context.Background())
