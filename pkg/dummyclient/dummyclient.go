@@ -121,7 +121,6 @@ func (dc *DummyClient) SubmitRequest(data []byte) error {
 	for nID, client := range dc.clients {
 		go func(nID t.NodeID, client requestreceiver.RequestReceiver_ListenClient) {
 			if err := client.Send(reqMsg); err != nil {
-
 				lock.Lock()
 				// If sending the request to a node fails, record that node's ID.
 				sendFailures = append(sendFailures, nID)
@@ -131,9 +130,9 @@ func (dc *DummyClient) SubmitRequest(data []byte) error {
 					firstSndErr = err
 				}
 				lock.Unlock()
-
-				wg.Done()
 			}
+
+			wg.Done()
 		}(nID, client)
 	}
 
