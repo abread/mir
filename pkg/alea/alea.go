@@ -118,6 +118,7 @@ func New(ownID t.NodeID, config *Config, params *Params, startingChkp *checkpoin
 			AleaAgreement: config.AleaAgreement,
 			BatchDB:       config.BatchDB,
 			Mempool:       config.Mempool,
+			Net:           config.Net,
 			ReliableNet:   config.ReliableNet,
 			ThreshCrypto:  config.ThreshCrypto,
 			Timer:         config.Timer,
