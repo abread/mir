@@ -110,22 +110,34 @@ func (dc *DummyClient) SubmitRequest(data []byte) error {
 	dc.nextReqNo++
 
 	// Declare variables keeping track of failed send attempts.
+	lock := sync.Mutex{}
 	sendFailures := make([]t.NodeID, 0) // List of nodes to which sending the request failed.
 	var firstSndErr error               // The error produced by the first sending failure.
 
+	wg := sync.WaitGroup{}
+	wg.Add(len(dc.clients))
+
 	// Send the request to all nodes.
 	for nID, client := range dc.clients {
-		if err := client.Send(reqMsg); err != nil {
+		go func(nID t.NodeID, client requestreceiver.RequestReceiver_ListenClient) {
+			if err := client.Send(reqMsg); err != nil {
 
-			// If sending the request to a node fails, record that node's ID.
-			sendFailures = append(sendFailures, nID)
+				lock.Lock()
+				// If sending the request to a node fails, record that node's ID.
+				sendFailures = append(sendFailures, nID)
 
-			// If this is the first failure, save it for later reporting.
-			if firstSndErr == nil {
-				firstSndErr = err
+				// If this is the first failure, save it for later reporting.
+				if firstSndErr == nil {
+					firstSndErr = err
+				}
+				lock.Unlock()
+
+				wg.Done()
 			}
-		}
+		}(nID, client)
 	}
+
+	wg.Wait()
 
 	// Return an error summarizing the failed send attempts or nil if the request was successfully sent to all nodes.
 	if firstSndErr != nil {
