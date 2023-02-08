@@ -10,7 +10,7 @@ type abbaRoundState struct {
 	estimate bool
 	values   abbat.ValueSet
 
-	initRecvd               map[bool]abbat.RecvTracker
+	initRecvd               abbat.BoolRecvTrackers
 	initRecvdEstimateCounts abbat.BoolCounters
 
 	auxRecvd            abbat.RecvTracker
@@ -32,11 +32,7 @@ type abbaRoundState struct {
 func (rs *abbaRoundState) resetState(params *ModuleParams) {
 	rs.values = abbat.VSetEmpty
 
-	rs.initRecvd = make(map[bool]recvTracker, 2)
-	for _, v := range []bool{false, true} {
-		rs.initRecvd[v] = make(abbat.RecvTracker, params.GetN())
-	}
-
+	rs.initRecvd.Reset(params.GetN())
 	rs.initRecvdEstimateCounts.Reset()
 
 	rs.auxRecvd = make(abbat.RecvTracker, params.GetN())
