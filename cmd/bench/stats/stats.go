@@ -72,6 +72,8 @@ func (s *Stats) WriteCSVHeader(w *csv.Writer) {
 		"memStackInUse",
 		"memHeapAlloc",
 		"memTotalAlloc",
+		"memMallocs",
+		"memFrees",
 		"memPauseTotalNs",
 		"memNumGC",
 	}
@@ -110,6 +112,8 @@ func (s *Stats) WriteCSVRecordAndReset(w *csv.Writer, d time.Duration) {
 		strconv.FormatUint(memStats.StackInuse, 10),
 		strconv.FormatUint(memStats.HeapAlloc, 10),
 		strconv.FormatUint(memStats.TotalAlloc, 10),
+		strconv.FormatUint(memStats.Mallocs, 10),
+		strconv.FormatUint(memStats.Frees, 10),
 		strconv.FormatUint(memStats.PauseTotalNs, 10),
 		strconv.FormatUint(uint64(memStats.NumGC), 10),
 	}
