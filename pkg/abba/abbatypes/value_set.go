@@ -16,9 +16,9 @@ func (vs ValueSet) Pb() uint32 {
 func boolToValueSet(v bool) ValueSet {
 	if v {
 		return VSetOne
-	} else {
-		return VSetZero
 	}
+
+	return VSetZero
 }
 
 func (vs *ValueSet) Add(v bool) {

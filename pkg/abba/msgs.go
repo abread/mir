@@ -35,3 +35,31 @@ func CoinMessage(moduleID t.ModuleID, roundNumber uint64, coinShare []byte) *mes
 func subidForRoundMsg(moduleID t.ModuleID, roundNumber uint64) t.ModuleID {
 	return moduleID.Then(RoundMsgsNs).Then(t.NewModuleIDFromInt(roundNumber))
 }
+
+const (
+	MsgTypeFinish uint8 = iota
+	MsgTypeInit
+	MsgTypeAux
+	MsgTypeConf
+	MsgTypeCoin
+)
+
+func FinishMsgID() []byte {
+	return []byte{MsgTypeFinish}
+}
+
+func InitMsgID(v bool) []byte {
+	return []byte{MsgTypeInit, boolToNum(v)}
+}
+
+func AuxMsgID() []byte {
+	return []byte{MsgTypeAux}
+}
+
+func ConfMsgID() []byte {
+	return []byte{MsgTypeConf}
+}
+
+func CoinMsgID() []byte {
+	return []byte{MsgTypeCoin}
+}
