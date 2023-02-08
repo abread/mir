@@ -1,10 +1,10 @@
-package abba
+package abbatypes
 
 import t "github.com/filecoin-project/mir/pkg/types"
 
-type recvTracker map[t.NodeID]struct{}
+type RecvTracker map[t.NodeID]struct{}
 
-func (r recvTracker) Register(node t.NodeID) bool {
+func (r RecvTracker) Register(node t.NodeID) bool {
 	if _, present := r[node]; present {
 		return false
 	}

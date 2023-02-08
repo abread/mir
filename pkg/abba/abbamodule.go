@@ -56,7 +56,7 @@ type abbaModuleState struct {
 
 	step uint8 // next/in-progress protocol step
 
-	finishRecvd       recvTracker
+	finishRecvd            abbat.RecvTracker
 	finishRecvdValueCounts abbat.BoolCounters
 
 	finishSent bool
@@ -86,7 +86,7 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 			number: 0,
 		},
 
-		finishRecvd:       make(recvTracker, params.GetN()),
+		finishRecvd: make(abbat.RecvTracker, params.GetN()),
 
 		finishSent: false,
 	}
@@ -94,12 +94,11 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 	state.round.resetState(params)
 
 	abbadsl.UponFinishMessageReceived(m, func(from t.NodeID, value bool) error {
-		if _, present := state.finishRecvd[from]; present {
+		rnetdsl.Ack(m, mc.ReliableNet, mc.Self.Then(GlobalMsgsNs), FinishMsgID(), from)
+		if !state.finishRecvd.Register(from) {
 			logger.Log(logging.LevelDebug, "duplicate FINISH(v)", "v", value)
 			return nil // duplicate message
 		}
-		rnetdsl.Ack(m, mc.ReliableNet, mc.Self.Then(GlobalMsgsNs), FinishMsgID(), from)
-		state.finishRecvd[from] = struct{}{}
 
 		state.finishRecvdValueCounts.Increment(value)
 
@@ -164,12 +163,13 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 			logger.Log(logging.LevelDebug, "wrong round for INIT(r, est)", "current", state.round.number, "got", r)
 			return nil // not ready yet or wrong round
 		}
-		if _, present := state.round.initRecvd[est][from]; present {
+
+		rnetdsl.Ack(m, mc.ReliableNet, subidForRoundMsg(mc.Self, r), InitMsgID(est), from)
+		if !state.round.initRecvd.Register(est, from) {
 			logger.Log(logging.LevelDebug, "duplicate INIT(r, _)", "r", r)
 			return nil // duplicate message
 		}
-		rnetdsl.Ack(m, mc.ReliableNet, subidForRoundMsg(mc.Self, r), InitMsgID(est), from)
-		state.round.initRecvd[est][from] = struct{}{}
+
 		state.round.initRecvdEstimateCounts.Increment(est)
 
 		return nil
@@ -223,12 +223,12 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 			logger.Log(logging.LevelDebug, "wrong round for AUX(r, v)", "current", state.round.number, "got", r)
 			return nil // not processing this round
 		}
-		if _, present := state.round.auxRecvd[from]; present {
+
+		rnetdsl.Ack(m, mc.ReliableNet, subidForRoundMsg(mc.Self, r), AuxMsgID(), from)
+		if !state.round.auxRecvd.Register(from) {
 			logger.Log(logging.LevelDebug, "duplicate AUX(r, _)", "r", r)
 			return nil // duplicate message
 		}
-		rnetdsl.Ack(m, mc.ReliableNet, subidForRoundMsg(mc.Self, r), AuxMsgID(), from)
-		state.round.auxRecvd[from] = struct{}{}
 		state.round.auxRecvdValueCounts.Increment(value)
 
 		logger.Log(logging.LevelDebug, "recvd AUX(r, v)", "r", r, "v", value)
@@ -261,12 +261,12 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 			logger.Log(logging.LevelDebug, "wrong round for CONF(r, c)", "current", state.round.number, "got", r)
 			return nil // wrong round
 		}
-		if _, present := state.round.confRecvd[from]; present {
+
+		rnetdsl.Ack(m, mc.ReliableNet, subidForRoundMsg(mc.Self, r), ConfMsgID(), from)
+		if !state.round.confRecvd.Register(from) {
 			logger.Log(logging.LevelDebug, "duplicate CONF(r, _)", "r", r)
 			return nil // duplicate message
 		}
-		rnetdsl.Ack(m, mc.ReliableNet, subidForRoundMsg(mc.Self, r), ConfMsgID(), from)
-		state.round.confRecvd[from] = struct{}{}
 		state.round.confRecvdValues[values]++
 
 		return nil
@@ -317,14 +317,13 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 			logger.Log(logging.LevelDebug, "already terminated (recvd COIN)")
 			return nil // already terminated
 		}
-		if _, present := state.round.coinRecvd[from]; present {
+
+		rnetdsl.Ack(m, mc.ReliableNet, subidForRoundMsg(mc.Self, r), CoinMsgID(), from)
+		if !state.round.coinRecvd.Register(from) {
 			logger.Log(logging.LevelDebug, "duplicate COIN(r, _)", "r", r)
 			return nil // duplicate message
 		}
-
-		rnetdsl.Ack(m, mc.ReliableNet, subidForRoundMsg(mc.Self, r), CoinMsgID(), from)
 		logger.Log(logging.LevelDebug, "recvd COIN(r, share)", "r", r)
-		state.round.coinRecvd[from] = struct{}{}
 
 		context := &verifyCoinShareCtx{
 			roundNumber: r,
