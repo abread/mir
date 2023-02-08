@@ -267,7 +267,7 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 			logger.Log(logging.LevelDebug, "duplicate CONF(r, _)", "r", r)
 			return nil // duplicate message
 		}
-		state.round.confRecvdValues[values]++
+		state.round.confRecvdValueSetCounts.Increment(values)
 
 		return nil
 	})

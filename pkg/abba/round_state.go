@@ -16,8 +16,8 @@ type abbaRoundState struct {
 	auxRecvd            abbat.RecvTracker
 	auxRecvdValueCounts abbat.BoolCounters
 
-	confRecvd       abbat.RecvTracker
-	confRecvdValues map[abbat.ValueSet]int
+	confRecvd               abbat.RecvTracker
+	confRecvdValueSetCounts abbat.ValueSetCounters
 
 	coinRecvd         abbat.RecvTracker
 	coinRecvdOkShares [][]byte
@@ -39,7 +39,7 @@ func (rs *abbaRoundState) resetState(params *ModuleParams) {
 	rs.auxRecvdValueCounts.Reset()
 
 	rs.confRecvd = make(abbat.RecvTracker, params.GetN())
-	rs.confRecvdValues = makeValueSetCounterMap()
+	rs.confRecvdValueSetCounts.Reset()
 
 	rs.coinRecvd = make(abbat.RecvTracker, params.GetN())
 	rs.coinRecvdOkShares = make([][]byte, 0, params.GetN())
@@ -71,9 +71,9 @@ func (rs *abbaRoundState) isNiceAuxValueCount(params *ModuleParams) bool {
 func (rs *abbaRoundState) isNiceConfValuesCount(params *ModuleParams) bool {
 	total := 0
 
-	for set, count := range rs.confRecvdValues {
+	for _, set := range []abbat.ValueSet{abbat.VSetEmpty, abbat.VSetZero, abbat.VSetOne, abbat.VSetZeroAndOne} {
 		if set.SubsetOf(rs.values) {
-			total += count
+			total += rs.confRecvdValueSetCounts.Get(set)
 		}
 	}
 
