@@ -57,7 +57,7 @@ type abbaModuleState struct {
 	step uint8 // next/in-progress protocol step
 
 	finishRecvd       recvTracker
-	finishRecvdValues map[bool]int
+	finishRecvdValueCounts abbat.BoolCounters
 
 	finishSent bool
 }
@@ -87,7 +87,6 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 		},
 
 		finishRecvd:       make(recvTracker, params.GetN()),
-		finishRecvdValues: makeBoolCounterMap(),
 
 		finishSent: false,
 	}
@@ -101,10 +100,11 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 		}
 		rnetdsl.Ack(m, mc.ReliableNet, mc.Self.Then(GlobalMsgsNs), FinishMsgID(), from)
 		state.finishRecvd[from] = struct{}{}
-		state.finishRecvdValues[value]++
+
+		state.finishRecvdValueCounts.Increment(value)
 
 		// 1. upon receiving weak support for FINISH(v), broadcast FINISH(v)
-		if !state.finishSent && state.finishRecvdValues[value] >= params.weakSupportThresh() {
+		if !state.finishSent && state.finishRecvdValueCounts.Get(value) >= params.weakSupportThresh() {
 			logger.Log(logging.LevelDebug, "received weak support for FINISH(v)", "v", value)
 			rnetdsl.SendMessage(m, mc.ReliableNet,
 				FinishMsgID(),
@@ -115,7 +115,7 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 		}
 
 		// 2. upon receiving strong support for FINISH(v), output v and terminate
-		if state.step <= MaxStep && state.finishRecvdValues[value] >= params.strongSupportThresh() {
+		if state.step <= MaxStep && state.finishRecvdValueCounts.Get(value) >= params.strongSupportThresh() {
 			logger.Log(logging.LevelDebug, "received strong support for FINISH(v)", "v", value)
 			abbadsl.Deliver(m, mc.Consumer, value, mc.Self)
 			state.updateStep(math.MaxUint8) // no more progress can be made
