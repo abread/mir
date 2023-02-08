@@ -183,7 +183,7 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 		r := state.round.number
 		for _, est := range []bool{false, true} {
 			// 5. upon receiving weak support for INIT(r, v), add v to values and broadcast INIT(r, v)
-			if !state.round.initWeakSupportReached[est] && state.round.initRecvdEstimateCounts.Get(est) >= params.weakSupportThresh() {
+			if !state.round.initWeakSupportReachedForValue.Get(est) && state.round.initRecvdEstimateCounts.Get(est) >= params.weakSupportThresh() {
 				logger.Log(logging.LevelDebug, "received weak support for INIT(r, v)", "r", r, "v", est)
 
 				state.round.values.Add(est)
@@ -197,7 +197,7 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 					)
 				}
 
-				state.round.initWeakSupportReached[est] = true
+				state.round.initWeakSupportReachedForValue.Set(est)
 
 				state.updateStep(6)
 			}

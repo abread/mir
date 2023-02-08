@@ -22,10 +22,10 @@ type abbaRoundState struct {
 	coinRecvd         recvTracker
 	coinRecvdOkShares [][]byte
 
-	initWeakSupportReached   map[bool]bool
-	auxSent                  bool
-	coinRecoverInProgress    bool
-	coinRecoverMinShareCount int
+	initWeakSupportReachedForValue abbat.BoolFlags
+	auxSent                        bool
+	coinRecoverInProgress          bool
+	coinRecoverMinShareCount       int
 }
 
 // resets round state, apart from the round number and estimate
@@ -48,7 +48,7 @@ func (rs *abbaRoundState) resetState(params *ModuleParams) {
 	rs.coinRecvd = make(recvTracker, params.strongSupportThresh())
 	rs.coinRecvdOkShares = make([][]byte, 0, params.GetN())
 
-	rs.initWeakSupportReached = makeBoolBoolMap()
+	rs.initWeakSupportReachedForValue.Reset()
 	rs.auxSent = false
 	rs.coinRecoverInProgress = false
 	rs.coinRecoverMinShareCount = params.strongSupportThresh() - 1
