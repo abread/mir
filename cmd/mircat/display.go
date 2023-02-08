@@ -65,8 +65,9 @@ func displayEvents(args *arguments) error {
 
 				validEvent := args.selectedEventTypes.IsEventSelected(event)
 				_, validDest := args.selectedEventDests[event.DestModule]
+				event = customTransform(event) // Apply custom transformation to event.
 
-				if validEvent && validDest && index >= args.offset && (args.limit == 0 || index < args.offset+args.limit) {
+				if validEvent && validDest && event != nil && index >= args.offset && (args.limit == 0 || index < args.offset+args.limit) {
 					// If event type has been selected for displaying
 					displayEvent(event, metadata)
 				}
