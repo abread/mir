@@ -483,7 +483,7 @@ func (rs *abbaRoundState) resetState(params *ModuleParams) {
 	rs.confRecvdValues = makeValueSetCounterMap()
 
 	rs.coinRecvd = make(recvTracker, params.strongSupportThresh())
-	rs.coinRecvdOkShares = make([][]byte, 0, params.GetN()-params.GetF())
+	rs.coinRecvdOkShares = make([][]byte, 0, params.GetN())
 
 	rs.initWeakSupportReached = makeBoolBoolMap()
 	rs.auxSent = false

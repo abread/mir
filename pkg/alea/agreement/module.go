@@ -72,7 +72,7 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 		nodeID: nodeID,
 		logger: logger,
 
-		roundDecisionHistory: make([]bool, 0),
+		roundDecisionHistory: nil, // TODO: consider using a bitvec (will reduce space and batch reallocations as a bonus)
 
 		currentAbba: nil,
 

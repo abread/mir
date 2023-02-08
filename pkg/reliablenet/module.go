@@ -230,42 +230,42 @@ func (m *Module) SendMessage(id string, msg *messagepb.Message, destinations []t
 	return evsOut, nil
 }
 
+// Initial capacity for message queue associated to a module
+// The queue is created lazily, so it will at least have one message added to it
+// In a ideal scenario, are replicas are more or less up-to-date so we should only need to keep
+// a few messages around.
+const initialQueueCapacity = 4
+
 func (m *Module) ensureQueueExists(destModule t.ModuleID) {
 	if _, present := m.queues[destModule]; !present {
-		m.queues[destModule] = make(map[string]*eventpb.SendMessage)
+		m.queues[destModule] = make(map[string]*eventpb.SendMessage, initialQueueCapacity)
 	}
 }
 
 func (m *Module) MarkModuleMsgsRecvd(destModule t.ModuleID, destinations []t.NodeID) (*events.EventList, error) {
 	// optimization for all destinations
 	if len(destinations) == len(m.params.AllNodes) {
-		toDelete := make([]t.ModuleID, 0, 1)
 		for id := range m.queues {
 			if id.IsSubOf(destModule) || id == destModule {
-				toDelete = append(toDelete, id)
+				delete(m.queues, id)
 			}
-		}
-		for _, k := range toDelete {
-			delete(m.queues, k)
 		}
 
 		return &events.EventList{}, nil
 	}
 
-	queuesToDelete := make([]t.ModuleID, 0)
 	for queueID, queue := range m.queues {
 		if !queueID.IsSubOf(destModule) && queueID != destModule {
 			continue
 		}
 
-		msgsToDelete := make([]string, 0)
 		for msgID, qmsg := range queue {
 			newDests := sliceutil.Filter(qmsg.Destinations, func(_ int, d string) bool {
 				return !slices.Contains(destinations, t.NodeID(d))
 			})
 
 			if len(newDests) == 0 {
-				msgsToDelete = append(msgsToDelete, msgID)
+				delete(queue, msgID)
 			} else {
 				// don't modify the underlying message to avoid data races
 				queue[msgID] = &eventpb.SendMessage{
@@ -275,17 +275,9 @@ func (m *Module) MarkModuleMsgsRecvd(destModule t.ModuleID, destinations []t.Nod
 			}
 		}
 
-		for _, msgID := range msgsToDelete {
-			delete(queue, msgID)
-		}
-
 		if len(queue) == 0 {
-			queuesToDelete = append(queuesToDelete, queueID)
+			delete(m.queues, queueID)
 		}
-	}
-
-	for _, queueID := range queuesToDelete {
-		delete(m.queues, queueID)
 	}
 
 	return &events.EventList{}, nil

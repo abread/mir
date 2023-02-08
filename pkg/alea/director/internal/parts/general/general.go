@@ -27,9 +27,9 @@ type state struct {
 	batchCutInProgress              bool
 	bcOwnQueueHead                  uint64
 
-	agQueueHeads map[uint32]uint64
+	agQueueHeads []uint64
 
-	slotsReadyToDeliver   map[uint32]set[uint64]
+	slotsReadyToDeliver   []set[uint64]
 	stalledAgreementSlot  *aleapbCommon.Slot
 	stalledAgreementRound uint64
 }
@@ -231,9 +231,9 @@ func newState(params *common.ModuleParams, tunables *common.ModuleTunables, node
 		batchCutInProgress:              false,
 		bcOwnQueueHead:                  0,
 
-		agQueueHeads: make(map[uint32]uint64, N),
+		agQueueHeads: make([]uint64, N),
 
-		slotsReadyToDeliver: make(map[uint32]set[uint64], N),
+		slotsReadyToDeliver: make([]set[uint64], N),
 		stalledAgreementSlot: &aleapbCommon.Slot{
 			QueueIdx:  0,
 			QueueSlot: 0,

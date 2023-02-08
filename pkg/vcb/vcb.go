@@ -180,7 +180,7 @@ func setupVcbLeader(m dsl.Module, mc *ModuleConfig, params *ModuleParams, common
 		sentFinal: false,
 
 		receivedEcho: make(map[t.NodeID]struct{}, len(params.AllNodes)),
-		sigShares:    make([][]byte, 0, params.GetN()-params.GetF()),
+		sigShares:    make([][]byte, 0, params.GetN()),
 	}
 
 	vcbdsl.UponBroadcastRequest(m, func(txIDs []t.TxID, txs []*requestpb.Request) error {
