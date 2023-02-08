@@ -170,7 +170,7 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 		}
 		rnetdsl.Ack(m, mc.ReliableNet, subidForRoundMsg(mc.Self, r), InitMsgID(est), from)
 		state.round.initRecvd[est][from] = struct{}{}
-		state.round.initRecvdEstimates[est]++
+		state.round.initRecvdEstimateCounts.Increment(est)
 
 		return nil
 	})
@@ -183,7 +183,7 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 		r := state.round.number
 		for _, est := range []bool{false, true} {
 			// 5. upon receiving weak support for INIT(r, v), add v to values and broadcast INIT(r, v)
-			if !state.round.initWeakSupportReached[est] && state.round.initRecvdEstimates[est] >= params.weakSupportThresh() {
+			if !state.round.initWeakSupportReached[est] && state.round.initRecvdEstimateCounts.Get(est) >= params.weakSupportThresh() {
 				logger.Log(logging.LevelDebug, "received weak support for INIT(r, v)", "r", r, "v", est)
 
 				state.round.values.Add(est)
@@ -203,7 +203,7 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 			}
 
 			// 6. upon receiving strong support for INIT(r, v), broadcast AUX(r, v) if we have not already broadcast AUX(r, _)
-			if !state.round.auxSent && state.round.initRecvdEstimates[est] >= params.strongSupportThresh() {
+			if !state.round.auxSent && state.round.initRecvdEstimateCounts.Get(est) >= params.strongSupportThresh() {
 				logger.Log(logging.LevelDebug, "received strong support for INIT(r, v)", "r", r, "v", est)
 				rnetdsl.SendMessage(m, mc.ReliableNet,
 					AuxMsgID(),
@@ -229,7 +229,7 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 		}
 		rnetdsl.Ack(m, mc.ReliableNet, subidForRoundMsg(mc.Self, r), AuxMsgID(), from)
 		state.round.auxRecvd[from] = struct{}{}
-		state.round.auxRecvdValues[value]++
+		state.round.auxRecvdValueCounts.Increment(value)
 
 		logger.Log(logging.LevelDebug, "recvd AUX(r, v)", "r", r, "v", value)
 
