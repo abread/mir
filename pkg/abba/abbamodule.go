@@ -9,8 +9,8 @@ import (
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/modules"
 	abbadsl "github.com/filecoin-project/mir/pkg/pb/abbapb/dsl"
+	threshDsl "github.com/filecoin-project/mir/pkg/pb/threshcryptopb/dsl"
 	"github.com/filecoin-project/mir/pkg/reliablenet/rnetdsl"
-	threshDsl "github.com/filecoin-project/mir/pkg/threshcrypto/dsl"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -368,7 +368,7 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 	})
 
 	// still in 9. sample coin
-	threshDsl.UponRecoverResult(m, func(ok bool, fullSig []byte, err string, context *recoverCoinCtx) error {
+	threshDsl.UponRecoverResult(m, func(fullSig []byte, ok bool, err string, context *recoverCoinCtx) error {
 		if context.roundNumber != state.round.number {
 			return fmt.Errorf("impossible condition: changed round without coin toss")
 		}

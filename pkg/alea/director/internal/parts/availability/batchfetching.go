@@ -16,9 +16,9 @@ import (
 	aleapbCommon "github.com/filecoin-project/mir/pkg/pb/aleapb/common"
 	apb "github.com/filecoin-project/mir/pkg/pb/availabilitypb"
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"
+	threshDsl "github.com/filecoin-project/mir/pkg/pb/threshcryptopb/dsl"
 	"github.com/filecoin-project/mir/pkg/reliablenet/rnetdsl"
 	"github.com/filecoin-project/mir/pkg/serializing"
-	threshDsl "github.com/filecoin-project/mir/pkg/threshcrypto/dsl"
 	t "github.com/filecoin-project/mir/pkg/types"
 	"github.com/filecoin-project/mir/pkg/vcb"
 )

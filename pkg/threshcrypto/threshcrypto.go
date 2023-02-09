@@ -9,7 +9,8 @@ import (
 	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
 	"github.com/filecoin-project/mir/pkg/pb/threshcryptopb"
-	tcEvents "github.com/filecoin-project/mir/pkg/threshcrypto/events"
+	tcEvents "github.com/filecoin-project/mir/pkg/pb/threshcryptopb/events"
+	threshcryptopbtypes "github.com/filecoin-project/mir/pkg/pb/threshcryptopb/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -49,8 +50,9 @@ func (c *MirModule) applyTCEvent(event *threshcryptopb.Event) (*events.EventList
 			return nil, err
 		}
 
+		origin := threshcryptopbtypes.SignShareOriginFromPb(e.SignShare.Origin)
 		return events.ListOf(
-			tcEvents.SignShareResult(t.ModuleID(e.SignShare.Origin.Module), sigShare, e.SignShare.Origin),
+			tcEvents.SignShareResult(origin.Module, sigShare, origin).Pb(),
 		), nil
 
 	case *threshcryptopb.Event_VerifyShare:
@@ -64,8 +66,9 @@ func (c *MirModule) applyTCEvent(event *threshcryptopb.Event) (*events.EventList
 			errStr = err.Error()
 		}
 
+		origin := threshcryptopbtypes.VerifyShareOriginFromPb(e.VerifyShare.Origin)
 		return events.ListOf(
-			tcEvents.VerifyShareResult(t.ModuleID(e.VerifyShare.Origin.Module), ok, errStr, e.VerifyShare.Origin),
+			tcEvents.VerifyShareResult(origin.Module, ok, errStr, origin).Pb(),
 		), nil
 
 	case *threshcryptopb.Event_VerifyFull:
@@ -79,8 +82,9 @@ func (c *MirModule) applyTCEvent(event *threshcryptopb.Event) (*events.EventList
 			errStr = err.Error()
 		}
 
+		origin := threshcryptopbtypes.VerifyFullOriginFromPb(e.VerifyFull.Origin)
 		return events.ListOf(
-			tcEvents.VerifyFullResult(t.ModuleID(e.VerifyFull.Origin.Module), ok, errStr, e.VerifyFull.Origin),
+			tcEvents.VerifyFullResult(origin.Module, ok, errStr, origin).Pb(),
 		), nil
 
 	case *threshcryptopb.Event_Recover:
@@ -94,8 +98,9 @@ func (c *MirModule) applyTCEvent(event *threshcryptopb.Event) (*events.EventList
 			errStr = err.Error()
 		}
 
+		origin := threshcryptopbtypes.RecoverOriginFromPb(e.Recover.Origin)
 		return events.ListOf(
-			tcEvents.RecoverResult(t.ModuleID(e.Recover.Origin.Module), fullSig, ok, errStr, e.Recover.Origin),
+			tcEvents.RecoverResult(origin.Module, fullSig, ok, errStr, origin).Pb(),
 		), nil
 	default:
 		// Complain about all other incoming event types.

@@ -11,7 +11,7 @@ import (
 	vcbdsl "github.com/filecoin-project/mir/pkg/pb/vcbpb/dsl"
 	"github.com/filecoin-project/mir/pkg/reliablenet/rnetdsl"
 	"github.com/filecoin-project/mir/pkg/serializing"
-	threshDsl "github.com/filecoin-project/mir/pkg/threshcrypto/dsl"
+	threshDsl "github.com/filecoin-project/mir/pkg/pb/threshcryptopb/dsl"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -233,7 +233,7 @@ func setupVcbLeader(m dsl.Module, mc *ModuleConfig, params *ModuleParams, common
 		return nil
 	})
 
-	threshDsl.UponRecoverResult(m, func(ok bool, fullSig []byte, err string, context *recoverVcbSigCtx) error {
+	threshDsl.UponRecoverResult(m, func(fullSig []byte, ok bool, err string, context *recoverVcbSigCtx) error {
 		if ok && !state.sentFinal {
 			state.sentFinal = true
 
