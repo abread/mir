@@ -4,6 +4,7 @@ import (
 	types1 "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
 	requestpb "github.com/filecoin-project/mir/pkg/pb/requestpb"
 	types2 "github.com/filecoin-project/mir/pkg/pb/vcbpb/types"
+	tctypes "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 	types "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -37,7 +38,7 @@ func EchoMessage(destModule types.ModuleID, signatureShare []uint8) *types1.Mess
 	}
 }
 
-func FinalMessage(destModule types.ModuleID, txs []*requestpb.Request, signature []uint8) *types1.Message {
+func FinalMessage(destModule types.ModuleID, txs []*requestpb.Request, signature tctypes.FullSig) *types1.Message {
 	return &types1.Message{
 		DestModule: destModule,
 		Type: &types1.Message_Vcb{

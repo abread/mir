@@ -11,6 +11,7 @@ import (
 	abbadsl "github.com/filecoin-project/mir/pkg/pb/abbapb/dsl"
 	threshDsl "github.com/filecoin-project/mir/pkg/pb/threshcryptopb/dsl"
 	"github.com/filecoin-project/mir/pkg/reliablenet/rnetdsl"
+	"github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -293,7 +294,7 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 	})
 
 	// still in 9. sample coin
-	threshDsl.UponSignShareResult(m, func(sigShare []byte, context *signCoinShareCtx) error {
+	threshDsl.UponSignShareResult(m, func(sigShare tctypes.SigShare, context *signCoinShareCtx) error {
 		if state.step > MaxStep { // TODO: state.step != 9 => early return?
 			return nil // already over
 		}
@@ -368,7 +369,7 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 	})
 
 	// still in 9. sample coin
-	threshDsl.UponRecoverResult(m, func(fullSig []byte, ok bool, err string, context *recoverCoinCtx) error {
+	threshDsl.UponRecoverResult(m, func(fullSig tctypes.FullSig, ok bool, err string, context *recoverCoinCtx) error {
 		if context.roundNumber != state.round.number {
 			return fmt.Errorf("impossible condition: changed round without coin toss")
 		}

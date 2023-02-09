@@ -6,6 +6,7 @@ import (
 	types2 "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
 	requestpb "github.com/filecoin-project/mir/pkg/pb/requestpb"
 	types "github.com/filecoin-project/mir/pkg/pb/vcbpb/types"
+	tctypes "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 	types1 "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -34,7 +35,7 @@ func UponEchoMessageReceived(m dsl.Module, handler func(from types1.NodeID, sign
 	})
 }
 
-func UponFinalMessageReceived(m dsl.Module, handler func(from types1.NodeID, txs []*requestpb.Request, signature []uint8) error) {
+func UponFinalMessageReceived(m dsl.Module, handler func(from types1.NodeID, txs []*requestpb.Request, signature tctypes.FullSig) error) {
 	UponMessageReceived[*types.Message_FinalMessage](m, func(from types1.NodeID, msg *types.FinalMessage) error {
 		return handler(from, msg.Txs, msg.Signature)
 	})

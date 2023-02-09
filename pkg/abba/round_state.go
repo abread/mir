@@ -3,6 +3,7 @@ package abba
 import (
 	abbat "github.com/filecoin-project/mir/pkg/abba/abbatypes"
 	"github.com/filecoin-project/mir/pkg/serializing"
+	"github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 )
 
 type abbaRoundState struct {
@@ -20,7 +21,7 @@ type abbaRoundState struct {
 	confRecvdValueSetCounts abbat.ValueSetCounters
 
 	coinRecvd         abbat.RecvTracker
-	coinRecvdOkShares [][]byte
+	coinRecvdOkShares []tctypes.SigShare
 
 	initWeakSupportReachedForValue abbat.BoolFlags
 	auxSent                        bool
@@ -42,7 +43,7 @@ func (rs *abbaRoundState) resetState(params *ModuleParams) {
 	rs.confRecvdValueSetCounts.Reset()
 
 	rs.coinRecvd = make(abbat.RecvTracker, params.GetN())
-	rs.coinRecvdOkShares = make([][]byte, 0, params.GetN())
+	rs.coinRecvdOkShares = make([]tctypes.SigShare, 0, params.GetN())
 
 	rs.initWeakSupportReachedForValue.Reset()
 	rs.auxSent = false

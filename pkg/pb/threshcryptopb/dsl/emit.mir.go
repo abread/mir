@@ -4,6 +4,7 @@ import (
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
 	events "github.com/filecoin-project/mir/pkg/pb/threshcryptopb/events"
 	types1 "github.com/filecoin-project/mir/pkg/pb/threshcryptopb/types"
+	tctypes "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 	types "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -20,11 +21,11 @@ func SignShare[C any](m dsl.Module, destModule types.ModuleID, data [][]uint8, c
 	dsl.EmitMirEvent(m, events.SignShare(destModule, data, origin))
 }
 
-func SignShareResult(m dsl.Module, destModule types.ModuleID, signatureShare []uint8, origin *types1.SignShareOrigin) {
+func SignShareResult(m dsl.Module, destModule types.ModuleID, signatureShare tctypes.SigShare, origin *types1.SignShareOrigin) {
 	dsl.EmitMirEvent(m, events.SignShareResult(destModule, signatureShare, origin))
 }
 
-func VerifyShare[C any](m dsl.Module, destModule types.ModuleID, data [][]uint8, signatureShare []uint8, nodeId types.NodeID, context *C) {
+func VerifyShare[C any](m dsl.Module, destModule types.ModuleID, data [][]uint8, signatureShare tctypes.SigShare, nodeId types.NodeID, context *C) {
 	contextID := m.DslHandle().StoreContext(context)
 
 	origin := &types1.VerifyShareOrigin{
@@ -39,7 +40,7 @@ func VerifyShareResult(m dsl.Module, destModule types.ModuleID, ok bool, error s
 	dsl.EmitMirEvent(m, events.VerifyShareResult(destModule, ok, error, origin))
 }
 
-func VerifyFull[C any](m dsl.Module, destModule types.ModuleID, data [][]uint8, fullSignature []uint8, context *C) {
+func VerifyFull[C any](m dsl.Module, destModule types.ModuleID, data [][]uint8, fullSignature tctypes.FullSig, context *C) {
 	contextID := m.DslHandle().StoreContext(context)
 
 	origin := &types1.VerifyFullOrigin{
@@ -54,7 +55,7 @@ func VerifyFullResult(m dsl.Module, destModule types.ModuleID, ok bool, error st
 	dsl.EmitMirEvent(m, events.VerifyFullResult(destModule, ok, error, origin))
 }
 
-func Recover[C any](m dsl.Module, destModule types.ModuleID, data [][]uint8, signatureShares [][]uint8, context *C) {
+func Recover[C any](m dsl.Module, destModule types.ModuleID, data [][]uint8, signatureShares []tctypes.SigShare, context *C) {
 	contextID := m.DslHandle().StoreContext(context)
 
 	origin := &types1.RecoverOrigin{
@@ -65,6 +66,6 @@ func Recover[C any](m dsl.Module, destModule types.ModuleID, data [][]uint8, sig
 	dsl.EmitMirEvent(m, events.Recover(destModule, data, signatureShares, origin))
 }
 
-func RecoverResult(m dsl.Module, destModule types.ModuleID, fullSignature []uint8, ok bool, error string, origin *types1.RecoverOrigin) {
+func RecoverResult(m dsl.Module, destModule types.ModuleID, fullSignature tctypes.FullSig, ok bool, error string, origin *types1.RecoverOrigin) {
 	dsl.EmitMirEvent(m, events.RecoverResult(destModule, fullSignature, ok, error, origin))
 }

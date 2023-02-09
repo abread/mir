@@ -2,9 +2,11 @@ package threshcryptopbtypes
 
 import (
 	mirreflect "github.com/filecoin-project/mir/codegen/mirreflect"
+	types3 "github.com/filecoin-project/mir/codegen/model/types"
 	types1 "github.com/filecoin-project/mir/pkg/pb/contextstorepb/types"
 	types2 "github.com/filecoin-project/mir/pkg/pb/dslpb/types"
 	threshcryptopb "github.com/filecoin-project/mir/pkg/pb/threshcryptopb"
+	tctypes "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 	types "github.com/filecoin-project/mir/pkg/types"
 	reflectutil "github.com/filecoin-project/mir/pkg/util/reflectutil"
 )
@@ -230,20 +232,20 @@ func (*SignShare) MirReflect() mirreflect.Type {
 }
 
 type SignShareResult struct {
-	SignatureShare []uint8
+	SignatureShare tctypes.SigShare
 	Origin         *SignShareOrigin
 }
 
 func SignShareResultFromPb(pb *threshcryptopb.SignShareResult) *SignShareResult {
 	return &SignShareResult{
-		SignatureShare: pb.SignatureShare,
+		SignatureShare: (tctypes.SigShare)(pb.SignatureShare),
 		Origin:         SignShareOriginFromPb(pb.Origin),
 	}
 }
 
 func (m *SignShareResult) Pb() *threshcryptopb.SignShareResult {
 	return &threshcryptopb.SignShareResult{
-		SignatureShare: m.SignatureShare,
+		SignatureShare: ([]uint8)(m.SignatureShare),
 		Origin:         (m.Origin).Pb(),
 	}
 }
@@ -334,7 +336,7 @@ func (*SignShareOrigin) MirReflect() mirreflect.Type {
 
 type VerifyShare struct {
 	Data           [][]uint8
-	SignatureShare []uint8
+	SignatureShare tctypes.SigShare
 	NodeId         types.NodeID
 	Origin         *VerifyShareOrigin
 }
@@ -342,7 +344,7 @@ type VerifyShare struct {
 func VerifyShareFromPb(pb *threshcryptopb.VerifyShare) *VerifyShare {
 	return &VerifyShare{
 		Data:           pb.Data,
-		SignatureShare: pb.SignatureShare,
+		SignatureShare: (tctypes.SigShare)(pb.SignatureShare),
 		NodeId:         (types.NodeID)(pb.NodeId),
 		Origin:         VerifyShareOriginFromPb(pb.Origin),
 	}
@@ -351,7 +353,7 @@ func VerifyShareFromPb(pb *threshcryptopb.VerifyShare) *VerifyShare {
 func (m *VerifyShare) Pb() *threshcryptopb.VerifyShare {
 	return &threshcryptopb.VerifyShare{
 		Data:           m.Data,
-		SignatureShare: m.SignatureShare,
+		SignatureShare: ([]uint8)(m.SignatureShare),
 		NodeId:         (string)(m.NodeId),
 		Origin:         (m.Origin).Pb(),
 	}
@@ -469,14 +471,14 @@ func (*VerifyShareOrigin) MirReflect() mirreflect.Type {
 
 type VerifyFull struct {
 	Data          [][]uint8
-	FullSignature []uint8
+	FullSignature tctypes.FullSig
 	Origin        *VerifyFullOrigin
 }
 
 func VerifyFullFromPb(pb *threshcryptopb.VerifyFull) *VerifyFull {
 	return &VerifyFull{
 		Data:          pb.Data,
-		FullSignature: pb.FullSignature,
+		FullSignature: (tctypes.FullSig)(pb.FullSignature),
 		Origin:        VerifyFullOriginFromPb(pb.Origin),
 	}
 }
@@ -484,7 +486,7 @@ func VerifyFullFromPb(pb *threshcryptopb.VerifyFull) *VerifyFull {
 func (m *VerifyFull) Pb() *threshcryptopb.VerifyFull {
 	return &threshcryptopb.VerifyFull{
 		Data:          m.Data,
-		FullSignature: m.FullSignature,
+		FullSignature: ([]uint8)(m.FullSignature),
 		Origin:        (m.Origin).Pb(),
 	}
 }
@@ -601,23 +603,27 @@ func (*VerifyFullOrigin) MirReflect() mirreflect.Type {
 
 type Recover struct {
 	Data            [][]uint8
-	SignatureShares [][]uint8
+	SignatureShares []tctypes.SigShare
 	Origin          *RecoverOrigin
 }
 
 func RecoverFromPb(pb *threshcryptopb.Recover) *Recover {
 	return &Recover{
-		Data:            pb.Data,
-		SignatureShares: pb.SignatureShares,
-		Origin:          RecoverOriginFromPb(pb.Origin),
+		Data: pb.Data,
+		SignatureShares: types3.ConvertSlice(pb.SignatureShares, func(t []uint8) tctypes.SigShare {
+			return (tctypes.SigShare)(t)
+		}),
+		Origin: RecoverOriginFromPb(pb.Origin),
 	}
 }
 
 func (m *Recover) Pb() *threshcryptopb.Recover {
 	return &threshcryptopb.Recover{
-		Data:            m.Data,
-		SignatureShares: m.SignatureShares,
-		Origin:          (m.Origin).Pb(),
+		Data: m.Data,
+		SignatureShares: types3.ConvertSlice(m.SignatureShares, func(t tctypes.SigShare) []uint8 {
+			return ([]uint8)(t)
+		}),
+		Origin: (m.Origin).Pb(),
 	}
 }
 
@@ -626,7 +632,7 @@ func (*Recover) MirReflect() mirreflect.Type {
 }
 
 type RecoverResult struct {
-	FullSignature []uint8
+	FullSignature tctypes.FullSig
 	Ok            bool
 	Error         string
 	Origin        *RecoverOrigin
@@ -634,7 +640,7 @@ type RecoverResult struct {
 
 func RecoverResultFromPb(pb *threshcryptopb.RecoverResult) *RecoverResult {
 	return &RecoverResult{
-		FullSignature: pb.FullSignature,
+		FullSignature: (tctypes.FullSig)(pb.FullSignature),
 		Ok:            pb.Ok,
 		Error:         pb.Error,
 		Origin:        RecoverOriginFromPb(pb.Origin),
@@ -643,7 +649,7 @@ func RecoverResultFromPb(pb *threshcryptopb.RecoverResult) *RecoverResult {
 
 func (m *RecoverResult) Pb() *threshcryptopb.RecoverResult {
 	return &threshcryptopb.RecoverResult{
-		FullSignature: m.FullSignature,
+		FullSignature: ([]uint8)(m.FullSignature),
 		Ok:            m.Ok,
 		Error:         m.Error,
 		Origin:        (m.Origin).Pb(),

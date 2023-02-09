@@ -5,6 +5,7 @@ import (
 	types1 "github.com/filecoin-project/mir/codegen/model/types"
 	requestpb "github.com/filecoin-project/mir/pkg/pb/requestpb"
 	vcbpb "github.com/filecoin-project/mir/pkg/pb/vcbpb"
+	tctypes "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 	types "github.com/filecoin-project/mir/pkg/types"
 	reflectutil "github.com/filecoin-project/mir/pkg/util/reflectutil"
 )
@@ -116,7 +117,7 @@ func (*BroadcastRequest) MirReflect() mirreflect.Type {
 type Deliver struct {
 	Txs          []*requestpb.Request
 	TxIds        []types.TxID
-	Signature    []uint8
+	Signature    tctypes.FullSig
 	OriginModule types.ModuleID
 }
 
@@ -126,7 +127,7 @@ func DeliverFromPb(pb *vcbpb.Deliver) *Deliver {
 		TxIds: types1.ConvertSlice(pb.TxIds, func(t []uint8) types.TxID {
 			return (types.TxID)(t)
 		}),
-		Signature:    pb.Signature,
+		Signature:    (tctypes.FullSig)(pb.Signature),
 		OriginModule: (types.ModuleID)(pb.OriginModule),
 	}
 }
@@ -137,7 +138,7 @@ func (m *Deliver) Pb() *vcbpb.Deliver {
 		TxIds: types1.ConvertSlice(m.TxIds, func(t types.TxID) []uint8 {
 			return ([]uint8)(t)
 		}),
-		Signature:    m.Signature,
+		Signature:    ([]uint8)(m.Signature),
 		OriginModule: (string)(m.OriginModule),
 	}
 }
@@ -285,20 +286,20 @@ func (*EchoMessage) MirReflect() mirreflect.Type {
 
 type FinalMessage struct {
 	Txs       []*requestpb.Request
-	Signature []uint8
+	Signature tctypes.FullSig
 }
 
 func FinalMessageFromPb(pb *vcbpb.FinalMessage) *FinalMessage {
 	return &FinalMessage{
 		Txs:       pb.Txs,
-		Signature: pb.Signature,
+		Signature: (tctypes.FullSig)(pb.Signature),
 	}
 }
 
 func (m *FinalMessage) Pb() *vcbpb.FinalMessage {
 	return &vcbpb.FinalMessage{
 		Txs:       m.Txs,
-		Signature: m.Signature,
+		Signature: ([]uint8)(m.Signature),
 	}
 }
 

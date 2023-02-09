@@ -35,7 +35,7 @@ message SignShare {
 message SignShareResult {
   option (mir.event) = true;
 
-  bytes           signature_share = 1;
+  bytes           signature_share = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes.SigShare"];
   SignShareOrigin origin          = 2 [(mir.origin_response) = true];
 }
 
@@ -53,7 +53,7 @@ message VerifyShare {
   option (mir.event) = true;
 
   repeated bytes    data            = 1;
-  bytes             signature_share = 2;
+  bytes             signature_share = 2 [(mir.type) = "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes.SigShare"];
   string            node_id         = 3 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.NodeID"];
   VerifyShareOrigin origin          = 4 [(mir.origin_request) = true];
 }
@@ -80,7 +80,7 @@ message VerifyFull {
   option (mir.event) = true;
 
   repeated bytes   data           = 1;
-  bytes            full_signature = 2;
+  bytes            full_signature = 2 [(mir.type) = "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes.FullSig"];
   VerifyFullOrigin origin         = 3 [(mir.origin_request) = true];
 }
 
@@ -106,14 +106,14 @@ message Recover {
   option (mir.event) = true;
 
   repeated bytes data             = 1;
-  repeated bytes signature_shares = 2;
+  repeated bytes signature_shares = 2 [(mir.type) = "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes.SigShare"];
   RecoverOrigin  origin           = 3 [(mir.origin_request) = true];
 }
 
 message RecoverResult {
   option (mir.event) = true;
 
-  bytes         full_signature = 1;
+  bytes         full_signature = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes.FullSig"];
   bool          ok             = 2;
   string        error          = 3;
   RecoverOrigin origin         = 4 [(mir.origin_response) = true];

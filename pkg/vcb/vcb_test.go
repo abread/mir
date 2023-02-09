@@ -30,6 +30,7 @@ import (
 	vcbdsl "github.com/filecoin-project/mir/pkg/pb/vcbpb/dsl"
 	"github.com/filecoin-project/mir/pkg/reliablenet"
 	"github.com/filecoin-project/mir/pkg/testsim"
+	"github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 	"github.com/filecoin-project/mir/pkg/timer"
 	"github.com/filecoin-project/mir/pkg/types"
 )
@@ -239,7 +240,7 @@ type countingApp struct {
 	deliveredCount int
 	firstData      []*requestpb.Request
 	firstTxIDs     []types.TxID
-	firstSignature []byte
+	firstSignature tctypes.FullSig
 	firstFrom      types.ModuleID
 }
 
@@ -278,7 +279,7 @@ func newCountingApp(isLeader bool) *countingApp {
 		})
 	}
 
-	vcbdsl.UponDeliver(m, func(data []*requestpb.Request, txIDs []types.TxID, signature []byte, from types.ModuleID) error {
+	vcbdsl.UponDeliver(m, func(data []*requestpb.Request, txIDs []types.TxID, signature tctypes.FullSig, from types.ModuleID) error {
 		if app.deliveredCount == 0 {
 			app.firstData = data
 			app.firstTxIDs = txIDs

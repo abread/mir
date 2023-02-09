@@ -4,6 +4,7 @@ import (
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
 	types1 "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 	types "github.com/filecoin-project/mir/pkg/pb/threshcryptopb/types"
+	tctypes "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 	types2 "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -26,7 +27,7 @@ func UponSignShare(m dsl.Module, handler func(data [][]uint8, origin *types.Sign
 	})
 }
 
-func UponSignShareResult[C any](m dsl.Module, handler func(signatureShare []uint8, context *C) error) {
+func UponSignShareResult[C any](m dsl.Module, handler func(signatureShare tctypes.SigShare, context *C) error) {
 	UponEvent[*types.Event_SignShareResult](m, func(ev *types.SignShareResult) error {
 		originWrapper, ok := ev.Origin.Type.(*types.SignShareOrigin_Dsl)
 		if !ok {
@@ -43,7 +44,7 @@ func UponSignShareResult[C any](m dsl.Module, handler func(signatureShare []uint
 	})
 }
 
-func UponVerifyShare(m dsl.Module, handler func(data [][]uint8, signatureShare []uint8, nodeId types2.NodeID, origin *types.VerifyShareOrigin) error) {
+func UponVerifyShare(m dsl.Module, handler func(data [][]uint8, signatureShare tctypes.SigShare, nodeId types2.NodeID, origin *types.VerifyShareOrigin) error) {
 	UponEvent[*types.Event_VerifyShare](m, func(ev *types.VerifyShare) error {
 		return handler(ev.Data, ev.SignatureShare, ev.NodeId, ev.Origin)
 	})
@@ -66,7 +67,7 @@ func UponVerifyShareResult[C any](m dsl.Module, handler func(ok bool, error stri
 	})
 }
 
-func UponVerifyFull(m dsl.Module, handler func(data [][]uint8, fullSignature []uint8, origin *types.VerifyFullOrigin) error) {
+func UponVerifyFull(m dsl.Module, handler func(data [][]uint8, fullSignature tctypes.FullSig, origin *types.VerifyFullOrigin) error) {
 	UponEvent[*types.Event_VerifyFull](m, func(ev *types.VerifyFull) error {
 		return handler(ev.Data, ev.FullSignature, ev.Origin)
 	})
@@ -89,13 +90,13 @@ func UponVerifyFullResult[C any](m dsl.Module, handler func(ok bool, error strin
 	})
 }
 
-func UponRecover(m dsl.Module, handler func(data [][]uint8, signatureShares [][]uint8, origin *types.RecoverOrigin) error) {
+func UponRecover(m dsl.Module, handler func(data [][]uint8, signatureShares []tctypes.SigShare, origin *types.RecoverOrigin) error) {
 	UponEvent[*types.Event_Recover](m, func(ev *types.Recover) error {
 		return handler(ev.Data, ev.SignatureShares, ev.Origin)
 	})
 }
 
-func UponRecoverResult[C any](m dsl.Module, handler func(fullSignature []uint8, ok bool, error string, context *C) error) {
+func UponRecoverResult[C any](m dsl.Module, handler func(fullSignature tctypes.FullSig, ok bool, error string, context *C) error) {
 	UponEvent[*types.Event_RecoverResult](m, func(ev *types.RecoverResult) error {
 		originWrapper, ok := ev.Origin.Type.(*types.RecoverOrigin_Dsl)
 		if !ok {

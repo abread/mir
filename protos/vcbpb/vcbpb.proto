@@ -36,7 +36,7 @@ message Deliver {
 
   repeated requestpb.Request txs             = 1;
   repeated bytes             tx_ids          = 2 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.TxID"];
-  bytes                      signature       = 3;
+  bytes                      signature       = 3 [(mir.type) = "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes.FullSig"];
 
   string origin_module = 4 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.ModuleID"];
 }
@@ -73,5 +73,5 @@ message FinalMessage {
   option (net.message) = true;
 
   repeated requestpb.Request txs       = 1;
-  bytes                      signature = 2;
+  bytes                      signature = 2 [(mir.type) = "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes.FullSig"];
 }

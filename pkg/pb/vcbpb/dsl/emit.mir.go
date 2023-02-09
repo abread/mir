@@ -4,6 +4,7 @@ import (
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
 	requestpb "github.com/filecoin-project/mir/pkg/pb/requestpb"
 	events "github.com/filecoin-project/mir/pkg/pb/vcbpb/events"
+	tctypes "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 	types "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -13,6 +14,6 @@ func BroadcastRequest(m dsl.Module, destModule types.ModuleID, txIds []types.TxI
 	dsl.EmitMirEvent(m, events.BroadcastRequest(destModule, txIds, txs))
 }
 
-func Deliver(m dsl.Module, destModule types.ModuleID, txs []*requestpb.Request, txIds []types.TxID, signature []uint8, originModule types.ModuleID) {
+func Deliver(m dsl.Module, destModule types.ModuleID, txs []*requestpb.Request, txIds []types.TxID, signature tctypes.FullSig, originModule types.ModuleID) {
 	dsl.EmitMirEvent(m, events.Deliver(destModule, txs, txIds, signature, originModule))
 }

@@ -8,10 +8,11 @@ import (
 	mpdsl "github.com/filecoin-project/mir/pkg/mempool/dsl"
 	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"
+	threshDsl "github.com/filecoin-project/mir/pkg/pb/threshcryptopb/dsl"
 	vcbdsl "github.com/filecoin-project/mir/pkg/pb/vcbpb/dsl"
 	"github.com/filecoin-project/mir/pkg/reliablenet/rnetdsl"
 	"github.com/filecoin-project/mir/pkg/serializing"
-	threshDsl "github.com/filecoin-project/mir/pkg/pb/threshcryptopb/dsl"
+	"github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -57,7 +58,7 @@ type vcbModuleLeaderState struct {
 	sentFinal bool
 
 	receivedEcho map[t.NodeID]struct{}
-	sigShares    [][]byte
+	sigShares    []tctypes.SigShare
 }
 type vcbModuleCommonState struct {
 	txs     []*requestpb.Request
@@ -122,7 +123,7 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 		return nil
 	})
 
-	threshDsl.UponSignShareResult(m, func(sigShare []byte, context *handleSendCtx) error {
+	threshDsl.UponSignShareResult(m, func(sigShare tctypes.SigShare, context *handleSendCtx) error {
 		rnetdsl.SendMessage(m, mc.ReliableNet,
 			EchoMsgID(),
 			EchoMessage(mc.Self, sigShare),
@@ -134,7 +135,7 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 	if nodeID == params.Leader {
 		setupVcbLeader(m, mc, params, &state)
 	} else {
-		vcbdsl.UponFinalMessageReceived(m, func(from t.NodeID, txs []*requestpb.Request, signature []byte) error {
+		vcbdsl.UponFinalMessageReceived(m, func(from t.NodeID, txs []*requestpb.Request, signature tctypes.FullSig) error {
 			if from == params.Leader && !state.delivered && !state.recvdFinal {
 				state.recvdFinal = true
 				rnetdsl.MarkModuleMsgsRecvd(m, mc.ReliableNet, mc.Self, params.AllNodes)
@@ -180,7 +181,7 @@ func setupVcbLeader(m dsl.Module, mc *ModuleConfig, params *ModuleParams, common
 		sentFinal: false,
 
 		receivedEcho: make(map[t.NodeID]struct{}, len(params.AllNodes)),
-		sigShares:    make([][]byte, 0, params.GetN()),
+		sigShares:    make([]tctypes.SigShare, 0, params.GetN()),
 	}
 
 	vcbdsl.UponBroadcastRequest(m, func(txIDs []t.TxID, txs []*requestpb.Request) error {
@@ -233,7 +234,7 @@ func setupVcbLeader(m dsl.Module, mc *ModuleConfig, params *ModuleParams, common
 		return nil
 	})
 
-	threshDsl.UponRecoverResult(m, func(fullSig []byte, ok bool, err string, context *recoverVcbSigCtx) error {
+	threshDsl.UponRecoverResult(m, func(fullSig tctypes.FullSig, ok bool, err string, context *recoverVcbSigCtx) error {
 		if ok && !state.sentFinal {
 			state.sentFinal = true
 
@@ -254,7 +255,7 @@ func setupVcbLeader(m dsl.Module, mc *ModuleConfig, params *ModuleParams, common
 		return nil
 	})
 
-	vcbdsl.UponFinalMessageReceived(m, func(from t.NodeID, data []*requestpb.Request, signature []byte) error {
+	vcbdsl.UponFinalMessageReceived(m, func(from t.NodeID, data []*requestpb.Request, signature tctypes.FullSig) error {
 		if from == params.Leader {
 			// ack ourselves to free up the queue
 			rnetdsl.Ack(m, mc.ReliableNet, mc.Self, FinalMsgID(), from)
