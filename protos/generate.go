@@ -65,6 +65,7 @@ package protos
 //go:generate std-gen "github.com/filecoin-project/mir/pkg/pb/threshcryptopb"
 //go:generate std-gen "github.com/filecoin-project/mir/pkg/pb/mempoolpb"
 //go:generate std-gen "github.com/filecoin-project/mir/pkg/pb/modringpb"
+//go:generate std-gen "github.com/filecoin-project/mir/pkg/pb/vcbpb"
 //go:generate std-gen "github.com/filecoin-project/mir/pkg/pb/abbapb"
 
 // Generate other things.

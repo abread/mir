@@ -2,7 +2,7 @@ package messagepbtypes
 
 import (
 	mirreflect "github.com/filecoin-project/mir/codegen/mirreflect"
-	types2 "github.com/filecoin-project/mir/pkg/pb/abbapb/types"
+	types3 "github.com/filecoin-project/mir/pkg/pb/abbapb/types"
 	aleapb "github.com/filecoin-project/mir/pkg/pb/aleapb"
 	agreementpb "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb"
 	mscpb "github.com/filecoin-project/mir/pkg/pb/availabilitypb/mscpb"
@@ -13,7 +13,7 @@ import (
 	ordererspb "github.com/filecoin-project/mir/pkg/pb/ordererspb"
 	pingpongpb "github.com/filecoin-project/mir/pkg/pb/pingpongpb"
 	messages "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/messages"
-	vcbpb "github.com/filecoin-project/mir/pkg/pb/vcbpb"
+	types2 "github.com/filecoin-project/mir/pkg/pb/vcbpb/types"
 	types "github.com/filecoin-project/mir/pkg/types"
 	reflectutil "github.com/filecoin-project/mir/pkg/util/reflectutil"
 )
@@ -49,9 +49,9 @@ func Message_TypeFromPb(pb messagepb.Message_Type) Message_Type {
 	case *messagepb.Message_SbMessage:
 		return &Message_SbMessage{SbMessage: pb.SbMessage}
 	case *messagepb.Message_Vcb:
-		return &Message_Vcb{Vcb: pb.Vcb}
+		return &Message_Vcb{Vcb: types2.MessageFromPb(pb.Vcb)}
 	case *messagepb.Message_Abba:
-		return &Message_Abba{Abba: types2.MessageFromPb(pb.Abba)}
+		return &Message_Abba{Abba: types3.MessageFromPb(pb.Abba)}
 	case *messagepb.Message_Alea:
 		return &Message_Alea{Alea: pb.Alea}
 	case *messagepb.Message_AleaAgreement:
@@ -171,17 +171,17 @@ func (*Message_SbMessage) MirReflect() mirreflect.Type {
 }
 
 type Message_Vcb struct {
-	Vcb *vcbpb.Message
+	Vcb *types2.Message
 }
 
 func (*Message_Vcb) isMessage_Type() {}
 
-func (w *Message_Vcb) Unwrap() *vcbpb.Message {
+func (w *Message_Vcb) Unwrap() *types2.Message {
 	return w.Vcb
 }
 
 func (w *Message_Vcb) Pb() messagepb.Message_Type {
-	return &messagepb.Message_Vcb{Vcb: w.Vcb}
+	return &messagepb.Message_Vcb{Vcb: (w.Vcb).Pb()}
 }
 
 func (*Message_Vcb) MirReflect() mirreflect.Type {
@@ -189,12 +189,12 @@ func (*Message_Vcb) MirReflect() mirreflect.Type {
 }
 
 type Message_Abba struct {
-	Abba *types2.Message
+	Abba *types3.Message
 }
 
 func (*Message_Abba) isMessage_Type() {}
 
-func (w *Message_Abba) Unwrap() *types2.Message {
+func (w *Message_Abba) Unwrap() *types3.Message {
 	return w.Abba
 }
 

@@ -8,11 +8,11 @@ import (
 	mpdsl "github.com/filecoin-project/mir/pkg/mempool/dsl"
 	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"
+	vcbdsl "github.com/filecoin-project/mir/pkg/pb/vcbpb/dsl"
 	"github.com/filecoin-project/mir/pkg/reliablenet/rnetdsl"
 	"github.com/filecoin-project/mir/pkg/serializing"
 	threshDsl "github.com/filecoin-project/mir/pkg/threshcrypto/dsl"
 	t "github.com/filecoin-project/mir/pkg/types"
-	"github.com/filecoin-project/mir/pkg/vcb/vcbdsl"
 )
 
 // ModuleConfig sets the module ids. All replicas are expected to use identical module configurations.
@@ -165,7 +165,7 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 		threshDsl.UponVerifyFullResult(m, func(ok bool, err string, context *handleFinalCtx) error {
 			if ok {
 				state.delivered = true
-				vcbdsl.Deliver(m, mc.Consumer, state.txIDs, state.txs, context.signature)
+				vcbdsl.Deliver(m, mc.Consumer, state.txs, state.txIDs, context.signature, mc.Self)
 			}
 
 			return nil
@@ -248,7 +248,7 @@ func setupVcbLeader(m dsl.Module, mc *ModuleConfig, params *ModuleParams, common
 			rnetdsl.MarkModuleMsgsRecvd(m, mc.ReliableNet, mc.Self, []t.NodeID{params.Leader})
 			// this is running concurrently with the SendMessage above, so the FINISH() message may remain in queue
 
-			vcbdsl.Deliver(m, mc.Consumer, commonState.txIDs, commonState.txs, fullSig)
+			vcbdsl.Deliver(m, mc.Consumer, commonState.txs, commonState.txIDs, fullSig, mc.Self)
 			commonState.delivered = true
 		}
 		return nil

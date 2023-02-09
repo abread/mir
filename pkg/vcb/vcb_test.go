@@ -27,11 +27,11 @@ import (
 	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"
+	vcbdsl "github.com/filecoin-project/mir/pkg/pb/vcbpb/dsl"
 	"github.com/filecoin-project/mir/pkg/reliablenet"
 	"github.com/filecoin-project/mir/pkg/testsim"
 	"github.com/filecoin-project/mir/pkg/timer"
 	"github.com/filecoin-project/mir/pkg/types"
-	"github.com/filecoin-project/mir/pkg/vcb/vcbdsl"
 )
 
 const (
@@ -273,12 +273,12 @@ func newCountingApp(isLeader bool) *countingApp {
 		})
 
 		mpdsl.UponTransactionIDsResponse(m, func(txIDs []types.TxID, _context *struct{}) error {
-			vcbdsl.Request(m, "vcb", txIDs, txs)
+			vcbdsl.BroadcastRequest(m, "vcb", txIDs, txs)
 			return nil
 		})
 	}
 
-	vcbdsl.UponDeliver(m, func(txIDs []types.TxID, data []*requestpb.Request, signature []byte, from types.ModuleID) error {
+	vcbdsl.UponDeliver(m, func(data []*requestpb.Request, txIDs []types.TxID, signature []byte, from types.ModuleID) error {
 		if app.deliveredCount == 0 {
 			app.firstData = data
 			app.firstTxIDs = txIDs

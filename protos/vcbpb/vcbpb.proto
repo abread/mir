@@ -6,8 +6,8 @@ option go_package = "github.com/filecoin-project/mir/pkg/pb/vcbpb";
 
 import "requestpb/requestpb.proto";
 
-// TODO: use DSL codegen
 import "mir/codegen_extensions.proto";
+import "net/codegen_extensions.proto";
 
 
 // ============================================================
@@ -15,6 +15,8 @@ import "mir/codegen_extensions.proto";
 // ============================================================
 
 message Event {
+  option (mir.event_class) = true;
+
   oneof type {
     option (mir.event_type) = true;
     BroadcastRequest request = 1;
@@ -23,16 +25,20 @@ message Event {
 }
 
 message BroadcastRequest {
-  repeated bytes             tx_ids = 1;
+  option (mir.event) = true;
+
+  repeated bytes             tx_ids = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.TxID"];
   repeated requestpb.Request txs    = 2;
 }
 
 message Deliver {
+  option (mir.event) = true;
+
   repeated requestpb.Request txs             = 1;
-  repeated bytes             tx_ids          = 2;
+  repeated bytes             tx_ids          = 2 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.TxID"];
   bytes                      signature       = 3;
 
-  string origin_module = 4;
+  string origin_module = 4 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.ModuleID"];
 }
 
 // ============================================================
@@ -40,7 +46,11 @@ message Deliver {
 // ============================================================
 
 message Message {
+  option (net.message_class) = true;
+
   oneof type {
+    option (net.message_type) = true;
+
     SendMessage  send_message  = 1;
     EchoMessage  echo_message  = 2;
     FinalMessage final_message = 3;
@@ -48,14 +58,20 @@ message Message {
 }
 
 message SendMessage {
+  option (net.message) = true;
+
   repeated requestpb.Request txs = 1;
 }
 
 message EchoMessage {
+  option (net.message) = true;
+
   bytes signature_share = 1;
 }
 
 message FinalMessage {
+  option (net.message) = true;
+
   repeated requestpb.Request txs       = 1;
   bytes                      signature = 2;
 }
