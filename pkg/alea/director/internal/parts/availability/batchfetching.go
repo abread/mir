@@ -190,7 +190,8 @@ func IncludeBatchFetching(
 }
 
 func certSigData(params *director.ModuleParams, slot batchSlot, txIDs []t.TxID) [][]byte {
-	return vcb.SigData(broadcast.VCBInstanceUID(params.InstanceUID, slot.QueueIdx, slot.QueueSlot), txIDs)
+	aleaUID := params.InstanceUID[:len(params.InstanceUID)-1]
+	return vcb.SigData(broadcast.VCBInstanceUID(aleaUID, slot.QueueIdx, slot.QueueSlot), txIDs)
 }
 
 func batchSlotFromPb(pb *aleapbCommon.Slot) batchSlot {

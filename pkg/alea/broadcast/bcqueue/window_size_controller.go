@@ -1,4 +1,4 @@
-package broadcast
+package bcqueue
 
 type SlotStatus uint8
 

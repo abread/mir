@@ -1,4 +1,4 @@
-package broadcast
+package bcqueue
 
 import (
 	"sync"
@@ -10,17 +10,16 @@ import (
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"
 	"github.com/filecoin-project/mir/pkg/pb/vcbpb"
 	rnEvents "github.com/filecoin-project/mir/pkg/reliablenet/events"
+	"github.com/filecoin-project/mir/pkg/serializing"
 	t "github.com/filecoin-project/mir/pkg/types"
 	"github.com/filecoin-project/mir/pkg/vcb"
 )
 
-type queueBcModule struct {
-	config     *ModuleConfig
-	params     *ModuleParams
-	queueOwner t.NodeID
-	queueIdx   uint32
-	nodeID     t.NodeID
-	logger     logging.Logger
+type QueueBcModule struct {
+	config *ModuleConfig
+	params *ModuleParams
+	nodeID t.NodeID
+	logger logging.Logger
 
 	windowSizeCtrl *WindowSizeController
 	slots          map[uint64]*queueSlot
@@ -28,12 +27,24 @@ type queueBcModule struct {
 	locker sync.Mutex
 }
 
+func New(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) *QueueBcModule {
+	return &QueueBcModule{
+		config: mc,
+		params: params,
+		nodeID: nodeID,
+		logger: logger,
+
+		windowSizeCtrl: NewWindowSizeController(tunables.MaxConcurrentVcb),
+		slots:          make(map[uint64]*queueSlot, tunables.MaxConcurrentVcb),
+	}
+}
+
 type queueSlot struct {
 	module modules.PassiveModule
 	locker sync.Mutex
 }
 
-func (m *queueBcModule) RouteEventToSlot(slotID uint64, event *eventpb.Event) (*events.EventList, error) {
+func (m *QueueBcModule) RouteEventToSlot(slotID uint64, event *eventpb.Event) (*events.EventList, error) {
 	slot, outEvents, err := m.getOrTryCreateQueueSlot(slotID)
 	if err != nil {
 		return nil, err
@@ -47,7 +58,7 @@ func (m *queueBcModule) RouteEventToSlot(slotID uint64, event *eventpb.Event) (*
 	return slot.module.ApplyEvents(outEvents.PushBack(event))
 }
 
-func (m *queueBcModule) getOrTryCreateQueueSlot(slotID uint64) (*queueSlot, *events.EventList, error) {
+func (m *QueueBcModule) getOrTryCreateQueueSlot(slotID uint64) (*queueSlot, *events.EventList, error) {
 	// TODO: try to break this apart, the return type is disgusting
 	m.locker.Lock()
 	defer m.locker.Unlock()
@@ -60,7 +71,7 @@ func (m *queueBcModule) getOrTryCreateQueueSlot(slotID uint64) (*queueSlot, *eve
 		// we need to create the slot module first
 		m.windowSizeCtrl.Acquire(slotID)
 
-		instanceUID := VCBInstanceUID(m.params.InstanceUID, m.queueIdx, slotID)
+		instanceUID := append(m.params.InstanceUID, serializing.Uint64ToBytes(slotID)...)
 		newSlotModuleID := m.config.Self.Then(t.NewModuleIDFromInt(slotID))
 
 		newSlot := &queueSlot{
@@ -75,7 +86,7 @@ func (m *queueBcModule) getOrTryCreateQueueSlot(slotID uint64) (*queueSlot, *eve
 				&vcb.ModuleParams{
 					InstanceUID: instanceUID,
 					AllNodes:    m.params.AllNodes,
-					Leader:      m.queueOwner,
+					Leader:      m.params.QueueOwner,
 				},
 				m.nodeID,
 				logging.Decorate(m.logger, "Vcb: ", "queueSlot", slotID),
@@ -96,7 +107,7 @@ func (m *queueBcModule) getOrTryCreateQueueSlot(slotID uint64) (*queueSlot, *eve
 	return m.slots[slotID], &events.EventList{}, nil
 }
 
-func (m *queueBcModule) FreeSlot(slotID uint64) (*events.EventList, error) {
+func (m *QueueBcModule) FreeSlot(slotID uint64) (*events.EventList, error) {
 	m.locker.Lock()
 	defer m.locker.Unlock()
 
@@ -114,7 +125,7 @@ func (m *queueBcModule) FreeSlot(slotID uint64) (*events.EventList, error) {
 	), nil
 }
 
-func (m *queueBcModule) StartBroadcast(slotID uint64, txIDsPb [][]byte, txs []*requestpb.Request) (*events.EventList, error) {
+func (m *QueueBcModule) StartBroadcast(slotID uint64, txIDsPb [][]byte, txs []*requestpb.Request) (*events.EventList, error) {
 	// TODO: rethink design to leave only one side responsible for window size control
 	// assumes caller checked that current queue window has this slot in view (and unused)
 

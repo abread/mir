@@ -124,7 +124,7 @@ func New(ownID t.NodeID, config *Config, params *Params, startingChkp *checkpoin
 			Timer:         config.Timer,
 		},
 		&director.ModuleParams{
-			InstanceUID: params.InstanceUID,
+			InstanceUID: append(params.InstanceUID, 'd'),
 			AllNodes:    allNodes,
 		},
 		&director.ModuleTunables{
@@ -146,7 +146,7 @@ func New(ownID t.NodeID, config *Config, params *Params, startingChkp *checkpoin
 			ThreshCrypto: config.ThreshCrypto,
 		},
 		&broadcast.ModuleParams{
-			InstanceUID: params.InstanceUID,
+			InstanceUID: append(params.InstanceUID, 'b'),
 			AllNodes:    allNodes,
 		},
 		&broadcast.ModuleTunables{
@@ -169,7 +169,7 @@ func New(ownID t.NodeID, config *Config, params *Params, startingChkp *checkpoin
 			ThreshCrypto: config.ThreshCrypto,
 		},
 		&agreement.ModuleParams{
-			InstanceUID: params.InstanceUID,
+			InstanceUID: append(params.InstanceUID, 'a'),
 			AllNodes:    allNodes,
 		},
 		ownID,

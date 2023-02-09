@@ -3,11 +3,11 @@ package broadcast
 import (
 	"fmt"
 	"strconv"
-	"sync"
 
 	"golang.org/x/exp/slices"
 
 	"github.com/filecoin-project/mir/pkg/alea/broadcast/abcevents"
+	"github.com/filecoin-project/mir/pkg/alea/broadcast/bcqueue"
 	"github.com/filecoin-project/mir/pkg/alea/common"
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/logging"
@@ -48,7 +48,7 @@ func DefaultModuleConfig(consumer t.ModuleID) *ModuleConfig {
 // ModuleParams sets the values for the parameters of an instance of the protocol.
 // All replicas are expected to use identical module parameters.
 type ModuleParams struct {
-	InstanceUID []byte     // must be the same as the one in the main and agreement alea components
+	InstanceUID []byte     // must be the alea instance uid followed by 'b'
 	AllNodes    []t.NodeID // the list of participating nodes, which must be the same as the set of nodes in the threshcrypto module
 }
 
@@ -64,37 +64,49 @@ type bcModule struct {
 	config         *ModuleConfig
 	ownNodeID      t.NodeID
 	ownQueueIdx    int
-	queueBcModules []queueBcModule
+	queueBcModules []*bcqueue.QueueBcModule
 
 	logger logging.Logger
 }
 
 func NewModule(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
-	queueBcModules := make([]queueBcModule, len(params.AllNodes))
+	queueBcModules := make([]*bcqueue.QueueBcModule, len(params.AllNodes))
 
 	ownQueueIdx := slices.Index(params.AllNodes, nodeID)
 	if ownQueueIdx == -1 {
 		return nil, fmt.Errorf("nodeID not present in AllNodes")
 	}
 
+	bcqueueConfig := bcqueue.ModuleConfig{
+		Self:         mc.Self,
+		Consumer:     mc.Self,
+		BatchDB:      mc.BatchDB,
+		Mempool:      mc.Mempool,
+		ReliableNet:  mc.ReliableNet,
+		ThreshCrypto: mc.ThreshCrypto,
+	}
+	bcqueueTunables := bcqueue.ModuleTunables{
+		MaxConcurrentVcb: tunables.MaxConcurrentVcbPerQueue,
+	}
 	for idx, queueOwner := range params.AllNodes {
-		config := *mc
-		config.Consumer = mc.Self
+		config := bcqueueConfig
 		config.Self = mc.Self.Then(t.NewModuleIDFromInt(idx))
 
-		queueBcModules[idx] = queueBcModule{
-			config:     &config,
-			params:     params,
-			queueOwner: queueOwner,
-			queueIdx:   uint32(idx),
-			nodeID:     nodeID,
-			logger:     logging.Decorate(logger, "AleaBcQueue: ", "queueIdx", idx),
+		uid := make([]byte, len(params.InstanceUID)+4)
+		uid = append(uid, params.InstanceUID...)
+		uid = append(uid, serializing.Uint32ToBytes(uint32(idx))...)
 
-			windowSizeCtrl: NewWindowSizeController(tunables.MaxConcurrentVcbPerQueue),
-			slots:          make(map[uint64]*queueSlot, tunables.MaxConcurrentVcbPerQueue),
-
-			locker: sync.Mutex{},
-		}
+		queueBcModules[idx] = bcqueue.New(
+			&config,
+			&bcqueue.ModuleParams{
+				InstanceUID: uid,
+				AllNodes:    params.AllNodes,
+				QueueOwner:  queueOwner,
+			},
+			&bcqueueTunables,
+			nodeID,
+			logging.Decorate(logger, "AleaBcQueue: ", "queueIdx", idx),
+		)
 	}
 
 	return &bcModule{
@@ -237,13 +249,4 @@ func (m *bcModule) routeEventToQueue(event *eventpb.Event) (*events.EventList, e
 	}
 
 	return m.queueBcModules[idx].RouteEventToSlot(slot, event)
-}
-
-func VCBInstanceUID(bcInstanceUID []byte, queueIdx uint32, queueSlot uint64) []byte {
-	uid := slices.Clone(bcInstanceUID)
-	uid = append(uid, []byte("bc")...)
-	uid = append(uid, serializing.Uint64ToBytes(uint64(queueIdx))...)
-	uid = append(uid, serializing.Uint64ToBytes(queueSlot)...)
-
-	return uid
 }

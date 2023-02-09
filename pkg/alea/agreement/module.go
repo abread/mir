@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"strconv"
 
-	"golang.org/x/exp/slices"
-
 	"github.com/filecoin-project/mir/pkg/abba"
 	aagEvents "github.com/filecoin-project/mir/pkg/alea/agreement/aagevents"
 	"github.com/filecoin-project/mir/pkg/events"
@@ -46,7 +44,7 @@ func DefaultModuleConfig(consumer t.ModuleID) *ModuleConfig {
 // ModuleParams sets the values for the parameters of an instance of the protocol.
 // All replicas are expected to use identical module parameters.
 type ModuleParams struct {
-	InstanceUID []byte     // must be the same as the one in the main and broadcast alea components
+	InstanceUID []byte     // must be the alea ID followed by 'a'
 	AllNodes    []t.NodeID // the list of participating nodes, which must be the same as the set of nodes in the threshcrypto module
 }
 
@@ -278,8 +276,8 @@ func (m *agModule) initializeRound() (*events.EventList, error) {
 
 	abbaModuleID := m.abbaModuleID()
 
-	instanceUID := slices.Clone(m.params.InstanceUID)
-	instanceUID = append(instanceUID, []byte("ag")...)
+	instanceUID := make([]byte, len(m.params.InstanceUID)+8)
+	instanceUID = append(instanceUID, m.params.InstanceUID...)
 	instanceUID = append(instanceUID, serializing.Uint64ToBytes(m.currentRound)...)
 
 	m.currentAbba = abba.NewModule(&abba.ModuleConfig{

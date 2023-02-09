@@ -125,3 +125,10 @@ func Uint64ToBytes(n uint64) []byte {
 func BytesToUint64(data []byte) uint64 {
 	return binary.LittleEndian.Uint64(data)
 }
+
+// Uint32ToBytes returns a 4-byte slice encoding an unsigned 32-bit integer.
+func Uint32ToBytes(n uint32) []byte {
+	buf := make([]byte, 4)
+	binary.LittleEndian.PutUint32(buf, n)
+	return buf
+}
