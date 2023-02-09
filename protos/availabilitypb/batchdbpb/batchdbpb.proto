@@ -49,8 +49,8 @@ message LookupBatchResponse {
 message StoreBatch {
     option (mir.event) = true;
 
-    bytes batch_id                 = 1; // TODO: make codegen work for t.BatchID
-    repeated bytes tx_ids          = 2; // TODO: make codegen work for t.TxID
+    bytes batch_id                 = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.BatchID"];
+    repeated bytes tx_ids          = 2 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.TxID"];
     repeated requestpb.Request txs = 3;
     bytes metadata                 = 4;
     StoreBatchOrigin origin        = 5 [(mir.origin_request) = true];

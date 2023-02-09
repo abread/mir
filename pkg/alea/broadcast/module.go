@@ -193,8 +193,8 @@ func (m *bcModule) handleVcbEvent(event *vcbpb.Event) (*events.EventList, error)
 	return events.ListOf(
 		batchdbpbevents.StoreBatch(
 			m.config.BatchDB,
-			common.FormatAleaBatchID(slot).Pb(),
-			ev.TxIds,
+			common.FormatAleaBatchID(slot),
+			t.TxIDSlice(ev.TxIds),
 			ev.Txs,
 			ev.Signature,
 			AleaBcStoreBatchOrigin(m.config.Self, slot),

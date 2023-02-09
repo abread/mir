@@ -25,7 +25,7 @@ func LookupBatchResponse(m dsl.Module, destModule types.ModuleID, found bool, tx
 	dsl.EmitMirEvent(m, events.LookupBatchResponse(destModule, found, txs, metadata, origin))
 }
 
-func StoreBatch[C any](m dsl.Module, destModule types.ModuleID, batchId []uint8, txIds [][]uint8, txs []*requestpb.Request, metadata []uint8, context *C) {
+func StoreBatch[C any](m dsl.Module, destModule types.ModuleID, batchId types.BatchID, txIds []types.TxID, txs []*requestpb.Request, metadata []uint8, context *C) {
 	contextID := m.DslHandle().StoreContext(context)
 
 	origin := &types1.StoreBatchOrigin{

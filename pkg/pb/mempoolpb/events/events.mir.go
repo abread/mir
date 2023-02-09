@@ -22,7 +22,7 @@ func RequestBatch(destModule types.ModuleID, origin *types1.RequestBatchOrigin) 
 	}
 }
 
-func NewBatch(destModule types.ModuleID, txIds [][]uint8, txs []*requestpb.Request, origin *types1.RequestBatchOrigin) *types2.Event {
+func NewBatch(destModule types.ModuleID, txIds []types.TxID, txs []*requestpb.Request, origin *types1.RequestBatchOrigin) *types2.Event {
 	return &types2.Event{
 		DestModule: destModule,
 		Type: &types2.Event_Mempool{
@@ -39,7 +39,7 @@ func NewBatch(destModule types.ModuleID, txIds [][]uint8, txs []*requestpb.Reque
 	}
 }
 
-func RequestTransactions(destModule types.ModuleID, txIds [][]uint8, origin *types1.RequestTransactionsOrigin) *types2.Event {
+func RequestTransactions(destModule types.ModuleID, txIds []types.TxID, origin *types1.RequestTransactionsOrigin) *types2.Event {
 	return &types2.Event{
 		DestModule: destModule,
 		Type: &types2.Event_Mempool{
@@ -88,7 +88,7 @@ func RequestTransactionIDs(destModule types.ModuleID, txs []*requestpb.Request, 
 	}
 }
 
-func TransactionIDsResponse(destModule types.ModuleID, txIds [][]uint8, origin *types1.RequestTransactionIDsOrigin) *types2.Event {
+func TransactionIDsResponse(destModule types.ModuleID, txIds []types.TxID, origin *types1.RequestTransactionIDsOrigin) *types2.Event {
 	return &types2.Event{
 		DestModule: destModule,
 		Type: &types2.Event_Mempool{
@@ -104,7 +104,7 @@ func TransactionIDsResponse(destModule types.ModuleID, txIds [][]uint8, origin *
 	}
 }
 
-func RequestBatchID(destModule types.ModuleID, txIds [][]uint8, origin *types1.RequestBatchIDOrigin) *types2.Event {
+func RequestBatchID(destModule types.ModuleID, txIds []types.TxID, origin *types1.RequestBatchIDOrigin) *types2.Event {
 	return &types2.Event{
 		DestModule: destModule,
 		Type: &types2.Event_Mempool{
@@ -120,7 +120,7 @@ func RequestBatchID(destModule types.ModuleID, txIds [][]uint8, origin *types1.R
 	}
 }
 
-func BatchIDResponse(destModule types.ModuleID, batchId []uint8, origin *types1.RequestBatchIDOrigin) *types2.Event {
+func BatchIDResponse(destModule types.ModuleID, batchId types.BatchID, origin *types1.RequestBatchIDOrigin) *types2.Event {
 	return &types2.Event{
 		DestModule: destModule,
 		Type: &types2.Event_Mempool{

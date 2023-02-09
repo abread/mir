@@ -5,6 +5,7 @@ import (
 	types "github.com/filecoin-project/mir/pkg/pb/availabilitypb/batchdbpb/types"
 	types1 "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 	requestpb "github.com/filecoin-project/mir/pkg/pb/requestpb"
+	types2 "github.com/filecoin-project/mir/pkg/types"
 )
 
 // Module-specific dsl functions for processing events.
@@ -43,7 +44,7 @@ func UponLookupBatchResponse[C any](m dsl.Module, handler func(found bool, txs [
 	})
 }
 
-func UponStoreBatch(m dsl.Module, handler func(batchId []uint8, txIds [][]uint8, txs []*requestpb.Request, metadata []uint8, origin *types.StoreBatchOrigin) error) {
+func UponStoreBatch(m dsl.Module, handler func(batchId types2.BatchID, txIds []types2.TxID, txs []*requestpb.Request, metadata []uint8, origin *types.StoreBatchOrigin) error) {
 	UponEvent[*types.Event_Store](m, func(ev *types.StoreBatch) error {
 		return handler(ev.BatchId, ev.TxIds, ev.Txs, ev.Metadata, ev.Origin)
 	})

@@ -239,18 +239,23 @@ func (p *Parser) parseField(
 }
 
 func (p *Parser) getFieldType(goType reflect.Type, protoField protoreflect.FieldDescriptor) (Type, error) {
-	// TODO: Since maps are not currently used, I didn't bother supporting them yet.
-	if goType.Kind() == reflect.Map {
-		return nil, fmt.Errorf("map fields are not supported yet")
-	}
-
 	// Check if the field is repeated.
-	if goType.Kind() == reflect.Slice {
-		underlying, err := p.getFieldType(goType.Elem(), protoField)
+	// Field descriptors don't have a handy .Elem() method like in go, so we extracted this check.
+	if protoField.Cardinality() == protoreflect.Repeated {
+		underlying, err := p.getFieldTypeNonRepeated(goType.Elem(), protoField)
 		if err != nil {
 			return nil, err
 		}
 		return Slice{underlying}, nil
+	}
+
+	return p.getFieldTypeNonRepeated(goType, protoField)
+}
+
+func (p *Parser) getFieldTypeNonRepeated(goType reflect.Type, protoField protoreflect.FieldDescriptor) (Type, error) {
+	// TODO: Since maps are not currently used, I didn't bother supporting them yet.
+	if goType.Kind() == reflect.Map {
+		return nil, fmt.Errorf("map fields are not supported yet")
 	}
 
 	// Check if the field has (mir.type) option specified.

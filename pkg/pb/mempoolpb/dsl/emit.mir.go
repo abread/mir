@@ -21,11 +21,11 @@ func RequestBatch[C any](m dsl.Module, destModule types.ModuleID, context *C) {
 	dsl.EmitMirEvent(m, events.RequestBatch(destModule, origin))
 }
 
-func NewBatch(m dsl.Module, destModule types.ModuleID, txIds [][]uint8, txs []*requestpb.Request, origin *types1.RequestBatchOrigin) {
+func NewBatch(m dsl.Module, destModule types.ModuleID, txIds []types.TxID, txs []*requestpb.Request, origin *types1.RequestBatchOrigin) {
 	dsl.EmitMirEvent(m, events.NewBatch(destModule, txIds, txs, origin))
 }
 
-func RequestTransactions[C any](m dsl.Module, destModule types.ModuleID, txIds [][]uint8, context *C) {
+func RequestTransactions[C any](m dsl.Module, destModule types.ModuleID, txIds []types.TxID, context *C) {
 	contextID := m.DslHandle().StoreContext(context)
 
 	origin := &types1.RequestTransactionsOrigin{
@@ -51,11 +51,11 @@ func RequestTransactionIDs[C any](m dsl.Module, destModule types.ModuleID, txs [
 	dsl.EmitMirEvent(m, events.RequestTransactionIDs(destModule, txs, origin))
 }
 
-func TransactionIDsResponse(m dsl.Module, destModule types.ModuleID, txIds [][]uint8, origin *types1.RequestTransactionIDsOrigin) {
+func TransactionIDsResponse(m dsl.Module, destModule types.ModuleID, txIds []types.TxID, origin *types1.RequestTransactionIDsOrigin) {
 	dsl.EmitMirEvent(m, events.TransactionIDsResponse(destModule, txIds, origin))
 }
 
-func RequestBatchID[C any](m dsl.Module, destModule types.ModuleID, txIds [][]uint8, context *C) {
+func RequestBatchID[C any](m dsl.Module, destModule types.ModuleID, txIds []types.TxID, context *C) {
 	contextID := m.DslHandle().StoreContext(context)
 
 	origin := &types1.RequestBatchIDOrigin{
@@ -66,6 +66,6 @@ func RequestBatchID[C any](m dsl.Module, destModule types.ModuleID, txIds [][]ui
 	dsl.EmitMirEvent(m, events.RequestBatchID(destModule, txIds, origin))
 }
 
-func BatchIDResponse(m dsl.Module, destModule types.ModuleID, batchId []uint8, origin *types1.RequestBatchIDOrigin) {
+func BatchIDResponse(m dsl.Module, destModule types.ModuleID, batchId types.BatchID, origin *types1.RequestBatchIDOrigin) {
 	dsl.EmitMirEvent(m, events.BatchIDResponse(destModule, batchId, origin))
 }

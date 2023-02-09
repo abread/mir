@@ -41,7 +41,7 @@ func LookupBatchResponse(destModule types.ModuleID, found bool, txs []*requestpb
 	}
 }
 
-func StoreBatch(destModule types.ModuleID, batchId []uint8, txIds [][]uint8, txs []*requestpb.Request, metadata []uint8, origin *types1.StoreBatchOrigin) *types2.Event {
+func StoreBatch(destModule types.ModuleID, batchId types.BatchID, txIds []types.TxID, txs []*requestpb.Request, metadata []uint8, origin *types1.StoreBatchOrigin) *types2.Event {
 	return &types2.Event{
 		DestModule: destModule,
 		Type: &types2.Event_BatchDb{

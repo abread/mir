@@ -5,6 +5,7 @@ import (
 	types1 "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 	types "github.com/filecoin-project/mir/pkg/pb/mempoolpb/types"
 	requestpb "github.com/filecoin-project/mir/pkg/pb/requestpb"
+	types2 "github.com/filecoin-project/mir/pkg/types"
 )
 
 // Module-specific dsl functions for processing events.
@@ -26,7 +27,7 @@ func UponRequestBatch(m dsl.Module, handler func(origin *types.RequestBatchOrigi
 	})
 }
 
-func UponNewBatch[C any](m dsl.Module, handler func(txIds [][]uint8, txs []*requestpb.Request, context *C) error) {
+func UponNewBatch[C any](m dsl.Module, handler func(txIds []types2.TxID, txs []*requestpb.Request, context *C) error) {
 	UponEvent[*types.Event_NewBatch](m, func(ev *types.NewBatch) error {
 		originWrapper, ok := ev.Origin.Type.(*types.RequestBatchOrigin_Dsl)
 		if !ok {
@@ -43,7 +44,7 @@ func UponNewBatch[C any](m dsl.Module, handler func(txIds [][]uint8, txs []*requ
 	})
 }
 
-func UponRequestTransactions(m dsl.Module, handler func(txIds [][]uint8, origin *types.RequestTransactionsOrigin) error) {
+func UponRequestTransactions(m dsl.Module, handler func(txIds []types2.TxID, origin *types.RequestTransactionsOrigin) error) {
 	UponEvent[*types.Event_RequestTransactions](m, func(ev *types.RequestTransactions) error {
 		return handler(ev.TxIds, ev.Origin)
 	})
@@ -72,7 +73,7 @@ func UponRequestTransactionIDs(m dsl.Module, handler func(txs []*requestpb.Reque
 	})
 }
 
-func UponTransactionIDsResponse[C any](m dsl.Module, handler func(txIds [][]uint8, context *C) error) {
+func UponTransactionIDsResponse[C any](m dsl.Module, handler func(txIds []types2.TxID, context *C) error) {
 	UponEvent[*types.Event_TransactionIdsResponse](m, func(ev *types.TransactionIDsResponse) error {
 		originWrapper, ok := ev.Origin.Type.(*types.RequestTransactionIDsOrigin_Dsl)
 		if !ok {
@@ -89,13 +90,13 @@ func UponTransactionIDsResponse[C any](m dsl.Module, handler func(txIds [][]uint
 	})
 }
 
-func UponRequestBatchID(m dsl.Module, handler func(txIds [][]uint8, origin *types.RequestBatchIDOrigin) error) {
+func UponRequestBatchID(m dsl.Module, handler func(txIds []types2.TxID, origin *types.RequestBatchIDOrigin) error) {
 	UponEvent[*types.Event_RequestBatchId](m, func(ev *types.RequestBatchID) error {
 		return handler(ev.TxIds, ev.Origin)
 	})
 }
 
-func UponBatchIDResponse[C any](m dsl.Module, handler func(batchId []uint8, context *C) error) {
+func UponBatchIDResponse[C any](m dsl.Module, handler func(batchId types2.BatchID, context *C) error) {
 	UponEvent[*types.Event_BatchIdResponse](m, func(ev *types.BatchIDResponse) error {
 		originWrapper, ok := ev.Origin.Type.(*types.RequestBatchIDOrigin_Dsl)
 		if !ok {
