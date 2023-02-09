@@ -63,3 +63,10 @@ func ConfMsgID() []byte {
 func CoinMsgID() []byte {
 	return []byte{MsgTypeCoin}
 }
+
+func boolToNum(v bool) uint8 {
+	if v {
+		return 1
+	}
+	return 0
+}
