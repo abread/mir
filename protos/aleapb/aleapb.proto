@@ -12,24 +12,24 @@ import "requestpb/requestpb.proto";
 // ============================================================
 
 message Message {
-    oneof type {
-        FillGapMessage fill_gap_message = 1;
-        FillerMessage  filler_message   = 2;
-    }
+  oneof type {
+    FillGapMessage fill_gap_message = 1;
+    FillerMessage  filler_message   = 2;
+  }
 }
 
 message FillGapMessage {
-    common.Slot slot = 1;
+  common.Slot slot = 1;
 }
 
 message FillerMessage {
-    common.Slot                slot      = 1;
-    repeated requestpb.Request txs       = 2;
-    bytes                      signature = 3;
+  common.Slot                slot      = 1;
+  repeated requestpb.Request txs       = 2;
+  bytes                      signature = 3;
 }
 
 // Availability interface certificate
 message Cert {
-    common.Slot slot = 1;
-    // agreement guarantees that at least f+1 nodes have the batch for this slot
+  common.Slot slot = 1;
+  // agreement guarantees that at least f+1 nodes have the batch for this slot
 }

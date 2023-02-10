@@ -16,31 +16,31 @@ import "mir/codegen_extensions.proto";
 // ============================================================
 
 message Event {
-    oneof type {
-        option (mir.event_type) = true;
+  oneof type {
+    option (mir.event_type) = true;
 
-        StartBroadcast start_broadcast = 1;
-        Deliver        deliver         = 2;
-        FreeSlot       free_slot       = 3;
-    }
+    StartBroadcast start_broadcast = 1;
+    Deliver        deliver         = 2;
+    FreeSlot       free_slot       = 3;
+  }
 }
 
 message StartBroadcast {
-    // queue_idx is the one for this node
-    uint64                     queue_slot = 1;
-    repeated bytes             tx_ids     = 2;
-    repeated requestpb.Request txs        = 3;
+  // queue_idx is the one for this node
+  uint64                     queue_slot = 1;
+  repeated bytes             tx_ids     = 2;
+  repeated requestpb.Request txs        = 3;
 }
 
 
 message Deliver {
-    common.Slot                slot      = 1;
+  common.Slot                slot      = 1;
 }
 
 message FreeSlot {
-    common.Slot slot = 1;
+  common.Slot slot = 1;
 }
 
 message StoreBatchOrigin {
-    common.Slot slot = 1;
+  common.Slot slot = 1;
 }

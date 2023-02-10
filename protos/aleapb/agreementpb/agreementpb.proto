@@ -14,39 +14,39 @@ import "mir/codegen_extensions.proto";
 // ============================================================
 
 message Event {
-    oneof type {
-        option (mir.event_type) = true;
+  oneof type {
+    option (mir.event_type) = true;
 
-        RequestInput request_input = 1;
-        InputValue   input_value   = 2;
-        Deliver      deliver       = 3;
-    }
+    RequestInput request_input = 1;
+    InputValue   input_value   = 2;
+    Deliver      deliver       = 3;
+  }
 }
 
 message RequestInput {
-    uint64 round = 1;
+  uint64 round = 1;
 }
 
 message InputValue {
-    uint64 round = 1;
-    bool input = 2;
+  uint64 round = 1;
+  bool input = 2;
 }
 
 message Deliver {
-    uint64 round    = 1;
-    bool   decision = 2;
+  uint64 round    = 1;
+  bool   decision = 2;
 }
 // ============================================================
 // Messages
 // ============================================================
 
 message Message {
-    oneof type {
-        FinishAbbaMessage finish_abba = 1;
-    }
+  oneof type {
+    FinishAbbaMessage finish_abba = 1;
+  }
 }
 
 message FinishAbbaMessage {
-    uint64 round = 1;
-    bool   value = 2;
+  uint64 round = 1;
+  bool   value = 2;
 }
