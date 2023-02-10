@@ -4,6 +4,7 @@ import (
 	abbatypes "github.com/filecoin-project/mir/pkg/abba/abbatypes"
 	types2 "github.com/filecoin-project/mir/pkg/pb/abbapb/types"
 	types1 "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
+	tctypes "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 	types "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -70,7 +71,7 @@ func ConfMessage(destModule types.ModuleID, roundNumber uint64, values abbatypes
 	}
 }
 
-func CoinMessage(destModule types.ModuleID, roundNumber uint64, coinShare []uint8) *types1.Message {
+func CoinMessage(destModule types.ModuleID, roundNumber uint64, coinShare tctypes.SigShare) *types1.Message {
 	return &types1.Message{
 		DestModule: destModule,
 		Type: &types1.Message_Abba{

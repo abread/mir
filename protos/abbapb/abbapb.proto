@@ -85,5 +85,5 @@ message CoinMessage {
   option (net.message) = true;
 
   uint64 round_number = 1;
-  bytes  coin_share   = 2;
+  bytes  coin_share   = 2 [(mir.type) = "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes.SigShare"];
 }

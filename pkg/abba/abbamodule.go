@@ -309,7 +309,7 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 	})
 
 	// working in advance for 9. sample coin
-	abbadsl.UponCoinMessageReceived(m, func(from t.NodeID, r uint64, coinShare []byte) error {
+	abbadsl.UponCoinMessageReceived(m, func(from t.NodeID, r uint64, coinShare tctypes.SigShare) error {
 		if r != state.round.number {
 			logger.Log(logging.LevelDebug, "wrong round for COIN(r, s)", "current", state.round.number, "got", r)
 			return nil // wrong round or already terminated

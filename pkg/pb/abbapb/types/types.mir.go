@@ -4,6 +4,7 @@ import (
 	mirreflect "github.com/filecoin-project/mir/codegen/mirreflect"
 	abbatypes "github.com/filecoin-project/mir/pkg/abba/abbatypes"
 	abbapb "github.com/filecoin-project/mir/pkg/pb/abbapb"
+	tctypes "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 	types "github.com/filecoin-project/mir/pkg/types"
 	reflectutil "github.com/filecoin-project/mir/pkg/util/reflectutil"
 )
@@ -356,20 +357,20 @@ func (*ConfMessage) MirReflect() mirreflect.Type {
 
 type CoinMessage struct {
 	RoundNumber uint64
-	CoinShare   []uint8
+	CoinShare   tctypes.SigShare
 }
 
 func CoinMessageFromPb(pb *abbapb.CoinMessage) *CoinMessage {
 	return &CoinMessage{
 		RoundNumber: pb.RoundNumber,
-		CoinShare:   pb.CoinShare,
+		CoinShare:   (tctypes.SigShare)(pb.CoinShare),
 	}
 }
 
 func (m *CoinMessage) Pb() *abbapb.CoinMessage {
 	return &abbapb.CoinMessage{
 		RoundNumber: m.RoundNumber,
-		CoinShare:   m.CoinShare,
+		CoinShare:   ([]uint8)(m.CoinShare),
 	}
 }
 

@@ -23,7 +23,7 @@ func SendMessage(destModule types.ModuleID, txs []*requestpb.Request) *types1.Me
 	}
 }
 
-func EchoMessage(destModule types.ModuleID, signatureShare []uint8) *types1.Message {
+func EchoMessage(destModule types.ModuleID, signatureShare tctypes.SigShare) *types1.Message {
 	return &types1.Message{
 		DestModule: destModule,
 		Type: &types1.Message_Vcb{

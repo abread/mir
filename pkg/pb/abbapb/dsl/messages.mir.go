@@ -6,6 +6,7 @@ import (
 	types "github.com/filecoin-project/mir/pkg/pb/abbapb/types"
 	dsl1 "github.com/filecoin-project/mir/pkg/pb/messagepb/dsl"
 	types2 "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
+	tctypes "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 	types1 "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -46,7 +47,7 @@ func UponConfMessageReceived(m dsl.Module, handler func(from types1.NodeID, roun
 	})
 }
 
-func UponCoinMessageReceived(m dsl.Module, handler func(from types1.NodeID, roundNumber uint64, coinShare []uint8) error) {
+func UponCoinMessageReceived(m dsl.Module, handler func(from types1.NodeID, roundNumber uint64, coinShare tctypes.SigShare) error) {
 	UponMessageReceived[*types.Message_CoinMessage](m, func(from types1.NodeID, msg *types.CoinMessage) error {
 		return handler(from, msg.RoundNumber, msg.CoinShare)
 	})

@@ -29,7 +29,7 @@ func UponSendMessageReceived(m dsl.Module, handler func(from types1.NodeID, txs 
 	})
 }
 
-func UponEchoMessageReceived(m dsl.Module, handler func(from types1.NodeID, signatureShare []uint8) error) {
+func UponEchoMessageReceived(m dsl.Module, handler func(from types1.NodeID, signatureShare tctypes.SigShare) error) {
 	UponMessageReceived[*types.Message_EchoMessage](m, func(from types1.NodeID, msg *types.EchoMessage) error {
 		return handler(from, msg.SignatureShare)
 	})

@@ -265,18 +265,18 @@ func (*SendMessage) MirReflect() mirreflect.Type {
 }
 
 type EchoMessage struct {
-	SignatureShare []uint8
+	SignatureShare tctypes.SigShare
 }
 
 func EchoMessageFromPb(pb *vcbpb.EchoMessage) *EchoMessage {
 	return &EchoMessage{
-		SignatureShare: pb.SignatureShare,
+		SignatureShare: (tctypes.SigShare)(pb.SignatureShare),
 	}
 }
 
 func (m *EchoMessage) Pb() *vcbpb.EchoMessage {
 	return &vcbpb.EchoMessage{
-		SignatureShare: m.SignatureShare,
+		SignatureShare: ([]uint8)(m.SignatureShare),
 	}
 }
 

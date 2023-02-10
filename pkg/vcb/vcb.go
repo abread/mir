@@ -203,7 +203,7 @@ func setupVcbLeader(m dsl.Module, mc *ModuleConfig, params *ModuleParams, common
 		return nil
 	})
 
-	vcbdsl.UponEchoMessageReceived(m, func(from t.NodeID, sigShare []byte) error {
+	vcbdsl.UponEchoMessageReceived(m, func(from t.NodeID, sigShare tctypes.SigShare) error {
 		if commonState.delivered {
 			return nil
 		}
