@@ -9,8 +9,8 @@ import (
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/modules"
 	abbadsl "github.com/filecoin-project/mir/pkg/pb/abbapb/dsl"
+	rnetdsl "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/dsl"
 	threshDsl "github.com/filecoin-project/mir/pkg/pb/threshcryptopb/dsl"
-	"github.com/filecoin-project/mir/pkg/reliablenet/rnetdsl"
 	"github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
@@ -108,7 +108,7 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 			logger.Log(logging.LevelDebug, "received weak support for FINISH(v)", "v", value)
 			rnetdsl.SendMessage(m, mc.ReliableNet,
 				FinishMsgID(),
-				FinishMessage(mc.Self, value).Pb(),
+				FinishMessage(mc.Self, value),
 				params.AllNodes,
 			)
 			state.finishSent = true
@@ -143,7 +143,7 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 		// 4. broadcast INIT(r, est^r_i)
 		rnetdsl.SendMessage(m, mc.ReliableNet,
 			InitMsgID(state.round.estimate),
-			InitMessage(mc.Self, state.round.number, state.round.estimate).Pb(),
+			InitMessage(mc.Self, state.round.number, state.round.estimate),
 			params.AllNodes,
 		)
 
@@ -193,7 +193,7 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 				if state.round.estimate != est {
 					rnetdsl.SendMessage(m, mc.ReliableNet,
 						InitMsgID(est),
-						InitMessage(mc.Self, r, est).Pb(),
+						InitMessage(mc.Self, r, est),
 						params.AllNodes,
 					)
 				}
@@ -208,7 +208,7 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 				logger.Log(logging.LevelDebug, "received strong support for INIT(r, v)", "r", r, "v", est)
 				rnetdsl.SendMessage(m, mc.ReliableNet,
 					AuxMsgID(),
-					AuxMessage(mc.Self, r, est).Pb(),
+					AuxMessage(mc.Self, r, est),
 					params.AllNodes,
 				)
 				state.round.auxSent = true
@@ -248,7 +248,7 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 			logger.Log(logging.LevelDebug, "received enough support for AUX(r, v in values)", "r", r, "values", state.round.values)
 			rnetdsl.SendMessage(m, mc.ReliableNet,
 				ConfMsgID(),
-				ConfMessage(mc.Self, r, state.round.values).Pb(),
+				ConfMessage(mc.Self, r, state.round.values),
 				params.AllNodes,
 			)
 			state.updateStep(8)
@@ -301,7 +301,7 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 
 		rnetdsl.SendMessage(m, mc.ReliableNet,
 			CoinMsgID(),
-			CoinMessage(mc.Self, context.roundNumber, sigShare).Pb(),
+			CoinMessage(mc.Self, context.roundNumber, sigShare),
 			params.AllNodes,
 		)
 
@@ -417,7 +417,7 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 			if v == sR && !state.finishSent {
 				rnetdsl.SendMessage(m, mc.ReliableNet,
 					FinishMsgID(),
-					FinishMessage(mc.Self, sR).Pb(),
+					FinishMessage(mc.Self, sR),
 					params.AllNodes,
 				)
 				state.finishSent = true
@@ -432,7 +432,7 @@ func registerRoundEvents(m dsl.Module, state *abbaModuleState, mc *ModuleConfig,
 		// 4. broadcast INIT(r, est)
 		rnetdsl.SendMessage(m, mc.ReliableNet,
 			InitMsgID(state.round.estimate),
-			InitMessage(mc.Self, state.round.number, state.round.estimate).Pb(),
+			InitMessage(mc.Self, state.round.number, state.round.estimate),
 			params.AllNodes,
 		)
 		state.updateStep(5)

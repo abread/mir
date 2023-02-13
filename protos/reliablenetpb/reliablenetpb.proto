@@ -29,9 +29,9 @@ message Event {
 message SendMessage {
   option (mir.event) = true;
 
-  messagepb.Message msg          = 1;
-  repeated string   destinations = 2 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.NodeID"];
-  bytes             msg_id       = 3;
+  bytes             msg_id       = 1;
+  messagepb.Message msg          = 2;
+  repeated string   destinations = 3 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.NodeID"];
 }
 
 message Ack {

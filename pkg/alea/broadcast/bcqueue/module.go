@@ -7,9 +7,9 @@ import (
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
+	rnEvents "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/events"
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"
 	"github.com/filecoin-project/mir/pkg/pb/vcbpb"
-	rnEvents "github.com/filecoin-project/mir/pkg/reliablenet/events"
 	"github.com/filecoin-project/mir/pkg/serializing"
 	t "github.com/filecoin-project/mir/pkg/types"
 	"github.com/filecoin-project/mir/pkg/vcb"
@@ -121,7 +121,7 @@ func (m *QueueBcModule) FreeSlot(slotID uint64) (*events.EventList, error) {
 			m.config.ReliableNet,
 			m.config.Self.Then(t.NewModuleIDFromInt(slotID)),
 			m.params.AllNodes,
-		),
+		).Pb(),
 	), nil
 }
 

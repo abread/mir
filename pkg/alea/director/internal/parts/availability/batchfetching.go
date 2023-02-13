@@ -15,10 +15,11 @@ import (
 	abcdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/dsl"
 	commontypes "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
 	bcdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/dsl"
+	aleamsgs "github.com/filecoin-project/mir/pkg/pb/aleapb/msgs"
 	apb "github.com/filecoin-project/mir/pkg/pb/availabilitypb"
+	rnetdsl "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/dsl"
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"
 	threshDsl "github.com/filecoin-project/mir/pkg/pb/threshcryptopb/dsl"
-	"github.com/filecoin-project/mir/pkg/reliablenet/rnetdsl"
 	"github.com/filecoin-project/mir/pkg/serializing"
 	"github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 	t "github.com/filecoin-project/mir/pkg/types"
@@ -87,7 +88,7 @@ func IncludeBatchFetching(
 		logger.Log(logging.LevelDebug, "broadcast component fell behind. requesting slot from other replicas with FILL-GAP", "queueIdx", slot.QueueIdx, "queueSlot", slot.QueueSlot)
 		rnetdsl.SendMessage(m, mc.ReliableNet,
 			FillGapMsgID(&slot),
-			protobuf.FillGapMessage(mc.Self, slot.Pb()),
+			aleamsgs.FillGapMessage(mc.Self, &slot),
 			params.AllNodes,
 		)
 		return nil

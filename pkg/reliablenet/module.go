@@ -12,8 +12,8 @@ import (
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
 	"github.com/filecoin-project/mir/pkg/pb/messagepb"
 	"github.com/filecoin-project/mir/pkg/pb/reliablenetpb"
+	rnEvents "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/events"
 	rnpbmsg "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/messages"
-	rnEvents "github.com/filecoin-project/mir/pkg/reliablenet/events"
 	t "github.com/filecoin-project/mir/pkg/types"
 	"github.com/filecoin-project/mir/pkg/util/sliceutil"
 )
@@ -199,7 +199,7 @@ func (m *Module) retransmitAll() (*events.EventList, error) {
 
 	evsOut.PushBack(events.TimerDelay(
 		m.config.Timer,
-		[]*eventpb.Event{rnEvents.RetransmitAll(m.config.Self)},
+		[]*eventpb.Event{rnEvents.RetransmitAll(m.config.Self).Pb()},
 		t.TimeDuration(m.params.RetransmissionLoopInterval),
 	))
 
@@ -221,7 +221,7 @@ func (m *Module) SendMessage(id string, msg *messagepb.Message, destinations []t
 		m.logger.Log(logging.LevelDebug, "rescheduling retransmission loop")
 		evsOut.PushBack(events.TimerDelay(
 			m.config.Timer,
-			[]*eventpb.Event{rnEvents.RetransmitAll(m.config.Self)},
+			[]*eventpb.Event{rnEvents.RetransmitAll(m.config.Self).Pb()},
 			t.TimeDuration(m.params.RetransmissionLoopInterval),
 		))
 		m.retransmitLoopScheduled = true

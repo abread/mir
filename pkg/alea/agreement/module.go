@@ -14,7 +14,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
 	"github.com/filecoin-project/mir/pkg/pb/messagepb"
-	rnEvents "github.com/filecoin-project/mir/pkg/reliablenet/events"
+	rnEvents "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/events"
 	"github.com/filecoin-project/mir/pkg/serializing"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
@@ -165,7 +165,7 @@ func (m *agModule) proxyABBAEvent(event *eventpb.Event) (*events.EventList, erro
 				m.config.Self.Then(t.NewModuleIDFromInt(r)).Then(t.ModuleID("__global")), // TODO: use constant from abba
 				abba.FinishMsgID(),
 				from,
-			),
+			).Pb(),
 		), nil
 	} else if m.delivered && r == m.currentRound+1 {
 		// other nodes are moving to the next agreement round, follow suit
@@ -260,7 +260,7 @@ func (m *agModule) advanceRound() (*events.EventList, error) {
 		m.config.ReliableNet,
 		m.config.Self.Then(t.NewModuleIDFromInt(m.currentRound)),
 		m.params.AllNodes,
-	)
+	).Pb()
 
 	m.currentRound++
 

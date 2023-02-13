@@ -9,8 +9,8 @@ import (
 
 // Module-specific dsl functions for emitting events.
 
-func SendMessage(m dsl.Module, destModule types.ModuleID, msg *types1.Message, destinations []types.NodeID, msgId []uint8) {
-	dsl.EmitMirEvent(m, events.SendMessage(destModule, msg, destinations, msgId))
+func SendMessage(m dsl.Module, destModule types.ModuleID, msgId []uint8, msg *types1.Message, destinations []types.NodeID) {
+	dsl.EmitMirEvent(m, events.SendMessage(destModule, msgId, msg, destinations))
 }
 
 func Ack(m dsl.Module, destModule types.ModuleID, destModule0 types.ModuleID, msgId []uint8, source types.NodeID) {

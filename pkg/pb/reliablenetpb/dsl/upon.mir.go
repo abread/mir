@@ -21,9 +21,9 @@ func UponEvent[W types.Event_TypeWrapper[Ev], Ev any](m dsl.Module, handler func
 	})
 }
 
-func UponSendMessage(m dsl.Module, handler func(msg *types2.Message, destinations []types3.NodeID, msgId []uint8) error) {
+func UponSendMessage(m dsl.Module, handler func(msgId []uint8, msg *types2.Message, destinations []types3.NodeID) error) {
 	UponEvent[*types.Event_SendMessage](m, func(ev *types.SendMessage) error {
-		return handler(ev.Msg, ev.Destinations, ev.MsgId)
+		return handler(ev.MsgId, ev.Msg, ev.Destinations)
 	})
 }
 

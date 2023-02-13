@@ -7,10 +7,11 @@ import (
 	"github.com/filecoin-project/mir/pkg/logging"
 	mpdsl "github.com/filecoin-project/mir/pkg/mempool/dsl"
 	"github.com/filecoin-project/mir/pkg/modules"
+	rnetdsl "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/dsl"
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"
 	threshDsl "github.com/filecoin-project/mir/pkg/pb/threshcryptopb/dsl"
 	vcbdsl "github.com/filecoin-project/mir/pkg/pb/vcbpb/dsl"
-	"github.com/filecoin-project/mir/pkg/reliablenet/rnetdsl"
+	vcbmsgs "github.com/filecoin-project/mir/pkg/pb/vcbpb/msgs"
 	"github.com/filecoin-project/mir/pkg/serializing"
 	"github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 	t "github.com/filecoin-project/mir/pkg/types"
@@ -126,7 +127,7 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 	threshDsl.UponSignShareResult(m, func(sigShare tctypes.SigShare, context *handleSendCtx) error {
 		rnetdsl.SendMessage(m, mc.ReliableNet,
 			EchoMsgID(),
-			EchoMessage(mc.Self, sigShare),
+			vcbmsgs.EchoMessage(mc.Self, sigShare),
 			[]t.NodeID{params.Leader},
 		)
 		return nil
@@ -197,7 +198,7 @@ func setupVcbLeader(m dsl.Module, mc *ModuleConfig, params *ModuleParams, common
 
 		rnetdsl.SendMessage(m, mc.ReliableNet,
 			SendMsgID(),
-			SendMessage(mc.Self, commonState.txs),
+			vcbmsgs.SendMessage(mc.Self, commonState.txs),
 			params.AllNodes,
 		)
 		return nil
@@ -240,7 +241,7 @@ func setupVcbLeader(m dsl.Module, mc *ModuleConfig, params *ModuleParams, common
 
 			rnetdsl.SendMessage(m, mc.ReliableNet,
 				FinalMsgID(),
-				FinalMessage(mc.Self, commonState.txs, fullSig),
+				vcbmsgs.FinalMessage(mc.Self, commonState.txs, fullSig),
 				params.AllNodes,
 			)
 

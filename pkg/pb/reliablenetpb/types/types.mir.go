@@ -147,28 +147,28 @@ func (*Event) MirReflect() mirreflect.Type {
 }
 
 type SendMessage struct {
+	MsgId        []uint8
 	Msg          *types.Message
 	Destinations []types1.NodeID
-	MsgId        []uint8
 }
 
 func SendMessageFromPb(pb *reliablenetpb.SendMessage) *SendMessage {
 	return &SendMessage{
-		Msg: types.MessageFromPb(pb.Msg),
+		MsgId: pb.MsgId,
+		Msg:   types.MessageFromPb(pb.Msg),
 		Destinations: types2.ConvertSlice(pb.Destinations, func(t string) types1.NodeID {
 			return (types1.NodeID)(t)
 		}),
-		MsgId: pb.MsgId,
 	}
 }
 
 func (m *SendMessage) Pb() *reliablenetpb.SendMessage {
 	return &reliablenetpb.SendMessage{
-		Msg: (m.Msg).Pb(),
+		MsgId: m.MsgId,
+		Msg:   (m.Msg).Pb(),
 		Destinations: types2.ConvertSlice(m.Destinations, func(t types1.NodeID) string {
 			return (string)(t)
 		}),
-		MsgId: m.MsgId,
 	}
 }
 

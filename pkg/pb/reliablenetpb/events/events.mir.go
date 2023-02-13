@@ -7,16 +7,16 @@ import (
 	types "github.com/filecoin-project/mir/pkg/types"
 )
 
-func SendMessage(destModule types.ModuleID, msg *types1.Message, destinations []types.NodeID, msgId []uint8) *types2.Event {
+func SendMessage(destModule types.ModuleID, msgId []uint8, msg *types1.Message, destinations []types.NodeID) *types2.Event {
 	return &types2.Event{
 		DestModule: destModule,
 		Type: &types2.Event_ReliableNet{
 			ReliableNet: &types3.Event{
 				Type: &types3.Event_SendMessage{
 					SendMessage: &types3.SendMessage{
+						MsgId:        msgId,
 						Msg:          msg,
 						Destinations: destinations,
-						MsgId:        msgId,
 					},
 				},
 			},
