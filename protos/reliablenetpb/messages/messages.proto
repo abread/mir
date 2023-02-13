@@ -4,17 +4,25 @@ package reliablenetpb;
 
 option go_package = "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/messages";
 
+import "mir/codegen_extensions.proto";
+import "net/codegen_extensions.proto";
+
 // ============================================================
 // Messages
 // ============================================================
 
 message Message {
+  option (net.message_class) = true;
+
   oneof type {
+    option (net.message_type) = true;
     AckMessage ack = 1;
   }
 }
 
 message AckMessage {
-  string msg_dest_module = 1;
+  option (net.message) = true;
+
+  string msg_dest_module = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.ModuleID"];
   bytes  msg_id          = 2;
 }

@@ -12,7 +12,7 @@ import (
 	messagepb "github.com/filecoin-project/mir/pkg/pb/messagepb"
 	ordererspb "github.com/filecoin-project/mir/pkg/pb/ordererspb"
 	pingpongpb "github.com/filecoin-project/mir/pkg/pb/pingpongpb"
-	messages "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/messages"
+	types6 "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/messages/types"
 	types2 "github.com/filecoin-project/mir/pkg/pb/vcbpb/types"
 	types "github.com/filecoin-project/mir/pkg/types"
 	reflectutil "github.com/filecoin-project/mir/pkg/util/reflectutil"
@@ -57,7 +57,7 @@ func Message_TypeFromPb(pb messagepb.Message_Type) Message_Type {
 	case *messagepb.Message_AleaAgreement:
 		return &Message_AleaAgreement{AleaAgreement: types5.MessageFromPb(pb.AleaAgreement)}
 	case *messagepb.Message_ReliableNet:
-		return &Message_ReliableNet{ReliableNet: pb.ReliableNet}
+		return &Message_ReliableNet{ReliableNet: types6.MessageFromPb(pb.ReliableNet)}
 	}
 	return nil
 }
@@ -243,17 +243,17 @@ func (*Message_AleaAgreement) MirReflect() mirreflect.Type {
 }
 
 type Message_ReliableNet struct {
-	ReliableNet *messages.Message
+	ReliableNet *types6.Message
 }
 
 func (*Message_ReliableNet) isMessage_Type() {}
 
-func (w *Message_ReliableNet) Unwrap() *messages.Message {
+func (w *Message_ReliableNet) Unwrap() *types6.Message {
 	return w.ReliableNet
 }
 
 func (w *Message_ReliableNet) Pb() messagepb.Message_Type {
-	return &messagepb.Message_ReliableNet{ReliableNet: w.ReliableNet}
+	return &messagepb.Message_ReliableNet{ReliableNet: (w.ReliableNet).Pb()}
 }
 
 func (*Message_ReliableNet) MirReflect() mirreflect.Type {
