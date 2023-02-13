@@ -6,6 +6,7 @@ import (
 
 	"golang.org/x/exp/slices"
 
+	"github.com/filecoin-project/mir/pkg/alea/aleatypes"
 	"github.com/filecoin-project/mir/pkg/alea/broadcast/abcevents"
 	"github.com/filecoin-project/mir/pkg/alea/broadcast/bcqueue"
 	"github.com/filecoin-project/mir/pkg/alea/common"
@@ -13,7 +14,8 @@ import (
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb"
-	aleaCommonPb "github.com/filecoin-project/mir/pkg/pb/aleapb/common"
+	bcpbtypes "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/types"
+	commontypes "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
 	"github.com/filecoin-project/mir/pkg/pb/availabilitypb/batchdbpb"
 	batchdbpbevents "github.com/filecoin-project/mir/pkg/pb/availabilitypb/batchdbpb/events"
 	batchdbpbtypes "github.com/filecoin-project/mir/pkg/pb/availabilitypb/batchdbpb/types"
@@ -183,9 +185,9 @@ func (m *bcModule) handleVcbEvent(event *vcbpb.Event) (*events.EventList, error)
 		return nil, fmt.Errorf("could not parse queue slot: %w", err2)
 	}
 
-	slot := &aleaCommonPb.Slot{
-		QueueIdx:  uint32(queueIdx),
-		QueueSlot: queueSlot,
+	slot := &commontypes.Slot{
+		QueueIdx:  aleatypes.QueueIdx(queueIdx),
+		QueueSlot: aleatypes.QueueSlot(queueSlot),
 	}
 
 	// store delivered slot
@@ -202,11 +204,11 @@ func (m *bcModule) handleVcbEvent(event *vcbpb.Event) (*events.EventList, error)
 	), nil
 }
 
-func AleaBcStoreBatchOrigin(module t.ModuleID, slot *aleaCommonPb.Slot) *batchdbpbtypes.StoreBatchOrigin {
+func AleaBcStoreBatchOrigin(module t.ModuleID, slot *commontypes.Slot) *batchdbpbtypes.StoreBatchOrigin {
 	return &batchdbpbtypes.StoreBatchOrigin{
 		Module: module,
 		Type: &batchdbpbtypes.StoreBatchOrigin_AleaBroadcast{
-			AleaBroadcast: &bcpb.StoreBatchOrigin{
+			AleaBroadcast: &bcpbtypes.StoreBatchOrigin{
 				Slot: slot,
 			},
 		},

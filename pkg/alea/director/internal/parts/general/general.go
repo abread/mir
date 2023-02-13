@@ -4,7 +4,7 @@ import (
 	"golang.org/x/exp/slices"
 
 	"github.com/filecoin-project/mir/pkg/alea/agreement/aagdsl"
-	"github.com/filecoin-project/mir/pkg/alea/broadcast/abcdsl"
+	"github.com/filecoin-project/mir/pkg/alea/aleatypes"
 	"github.com/filecoin-project/mir/pkg/alea/director/internal/common"
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/events"
@@ -12,7 +12,8 @@ import (
 	mempooldsl "github.com/filecoin-project/mir/pkg/mempool/dsl"
 	mempoolevents "github.com/filecoin-project/mir/pkg/mempool/events"
 	"github.com/filecoin-project/mir/pkg/pb/aleapb"
-	aleapbCommon "github.com/filecoin-project/mir/pkg/pb/aleapb/common"
+	abcdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/dsl"
+	commontypes "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
 	"github.com/filecoin-project/mir/pkg/pb/availabilitypb"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
 	"github.com/filecoin-project/mir/pkg/pb/mempoolpb"
@@ -25,18 +26,18 @@ type set[T comparable] map[T]struct{}
 type state struct {
 	unagreedBroadcastedOwnSlotCount int
 	batchCutInProgress              bool
-	bcOwnQueueHead                  uint64
+	bcOwnQueueHead                  aleatypes.QueueSlot
 
-	agQueueHeads []uint64
+	agQueueHeads []aleatypes.QueueSlot
 
-	slotsReadyToDeliver   []set[uint64]
-	stalledAgreementSlot  *aleapbCommon.Slot
+	slotsReadyToDeliver   []set[aleatypes.QueueSlot]
+	stalledAgreementSlot  *commontypes.Slot
 	stalledAgreementRound uint64
 }
 
 func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams, tunables *common.ModuleTunables, nodeID t.NodeID, logger logging.Logger) {
 	state := newState(params, tunables, nodeID)
-	ownQueueIdx := uint32(slices.Index(params.AllNodes, nodeID))
+	ownQueueIdx := aleatypes.QueueIdx(slices.Index(params.AllNodes, nodeID))
 
 	// TODO: split sections into different parts (with independent state)
 
@@ -44,7 +45,7 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 	// Delivery
 	// =============================================================================================
 
-	abcdsl.UponDeliver(m, func(slot *aleapbCommon.Slot) error {
+	abcdsl.UponDeliver(m, func(slot *commontypes.Slot) error {
 		if slot.QueueSlot >= state.agQueueHeads[slot.QueueIdx] {
 			// slot wasn't delivered yet by agreement component
 			logger.Log(logging.LevelDebug, "marking slot as ready for delivery", "queueIdx", slot.QueueIdx, "queueSlot", slot.QueueSlot)
@@ -61,8 +62,8 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 			return nil
 		}
 
-		queueIdx := uint32(round % uint64(len(params.AllNodes)))
-		slot := &aleapbCommon.Slot{
+		queueIdx := aleatypes.QueueIdx(round % uint64(len(params.AllNodes)))
+		slot := &commontypes.Slot{
 			QueueIdx:  queueIdx,
 			QueueSlot: state.agQueueHeads[queueIdx],
 		}
@@ -72,7 +73,7 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 		dsl.EmitEvent(m, events.DeliverCert(mc.Consumer, t.SeqNr(round), &availabilitypb.Cert{
 			Type: &availabilitypb.Cert_Alea{
 				Alea: &aleapb.Cert{
-					Slot: slot,
+					Slot: slot.Pb(),
 				},
 			},
 		}))
@@ -92,7 +93,7 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 	// Batch Cutting / Own Queue Broadcast Control
 	// =============================================================================================
 
-	abcdsl.UponDeliver(m, func(slot *aleapbCommon.Slot) error {
+	abcdsl.UponDeliver(m, func(slot *commontypes.Slot) error {
 		if slot.QueueIdx == ownQueueIdx {
 			state.unagreedBroadcastedOwnSlotCount++
 		}
@@ -101,7 +102,7 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 	})
 	aagdsl.UponDeliver(m, func(round uint64, decision bool) error {
 		if decision {
-			queueIdx := uint32(round % uint64(len(params.AllNodes)))
+			queueIdx := aleatypes.QueueIdx(round % uint64(len(params.AllNodes)))
 
 			// track unagreed own slots
 			if queueIdx == ownQueueIdx {
@@ -150,7 +151,7 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 		state.bcOwnQueueHead++
 		return nil
 	})
-	abcdsl.UponDeliver(m, func(slot *aleapbCommon.Slot) error {
+	abcdsl.UponDeliver(m, func(slot *commontypes.Slot) error {
 		if slot.QueueIdx == ownQueueIdx && slot.QueueSlot == state.bcOwnQueueHead-1 {
 			// new batch was delivered
 			state.batchCutInProgress = false
@@ -165,7 +166,7 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 	// upon agreement round completion, prepare next round
 	aagdsl.UponDeliver(m, func(round uint64, decision bool) error {
 		// prepare next round
-		nextQueueIdx := uint32((round + 1) % uint64(len(params.AllNodes)))
+		nextQueueIdx := aleatypes.QueueIdx((round + 1) % uint64(len(params.AllNodes)))
 		nextQueueSlot := state.agQueueHeads[nextQueueIdx]
 
 		// start next round if corresponding slot's broadcast is complete (or if we have pending requests)
@@ -177,7 +178,7 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 			state.stalledAgreementSlot = nil
 		} else {
 			logger.Log(logging.LevelDebug, "stalling next round", "agreementRound", round+1)
-			state.stalledAgreementSlot = &aleapbCommon.Slot{
+			state.stalledAgreementSlot = &commontypes.Slot{
 				QueueIdx:  nextQueueIdx,
 				QueueSlot: nextQueueSlot,
 			}
@@ -188,7 +189,7 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 	})
 
 	// upon vcb completion for the stalled agreement slot or one of ours, start the stalled agreement round
-	abcdsl.UponDeliver(m, func(slot *aleapbCommon.Slot) error {
+	abcdsl.UponDeliver(m, func(slot *commontypes.Slot) error {
 		if state.stalledAgreementSlot == nil {
 			return nil // nothing to do
 		}
@@ -231,10 +232,12 @@ func newState(params *common.ModuleParams, tunables *common.ModuleTunables, node
 		batchCutInProgress:              false,
 		bcOwnQueueHead:                  0,
 
-		agQueueHeads: make([]uint64, N),
+		agQueueHeads: make([]aleatypes.QueueSlot, N),
 
-		slotsReadyToDeliver: make([]set[uint64], N),
-		stalledAgreementSlot: &aleapbCommon.Slot{
+		slotsReadyToDeliver: make([]set[aleatypes.QueueSlot], N),
+
+		// the first round is stalled until requests come in
+		stalledAgreementSlot: &commontypes.Slot{
 			QueueIdx:  0,
 			QueueSlot: 0,
 		},
@@ -247,9 +250,9 @@ func newState(params *common.ModuleParams, tunables *common.ModuleTunables, node
 		state.agQueueHeads[queueIdx] = 0
 
 		if queueIdx == ownQueueIdx {
-			state.slotsReadyToDeliver[queueIdx] = make(set[uint64], tunables.TargetOwnUnagreedBatchCount)
+			state.slotsReadyToDeliver[queueIdx] = make(set[aleatypes.QueueSlot], tunables.TargetOwnUnagreedBatchCount)
 		} else {
-			state.slotsReadyToDeliver[queueIdx] = make(set[uint64], tunables.MaxConcurrentVcbPerQueue)
+			state.slotsReadyToDeliver[queueIdx] = make(set[aleatypes.QueueSlot], tunables.MaxConcurrentVcbPerQueue)
 		}
 	}
 

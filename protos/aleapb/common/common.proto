@@ -4,7 +4,11 @@ package aleapb.common;
 
 option go_package = "github.com/filecoin-project/mir/pkg/pb/aleapb/common";
 
+import "mir/codegen_extensions.proto";
+
 message Slot {
-  uint32 queue_idx = 1;
-  uint64 queue_slot = 2;
+  option (mir.struct) = true;
+
+  uint32 queue_idx = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/alea/aleatypes.QueueIdx"];
+  uint64 queue_slot = 2 [(mir.type) = "github.com/filecoin-project/mir/pkg/alea/aleatypes.QueueSlot"];
 }

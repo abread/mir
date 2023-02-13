@@ -7,7 +7,6 @@ option go_package = "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb";
 import "aleapb/common/common.proto";
 import "requestpb/requestpb.proto";
 
-// TODO: use DSL codegen
 import "mir/codegen_extensions.proto";
 
 
@@ -16,6 +15,8 @@ import "mir/codegen_extensions.proto";
 // ============================================================
 
 message Event {
+  option (mir.event_class) = true;
+
   oneof type {
     option (mir.event_type) = true;
 
@@ -26,21 +27,29 @@ message Event {
 }
 
 message StartBroadcast {
+  option (mir.event) = true;
+
   // queue_idx is the one for this node
-  uint64                     queue_slot = 1;
-  repeated bytes             tx_ids     = 2;
+  uint64                     queue_slot = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/alea/aleatypes.QueueSlot"];
+  repeated bytes             tx_ids     = 2 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.TxID"];
   repeated requestpb.Request txs        = 3;
 }
 
 
 message Deliver {
-  common.Slot                slot      = 1;
+  option (mir.event) = true;
+
+  common.Slot slot = 1;
 }
 
 message FreeSlot {
+  option (mir.event) = true;
+
   common.Slot slot = 1;
 }
 
 message StoreBatchOrigin {
+  option (mir.struct) = true;
+
   common.Slot slot = 1;
 }

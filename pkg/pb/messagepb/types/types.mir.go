@@ -3,8 +3,8 @@ package messagepbtypes
 import (
 	mirreflect "github.com/filecoin-project/mir/codegen/mirreflect"
 	types3 "github.com/filecoin-project/mir/pkg/pb/abbapb/types"
-	aleapb "github.com/filecoin-project/mir/pkg/pb/aleapb"
-	agreementpb "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb"
+	types5 "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/types"
+	types4 "github.com/filecoin-project/mir/pkg/pb/aleapb/types"
 	mscpb "github.com/filecoin-project/mir/pkg/pb/availabilitypb/mscpb"
 	types1 "github.com/filecoin-project/mir/pkg/pb/bcbpb/types"
 	checkpointpb "github.com/filecoin-project/mir/pkg/pb/checkpointpb"
@@ -53,9 +53,9 @@ func Message_TypeFromPb(pb messagepb.Message_Type) Message_Type {
 	case *messagepb.Message_Abba:
 		return &Message_Abba{Abba: types3.MessageFromPb(pb.Abba)}
 	case *messagepb.Message_Alea:
-		return &Message_Alea{Alea: pb.Alea}
+		return &Message_Alea{Alea: types4.MessageFromPb(pb.Alea)}
 	case *messagepb.Message_AleaAgreement:
-		return &Message_AleaAgreement{AleaAgreement: pb.AleaAgreement}
+		return &Message_AleaAgreement{AleaAgreement: types5.MessageFromPb(pb.AleaAgreement)}
 	case *messagepb.Message_ReliableNet:
 		return &Message_ReliableNet{ReliableNet: pb.ReliableNet}
 	}
@@ -207,17 +207,17 @@ func (*Message_Abba) MirReflect() mirreflect.Type {
 }
 
 type Message_Alea struct {
-	Alea *aleapb.Message
+	Alea *types4.Message
 }
 
 func (*Message_Alea) isMessage_Type() {}
 
-func (w *Message_Alea) Unwrap() *aleapb.Message {
+func (w *Message_Alea) Unwrap() *types4.Message {
 	return w.Alea
 }
 
 func (w *Message_Alea) Pb() messagepb.Message_Type {
-	return &messagepb.Message_Alea{Alea: w.Alea}
+	return &messagepb.Message_Alea{Alea: (w.Alea).Pb()}
 }
 
 func (*Message_Alea) MirReflect() mirreflect.Type {
@@ -225,17 +225,17 @@ func (*Message_Alea) MirReflect() mirreflect.Type {
 }
 
 type Message_AleaAgreement struct {
-	AleaAgreement *agreementpb.Message
+	AleaAgreement *types5.Message
 }
 
 func (*Message_AleaAgreement) isMessage_Type() {}
 
-func (w *Message_AleaAgreement) Unwrap() *agreementpb.Message {
+func (w *Message_AleaAgreement) Unwrap() *types5.Message {
 	return w.AleaAgreement
 }
 
 func (w *Message_AleaAgreement) Pb() messagepb.Message_Type {
-	return &messagepb.Message_AleaAgreement{AleaAgreement: w.AleaAgreement}
+	return &messagepb.Message_AleaAgreement{AleaAgreement: (w.AleaAgreement).Pb()}
 }
 
 func (*Message_AleaAgreement) MirReflect() mirreflect.Type {

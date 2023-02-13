@@ -7,29 +7,42 @@ option go_package = "github.com/filecoin-project/mir/pkg/pb/aleapb";
 import "aleapb/common/common.proto";
 import "requestpb/requestpb.proto";
 
+import "mir/codegen_extensions.proto";
+import "net/codegen_extensions.proto";
+
 // ============================================================
 // Messages
 // ============================================================
 
 message Message {
+  option (net.message_class) = true;
+
   oneof type {
+    option (net.message_type) = true;
+
     FillGapMessage fill_gap_message = 1;
     FillerMessage  filler_message   = 2;
   }
 }
 
 message FillGapMessage {
+  option (net.message) = true;
+
   common.Slot slot = 1;
 }
 
 message FillerMessage {
+  option (net.message) = true;
+
   common.Slot                slot      = 1;
   repeated requestpb.Request txs       = 2;
-  bytes                      signature = 3;
+  bytes                      signature = 3 [(mir.type) = "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes.FullSig"];
 }
 
 // Availability interface certificate
 message Cert {
+  option (mir.struct) = true;
+
   common.Slot slot = 1;
   // agreement guarantees that at least f+1 nodes have the batch for this slot
 }

@@ -4,16 +4,16 @@ package aleapb.agreementpb;
 
 option go_package = "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb";
 
-
-// TODO: use DSL codegen
 import "mir/codegen_extensions.proto";
-
+import "net/codegen_extensions.proto";
 
 // ============================================================
 // Events
 // ============================================================
 
 message Event {
+  option (mir.event_class) = true;
+
   oneof type {
     option (mir.event_type) = true;
 
@@ -24,15 +24,21 @@ message Event {
 }
 
 message RequestInput {
+  option (mir.event) = true;
+
   uint64 round = 1;
 }
 
 message InputValue {
+  option (mir.event) = true;
+
   uint64 round = 1;
-  bool input = 2;
+  bool   input = 2;
 }
 
 message Deliver {
+  option (mir.event) = true;
+
   uint64 round    = 1;
   bool   decision = 2;
 }
@@ -41,12 +47,18 @@ message Deliver {
 // ============================================================
 
 message Message {
+  option (net.message_class) = true;
+
   oneof type {
+    option (net.message_type) = true;
+
     FinishAbbaMessage finish_abba = 1;
   }
 }
 
 message FinishAbbaMessage {
+  option (net.message) = true;
+
   uint64 round = 1;
   bool   value = 2;
 }
