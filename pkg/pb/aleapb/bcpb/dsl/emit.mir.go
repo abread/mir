@@ -11,8 +11,8 @@ import (
 
 // Module-specific dsl functions for emitting events.
 
-func StartBroadcast(m dsl.Module, destModule types.ModuleID, queueSlot aleatypes.QueueSlot, txIds []types.TxID, txs []*requestpb.Request) {
-	dsl.EmitMirEvent(m, events.StartBroadcast(destModule, queueSlot, txIds, txs))
+func StartBroadcast(m dsl.Module, destModule types.ModuleID, queueSlot aleatypes.QueueSlot, txs []*requestpb.Request) {
+	dsl.EmitMirEvent(m, events.StartBroadcast(destModule, queueSlot, txs))
 }
 
 func Deliver(m dsl.Module, destModule types.ModuleID, slot *types1.Slot) {

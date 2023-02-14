@@ -4,10 +4,9 @@ import (
 	aleatypes "github.com/filecoin-project/mir/pkg/alea/aleatypes"
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
 	types "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/types"
-	types3 "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
+	types2 "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
 	types1 "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 	requestpb "github.com/filecoin-project/mir/pkg/pb/requestpb"
-	types2 "github.com/filecoin-project/mir/pkg/types"
 )
 
 // Module-specific dsl functions for processing events.
@@ -23,19 +22,19 @@ func UponEvent[W types.Event_TypeWrapper[Ev], Ev any](m dsl.Module, handler func
 	})
 }
 
-func UponStartBroadcast(m dsl.Module, handler func(queueSlot aleatypes.QueueSlot, txIds []types2.TxID, txs []*requestpb.Request) error) {
+func UponStartBroadcast(m dsl.Module, handler func(queueSlot aleatypes.QueueSlot, txs []*requestpb.Request) error) {
 	UponEvent[*types.Event_StartBroadcast](m, func(ev *types.StartBroadcast) error {
-		return handler(ev.QueueSlot, ev.TxIds, ev.Txs)
+		return handler(ev.QueueSlot, ev.Txs)
 	})
 }
 
-func UponDeliver(m dsl.Module, handler func(slot *types3.Slot) error) {
+func UponDeliver(m dsl.Module, handler func(slot *types2.Slot) error) {
 	UponEvent[*types.Event_Deliver](m, func(ev *types.Deliver) error {
 		return handler(ev.Slot)
 	})
 }
 
-func UponFreeSlot(m dsl.Module, handler func(slot *types3.Slot) error) {
+func UponFreeSlot(m dsl.Module, handler func(slot *types2.Slot) error) {
 	UponEvent[*types.Event_FreeSlot](m, func(ev *types.FreeSlot) error {
 		return handler(ev.Slot)
 	})

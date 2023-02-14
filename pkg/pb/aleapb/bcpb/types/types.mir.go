@@ -2,12 +2,11 @@ package bcpbtypes
 
 import (
 	mirreflect "github.com/filecoin-project/mir/codegen/mirreflect"
-	types1 "github.com/filecoin-project/mir/codegen/model/types"
 	aleatypes "github.com/filecoin-project/mir/pkg/alea/aleatypes"
 	bcpb "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb"
-	types2 "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
+	types "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
 	requestpb "github.com/filecoin-project/mir/pkg/pb/requestpb"
-	types "github.com/filecoin-project/mir/pkg/types"
+	types1 "github.com/filecoin-project/mir/pkg/types"
 	reflectutil "github.com/filecoin-project/mir/pkg/util/reflectutil"
 )
 
@@ -110,27 +109,20 @@ func (*Event) MirReflect() mirreflect.Type {
 
 type StartBroadcast struct {
 	QueueSlot aleatypes.QueueSlot
-	TxIds     []types.TxID
 	Txs       []*requestpb.Request
 }
 
 func StartBroadcastFromPb(pb *bcpb.StartBroadcast) *StartBroadcast {
 	return &StartBroadcast{
 		QueueSlot: (aleatypes.QueueSlot)(pb.QueueSlot),
-		TxIds: types1.ConvertSlice(pb.TxIds, func(t []uint8) types.TxID {
-			return (types.TxID)(t)
-		}),
-		Txs: pb.Txs,
+		Txs:       pb.Txs,
 	}
 }
 
 func (m *StartBroadcast) Pb() *bcpb.StartBroadcast {
 	return &bcpb.StartBroadcast{
 		QueueSlot: (uint64)(m.QueueSlot),
-		TxIds: types1.ConvertSlice(m.TxIds, func(t types.TxID) []uint8 {
-			return ([]uint8)(t)
-		}),
-		Txs: m.Txs,
+		Txs:       m.Txs,
 	}
 }
 
@@ -139,12 +131,12 @@ func (*StartBroadcast) MirReflect() mirreflect.Type {
 }
 
 type Deliver struct {
-	Slot *types2.Slot
+	Slot *types.Slot
 }
 
 func DeliverFromPb(pb *bcpb.Deliver) *Deliver {
 	return &Deliver{
-		Slot: types2.SlotFromPb(pb.Slot),
+		Slot: types.SlotFromPb(pb.Slot),
 	}
 }
 
@@ -159,12 +151,12 @@ func (*Deliver) MirReflect() mirreflect.Type {
 }
 
 type FreeSlot struct {
-	Slot *types2.Slot
+	Slot *types.Slot
 }
 
 func FreeSlotFromPb(pb *bcpb.FreeSlot) *FreeSlot {
 	return &FreeSlot{
-		Slot: types2.SlotFromPb(pb.Slot),
+		Slot: types.SlotFromPb(pb.Slot),
 	}
 }
 
@@ -179,12 +171,12 @@ func (*FreeSlot) MirReflect() mirreflect.Type {
 }
 
 type StoreBatchOrigin struct {
-	Slot *types2.Slot
+	Slot *types.Slot
 }
 
 func StoreBatchOriginFromPb(pb *bcpb.StoreBatchOrigin) *StoreBatchOrigin {
 	return &StoreBatchOrigin{
-		Slot: types2.SlotFromPb(pb.Slot),
+		Slot: types.SlotFromPb(pb.Slot),
 	}
 }
 
@@ -196,4 +188,24 @@ func (m *StoreBatchOrigin) Pb() *bcpb.StoreBatchOrigin {
 
 func (*StoreBatchOrigin) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*bcpb.StoreBatchOrigin]()}
+}
+
+type BcOrigin struct {
+	Module types1.ModuleID
+}
+
+func BcOriginFromPb(pb *bcpb.BcOrigin) *BcOrigin {
+	return &BcOrigin{
+		Module: (types1.ModuleID)(pb.Module),
+	}
+}
+
+func (m *BcOrigin) Pb() *bcpb.BcOrigin {
+	return &bcpb.BcOrigin{
+		Module: (string)(m.Module),
+	}
+}
+
+func (*BcOrigin) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*bcpb.BcOrigin]()}
 }

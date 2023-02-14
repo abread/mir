@@ -6,10 +6,12 @@ import (
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/modules"
+	bcpbtypes "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/types"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
 	rnEvents "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/events"
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"
-	"github.com/filecoin-project/mir/pkg/pb/vcbpb"
+	vcbpbevents "github.com/filecoin-project/mir/pkg/pb/vcbpb/events"
+	vcbpbtypes "github.com/filecoin-project/mir/pkg/pb/vcbpb/types"
 	"github.com/filecoin-project/mir/pkg/serializing"
 	t "github.com/filecoin-project/mir/pkg/types"
 	"github.com/filecoin-project/mir/pkg/vcb"
@@ -78,7 +80,6 @@ func (m *QueueBcModule) getOrTryCreateQueueSlot(slotID uint64) (*queueSlot, *eve
 			module: vcb.NewModule(
 				&vcb.ModuleConfig{
 					Self:         newSlotModuleID,
-					Consumer:     m.config.Consumer,
 					ReliableNet:  m.config.ReliableNet,
 					ThreshCrypto: m.config.ThreshCrypto,
 					Mempool:      m.config.Mempool,
@@ -93,7 +94,21 @@ func (m *QueueBcModule) getOrTryCreateQueueSlot(slotID uint64) (*queueSlot, *eve
 			),
 		}
 
-		initOutEvents, err := newSlot.module.ApplyEvents(events.ListOf(events.Init(newSlotModuleID)))
+		initEvents := events.ListOf(events.Init(newSlotModuleID))
+		if m.params.QueueOwner != m.nodeID {
+			initEvents.PushBack(vcbpbevents.InputValue(newSlotModuleID, nil, &vcbpbtypes.Origin{
+				// TODO: route slot delivery through ourselves
+				Module: m.config.Consumer,
+				Type: &vcbpbtypes.Origin_AleaBc{
+					// TODO: use a proper origin
+					AleaBc: &bcpbtypes.BcOrigin{
+						Module: newSlotModuleID,
+					},
+				},
+			}).Pb())
+		}
+
+		initOutEvents, err := newSlot.module.ApplyEvents(initEvents)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -125,26 +140,22 @@ func (m *QueueBcModule) FreeSlot(slotID uint64) (*events.EventList, error) {
 	), nil
 }
 
-func (m *QueueBcModule) StartBroadcast(slotID uint64, txIDsPb [][]byte, txs []*requestpb.Request) (*events.EventList, error) {
+func (m *QueueBcModule) StartBroadcast(slotID uint64, txs []*requestpb.Request) (*events.EventList, error) {
 	// TODO: rethink design to leave only one side responsible for window size control
 	// assumes caller checked that current queue window has this slot in view (and unused)
 
 	destModule := m.config.Self.Then(t.NewModuleIDFromInt(slotID))
 
-	// TODO: use some helper method from within vcb to create this
-	outEvent := &eventpb.Event{
-		DestModule: destModule.Pb(),
-		Type: &eventpb.Event_Vcb{
-			Vcb: &vcbpb.Event{
-				Type: &vcbpb.Event_Request{
-					Request: &vcbpb.BroadcastRequest{
-						TxIds: txIDsPb,
-						Txs:   txs,
-					},
-				},
+	outEvent := vcbpbevents.InputValue(destModule, txs, &vcbpbtypes.Origin{
+		// TODO: route slot delivery through ourselves
+		Module: m.config.Consumer,
+		Type: &vcbpbtypes.Origin_AleaBc{
+			// TODO: use a proper origin
+			AleaBc: &bcpbtypes.BcOrigin{
+				Module: destModule,
 			},
 		},
-	}
+	}).Pb()
 
 	// routing logic will create the vcb instance for us
 	m.logger.Log(logging.LevelDebug, "Starting broadcast", "queueSlot", slotID)

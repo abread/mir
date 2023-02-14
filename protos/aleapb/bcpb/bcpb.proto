@@ -31,8 +31,7 @@ message StartBroadcast {
 
   // queue_idx is the one for this node
   uint64                     queue_slot = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/alea/aleatypes.QueueSlot"];
-  repeated bytes             tx_ids     = 2 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.TxID"];
-  repeated requestpb.Request txs        = 3;
+  repeated requestpb.Request txs        = 2;
 }
 
 
@@ -52,4 +51,11 @@ message StoreBatchOrigin {
   option (mir.struct) = true;
 
   common.Slot slot = 1;
+}
+
+// TODO: use a proper origin
+message BcOrigin {
+  option (mir.struct) = true;
+
+  string module = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.ModuleID"];
 }

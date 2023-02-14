@@ -157,7 +157,7 @@ func (m *bcModule) handleBroadcastEvent(event *bcpb.Event) (*events.EventList, e
 }
 
 func (m *bcModule) handleStartBroadcast(event *bcpb.StartBroadcast) (*events.EventList, error) {
-	return m.queueBcModules[m.ownQueueIdx].StartBroadcast(event.QueueSlot, event.TxIds, event.Txs)
+	return m.queueBcModules[m.ownQueueIdx].StartBroadcast(event.QueueSlot, event.Txs)
 }
 
 func (m *bcModule) handleFreeSlot(event *bcpb.FreeSlot) (*events.EventList, error) {
@@ -174,8 +174,8 @@ func (m *bcModule) handleVcbEvent(event *vcbpb.Event) (*events.EventList, error)
 	}
 	ev := evWrapped.Unwrap()
 
-	// TODO: try to decouple this from queue internal module hierarchy
-	originModuleSuffix := t.ModuleID(ev.OriginModule).StripParent(m.config.Self)
+	// TODO: define proper custom origin for slot tracking
+	originModuleSuffix := t.ModuleID(ev.Origin.Type.(*vcbpb.Origin_AleaBc).AleaBc.Module).StripParent(m.config.Self)
 	queueIdx, err1 := strconv.ParseUint(string(originModuleSuffix.Top()), 10, 32)
 	if err1 != nil {
 		return nil, fmt.Errorf("could not parse queue idx: %w", err1)

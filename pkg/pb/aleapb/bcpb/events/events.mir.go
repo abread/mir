@@ -9,7 +9,7 @@ import (
 	types "github.com/filecoin-project/mir/pkg/types"
 )
 
-func StartBroadcast(destModule types.ModuleID, queueSlot aleatypes.QueueSlot, txIds []types.TxID, txs []*requestpb.Request) *types1.Event {
+func StartBroadcast(destModule types.ModuleID, queueSlot aleatypes.QueueSlot, txs []*requestpb.Request) *types1.Event {
 	return &types1.Event{
 		DestModule: destModule,
 		Type: &types1.Event_AleaBroadcast{
@@ -17,7 +17,6 @@ func StartBroadcast(destModule types.ModuleID, queueSlot aleatypes.QueueSlot, tx
 				Type: &types2.Event_StartBroadcast{
 					StartBroadcast: &types2.StartBroadcast{
 						QueueSlot: queueSlot,
-						TxIds:     txIds,
 						Txs:       txs,
 					},
 				},

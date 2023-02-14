@@ -147,7 +147,7 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 			return nil
 		}
 
-		abcdsl.StartBroadcast(m, mc.AleaBroadcast, state.bcOwnQueueHead, txIDs, txs)
+		abcdsl.StartBroadcast(m, mc.AleaBroadcast, state.bcOwnQueueHead, txs)
 		state.bcOwnQueueHead++
 		return nil
 	})

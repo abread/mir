@@ -3,17 +3,18 @@ package vcb
 import (
 	"fmt"
 
+	"github.com/filecoin-project/mir/pkg/abba/abbatypes"
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/logging"
-	mpdsl "github.com/filecoin-project/mir/pkg/mempool/dsl"
 	"github.com/filecoin-project/mir/pkg/modules"
 	rnetdsl "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/dsl"
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"
 	threshDsl "github.com/filecoin-project/mir/pkg/pb/threshcryptopb/dsl"
+	threshcryptopbtypes "github.com/filecoin-project/mir/pkg/pb/threshcryptopb/types"
 	vcbdsl "github.com/filecoin-project/mir/pkg/pb/vcbpb/dsl"
 	vcbmsgs "github.com/filecoin-project/mir/pkg/pb/vcbpb/msgs"
+	vcbtypes "github.com/filecoin-project/mir/pkg/pb/vcbpb/types"
 	"github.com/filecoin-project/mir/pkg/reliablenet/rntypes"
-	"github.com/filecoin-project/mir/pkg/serializing"
 	"github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
@@ -21,17 +22,15 @@ import (
 // ModuleConfig sets the module ids. All replicas are expected to use identical module configurations.
 type ModuleConfig struct {
 	Self         t.ModuleID // id of this module
-	Consumer     t.ModuleID // id of the module to send the "Deliver" event to
 	ReliableNet  t.ModuleID
 	ThreshCrypto t.ModuleID
 	Mempool      t.ModuleID
 }
 
 // DefaultModuleConfig returns a valid module config with default names for all modules.
-func DefaultModuleConfig(consumer t.ModuleID) *ModuleConfig {
+func DefaultModuleConfig() *ModuleConfig {
 	return &ModuleConfig{
 		Self:         "vcb",
-		Consumer:     consumer,
 		ReliableNet:  "reliablenet",
 		ThreshCrypto: "threshcrypto",
 		Mempool:      "mempool",
@@ -56,214 +55,226 @@ func (params *ModuleParams) GetF() int {
 	return (params.GetN() - 1) / 3
 }
 
-type vcbModuleLeaderState struct {
-	sentFinal bool
+type state struct {
+	phase vcbPhase
 
-	receivedEcho map[t.NodeID]struct{}
-	sigShares    []tctypes.SigShare
-}
-type vcbModuleCommonState struct {
-	txs     []*requestpb.Request
-	sigData [][]byte
-	txIDs   []t.TxID
-
-	recvdSent  bool
-	recvdFinal bool
-	delivered  bool
+	payload *vcbPayloadManager
+	sig     []byte
+	origin  *vcbtypes.Origin
 }
 
-type handleSendCtx struct{}
+type vcbPhase uint8
 
-type verifyEchoMsgShareCtx struct {
-	sigShare []byte
+const (
+	VcbPhaseAwaitingSend vcbPhase = iota
+	VcbPhaseAwaitingSigData
+	VcbPhaseAwaitingSigShare
+	VcbPhaseAwaitingFinal
+	VcbPhasePendingVerification
+	VcbPhaseVerifying
+	VcbPhaseDelivered
+)
+
+type leaderState struct {
+	phase vcbLeaderPhase
+
+	receivedEcho           abbatypes.RecvTracker // TODO: move to common package
+	sigShares              []tctypes.SigShare
+	lastCombineAttemptSize int
 }
-type recoverVcbSigCtx struct{}
-type handleFinalCtx struct {
-	signature []byte
-}
 
-func SigData(instanceUID []byte, txIDs []t.TxID) [][]byte {
-	res := make([][]byte, 0, len(txIDs)+3)
+type vcbLeaderPhase uint8
 
-	res = append(res, []byte("github.com/filecoin-project/mir/pkg/vcb"))
-	res = append(res, instanceUID)
-	res = append(res, serializing.Uint64ToBytes(uint64(len(txIDs))))
-
-	for _, txID := range txIDs {
-		res = append(res, txID.Pb())
-	}
-
-	return res
-}
+const (
+	VcbLeaderPhaseAwaitingInput vcbLeaderPhase = iota
+	VcbLeaderPhaseAwaitingEchoes
+	VcbLeaderPhaseCombining
+	VcbLeaderPhaseDone
+)
 
 func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging.Logger) modules.PassiveModule {
 	m := dsl.NewModule(mc.Self)
 
-	state := vcbModuleCommonState{
-		txs:     nil,
-		sigData: nil, // cache sigData
+	state := &state{
+		payload: newVcbPayloadManager(m, mc, params),
 
-		recvdSent:  false,
-		recvdFinal: false,
-		delivered:  false,
+		phase: VcbPhaseAwaitingSend,
 	}
 
-	vcbdsl.UponSendMessageReceived(m, func(from t.NodeID, txs []*requestpb.Request) error {
-		if from == params.Leader && !state.recvdSent && !state.delivered {
-			state.txs = txs
-			state.recvdSent = true
+	if nodeID == params.Leader {
+		setupVcbLeader(m, mc, params, nodeID, logger, state)
+	}
 
-			mpdsl.RequestTransactionIDs(m, mc.Mempool, txs, &handleSendCtx{})
+	vcbdsl.UponInputValue(m, func(txs []*requestpb.Request, origin *vcbtypes.Origin) error {
+		if state.origin != nil {
+			return fmt.Errorf("duplicate input value in vcb")
+		}
+		state.origin = origin
+		return nil
+	})
+
+	vcbdsl.UponFinalMessageReceived(m, func(from t.NodeID, txs []*requestpb.Request, signature tctypes.FullSig) error {
+		if from != params.Leader {
+			return nil // byz node // TODO: suspect?
+		}
+
+		rnetdsl.Ack(m, mc.ReliableNet, mc.Self, FinalMsgID(), from)
+
+		if state.phase >= VcbPhaseDelivered {
+			return nil // already returned
+		}
+
+		// FINAL acts as ack for ECHO messages
+		rnetdsl.MarkRecvd(m, mc.ReliableNet, mc.Self, EchoMsgID(), []t.NodeID{params.Leader})
+
+		state.payload.Input(txs)
+		state.sig = signature
+		state.phase = VcbPhasePendingVerification
+		return nil
+	})
+	dsl.UponCondition(m, func() error {
+		if state.phase == VcbPhasePendingVerification && state.payload.SigData() != nil && state.origin != nil {
+			if nodeID == params.Leader {
+				// bypass verification, it came from ourselves
+				contextID := m.DslHandle().StoreContext(&struct{}{})
+				origin := &threshcryptopbtypes.VerifyFullOrigin{
+					Module: mc.ThreshCrypto,
+					Type:   &threshcryptopbtypes.VerifyFullOrigin_Dsl{Dsl: dsl.MirOrigin(contextID)},
+				}
+				threshDsl.VerifyFullResult(m, mc.Self, true, "", origin)
+			} else {
+				threshDsl.VerifyFull(m, mc.ThreshCrypto, state.payload.SigData(), state.sig, &struct{}{})
+			}
+
+			state.phase = VcbPhaseVerifying
 		}
 		return nil
 	})
+	threshDsl.UponVerifyFullResult(m, func(ok bool, error string, context *struct{}) error {
+		if ok {
+			vcbdsl.Deliver(m, state.origin.Module,
+				state.payload.Txs(),
+				state.payload.TxIDs(),
+				state.sig,
+				state.origin,
+			)
+		} else {
+			vcbdsl.Deliver(m, state.origin.Module, nil, nil, nil, state.origin)
+		}
 
-	mpdsl.UponTransactionIDsResponse(m, func(txIDs []t.TxID, context *handleSendCtx) error {
-		state.txIDs = txIDs
-		state.sigData = SigData(params.InstanceUID, txIDs)
-		threshDsl.SignShare(m, mc.ThreshCrypto, state.sigData, context)
+		state.phase = VcbPhaseDelivered
 		return nil
 	})
 
-	threshDsl.UponSignShareResult(m, func(sigShare tctypes.SigShare, context *handleSendCtx) error {
-		rnetdsl.SendMessage(m, mc.ReliableNet,
-			EchoMsgID(),
-			vcbmsgs.EchoMessage(mc.Self, sigShare),
-			[]t.NodeID{params.Leader},
-		)
+	vcbdsl.UponSendMessageReceived(m, func(from t.NodeID, txs []*requestpb.Request) error {
+		if from != params.Leader {
+			return nil // byz node // TODO: suspect?
+		}
+		if state.phase > VcbPhaseAwaitingSend {
+			return nil // already moved on from this
+		}
+
+		state.payload.Input(txs)
+		state.phase = VcbPhaseAwaitingSigData
 		return nil
 	})
-
-	if nodeID == params.Leader {
-		setupVcbLeader(m, mc, params, &state)
-	} else {
-		vcbdsl.UponFinalMessageReceived(m, func(from t.NodeID, txs []*requestpb.Request, signature tctypes.FullSig) error {
-			if from == params.Leader && !state.delivered && !state.recvdFinal {
-				state.recvdFinal = true
-				rnetdsl.MarkModuleMsgsRecvd(m, mc.ReliableNet, mc.Self, params.AllNodes)
-				rnetdsl.Ack(m, mc.ReliableNet, mc.Self, FinalMsgID(), from)
-
-				ctx := &handleFinalCtx{
-					signature: signature,
-				}
-
-				if state.sigData != nil {
-					threshDsl.VerifyFull(m, mc.ThreshCrypto, state.sigData, signature, ctx)
-				} else {
-					state.txs = txs
-					mpdsl.RequestTransactionIDs(m, mc.Mempool, txs, ctx)
-				}
-			}
-
-			return nil
-		})
-
-		mpdsl.UponTransactionIDsResponse(m, func(txIDs []t.TxID, context *handleFinalCtx) error {
-			state.txIDs = txIDs
-			state.sigData = SigData(params.InstanceUID, txIDs)
-			threshDsl.VerifyFull(m, mc.ThreshCrypto, state.sigData, context.signature, context)
-			return nil
-		})
-
-		threshDsl.UponVerifyFullResult(m, func(ok bool, err string, context *handleFinalCtx) error {
-			if ok {
-				state.delivered = true
-				vcbdsl.Deliver(m, mc.Consumer, state.txs, state.txIDs, context.signature, mc.Self)
-			}
-
-			return nil
-		})
-	}
+	dsl.UponCondition(m, func() error {
+		if state.phase == VcbPhaseAwaitingSigData && state.payload.SigData() != nil {
+			threshDsl.SignShare(m, mc.ThreshCrypto, state.payload.SigData(), &struct{}{})
+			state.phase = VcbPhaseAwaitingSigShare
+		}
+		return nil
+	})
+	threshDsl.UponSignShareResult(m, func(signatureShare tctypes.SigShare, context *struct{}) error {
+		if state.phase == VcbPhaseAwaitingSigShare {
+			rnetdsl.SendMessage(m, mc.ReliableNet,
+				EchoMsgID(),
+				vcbmsgs.EchoMessage(mc.Self, signatureShare),
+				[]t.NodeID{params.Leader},
+			)
+		}
+		return nil
+	})
 
 	return m
 }
 
-func setupVcbLeader(m dsl.Module, mc *ModuleConfig, params *ModuleParams, commonState *vcbModuleCommonState) {
-	state := vcbModuleLeaderState{
-		sentFinal: false,
+func setupVcbLeader(m dsl.Module, mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging.Logger, state *state) {
+	leaderState := &leaderState{
+		receivedEcho: make(abbatypes.RecvTracker, len(params.AllNodes)),
+		sigShares:    make([]tctypes.SigShare, 0, len(params.AllNodes)),
 
-		receivedEcho: make(map[t.NodeID]struct{}, len(params.AllNodes)),
-		sigShares:    make([]tctypes.SigShare, 0, params.GetN()),
+		phase: VcbLeaderPhaseAwaitingInput,
 	}
 
-	vcbdsl.UponBroadcastRequest(m, func(txIDs []t.TxID, txs []*requestpb.Request) error {
-		if commonState.txs != nil {
-			return fmt.Errorf("cannot vcb-broadcast more than once in same instance")
-		} else if len(txs) == 0 {
-			return fmt.Errorf("cannot vcb-broadcast an empty batch")
+	vcbdsl.UponEchoMessageReceived(m, func(from t.NodeID, signatureShare tctypes.SigShare) error {
+		if leaderState.phase != VcbLeaderPhaseAwaitingEchoes {
+			return nil // we're doing something better
 		}
 
-		commonState.txIDs = txIDs
-		commonState.txs = txs
-		commonState.sigData = SigData(params.InstanceUID, txIDs)
-
-		rnetdsl.SendMessage(m, mc.ReliableNet,
-			SendMsgID(),
-			vcbmsgs.SendMessage(mc.Self, commonState.txs),
-			params.AllNodes,
-		)
-		return nil
-	})
-
-	vcbdsl.UponEchoMessageReceived(m, func(from t.NodeID, sigShare tctypes.SigShare) error {
-		if commonState.delivered {
-			return nil
+		rnetdsl.Ack(m, mc.ReliableNet, mc.Self, EchoMsgID(), from)
+		if !leaderState.receivedEcho.Register(from) {
+			return nil // already received
 		}
 
-		if _, present := state.receivedEcho[from]; present {
-			return nil // already received Echo from this node
-		}
-		state.receivedEcho[from] = struct{}{}
+		// ECHO message acts as acknowledgement for SEND message
 		rnetdsl.MarkRecvd(m, mc.ReliableNet, mc.Self, SendMsgID(), []t.NodeID{from})
 
-		threshDsl.VerifyShare(m, mc.ThreshCrypto, commonState.sigData, sigShare, from, &verifyEchoMsgShareCtx{
-			sigShare: sigShare,
-		})
-
+		threshDsl.VerifyShare(m, mc.ThreshCrypto, state.payload.SigData(), signatureShare, from, &signatureShare)
 		return nil
 	})
-
-	threshDsl.UponVerifyShareResult(m, func(ok bool, err string, context *verifyEchoMsgShareCtx) error {
+	threshDsl.UponVerifyShareResult(m, func(ok bool, error string, sigShare *tctypes.SigShare) error {
+		// TODO: report byz nodes?
 		if ok {
-			state.sigShares = append(state.sigShares, context.sigShare)
-
-			if len(state.sigShares) >= (2*params.GetF()+1) && !state.sentFinal {
-				// TODO: avoid calling Recover while another is in progress
-				threshDsl.Recover(m, mc.ThreshCrypto, commonState.sigData, state.sigShares, &recoverVcbSigCtx{})
-			}
+			leaderState.sigShares = append(leaderState.sigShares, *sigShare)
 		}
-
 		return nil
 	})
 
-	threshDsl.UponRecoverResult(m, func(fullSig tctypes.FullSig, ok bool, err string, context *recoverVcbSigCtx) error {
-		if ok && !state.sentFinal {
-			state.sentFinal = true
+	dsl.UponCondition(m, func() error {
+		if leaderState.phase == VcbLeaderPhaseAwaitingEchoes && len(leaderState.sigShares) >= params.GetF()+1 && len(leaderState.sigShares) > leaderState.lastCombineAttemptSize {
+			threshDsl.Recover(m, mc.ThreshCrypto, state.payload.SigData(), leaderState.sigShares, &struct{}{})
+			leaderState.phase = VcbLeaderPhaseCombining
+			leaderState.lastCombineAttemptSize = len(leaderState.sigShares)
+		}
+		return nil
+	})
+	threshDsl.UponRecoverResult(m, func(fullSignature tctypes.FullSig, ok bool, error string, context *struct{}) error {
+		if ok {
+			rnetdsl.SendMessage(m, mc.ReliableNet, FinalMsgID(), vcbmsgs.FinalMessage(
+				mc.Self,
+				state.payload.Txs(),
+				fullSignature,
+			), params.AllNodes)
 
-			rnetdsl.SendMessage(m, mc.ReliableNet,
-				FinalMsgID(),
-				vcbmsgs.FinalMessage(mc.Self, commonState.txs, fullSig),
-				params.AllNodes,
-			)
-
-			// no need to send SEND messages anymore (or any message to ourselves)
+			// all SEND messages were made redundant, we can forget about them
 			rnetdsl.MarkRecvd(m, mc.ReliableNet, mc.Self, SendMsgID(), params.AllNodes)
-			rnetdsl.MarkModuleMsgsRecvd(m, mc.ReliableNet, mc.Self, []t.NodeID{params.Leader})
-			// this is running concurrently with the SendMessage above, so the FINISH() message may remain in queue
 
-			vcbdsl.Deliver(m, mc.Consumer, commonState.txs, commonState.txIDs, fullSig, mc.Self)
-			commonState.delivered = true
+			leaderState.phase = VcbLeaderPhaseDone
+		} else {
+			leaderState.phase = VcbLeaderPhaseAwaitingEchoes
 		}
 		return nil
 	})
 
-	vcbdsl.UponFinalMessageReceived(m, func(from t.NodeID, data []*requestpb.Request, signature tctypes.FullSig) error {
-		if from == params.Leader {
-			// ack ourselves to free up the queue
-			rnetdsl.Ack(m, mc.ReliableNet, mc.Self, FinalMsgID(), from)
+	vcbdsl.UponInputValue(m, func(txs []*requestpb.Request, origin *vcbtypes.Origin) error {
+		if nodeID == params.Leader {
+			state.payload.Input(txs)
 		}
 		return nil
 	})
+	dsl.UponCondition(m, func() error {
+		if leaderState.phase == VcbLeaderPhaseAwaitingInput && state.payload.SigData() != nil {
+			// to make things easier, we only broadcast SEND when we are ready to validate the replies (ECHO messages)
+			rnetdsl.SendMessage(m, mc.ReliableNet, SendMsgID(), vcbmsgs.SendMessage(
+				mc.Self,
+				state.payload.Txs(),
+			), params.AllNodes)
+			leaderState.phase = VcbLeaderPhaseAwaitingEchoes
+		}
+		return nil
+	})
+
 }
 
 const (

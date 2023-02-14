@@ -22,14 +22,25 @@ func UponEvent[W types.Event_TypeWrapper[Ev], Ev any](m dsl.Module, handler func
 	})
 }
 
-func UponBroadcastRequest(m dsl.Module, handler func(txIds []types2.TxID, txs []*requestpb.Request) error) {
-	UponEvent[*types.Event_Request](m, func(ev *types.BroadcastRequest) error {
-		return handler(ev.TxIds, ev.Txs)
+func UponInputValue(m dsl.Module, handler func(txs []*requestpb.Request, origin *types.Origin) error) {
+	UponEvent[*types.Event_InputValue](m, func(ev *types.InputValue) error {
+		return handler(ev.Txs, ev.Origin)
 	})
 }
 
-func UponDeliver(m dsl.Module, handler func(txs []*requestpb.Request, txIds []types2.TxID, signature tctypes.FullSig, originModule types2.ModuleID) error) {
+func UponDeliver[C any](m dsl.Module, handler func(txs []*requestpb.Request, txIds []types2.TxID, signature tctypes.FullSig, context *C) error) {
 	UponEvent[*types.Event_Deliver](m, func(ev *types.Deliver) error {
-		return handler(ev.Txs, ev.TxIds, ev.Signature, ev.OriginModule)
+		originWrapper, ok := ev.Origin.Type.(*types.Origin_Dsl)
+		if !ok {
+			return nil
+		}
+
+		contextRaw := m.DslHandle().RecoverAndCleanupContext(dsl.ContextID(originWrapper.Dsl.ContextID))
+		context, ok := contextRaw.(*C)
+		if !ok {
+			return nil
+		}
+
+		return handler(ev.Txs, ev.TxIds, ev.Signature, context)
 	})
 }

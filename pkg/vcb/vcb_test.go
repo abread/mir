@@ -111,7 +111,6 @@ func runTest(t *testing.T, conf *TestConfig) (heapObjects int64, heapAlloc int64
 	}
 
 	app0 := deployment.TestReplicas[0].Modules["app"].(*countingApp)
-	assert.Equal(t, app0.firstFrom, types.ModuleID("vcb"))
 	for _, replica := range deployment.TestReplicas {
 		// Check if all requests were delivered exactly once in all replicas.
 		app := replica.Modules["app"].(*countingApp)
@@ -119,7 +118,6 @@ func runTest(t *testing.T, conf *TestConfig) (heapObjects int64, heapAlloc int64
 		// TODO: check request data
 		assert.ElementsMatch(t, app0.firstTxIDs, app.firstTxIDs)
 		assert.ElementsMatch(t, app0.firstSignature, app.firstSignature)
-		assert.Equal(t, app0.firstFrom, app.firstFrom)
 
 		// Check that all messages were properly ACKed
 		rnet := replica.Modules["reliablenet"].(*reliablenet.Module)
@@ -181,7 +179,7 @@ func newDeployment(conf *TestConfig) (*deploytest.Deployment, error) {
 			},
 		)
 
-		vcbConfig := DefaultModuleConfig("app")
+		vcbConfig := DefaultModuleConfig()
 		vcb := NewModule(vcbConfig, &ModuleParams{
 			InstanceUID: []byte{0},
 			AllNodes:    nodeIDs,
@@ -207,7 +205,7 @@ func newDeployment(conf *TestConfig) (*deploytest.Deployment, error) {
 		}
 
 		modulesWithDefaults := map[types.ModuleID]modules.Module{
-			vcbConfig.Consumer:     newCountingApp(nodeID == leader),
+			"app":                  newCountingApp(nodeID == leader),
 			vcbConfig.Self:         vcb,
 			vcbConfig.ThreshCrypto: threshCryptoSystem.Module(nodeID),
 			vcbConfig.Mempool:      mempool,
@@ -241,7 +239,6 @@ type countingApp struct {
 	firstData      []*requestpb.Request
 	firstTxIDs     []types.TxID
 	firstSignature tctypes.FullSig
-	firstFrom      types.ModuleID
 }
 
 func newCountingApp(isLeader bool) *countingApp {
@@ -274,17 +271,21 @@ func newCountingApp(isLeader bool) *countingApp {
 		})
 
 		mpdsl.UponTransactionIDsResponse(m, func(txIDs []types.TxID, _context *struct{}) error {
-			vcbdsl.BroadcastRequest(m, "vcb", txIDs, txs)
+			vcbdsl.InputValue(m, "vcb", txs, &struct{}{})
+			return nil
+		})
+	} else {
+		dsl.UponInit(m, func() error {
+			vcbdsl.InputValue(m, "vcb", nil, &struct{}{})
 			return nil
 		})
 	}
 
-	vcbdsl.UponDeliver(m, func(data []*requestpb.Request, txIDs []types.TxID, signature tctypes.FullSig, from types.ModuleID) error {
+	vcbdsl.UponDeliver(m, func(data []*requestpb.Request, txIDs []types.TxID, signature tctypes.FullSig, _ctx *struct{}) error {
 		if app.deliveredCount == 0 {
 			app.firstData = data
 			app.firstTxIDs = txIDs
 			app.firstSignature = signature
-			app.firstFrom = from
 		}
 
 		app.deliveredCount++
