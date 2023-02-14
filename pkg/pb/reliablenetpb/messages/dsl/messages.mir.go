@@ -5,6 +5,7 @@ import (
 	dsl1 "github.com/filecoin-project/mir/pkg/pb/messagepb/dsl"
 	types2 "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
 	types "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/messages/types"
+	rntypes "github.com/filecoin-project/mir/pkg/reliablenet/rntypes"
 	types1 "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -21,7 +22,7 @@ func UponMessageReceived[W types.Message_TypeWrapper[M], M any](m dsl.Module, ha
 	})
 }
 
-func UponAckMessageReceived(m dsl.Module, handler func(from types1.NodeID, msgDestModule types1.ModuleID, msgId []uint8) error) {
+func UponAckMessageReceived(m dsl.Module, handler func(from types1.NodeID, msgDestModule types1.ModuleID, msgId rntypes.MsgID) error) {
 	UponMessageReceived[*types.Message_Ack](m, func(from types1.NodeID, msg *types.AckMessage) error {
 		return handler(from, msg.MsgDestModule, msg.MsgId)
 	})

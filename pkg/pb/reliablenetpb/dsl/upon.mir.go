@@ -5,6 +5,7 @@ import (
 	types1 "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 	types2 "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
 	types "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/types"
+	rntypes "github.com/filecoin-project/mir/pkg/reliablenet/rntypes"
 	types3 "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -21,19 +22,19 @@ func UponEvent[W types.Event_TypeWrapper[Ev], Ev any](m dsl.Module, handler func
 	})
 }
 
-func UponSendMessage(m dsl.Module, handler func(msgId []uint8, msg *types2.Message, destinations []types3.NodeID) error) {
+func UponSendMessage(m dsl.Module, handler func(msgId rntypes.MsgID, msg *types2.Message, destinations []types3.NodeID) error) {
 	UponEvent[*types.Event_SendMessage](m, func(ev *types.SendMessage) error {
 		return handler(ev.MsgId, ev.Msg, ev.Destinations)
 	})
 }
 
-func UponAck(m dsl.Module, handler func(destModule0 types3.ModuleID, msgId []uint8, source types3.NodeID) error) {
+func UponAck(m dsl.Module, handler func(destModule0 types3.ModuleID, msgId rntypes.MsgID, source types3.NodeID) error) {
 	UponEvent[*types.Event_Ack](m, func(ev *types.Ack) error {
 		return handler(ev.DestModule, ev.MsgId, ev.Source)
 	})
 }
 
-func UponMarkRecvd(m dsl.Module, handler func(destModule0 types3.ModuleID, msgId []uint8, destinations []types3.NodeID) error) {
+func UponMarkRecvd(m dsl.Module, handler func(destModule0 types3.ModuleID, msgId rntypes.MsgID, destinations []types3.NodeID) error) {
 	UponEvent[*types.Event_MarkRecvd](m, func(ev *types.MarkRecvd) error {
 		return handler(ev.DestModule, ev.MsgId, ev.Destinations)
 	})

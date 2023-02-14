@@ -12,6 +12,7 @@ import (
 	threshDsl "github.com/filecoin-project/mir/pkg/pb/threshcryptopb/dsl"
 	vcbdsl "github.com/filecoin-project/mir/pkg/pb/vcbpb/dsl"
 	vcbmsgs "github.com/filecoin-project/mir/pkg/pb/vcbpb/msgs"
+	"github.com/filecoin-project/mir/pkg/reliablenet/rntypes"
 	"github.com/filecoin-project/mir/pkg/serializing"
 	"github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 	t "github.com/filecoin-project/mir/pkg/types"
@@ -266,20 +267,20 @@ func setupVcbLeader(m dsl.Module, mc *ModuleConfig, params *ModuleParams, common
 }
 
 const (
-	MsgTypeSend uint8 = iota
-	MsgTypeEcho
-	MsgTypeFinal
+	MsgTypeSend  = "s"
+	MsgTypeEcho  = "e"
+	MsgTypeFinal = "f"
 )
 
-func SendMsgID() []byte {
-	return []byte{MsgTypeSend}
+func SendMsgID() rntypes.MsgID {
+	return MsgTypeSend
 }
 
-func EchoMsgID() []byte {
+func EchoMsgID() rntypes.MsgID {
 	// each node only sends one of these messages, no other parameters are needed
-	return []byte{MsgTypeEcho}
+	return MsgTypeEcho
 }
 
-func FinalMsgID() []byte {
-	return []byte{MsgTypeFinal}
+func FinalMsgID() rntypes.MsgID {
+	return MsgTypeFinal
 }

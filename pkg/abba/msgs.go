@@ -1,9 +1,12 @@
 package abba
 
 import (
+	"fmt"
+
 	abbat "github.com/filecoin-project/mir/pkg/abba/abbatypes"
 	abbapbmsgs "github.com/filecoin-project/mir/pkg/pb/abbapb/msgs"
 	messagepbtypes "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
+	"github.com/filecoin-project/mir/pkg/reliablenet/rntypes"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -37,31 +40,31 @@ func subidForRoundMsg(moduleID t.ModuleID, roundNumber uint64) t.ModuleID {
 }
 
 const (
-	MsgTypeFinish uint8 = iota
-	MsgTypeInit
-	MsgTypeAux
-	MsgTypeConf
-	MsgTypeCoin
+	MsgTypeFinish = "f"
+	MsgTypeInit   = "i"
+	MsgTypeAux    = "a"
+	MsgTypeConf   = "c"
+	MsgTypeCoin   = "r"
 )
 
-func FinishMsgID() []byte {
-	return []byte{MsgTypeFinish}
+func FinishMsgID() rntypes.MsgID {
+	return MsgTypeFinish
 }
 
-func InitMsgID(v bool) []byte {
-	return []byte{MsgTypeInit, boolToNum(v)}
+func InitMsgID(v bool) rntypes.MsgID {
+	return rntypes.MsgID(fmt.Sprintf("%s.%d", MsgTypeInit, boolToNum(v)))
 }
 
-func AuxMsgID() []byte {
-	return []byte{MsgTypeAux}
+func AuxMsgID() rntypes.MsgID {
+	return MsgTypeAux
 }
 
-func ConfMsgID() []byte {
-	return []byte{MsgTypeConf}
+func ConfMsgID() rntypes.MsgID {
+	return MsgTypeConf
 }
 
-func CoinMsgID() []byte {
-	return []byte{MsgTypeCoin}
+func CoinMsgID() rntypes.MsgID {
+	return MsgTypeCoin
 }
 
 func boolToNum(v bool) uint8 {

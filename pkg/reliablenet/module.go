@@ -14,6 +14,8 @@ import (
 	"github.com/filecoin-project/mir/pkg/pb/reliablenetpb"
 	rnEvents "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/events"
 	rnpbmsg "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/messages"
+	rnetmsgs "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/messages/msgs"
+	"github.com/filecoin-project/mir/pkg/reliablenet/rntypes"
 	t "github.com/filecoin-project/mir/pkg/types"
 	"github.com/filecoin-project/mir/pkg/util/sliceutil"
 )
@@ -53,7 +55,7 @@ type Module struct {
 
 	retransmitLoopScheduled bool // TODO: atomic.Bool in Go 1.19
 
-	queues map[t.ModuleID]map[string]*eventpb.SendMessage // ModuleID -> msgID ([]byte) -> queuedMsg
+	queues map[t.ModuleID]map[rntypes.MsgID]*eventpb.SendMessage
 }
 
 func New(ownID t.NodeID, mc *ModuleConfig, params *ModuleParams, logger logging.Logger) (*Module, error) {
@@ -65,7 +67,7 @@ func New(ownID t.NodeID, mc *ModuleConfig, params *ModuleParams, logger logging.
 
 		retransmitLoopScheduled: false,
 
-		queues: make(map[t.ModuleID]map[string]*eventpb.SendMessage),
+		queues: make(map[t.ModuleID]map[rntypes.MsgID]*eventpb.SendMessage),
 	}, nil
 }
 
@@ -114,13 +116,13 @@ func (m *Module) applyRNEvent(event *reliablenetpb.Event) (*events.EventList, er
 	case *reliablenetpb.Event_RetransmitAll:
 		return m.retransmitAll()
 	case *reliablenetpb.Event_SendMessage:
-		return m.SendMessage(string(ev.SendMessage.MsgId), ev.SendMessage.Msg, t.NodeIDSlice(ev.SendMessage.Destinations))
+		return m.SendMessage(rntypes.MsgID(ev.SendMessage.MsgId), ev.SendMessage.Msg, t.NodeIDSlice(ev.SendMessage.Destinations))
 	case *reliablenetpb.Event_MarkModuleMsgsRecvd:
 		return m.MarkModuleMsgsRecvd(t.ModuleID(ev.MarkModuleMsgsRecvd.DestModule), t.NodeIDSlice(ev.MarkModuleMsgsRecvd.Destinations))
 	case *reliablenetpb.Event_MarkRecvd:
-		return m.MarkRecvd(t.ModuleID(ev.MarkRecvd.DestModule), string(ev.MarkRecvd.MsgId), t.NodeIDSlice(ev.MarkRecvd.Destinations))
+		return m.MarkRecvd(t.ModuleID(ev.MarkRecvd.DestModule), rntypes.MsgID(ev.MarkRecvd.MsgId), t.NodeIDSlice(ev.MarkRecvd.Destinations))
 	case *reliablenetpb.Event_Ack:
-		return m.SendAck(t.ModuleID(ev.Ack.DestModule), ev.Ack.MsgId, t.NodeID(ev.Ack.Source))
+		return m.SendAck(t.ModuleID(ev.Ack.DestModule), rntypes.MsgID(ev.Ack.MsgId), t.NodeID(ev.Ack.Source))
 	default:
 		return nil, fmt.Errorf("unsupported reliablenet event type: %T", ev)
 	}
@@ -137,31 +139,19 @@ func (m *Module) applyMessage(message *messagepb.Message, from t.NodeID) (*event
 		return &events.EventList{}, nil
 	}
 
-	return m.MarkRecvd(t.ModuleID(msg.Ack.MsgDestModule), string(msg.Ack.MsgId), []t.NodeID{from})
+	return m.MarkRecvd(t.ModuleID(msg.Ack.MsgDestModule), rntypes.MsgID(msg.Ack.MsgId), []t.NodeID{from})
 }
 
-func (m *Module) SendAck(msgDestModule t.ModuleID, msgID []byte, msgSource t.NodeID) (*events.EventList, error) {
+func (m *Module) SendAck(msgDestModule t.ModuleID, msgID rntypes.MsgID, msgSource t.NodeID) (*events.EventList, error) {
 	if msgSource == m.ownID {
 		// fast path for local messages
-		return m.MarkRecvd(msgDestModule, string(msgID), []t.NodeID{msgSource})
+		return m.MarkRecvd(msgDestModule, msgID, []t.NodeID{msgSource})
 	}
 
 	return events.ListOf(
 		events.SendMessage(
 			m.config.Net,
-			&messagepb.Message{
-				Type: &messagepb.Message_ReliableNet{
-					ReliableNet: &rnpbmsg.Message{
-						Type: &rnpbmsg.Message_Ack{
-							Ack: &rnpbmsg.AckMessage{
-								MsgDestModule: msgDestModule.Pb(),
-								MsgId:         msgID,
-							},
-						},
-					},
-				},
-				DestModule: m.config.Self.Pb(),
-			},
+			rnetmsgs.AckMessage(m.config.Self, msgDestModule, msgID).Pb(),
 			[]t.NodeID{msgSource},
 		),
 	), nil
@@ -206,7 +196,7 @@ func (m *Module) retransmitAll() (*events.EventList, error) {
 	return evsOut, nil
 }
 
-func (m *Module) SendMessage(id string, msg *messagepb.Message, destinations []t.NodeID) (*events.EventList, error) {
+func (m *Module) SendMessage(id rntypes.MsgID, msg *messagepb.Message, destinations []t.NodeID) (*events.EventList, error) {
 	m.ensureQueueExists(t.ModuleID(msg.DestModule))
 	m.queues[t.ModuleID(msg.DestModule)][id] = &eventpb.SendMessage{
 		Msg:          msg,
@@ -238,7 +228,7 @@ const initialQueueCapacity = 4
 
 func (m *Module) ensureQueueExists(destModule t.ModuleID) {
 	if _, present := m.queues[destModule]; !present {
-		m.queues[destModule] = make(map[string]*eventpb.SendMessage, initialQueueCapacity)
+		m.queues[destModule] = make(map[rntypes.MsgID]*eventpb.SendMessage, initialQueueCapacity)
 	}
 }
 
@@ -283,7 +273,7 @@ func (m *Module) MarkModuleMsgsRecvd(destModule t.ModuleID, destinations []t.Nod
 	return &events.EventList{}, nil
 }
 
-func (m *Module) MarkRecvd(destModule t.ModuleID, messageID string, destinations []t.NodeID) (*events.EventList, error) {
+func (m *Module) MarkRecvd(destModule t.ModuleID, messageID rntypes.MsgID, destinations []t.NodeID) (*events.EventList, error) {
 	queue, queueExists := m.queues[destModule]
 	if !queueExists {
 		// queue doesn't event exist anymore, no pending messages to clean up

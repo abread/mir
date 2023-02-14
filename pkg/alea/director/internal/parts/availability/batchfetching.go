@@ -20,7 +20,7 @@ import (
 	rnetdsl "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/dsl"
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"
 	threshDsl "github.com/filecoin-project/mir/pkg/pb/threshcryptopb/dsl"
-	"github.com/filecoin-project/mir/pkg/serializing"
+	"github.com/filecoin-project/mir/pkg/reliablenet/rntypes"
 	"github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 	t "github.com/filecoin-project/mir/pkg/types"
 	"github.com/filecoin-project/mir/pkg/vcb"
@@ -196,15 +196,11 @@ func certSigData(params *director.ModuleParams, slot *commontypes.Slot, txIDs []
 }
 
 const (
-	MsgTypeFillGap uint8 = iota
+	MsgTypeFillGap = "f"
 )
 
-func FillGapMsgID(slot *commontypes.Slot) []byte {
-	s := make([]byte, 0, 1+2*8)
-	s = append(s, MsgTypeFillGap)
-	s = append(s, serializing.Uint64ToBytes(uint64(slot.QueueIdx))...)
-	s = append(s, serializing.Uint64ToBytes(uint64(slot.QueueSlot))...)
-	return s
+func FillGapMsgID(slot *commontypes.Slot) rntypes.MsgID {
+	return rntypes.MsgID(fmt.Sprintf("%s.%d.%d", MsgTypeFillGap, slot.QueueIdx, slot.QueueSlot))
 }
 
 // Context data structures

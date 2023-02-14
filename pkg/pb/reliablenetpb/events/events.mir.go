@@ -4,10 +4,11 @@ import (
 	types2 "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 	types1 "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
 	types3 "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/types"
+	rntypes "github.com/filecoin-project/mir/pkg/reliablenet/rntypes"
 	types "github.com/filecoin-project/mir/pkg/types"
 )
 
-func SendMessage(destModule types.ModuleID, msgId []uint8, msg *types1.Message, destinations []types.NodeID) *types2.Event {
+func SendMessage(destModule types.ModuleID, msgId rntypes.MsgID, msg *types1.Message, destinations []types.NodeID) *types2.Event {
 	return &types2.Event{
 		DestModule: destModule,
 		Type: &types2.Event_ReliableNet{
@@ -24,7 +25,7 @@ func SendMessage(destModule types.ModuleID, msgId []uint8, msg *types1.Message, 
 	}
 }
 
-func Ack(destModule types.ModuleID, destModule0 types.ModuleID, msgId []uint8, source types.NodeID) *types2.Event {
+func Ack(destModule types.ModuleID, destModule0 types.ModuleID, msgId rntypes.MsgID, source types.NodeID) *types2.Event {
 	return &types2.Event{
 		DestModule: destModule,
 		Type: &types2.Event_ReliableNet{
@@ -41,7 +42,7 @@ func Ack(destModule types.ModuleID, destModule0 types.ModuleID, msgId []uint8, s
 	}
 }
 
-func MarkRecvd(destModule types.ModuleID, destModule0 types.ModuleID, msgId []uint8, destinations []types.NodeID) *types2.Event {
+func MarkRecvd(destModule types.ModuleID, destModule0 types.ModuleID, msgId rntypes.MsgID, destinations []types.NodeID) *types2.Event {
 	return &types2.Event{
 		DestModule: destModule,
 		Type: &types2.Event_ReliableNet{

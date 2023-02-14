@@ -5,6 +5,7 @@ import (
 	types2 "github.com/filecoin-project/mir/codegen/model/types"
 	types "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
 	reliablenetpb "github.com/filecoin-project/mir/pkg/pb/reliablenetpb"
+	rntypes "github.com/filecoin-project/mir/pkg/reliablenet/rntypes"
 	types1 "github.com/filecoin-project/mir/pkg/types"
 	reflectutil "github.com/filecoin-project/mir/pkg/util/reflectutil"
 )
@@ -147,14 +148,14 @@ func (*Event) MirReflect() mirreflect.Type {
 }
 
 type SendMessage struct {
-	MsgId        []uint8
+	MsgId        rntypes.MsgID
 	Msg          *types.Message
 	Destinations []types1.NodeID
 }
 
 func SendMessageFromPb(pb *reliablenetpb.SendMessage) *SendMessage {
 	return &SendMessage{
-		MsgId: pb.MsgId,
+		MsgId: (rntypes.MsgID)(pb.MsgId),
 		Msg:   types.MessageFromPb(pb.Msg),
 		Destinations: types2.ConvertSlice(pb.Destinations, func(t string) types1.NodeID {
 			return (types1.NodeID)(t)
@@ -164,7 +165,7 @@ func SendMessageFromPb(pb *reliablenetpb.SendMessage) *SendMessage {
 
 func (m *SendMessage) Pb() *reliablenetpb.SendMessage {
 	return &reliablenetpb.SendMessage{
-		MsgId: m.MsgId,
+		MsgId: (string)(m.MsgId),
 		Msg:   (m.Msg).Pb(),
 		Destinations: types2.ConvertSlice(m.Destinations, func(t types1.NodeID) string {
 			return (string)(t)
@@ -178,14 +179,14 @@ func (*SendMessage) MirReflect() mirreflect.Type {
 
 type Ack struct {
 	DestModule types1.ModuleID
-	MsgId      []uint8
+	MsgId      rntypes.MsgID
 	Source     types1.NodeID
 }
 
 func AckFromPb(pb *reliablenetpb.Ack) *Ack {
 	return &Ack{
 		DestModule: (types1.ModuleID)(pb.DestModule),
-		MsgId:      pb.MsgId,
+		MsgId:      (rntypes.MsgID)(pb.MsgId),
 		Source:     (types1.NodeID)(pb.Source),
 	}
 }
@@ -193,7 +194,7 @@ func AckFromPb(pb *reliablenetpb.Ack) *Ack {
 func (m *Ack) Pb() *reliablenetpb.Ack {
 	return &reliablenetpb.Ack{
 		DestModule: (string)(m.DestModule),
-		MsgId:      m.MsgId,
+		MsgId:      (string)(m.MsgId),
 		Source:     (string)(m.Source),
 	}
 }
@@ -231,14 +232,14 @@ func (*MarkModuleMsgsRecvd) MirReflect() mirreflect.Type {
 
 type MarkRecvd struct {
 	DestModule   types1.ModuleID
-	MsgId        []uint8
+	MsgId        rntypes.MsgID
 	Destinations []types1.NodeID
 }
 
 func MarkRecvdFromPb(pb *reliablenetpb.MarkRecvd) *MarkRecvd {
 	return &MarkRecvd{
 		DestModule: (types1.ModuleID)(pb.DestModule),
-		MsgId:      pb.MsgId,
+		MsgId:      (rntypes.MsgID)(pb.MsgId),
 		Destinations: types2.ConvertSlice(pb.Destinations, func(t string) types1.NodeID {
 			return (types1.NodeID)(t)
 		}),
@@ -248,7 +249,7 @@ func MarkRecvdFromPb(pb *reliablenetpb.MarkRecvd) *MarkRecvd {
 func (m *MarkRecvd) Pb() *reliablenetpb.MarkRecvd {
 	return &reliablenetpb.MarkRecvd{
 		DestModule: (string)(m.DestModule),
-		MsgId:      m.MsgId,
+		MsgId:      (string)(m.MsgId),
 		Destinations: types2.ConvertSlice(m.Destinations, func(t types1.NodeID) string {
 			return (string)(t)
 		}),

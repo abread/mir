@@ -24,5 +24,5 @@ message AckMessage {
   option (net.message) = true;
 
   string msg_dest_module = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.ModuleID"];
-  bytes  msg_id          = 2;
+  string msg_id          = 2 [(mir.type) = "github.com/filecoin-project/mir/pkg/reliablenet/rntypes.MsgID"];
 }

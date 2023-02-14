@@ -3,6 +3,7 @@ package messagestypes
 import (
 	mirreflect "github.com/filecoin-project/mir/codegen/mirreflect"
 	messages "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/messages"
+	rntypes "github.com/filecoin-project/mir/pkg/reliablenet/rntypes"
 	types "github.com/filecoin-project/mir/pkg/types"
 	reflectutil "github.com/filecoin-project/mir/pkg/util/reflectutil"
 )
@@ -66,20 +67,20 @@ func (*Message) MirReflect() mirreflect.Type {
 
 type AckMessage struct {
 	MsgDestModule types.ModuleID
-	MsgId         []uint8
+	MsgId         rntypes.MsgID
 }
 
 func AckMessageFromPb(pb *messages.AckMessage) *AckMessage {
 	return &AckMessage{
 		MsgDestModule: (types.ModuleID)(pb.MsgDestModule),
-		MsgId:         pb.MsgId,
+		MsgId:         (rntypes.MsgID)(pb.MsgId),
 	}
 }
 
 func (m *AckMessage) Pb() *messages.AckMessage {
 	return &messages.AckMessage{
 		MsgDestModule: (string)(m.MsgDestModule),
-		MsgId:         m.MsgId,
+		MsgId:         (string)(m.MsgId),
 	}
 }
 
