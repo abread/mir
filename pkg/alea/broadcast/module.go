@@ -7,13 +7,13 @@ import (
 	"golang.org/x/exp/slices"
 
 	"github.com/filecoin-project/mir/pkg/alea/aleatypes"
-	"github.com/filecoin-project/mir/pkg/alea/broadcast/abcevents"
 	"github.com/filecoin-project/mir/pkg/alea/broadcast/bcqueue"
 	"github.com/filecoin-project/mir/pkg/alea/common"
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb"
+	abcevents "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/events"
 	bcpbtypes "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/types"
 	commontypes "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
 	"github.com/filecoin-project/mir/pkg/pb/availabilitypb/batchdbpb"
@@ -232,7 +232,7 @@ func (m *bcModule) handleBatchDBEvent(event *batchdbpb.Event) (*events.EventList
 	m.logger.Log(logging.LevelInfo, "Delivered BC slot", "queueIdx", slot.QueueIdx, "queueSlot", slot.QueueSlot)
 
 	return events.ListOf(
-		abcevents.Deliver(m.config.Consumer, slot),
+		abcevents.Deliver(m.config.Consumer, commontypes.SlotFromPb(slot)).Pb(),
 	), nil
 }
 

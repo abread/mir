@@ -3,7 +3,6 @@ package general
 import (
 	"golang.org/x/exp/slices"
 
-	"github.com/filecoin-project/mir/pkg/alea/agreement/aagdsl"
 	"github.com/filecoin-project/mir/pkg/alea/aleatypes"
 	"github.com/filecoin-project/mir/pkg/alea/director/internal/common"
 	"github.com/filecoin-project/mir/pkg/dsl"
@@ -12,6 +11,7 @@ import (
 	mempooldsl "github.com/filecoin-project/mir/pkg/mempool/dsl"
 	mempoolevents "github.com/filecoin-project/mir/pkg/mempool/events"
 	"github.com/filecoin-project/mir/pkg/pb/aleapb"
+	aagdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/dsl"
 	abcdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/dsl"
 	commontypes "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
 	"github.com/filecoin-project/mir/pkg/pb/availabilitypb"

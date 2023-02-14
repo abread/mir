@@ -6,7 +6,6 @@ import (
 	"github.com/filecoin-project/mir/pkg/alea/broadcast"
 	"github.com/filecoin-project/mir/pkg/alea/common"
 	director "github.com/filecoin-project/mir/pkg/alea/director/internal/common"
-	"github.com/filecoin-project/mir/pkg/alea/director/internal/protobuf"
 	batchdbdsl "github.com/filecoin-project/mir/pkg/availability/batchdb/dsl"
 	adsl "github.com/filecoin-project/mir/pkg/availability/dsl"
 	"github.com/filecoin-project/mir/pkg/dsl"
@@ -111,7 +110,7 @@ func IncludeBatchFetching(
 		}
 
 		dsl.SendMessage(m, mc.Net,
-			protobuf.FillerMessage(mc.Self, context.slot.Pb(), txs, signature),
+			aleamsgs.FillerMessage(mc.Self, context.slot, txs, signature).Pb(),
 			[]t.NodeID{context.requester},
 		)
 		return nil

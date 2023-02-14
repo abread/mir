@@ -5,13 +5,14 @@ import (
 	"strconv"
 
 	"github.com/filecoin-project/mir/pkg/abba"
-	aagEvents "github.com/filecoin-project/mir/pkg/alea/agreement/aagevents"
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/pb/abbapb"
 	abbaEvents "github.com/filecoin-project/mir/pkg/pb/abbapb/events"
 	"github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb"
+	aagEvents "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/events"
+	aagMsgs "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/msgs"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
 	"github.com/filecoin-project/mir/pkg/pb/messagepb"
 	rnEvents "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/events"
@@ -153,11 +154,11 @@ func (m *agModule) proxyABBAEvent(event *eventpb.Event) (*events.EventList, erro
 
 		from := t.NodeID(ev.MessageReceived.From)
 		return events.ListOf(
-			events.SendMessage(m.config.Net, aagEvents.AbbaFinishMessage(
+			events.SendMessage(m.config.Net, aagMsgs.FinishAbbaMessage(
 				m.config.Self,
 				r,
 				m.roundDecisionHistory[r],
-			), []t.NodeID{from}),
+			).Pb(), []t.NodeID{from}),
 
 			// ABBA does not mark FINISH(_) messages as received, so we must acknowledge any we may receive
 			rnEvents.Ack(
@@ -185,7 +186,7 @@ func (m *agModule) proxyABBAEvent(event *eventpb.Event) (*events.EventList, erro
 	if err == nil && !m.inputDone {
 		// request input value into new agreement round
 		// may end up happening multiple times.
-		evsOut.PushBack(aagEvents.RequestInput(m.config.Consumer, m.currentRound))
+		evsOut.PushBack(aagEvents.RequestInput(m.config.Consumer, m.currentRound).Pb())
 	}
 
 	return evsOut, err
@@ -240,7 +241,7 @@ func (m *agModule) handleABBAEvent(event *abbapb.Event) (*events.EventList, erro
 
 	// notify Alea of delivery
 	m.delivered = true
-	evsOut.PushBack(aagEvents.Deliver(m.config.Consumer, m.currentRound, ev.Result))
+	evsOut.PushBack(aagEvents.Deliver(m.config.Consumer, m.currentRound, ev.Result).Pb())
 
 	// free up message queues for past round (we'll just re-send the FINAL message later if needed)
 	if len(m.roundDecisionHistory) != int(m.currentRound) {
