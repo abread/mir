@@ -3,7 +3,7 @@ package vcbpbtypes
 import (
 	mirreflect "github.com/filecoin-project/mir/codegen/mirreflect"
 	types1 "github.com/filecoin-project/mir/codegen/model/types"
-	types4 "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/types"
+	types4 "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/types"
 	types2 "github.com/filecoin-project/mir/pkg/pb/contextstorepb/types"
 	types3 "github.com/filecoin-project/mir/pkg/pb/dslpb/types"
 	requestpb "github.com/filecoin-project/mir/pkg/pb/requestpb"
@@ -328,8 +328,8 @@ func Origin_TypeFromPb(pb vcbpb.Origin_Type) Origin_Type {
 		return &Origin_ContextStore{ContextStore: types2.OriginFromPb(pb.ContextStore)}
 	case *vcbpb.Origin_Dsl:
 		return &Origin_Dsl{Dsl: types3.OriginFromPb(pb.Dsl)}
-	case *vcbpb.Origin_AleaBc:
-		return &Origin_AleaBc{AleaBc: types4.BcOriginFromPb(pb.AleaBc)}
+	case *vcbpb.Origin_AleaBcqueue:
+		return &Origin_AleaBcqueue{AleaBcqueue: types4.VcbOriginFromPb(pb.AleaBcqueue)}
 	}
 	return nil
 }
@@ -370,22 +370,22 @@ func (*Origin_Dsl) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*vcbpb.Origin_Dsl]()}
 }
 
-type Origin_AleaBc struct {
-	AleaBc *types4.BcOrigin
+type Origin_AleaBcqueue struct {
+	AleaBcqueue *types4.VcbOrigin
 }
 
-func (*Origin_AleaBc) isOrigin_Type() {}
+func (*Origin_AleaBcqueue) isOrigin_Type() {}
 
-func (w *Origin_AleaBc) Unwrap() *types4.BcOrigin {
-	return w.AleaBc
+func (w *Origin_AleaBcqueue) Unwrap() *types4.VcbOrigin {
+	return w.AleaBcqueue
 }
 
-func (w *Origin_AleaBc) Pb() vcbpb.Origin_Type {
-	return &vcbpb.Origin_AleaBc{AleaBc: (w.AleaBc).Pb()}
+func (w *Origin_AleaBcqueue) Pb() vcbpb.Origin_Type {
+	return &vcbpb.Origin_AleaBcqueue{AleaBcqueue: (w.AleaBcqueue).Pb()}
 }
 
-func (*Origin_AleaBc) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*vcbpb.Origin_AleaBc]()}
+func (*Origin_AleaBcqueue) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*vcbpb.Origin_AleaBcqueue]()}
 }
 
 func OriginFromPb(pb *vcbpb.Origin) *Origin {

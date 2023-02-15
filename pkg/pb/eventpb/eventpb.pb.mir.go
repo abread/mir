@@ -45,11 +45,12 @@ func (*Event) ReflectTypeOptions() []reflect.Type {
 		reflect.TypeOf((*Event_Checkpoint)(nil)),
 		reflect.TypeOf((*Event_SbEvent)(nil)),
 		reflect.TypeOf((*Event_Modring)(nil)),
+		reflect.TypeOf((*Event_ReliableNet)(nil)),
 		reflect.TypeOf((*Event_Vcb)(nil)),
 		reflect.TypeOf((*Event_Abba)(nil)),
 		reflect.TypeOf((*Event_AleaBroadcast)(nil)),
 		reflect.TypeOf((*Event_AleaAgreement)(nil)),
-		reflect.TypeOf((*Event_ReliableNet)(nil)),
+		reflect.TypeOf((*Event_AleaBcqueue)(nil)),
 		reflect.TypeOf((*Event_TestingString)(nil)),
 		reflect.TypeOf((*Event_TestingUint)(nil)),
 	}

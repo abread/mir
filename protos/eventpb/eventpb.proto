@@ -30,6 +30,7 @@ import "vcbpb/vcbpb.proto";
 import "abbapb/abbapb.proto";
 import "aleapb/bcpb/bcpb.proto";
 import "aleapb/agreementpb/agreementpb.proto";
+import "aleapb/bcqueuepb/bcqueuepb.proto";
 import "reliablenetpb/reliablenetpb.proto";
 
 import "mir/codegen_extensions.proto";
@@ -83,11 +84,12 @@ message Event {
     checkpointpb.Event      checkpoint              = 38;
     ordererspb.SBInstanceEvent sb_event             = 39;
     modringpb.Event         modring                 = 40;
-    vcbpb.Event             vcb                     = 41;
-    abbapb.Event            abba                    = 42;
-    aleapb.bcpb.Event       alea_broadcast          = 43;
-    aleapb.agreementpb.Event alea_agreement         = 44;
-    reliablenetpb.Event     reliable_net            = 45;
+    reliablenetpb.Event     reliable_net            = 41;
+    vcbpb.Event             vcb                     = 42;
+    abbapb.Event            abba                    = 43;
+    aleapb.bcpb.Event       alea_broadcast          = 44;
+    aleapb.agreementpb.Event alea_agreement         = 45;
+    aleapb.bcqueuepb.Event  alea_bcqueue            = 46;
 
     // for unit-tests
     google.protobuf.StringValue testingString = 301;

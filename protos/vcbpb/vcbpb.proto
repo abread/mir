@@ -7,7 +7,7 @@ option go_package = "github.com/filecoin-project/mir/pkg/pb/vcbpb";
 import "requestpb/requestpb.proto";
 import "contextstorepb/contextstorepb.proto";
 import "dslpb/dslpb.proto";
-import "aleapb/bcpb/bcpb.proto";
+import "aleapb/bcqueuepb/bcqueuepb.proto";
 
 import "mir/codegen_extensions.proto";
 import "net/codegen_extensions.proto";
@@ -92,6 +92,7 @@ message Origin {
   oneof Type {
     contextstorepb.Origin context_store = 2;
     dslpb.Origin          dsl           = 3;
-    aleapb.bcpb.BcOrigin  alea_bc       = 4;
+
+    aleapb.bcqueuepb.VcbOrigin alea_bcqueue = 4;
   }
 }

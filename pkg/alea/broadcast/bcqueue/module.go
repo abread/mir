@@ -1,163 +1,131 @@
 package bcqueue
 
 import (
-	"sync"
+	"fmt"
 
+	"golang.org/x/exp/slices"
+
+	"github.com/filecoin-project/mir/pkg/alea/aleatypes"
+	aleaCommon "github.com/filecoin-project/mir/pkg/alea/common"
+	batchdbdsl "github.com/filecoin-project/mir/pkg/availability/batchdb/dsl"
+	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/logging"
+	"github.com/filecoin-project/mir/pkg/modring"
 	"github.com/filecoin-project/mir/pkg/modules"
-	bcpbtypes "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/types"
-	"github.com/filecoin-project/mir/pkg/pb/eventpb"
-	rnEvents "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/events"
+	bcqueuedsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/dsl"
+	bcqueuepbtypes "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/types"
+	commontypes "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
+	modringdsl "github.com/filecoin-project/mir/pkg/pb/modringpb/dsl"
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"
+	vcbpbdsl "github.com/filecoin-project/mir/pkg/pb/vcbpb/dsl"
 	vcbpbevents "github.com/filecoin-project/mir/pkg/pb/vcbpb/events"
 	vcbpbtypes "github.com/filecoin-project/mir/pkg/pb/vcbpb/types"
-	"github.com/filecoin-project/mir/pkg/serializing"
 	t "github.com/filecoin-project/mir/pkg/types"
 	"github.com/filecoin-project/mir/pkg/vcb"
 )
 
-type QueueBcModule struct {
-	config *ModuleConfig
-	params *ModuleParams
-	nodeID t.NodeID
-	logger logging.Logger
-
-	windowSizeCtrl *WindowSizeController
-	slots          map[uint64]*queueSlot
-
-	locker sync.Mutex
-}
-
-func New(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) *QueueBcModule {
-	return &QueueBcModule{
-		config: mc,
-		params: params,
-		nodeID: nodeID,
-		logger: logger,
-
-		windowSizeCtrl: NewWindowSizeController(tunables.MaxConcurrentVcb),
-		slots:          make(map[uint64]*queueSlot, tunables.MaxConcurrentVcb),
-	}
-}
-
-type queueSlot struct {
-	module modules.PassiveModule
-	locker sync.Mutex
-}
-
-func (m *QueueBcModule) RouteEventToSlot(slotID uint64, event *eventpb.Event) (*events.EventList, error) {
-	slot, outEvents, err := m.getOrTryCreateQueueSlot(slotID)
-	if err != nil {
-		return nil, err
-	} else if slot == nil {
-		// bogus message
-		return &events.EventList{}, nil
+func New(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
+	if slices.Index(params.AllNodes, params.QueueOwner) != int(params.QueueIdx) {
+		return nil, fmt.Errorf("invalid queue index/owner combination: %v - %v", params.QueueIdx, params.QueueOwner)
 	}
 
-	slot.locker.Lock()
-	defer slot.locker.Unlock()
-	return slot.module.ApplyEvents(outEvents.PushBack(event))
+	controller := newQueueController(mc, params, tunables, nodeID, logger)
+
+	slots := modring.New(mc.Self.Then("slot"), tunables.MaxConcurrentVcb, modring.ModuleParams{
+		Generator: newVcbGenerator(mc, params, nodeID, logger),
+	}, logging.Decorate(logger, "Modring controller: "))
+
+	return modules.RoutedModule(mc.Self, controller, slots), nil
 }
 
-func (m *QueueBcModule) getOrTryCreateQueueSlot(slotID uint64) (*queueSlot, *events.EventList, error) {
-	// TODO: try to break this apart, the return type is disgusting
-	m.locker.Lock()
-	defer m.locker.Unlock()
+func newQueueController(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) modules.PassiveModule {
+	m := dsl.NewModule(mc.Self)
 
-	if !m.windowSizeCtrl.IsSlotInView(slotID) || m.windowSizeCtrl.IsSlotFreed(slotID) {
-		return nil, nil, nil
-	}
-
-	if m.windowSizeCtrl.IsSlotUnused(slotID) {
-		// we need to create the slot module first
-		m.windowSizeCtrl.Acquire(slotID)
-
-		instanceUID := append(m.params.InstanceUID, serializing.Uint64ToBytes(slotID)...)
-		newSlotModuleID := m.config.Self.Then(t.NewModuleIDFromInt(slotID))
-
-		newSlot := &queueSlot{
-			module: vcb.NewModule(
-				&vcb.ModuleConfig{
-					Self:         newSlotModuleID,
-					ReliableNet:  m.config.ReliableNet,
-					ThreshCrypto: m.config.ThreshCrypto,
-					Mempool:      m.config.Mempool,
-				},
-				&vcb.ModuleParams{
-					InstanceUID: instanceUID,
-					AllNodes:    m.params.AllNodes,
-					Leader:      m.params.QueueOwner,
-				},
-				m.nodeID,
-				logging.Decorate(m.logger, "Vcb: ", "queueSlot", slotID),
-			),
+	bcqueuedsl.UponInputValue(m, func(slot *commontypes.Slot, txs []*requestpb.Request) error {
+		if slot.QueueIdx != params.QueueIdx {
+			return fmt.Errorf("input value given to wrong queue")
 		}
 
-		initEvents := events.ListOf(events.Init(newSlotModuleID))
-		if m.params.QueueOwner != m.nodeID {
-			initEvents.PushBack(vcbpbevents.InputValue(newSlotModuleID, nil, &vcbpbtypes.Origin{
-				// TODO: route slot delivery through ourselves
-				Module: m.config.Consumer,
-				Type: &vcbpbtypes.Origin_AleaBc{
-					// TODO: use a proper origin
-					AleaBc: &bcpbtypes.BcOrigin{
-						Module: newSlotModuleID,
+		dsl.EmitMirEvent(m, vcbpbevents.InputValue(
+			mc.Self.Then("slot").Then(t.NewModuleIDFromInt(slot.QueueSlot)),
+			txs,
+			&vcbpbtypes.Origin{
+				Module: mc.Self,
+				Type: &vcbpbtypes.Origin_AleaBcqueue{
+					AleaBcqueue: &bcqueuepbtypes.VcbOrigin{
+						QueueSlot: slot.QueueSlot,
+					},
+				},
+			},
+		))
+		return nil
+	})
+
+	// we can't use .UponDeliver because that assumes a DSL origin
+	vcbpbdsl.UponEvent[*vcbpbtypes.Event_Deliver](m, func(ev *vcbpbtypes.Deliver) error {
+		origin, ok := ev.Origin.Type.(*vcbpbtypes.Origin_AleaBcqueue)
+		if !ok {
+			return fmt.Errorf("invalid origin for vcb instance")
+		}
+		slot := &commontypes.Slot{
+			QueueIdx:  params.QueueIdx,
+			QueueSlot: origin.AleaBcqueue.QueueSlot,
+		}
+
+		batchdbdsl.StoreBatch(m, mc.BatchDB, aleaCommon.FormatAleaBatchID(slot), ev.TxIds, ev.Txs, ev.Signature, slot)
+		return nil
+	})
+	batchdbdsl.UponBatchStored(m, func(slot *commontypes.Slot) error {
+		bcqueuedsl.Deliver(m, mc.Consumer, slot)
+		return nil
+	})
+
+	bcqueuedsl.UponFreeSlot(m, func(queueSlot aleatypes.QueueSlot, origin *bcqueuepbtypes.FreeSlotOrigin) error {
+		modringdsl.FreeSubmodule(m, mc.Self.Then("slot"), queueSlot.Pb(), origin)
+		return nil
+	})
+	modringdsl.UponFreedSubmodule(m, func(origin *bcqueuepbtypes.FreeSlotOrigin) error {
+		bcqueuedsl.SlotFreed(m, origin.Module, origin)
+		return nil
+	})
+
+	return m
+}
+
+func newVcbGenerator(queueMc *ModuleConfig, queueParams *ModuleParams, nodeID t.NodeID, logger logging.Logger) func(id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
+	baseConfig := &vcb.ModuleConfig{
+		Self:         "INVALID",
+		ReliableNet:  queueMc.ReliableNet,
+		ThreshCrypto: queueMc.ThreshCrypto,
+		Mempool:      queueMc.Mempool,
+	}
+
+	params := &vcb.ModuleParams{
+		InstanceUID: queueParams.InstanceUID, // TODO: review
+		AllNodes:    queueParams.AllNodes,
+		Leader:      queueParams.QueueOwner,
+	}
+
+	return func(id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
+		mc := *baseConfig
+		mc.Self = id
+
+		mod := vcb.NewModule(&mc, params, nodeID, logging.Decorate(logger, "slot", idx))
+
+		initialEvs := &events.EventList{}
+		// events.Init is taken care of by modring
+		if nodeID != params.Leader {
+			initialEvs.PushBack(vcbpbevents.InputValue(mc.Self, nil, &vcbpbtypes.Origin{
+				Module: queueMc.Self,
+				Type: &vcbpbtypes.Origin_AleaBcqueue{
+					AleaBcqueue: &bcqueuepbtypes.VcbOrigin{
+						QueueSlot: aleatypes.QueueSlot(idx),
 					},
 				},
 			}).Pb())
 		}
 
-		initOutEvents, err := newSlot.module.ApplyEvents(initEvents)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		m.slots[slotID] = newSlot
-
-		m.logger.Log(logging.LevelDebug, "Created slot/VCB instance", "queueSlot", slotID)
-		return newSlot, initOutEvents, nil
+		return mod, initialEvs, nil
 	}
-
-	return m.slots[slotID], &events.EventList{}, nil
-}
-
-func (m *QueueBcModule) FreeSlot(slotID uint64) (*events.EventList, error) {
-	m.locker.Lock()
-	defer m.locker.Unlock()
-
-	m.windowSizeCtrl.Free(slotID)
-	delete(m.slots, slotID)
-
-	m.logger.Log(logging.LevelDebug, "Freed slot/VCB instance", "queueSlot", slotID)
-
-	return events.ListOf(
-		rnEvents.MarkModuleMsgsRecvd(
-			m.config.ReliableNet,
-			m.config.Self.Then(t.NewModuleIDFromInt(slotID)),
-			m.params.AllNodes,
-		).Pb(),
-	), nil
-}
-
-func (m *QueueBcModule) StartBroadcast(slotID uint64, txs []*requestpb.Request) (*events.EventList, error) {
-	// TODO: rethink design to leave only one side responsible for window size control
-	// assumes caller checked that current queue window has this slot in view (and unused)
-
-	destModule := m.config.Self.Then(t.NewModuleIDFromInt(slotID))
-
-	outEvent := vcbpbevents.InputValue(destModule, txs, &vcbpbtypes.Origin{
-		// TODO: route slot delivery through ourselves
-		Module: m.config.Consumer,
-		Type: &vcbpbtypes.Origin_AleaBc{
-			// TODO: use a proper origin
-			AleaBc: &bcpbtypes.BcOrigin{
-				Module: destModule,
-			},
-		},
-	}).Pb()
-
-	// routing logic will create the vcb instance for us
-	m.logger.Log(logging.LevelDebug, "Starting broadcast", "queueSlot", slotID)
-	return (&events.EventList{}).PushBack(outEvent), nil
 }

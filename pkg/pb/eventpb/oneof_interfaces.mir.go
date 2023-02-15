@@ -6,6 +6,7 @@ import (
 	abbapb "github.com/filecoin-project/mir/pkg/pb/abbapb"
 	agreementpb "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb"
 	bcpb "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb"
+	bcqueuepb "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb"
 	availabilitypb "github.com/filecoin-project/mir/pkg/pb/availabilitypb"
 	batchdbpb "github.com/filecoin-project/mir/pkg/pb/availabilitypb/batchdbpb"
 	batchfetcherpb "github.com/filecoin-project/mir/pkg/pb/batchfetcherpb"
@@ -187,6 +188,10 @@ func (w *Event_Modring) Unwrap() *modringpb.Event {
 	return w.Modring
 }
 
+func (w *Event_ReliableNet) Unwrap() *reliablenetpb.Event {
+	return w.ReliableNet
+}
+
 func (w *Event_Vcb) Unwrap() *vcbpb.Event {
 	return w.Vcb
 }
@@ -203,8 +208,8 @@ func (w *Event_AleaAgreement) Unwrap() *agreementpb.Event {
 	return w.AleaAgreement
 }
 
-func (w *Event_ReliableNet) Unwrap() *reliablenetpb.Event {
-	return w.ReliableNet
+func (w *Event_AleaBcqueue) Unwrap() *bcqueuepb.Event {
+	return w.AleaBcqueue
 }
 
 func (w *Event_TestingString) Unwrap() *wrapperspb.StringValue {

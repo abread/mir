@@ -158,14 +158,15 @@ func (m *Module) getSub(subIdx uint64) (modules.PassiveModule, *events.EventList
 		}
 
 		subFullID := m.ownID.Then(t.NewModuleIDFromInt(subIdx))
-		sub, err := (m.generator)(subFullID)
+		sub, initialEvs, err := (m.generator)(subFullID, subIdx)
 		if err != nil {
 			return nil, nil, err
 		}
 
 		m.ring[ringIdx] = sub
+		initialEvs.PushBack(events.Init(subFullID))
 
-		evsOut, err := m.ring[ringIdx].ApplyEvents(events.ListOf(events.Init(subFullID)))
+		evsOut, err := m.ring[ringIdx].ApplyEvents(initialEvs)
 		if err != nil {
 			return nil, nil, err
 		}

@@ -1,11 +1,12 @@
 package modring
 
 import (
+	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/modules"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
-type ModuleGenerator func(id t.ModuleID) (modules.PassiveModule, error)
+type ModuleGenerator func(id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error)
 
 type ModuleParams struct {
 	Generator ModuleGenerator

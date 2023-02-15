@@ -1,6 +1,9 @@
 package bcqueue
 
-import t "github.com/filecoin-project/mir/pkg/types"
+import (
+	"github.com/filecoin-project/mir/pkg/alea/aleatypes"
+	t "github.com/filecoin-project/mir/pkg/types"
+)
 
 // ModuleConfig sets the module ids. All replicas are expected to use identical module configurations.
 type ModuleConfig struct {
@@ -27,9 +30,10 @@ func DefaultModuleConfig(self t.ModuleID, consumer t.ModuleID) *ModuleConfig {
 // ModuleParams sets the values for the parameters of an instance of the protocol.
 // All replicas are expected to use identical module parameters.
 type ModuleParams struct {
-	InstanceUID []byte     // must be the same as the one in the main and agreement alea components
+	InstanceUID []byte
 	AllNodes    []t.NodeID // the list of participating nodes, which must be the same as the set of nodes in the threshcrypto module
 
+	QueueIdx   aleatypes.QueueIdx
 	QueueOwner t.NodeID
 }
 

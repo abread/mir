@@ -23,6 +23,6 @@ func (*Origin) ReflectTypeOptions() []reflect.Type {
 	return []reflect.Type{
 		reflect.TypeOf((*Origin_ContextStore)(nil)),
 		reflect.TypeOf((*Origin_Dsl)(nil)),
-		reflect.TypeOf((*Origin_AleaBc)(nil)),
+		reflect.TypeOf((*Origin_AleaBcqueue)(nil)),
 	}
 }

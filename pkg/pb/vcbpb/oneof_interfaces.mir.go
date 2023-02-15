@@ -1,7 +1,7 @@
 package vcbpb
 
 import (
-	bcpb "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb"
+	bcqueuepb "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb"
 	contextstorepb "github.com/filecoin-project/mir/pkg/pb/contextstorepb"
 	dslpb "github.com/filecoin-project/mir/pkg/pb/dslpb"
 )
@@ -55,6 +55,6 @@ func (w *Origin_Dsl) Unwrap() *dslpb.Origin {
 	return w.Dsl
 }
 
-func (w *Origin_AleaBc) Unwrap() *bcpb.BcOrigin {
-	return w.AleaBc
+func (w *Origin_AleaBcqueue) Unwrap() *bcqueuepb.VcbOrigin {
+	return w.AleaBcqueue
 }
