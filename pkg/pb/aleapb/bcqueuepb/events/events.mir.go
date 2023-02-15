@@ -40,7 +40,7 @@ func Deliver(destModule types.ModuleID, slot *types1.Slot) *types2.Event {
 	}
 }
 
-func FreeSlot(destModule types.ModuleID, queueSlot aleatypes.QueueSlot, origin *types3.FreeSlotOrigin) *types2.Event {
+func FreeSlot(destModule types.ModuleID, queueSlot aleatypes.QueueSlot) *types2.Event {
 	return &types2.Event{
 		DestModule: destModule,
 		Type: &types2.Event_AleaBcqueue{
@@ -48,22 +48,6 @@ func FreeSlot(destModule types.ModuleID, queueSlot aleatypes.QueueSlot, origin *
 				Type: &types3.Event_FreeSlot{
 					FreeSlot: &types3.FreeSlot{
 						QueueSlot: queueSlot,
-						Origin:    origin,
-					},
-				},
-			},
-		},
-	}
-}
-
-func SlotFreed(destModule types.ModuleID, origin *types3.FreeSlotOrigin) *types2.Event {
-	return &types2.Event{
-		DestModule: destModule,
-		Type: &types2.Event_AleaBcqueue{
-			AleaBcqueue: &types3.Event{
-				Type: &types3.Event_SlotFreed{
-					SlotFreed: &types3.SlotFreed{
-						Origin: origin,
 					},
 				},
 			},

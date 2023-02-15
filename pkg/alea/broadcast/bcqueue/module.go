@@ -81,12 +81,8 @@ func newQueueController(mc *ModuleConfig, params *ModuleParams, tunables *Module
 		return nil
 	})
 
-	bcqueuedsl.UponFreeSlot(m, func(queueSlot aleatypes.QueueSlot, origin *bcqueuepbtypes.FreeSlotOrigin) error {
-		modringdsl.FreeSubmodule(m, mc.Self.Then("slot"), queueSlot.Pb(), origin)
-		return nil
-	})
-	modringdsl.UponFreedSubmodule(m, func(origin *bcqueuepbtypes.FreeSlotOrigin) error {
-		bcqueuedsl.SlotFreed(m, origin.Module, origin)
+	bcqueuedsl.UponFreeSlot(m, func(queueSlot aleatypes.QueueSlot) error {
+		modringdsl.FreeSubmodule(m, mc.Self.Then("slot"), queueSlot.Pb())
 		return nil
 	})
 

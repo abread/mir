@@ -1,7 +1,6 @@
 package batchdbpb
 
 import (
-	bcpb "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb"
 	contextstorepb "github.com/filecoin-project/mir/pkg/pb/contextstorepb"
 	dslpb "github.com/filecoin-project/mir/pkg/pb/dslpb"
 )
@@ -57,8 +56,4 @@ func (w *StoreBatchOrigin_ContextStore) Unwrap() *contextstorepb.Origin {
 
 func (w *StoreBatchOrigin_Dsl) Unwrap() *dslpb.Origin {
 	return w.Dsl
-}
-
-func (w *StoreBatchOrigin_AleaBroadcast) Unwrap() *bcpb.StoreBatchOrigin {
-	return w.AleaBroadcast
 }

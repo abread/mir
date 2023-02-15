@@ -43,24 +43,24 @@ func (s *RingController) GetSlotStatus(slot uint64) RingSlotStatus {
 	return *s.uncheckedSlotStatusRingPtr(slot)
 }
 
-func (s *RingController) IsSlotInView(slot uint64) bool {
+func (s *RingController) isSlotInView(slot uint64) bool {
 	return slot >= s.minSlot && slot < s.minSlot+uint64(len(s.slotStatus))
 }
 
-func (s *RingController) IsSlotUnused(slot uint64) bool {
+func (s *RingController) IsFutureSlot(slot uint64) bool {
 	return s.GetSlotStatus(slot) == RingSlotFuture
 }
 
-func (s *RingController) IsSlotInUse(slot uint64) bool {
+func (s *RingController) IsCurrentSlot(slot uint64) bool {
 	return s.GetSlotStatus(slot) == RingSlotCurrent
 }
 
-func (s *RingController) IsSlotFreed(slot uint64) bool {
+func (s *RingController) IsPastSlot(slot uint64) bool {
 	return s.GetSlotStatus(slot) == RingSlotPast
 }
 
 func (s *RingController) TryAcquire(slot uint64) bool {
-	if !(s.IsSlotInView(slot) && s.IsSlotUnused(slot)) {
+	if !(s.isSlotInView(slot) && s.IsFutureSlot(slot)) {
 		return false
 	}
 
@@ -80,17 +80,17 @@ func (s *RingController) TryFree(slot uint64) bool {
 		return true // nothing to do, already freed by definition
 	}
 
-	if !s.IsSlotInView(slot) {
+	if !s.isSlotInView(slot) {
 		return false
 	}
 
 	*s.uncheckedSlotStatusRingPtr(slot) = RingSlotPast
 
 	// advance view to expose unused slots
-	for s.IsSlotFreed(s.minSlot) {
+	for s.IsPastSlot(s.minSlot) {
 		*s.uncheckedSlotStatusRingPtr(s.minSlot) = RingSlotFuture
 		s.minSlot++
-		s.minIdx++
+		s.minIdx = (s.minIdx + 1) % len(s.slotStatus)
 	}
 
 	return true

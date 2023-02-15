@@ -19,25 +19,8 @@ func UponEvent[W types.Event_TypeWrapper[Ev], Ev any](m dsl.Module, handler func
 	})
 }
 
-func UponFreeSubmodule(m dsl.Module, handler func(id uint64, origin *types.FreeSubmoduleOrigin) error) {
+func UponFreeSubmodule(m dsl.Module, handler func(id uint64) error) {
 	UponEvent[*types.Event_Free](m, func(ev *types.FreeSubmodule) error {
-		return handler(ev.Id, ev.Origin)
-	})
-}
-
-func UponFreedSubmodule[C any](m dsl.Module, handler func(context *C) error) {
-	UponEvent[*types.Event_Freed](m, func(ev *types.FreedSubmodule) error {
-		originWrapper, ok := ev.Origin.Type.(*types.FreeSubmoduleOrigin_Dsl)
-		if !ok {
-			return nil
-		}
-
-		contextRaw := m.DslHandle().RecoverAndCleanupContext(dsl.ContextID(originWrapper.Dsl.ContextID))
-		context, ok := contextRaw.(*C)
-		if !ok {
-			return nil
-		}
-
-		return handler(context)
+		return handler(ev.Id)
 	})
 }

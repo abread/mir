@@ -1,6 +1,7 @@
 package modring
 
 import (
+	"math"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -14,13 +15,13 @@ func TestWSC_PutMutateFree(t *testing.T) {
 	assert.False(t, windowController.TryAcquire(8))
 
 	for _, i := range []uint64{0, 7, 1, 2, 3, 4, 5, 6} { // non-monotonic orders should work
-		assert.False(t, windowController.IsSlotInUse(i))
+		assert.False(t, windowController.IsCurrentSlot(i))
 
 		assert.True(t, windowController.TryAcquire(i))
 	}
 
 	for i := uint64(0); i < 8; i++ {
-		assert.True(t, windowController.IsSlotInUse(i))
+		assert.True(t, windowController.IsCurrentSlot(i))
 	}
 
 	// queue should be bounded
@@ -56,4 +57,24 @@ func TestWSC_OutOfOrderViewChange(t *testing.T) {
 	for i := uint64(3); i < 6; i++ {
 		assert.True(t, windowController.TryAcquire(i))
 	}
+}
+
+func TestWSC_Load(t *testing.T) {
+	windowController := NewRingController(2)
+
+	for i := uint64(0); i < 2; i++ {
+		require.True(t, windowController.TryAcquire(i))
+	}
+
+	for i := uint64(2); i < uint64(math.MaxInt)+1; i++ {
+		assert.False(t, windowController.TryAcquire(i))
+		assert.True(t, windowController.TryFree(i-2))
+		assert.True(t, windowController.TryAcquire(i))
+	}
+
+	assert.False(t, windowController.TryAcquire(64))
+	assert.True(t, windowController.TryFree(64-1))
+	assert.False(t, windowController.TryAcquire(64))
+	assert.True(t, windowController.TryFree(64-2))
+	assert.True(t, windowController.TryAcquire(64))
 }

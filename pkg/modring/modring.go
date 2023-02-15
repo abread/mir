@@ -2,16 +2,14 @@ package modring
 
 import (
 	"fmt"
+	"runtime/debug"
 	"strconv"
-	"sync"
 
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
 	"github.com/filecoin-project/mir/pkg/pb/modringpb"
-	modringpbevents "github.com/filecoin-project/mir/pkg/pb/modringpb/events"
-	modringpbtypes "github.com/filecoin-project/mir/pkg/pb/modringpb/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -19,7 +17,6 @@ type Module struct {
 	ownID     t.ModuleID
 	generator ModuleGenerator
 
-	lock           sync.Mutex
 	ringController RingController
 	ring           []modules.PassiveModule
 
@@ -49,6 +46,48 @@ func (m *Module) ApplyEvents(eventsIn *events.EventList) (*events.EventList, err
 	// modules, not all events.
 	ownEventsIn, subEventsIn := m.splitEventsByDest(eventsIn)
 
+	evsOut := events.EventList{}
+
+	if ownEventsIn.Len() > 0 {
+		ownEvsOut, err := modules.ApplyEventsSequentially(ownEventsIn, m.applyEvent)
+		if err != nil {
+			return nil, err
+		}
+
+		evsOut.PushBackList(ownEvsOut)
+	}
+
+	for i := 0; i < len(subEventsIn); i++ {
+		if subEventsIn[i].Len() == 0 {
+			continue
+		}
+
+		mod, subInitEvsOut, err := m.getSubByRingIdx(i)
+		if err != nil {
+			return nil, err
+		}
+		if mod == nil {
+			continue // module already out of view
+			// TODO: allow custom handler for unhandled events?
+		}
+		evsOut.PushBackList(subInitEvsOut)
+
+		subEvsOut, err := applyAllSafely(mod, &subEventsIn[i])
+		if err != nil {
+			return nil, err
+		}
+		evsOut.PushBackList(subEvsOut)
+	}
+
+	return &evsOut, nil
+}
+
+// TODO: try concurrency again
+/* func (m *Module) ApplyEvents(eventsIn *events.EventList) (*events.EventList, error) {
+	// Note: this method is similar to ApplyEvents, but it only parallelizes execution across diferent
+	// modules, not all events.
+	ownEventsIn, subEventsIn := m.splitEventsByDest(eventsIn)
+
 	results := make([]chan *events.EventList, len(subEventsIn))
 	errors := make([]chan error, len(subEventsIn))
 	for i := 0; i < eventsIn.Len(); i++ {
@@ -59,18 +98,31 @@ func (m *Module) ApplyEvents(eventsIn *events.EventList) (*events.EventList, err
 	// Start one concurrent worker for each submodule
 	// Note that the processing starts concurrently for all eventlists, and only the writing of the results is synchronized.
 	for i := 0; i < len(subEventsIn); i++ {
-		go func(mod modules.PassiveModule, evs *events.EventList, j int) {
+		if subEventsIn[i].Len() == 0 {
+			go func(j int) {
+				results[j] <- nil
+				errors[j] <- nil
+			}(i)
+			continue
+		}
+
+		mod, evsOut, err := m.getSubByRingIdx(i)
+		if err != nil {
+			return nil, err
+		}
+
+		go func(modring *Module, evsIn *events.EventList, initialEvsOut *events.EventList, j int) {
 
 			// Apply the input event, catching potential panics.
-			res, err := mod.ApplyEvents(evs)
+			res, err := mod.ApplyEvents(evsIn)
 
 			// Write processing results to the output channels.
 			// Attention: Those (unbuffered) channels must be read by the aggregator in the same order
 			//            as they are being written here, otherwise the system gets stuck.
-			results[j] <- res
+			results[j] <- initialEvsOut.PushBackList(res)
 			errors[j] <- err
 
-		}(m.ring[i], &subEventsIn[i], i)
+		}(m, &subEventsIn[i], evsOut, i)
 		i++
 	}
 
@@ -83,7 +135,6 @@ func (m *Module) ApplyEvents(eventsIn *events.EventList) (*events.EventList, err
 
 	// For each submodule, read the processing result from the common channels and aggregate it with the rest.
 	for i := 0; i < len(subEventsIn); i++ {
-
 		// Attention: The (unbuffered) errors and results channels must be read in the same order
 		//            as they are being written by the worker goroutines, otherwise the system gets stuck.
 
@@ -106,7 +157,7 @@ func (m *Module) ApplyEvents(eventsIn *events.EventList) (*events.EventList, err
 		return nil, firstError
 	}
 	return eventsOut, nil
-}
+}*/
 
 func (m *Module) splitEventsByDest(eventsIn *events.EventList) (*events.EventList, []events.EventList) {
 	ownEventsIn := &events.EventList{}
@@ -117,12 +168,13 @@ func (m *Module) splitEventsByDest(eventsIn *events.EventList) (*events.EventLis
 		if event.DestModule == m.ownID.Pb() {
 			ownEventsIn.PushBack(event)
 		} else {
-			idxStr := t.ModuleID(event.DestModule).StripParent(m.ownID).Top()
-			idx, err := strconv.ParseUint(string(idxStr), 10, 64)
+			subIDStr := t.ModuleID(event.DestModule).StripParent(m.ownID).Top()
+			subID, err := strconv.ParseUint(string(subIDStr), 10, 64)
 			if err != nil {
-				m.logger.Log(logging.LevelWarn, "event received for invalid submodule index", "submoduleIdx", idxStr)
+				m.logger.Log(logging.LevelWarn, "event received for invalid submodule index", "submoduleIdx", subIDStr)
 			}
 
+			idx := int(subID % uint64(len(m.ring)))
 			subEventsIn[idx].PushBack(event)
 		}
 	}
@@ -141,24 +193,25 @@ func (m *Module) applyEvent(event *eventpb.Event) (*events.EventList, error) {
 	}
 }
 
-func (m *Module) getSub(subIdx uint64) (modules.PassiveModule, *events.EventList, error) {
-	ringIdx := int(subIdx % uint64(len(m.ring)))
+func (m *Module) getSubByRingIdx(ringIdx int) (modules.PassiveModule, *events.EventList, error) {
+	subID := m.ringController.minSlot + uint64(ringIdx) - uint64(m.ringController.minIdx)
 
-	m.lock.Lock()
-	defer m.lock.Unlock()
-
-	switch m.ringController.GetSlotStatus(subIdx) {
+	switch m.ringController.GetSlotStatus(subID) {
 	case RingSlotPast:
 		return nil, nil, nil
 	case RingSlotCurrent:
+		if m.ring[ringIdx] == nil {
+			return nil, nil, fmt.Errorf("module %v disappeared", subID)
+		}
+
 		return m.ring[ringIdx], &events.EventList{}, nil
 	case RingSlotFuture:
-		if !m.ringController.TryAcquire(subIdx) {
+		if !m.ringController.TryAcquire(subID) {
 			return nil, nil, nil
 		}
 
-		subFullID := m.ownID.Then(t.NewModuleIDFromInt(subIdx))
-		sub, initialEvs, err := (m.generator)(subFullID, subIdx)
+		subFullID := m.ownID.Then(t.NewModuleIDFromInt(subID))
+		sub, initialEvs, err := (m.generator)(subFullID, subID)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -173,7 +226,7 @@ func (m *Module) getSub(subIdx uint64) (modules.PassiveModule, *events.EventList
 
 		return m.ring[ringIdx], evsOut, err
 	default:
-		return nil, nil, fmt.Errorf("unknown slot status: %v", m.ringController.GetSlotStatus(subIdx))
+		return nil, nil, fmt.Errorf("unknown slot status: %v", m.ringController.GetSlotStatus(subID))
 	}
 }
 
@@ -187,24 +240,32 @@ func (m *Module) applyModringEvent(event *modringpb.Event) (*events.EventList, e
 }
 
 func (m *Module) applyFreeSubmodule(event *modringpb.FreeSubmodule) (*events.EventList, error) {
-	m.lock.Lock()
-	defer m.lock.Unlock()
-
 	if m.ringController.TryFree(event.Id) {
 		// zero slot just in case (and to let the GC do its job)
 		ringIdx := int(event.Id % uint64(len(m.ring)))
 		m.ring[ringIdx] = nil
 
-		return events.ListOf(
-			modringpbevents.FreedSubmodule(
-				t.ModuleID(event.Origin.Module),
-				modringpbtypes.FreeSubmoduleOriginFromPb(event.Origin),
-			).Pb(),
-		), nil
-	} else if m.ringController.IsSlotUnused(event.Id) {
+		m.logger.Log(logging.LevelDebug, "module freed", "id", event.Id, "ringIdx", ringIdx)
+		return &events.EventList{}, nil
+	} else if m.ringController.IsFutureSlot(event.Id) {
 		return nil, fmt.Errorf("cannot free future slot (id=%v)", event.Id)
 	} else {
+		m.logger.Log(logging.LevelDebug, "tried to double-free module", "id", event.Id)
 		// already freed, but that's alright
 		return &events.EventList{}, nil
 	}
+}
+
+func applyAllSafely(m modules.PassiveModule, evs *events.EventList) (result *events.EventList, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			if rErr, ok := r.(error); ok {
+				err = fmt.Errorf("event application panicked: %w\nStack trace:\n%s", rErr, string(debug.Stack()))
+			} else {
+				err = fmt.Errorf("event application panicked: %v\nStack trace:\n%s", r, string(debug.Stack()))
+			}
+		}
+	}()
+
+	return m.ApplyEvents(evs)
 }

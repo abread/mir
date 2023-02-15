@@ -6,8 +6,6 @@ option go_package = "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb";
 
 import "aleapb/common/common.proto";
 import "requestpb/requestpb.proto";
-import "contextstorepb/contextstorepb.proto";
-import "dslpb/dslpb.proto";
 
 import "mir/codegen_extensions.proto";
 
@@ -25,7 +23,6 @@ message Event {
     InputValue input_value = 1;
     Deliver    deliver     = 2;
     FreeSlot   free_slot   = 3;
-    SlotFreed  slot_freed  = 4;
   }
 }
 
@@ -49,29 +46,11 @@ message FreeSlot {
   option (mir.event) = true;
 
   uint64 queue_slot = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/alea/aleatypes.QueueSlot"];
-
-  FreeSlotOrigin origin = 2 [(mir.origin_request) = true];
-}
-
-message SlotFreed {
-  option (mir.event) = true;
-
-  FreeSlotOrigin origin = 1 [(mir.origin_response) = true];
 }
 
 // ============================================================
 // Data structures
 // ============================================================
-message FreeSlotOrigin {
-  option (mir.struct) = true;
-
-  string module = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.ModuleID"];
-  oneof Type {
-    contextstorepb.Origin context_store = 2;
-    dslpb.Origin          dsl           = 3;
-  }
-}
-
 message VcbOrigin {
   option (mir.struct) = true;
 

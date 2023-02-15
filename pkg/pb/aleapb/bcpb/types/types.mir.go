@@ -6,7 +6,6 @@ import (
 	bcpb "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb"
 	types "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
 	requestpb "github.com/filecoin-project/mir/pkg/pb/requestpb"
-	types1 "github.com/filecoin-project/mir/pkg/types"
 	reflectutil "github.com/filecoin-project/mir/pkg/util/reflectutil"
 )
 
@@ -168,44 +167,4 @@ func (m *FreeSlot) Pb() *bcpb.FreeSlot {
 
 func (*FreeSlot) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*bcpb.FreeSlot]()}
-}
-
-type StoreBatchOrigin struct {
-	Slot *types.Slot
-}
-
-func StoreBatchOriginFromPb(pb *bcpb.StoreBatchOrigin) *StoreBatchOrigin {
-	return &StoreBatchOrigin{
-		Slot: types.SlotFromPb(pb.Slot),
-	}
-}
-
-func (m *StoreBatchOrigin) Pb() *bcpb.StoreBatchOrigin {
-	return &bcpb.StoreBatchOrigin{
-		Slot: (m.Slot).Pb(),
-	}
-}
-
-func (*StoreBatchOrigin) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*bcpb.StoreBatchOrigin]()}
-}
-
-type BcOrigin struct {
-	Module types1.ModuleID
-}
-
-func BcOriginFromPb(pb *bcpb.BcOrigin) *BcOrigin {
-	return &BcOrigin{
-		Module: (types1.ModuleID)(pb.Module),
-	}
-}
-
-func (m *BcOrigin) Pb() *bcpb.BcOrigin {
-	return &bcpb.BcOrigin{
-		Module: (string)(m.Module),
-	}
-}
-
-func (*BcOrigin) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*bcpb.BcOrigin]()}
 }

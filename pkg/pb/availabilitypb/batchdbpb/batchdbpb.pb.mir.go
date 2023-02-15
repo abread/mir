@@ -24,6 +24,5 @@ func (*StoreBatchOrigin) ReflectTypeOptions() []reflect.Type {
 	return []reflect.Type{
 		reflect.TypeOf((*StoreBatchOrigin_ContextStore)(nil)),
 		reflect.TypeOf((*StoreBatchOrigin_Dsl)(nil)),
-		reflect.TypeOf((*StoreBatchOrigin_AleaBroadcast)(nil)),
 	}
 }

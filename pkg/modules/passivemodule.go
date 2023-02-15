@@ -1,6 +1,9 @@
 package modules
 
 import (
+	"fmt"
+	"runtime/debug"
+
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/types"
 )
@@ -29,43 +32,53 @@ type routedModule struct {
 
 func (m *routedModule) ImplementsModule() {}
 func (m *routedModule) ApplyEvents(evs *events.EventList) (*events.EventList, error) {
+	rootEvsIn := &events.EventList{}
+	subRouterEvsIn := &events.EventList{}
+
 	it := evs.Iterator()
-
-	evsInner := &events.EventList{}
-	evsSub := &events.EventList{}
-
 	for ev := it.Next(); ev != nil; ev = it.Next() {
 		if ev.DestModule == m.rootID {
-			evsInner.PushBack(ev)
+			rootEvsIn.PushBack(ev)
 		} else {
-			evsSub.PushBack(ev)
+			subRouterEvsIn.PushBack(ev)
 		}
 	}
 
-	innerOutChan := make(chan *events.EventList)
-	innerErrChan := make(chan error)
+	rootOutChan := make(chan *events.EventList)
+	rootErrChan := make(chan error)
 
-	go func() {
-		out, err := m.root.ApplyEvents(evsInner)
-		if err != nil {
-			innerErrChan <- err
+	go func(rootModule PassiveModule, evs *events.EventList) {
+		out, err := applyAllSafely(rootModule, evs)
+		rootOutChan <- out
+		rootErrChan <- err
+	}(m.root, rootEvsIn)
+
+	subRouterEvsOut, subRouterErr := applyAllSafely(m.subRouter, subRouterEvsIn)
+
+	// Attention: Those (unbuffered) channels must be read by the aggregator in the same order
+	//            as they are being written here, otherwise the system gets stuck.
+	rootEvsOut := <-rootOutChan
+	rootErr := <-rootErrChan
+
+	if subRouterErr != nil {
+		return nil, subRouterErr
+	} else if rootErr != nil {
+		return nil, rootErr
+	}
+
+	return rootEvsOut.PushBackList(subRouterEvsOut), nil
+}
+
+func applyAllSafely(m PassiveModule, evs *events.EventList) (result *events.EventList, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			if rErr, ok := r.(error); ok {
+				err = fmt.Errorf("event application panicked: %w\nStack trace:\n%s", rErr, string(debug.Stack()))
+			} else {
+				err = fmt.Errorf("event application panicked: %v\nStack trace:\n%s", r, string(debug.Stack()))
+			}
 		}
-		innerOutChan <- out
 	}()
 
-	evsOut, err := m.subRouter.ApplyEvents(evsSub)
-
-	select {
-	case innerOut := <-innerOutChan:
-		evsOut.PushBackList(innerOut)
-	case innerErr := <-innerErrChan:
-		return nil, innerErr
-	}
-
-	// we only check this error here to ensure the concurrent m.inner.ApplyEvents ends
-	if err != nil {
-		return nil, err
-	}
-
-	return evsOut, nil
+	return m.ApplyEvents(evs)
 }

@@ -2,26 +2,20 @@ package broadcast
 
 import (
 	"fmt"
-	"strconv"
 
 	"golang.org/x/exp/slices"
 
 	"github.com/filecoin-project/mir/pkg/alea/aleatypes"
 	"github.com/filecoin-project/mir/pkg/alea/broadcast/bcqueue"
-	"github.com/filecoin-project/mir/pkg/alea/common"
+	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/logging"
+	"github.com/filecoin-project/mir/pkg/modring"
 	"github.com/filecoin-project/mir/pkg/modules"
-	"github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb"
-	abcevents "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/events"
-	bcpbtypes "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/types"
+	bcdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/dsl"
+	bcqueuedsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/dsl"
 	commontypes "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
-	"github.com/filecoin-project/mir/pkg/pb/availabilitypb/batchdbpb"
-	batchdbpbevents "github.com/filecoin-project/mir/pkg/pb/availabilitypb/batchdbpb/events"
-	batchdbpbtypes "github.com/filecoin-project/mir/pkg/pb/availabilitypb/batchdbpb/types"
-	"github.com/filecoin-project/mir/pkg/pb/eventpb"
-	"github.com/filecoin-project/mir/pkg/pb/vcbpb"
-	"github.com/filecoin-project/mir/pkg/serializing"
+	"github.com/filecoin-project/mir/pkg/pb/requestpb"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -62,193 +56,78 @@ type ModuleTunables struct {
 	MaxConcurrentVcbPerQueue int
 }
 
-type bcModule struct {
-	config         *ModuleConfig
-	ownNodeID      t.NodeID
-	ownQueueIdx    int
-	queueBcModules []*bcqueue.QueueBcModule
+func NewModule(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
+	controller, err := newQueueController(mc, params, tunables, nodeID, logger)
+	if err != nil {
+		return nil, err
+	}
 
-	logger logging.Logger
+	queues := modring.New(mc.Self.Then("queue"), len(params.AllNodes), modring.ModuleParams{
+		Generator: newBcQueueGenerator(mc, params, tunables, nodeID, logger),
+	}, logging.Decorate(logger, "Modring controller: "))
+
+	return modules.RoutedModule(mc.Self, controller, queues), nil
 }
 
-func NewModule(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
-	queueBcModules := make([]*bcqueue.QueueBcModule, len(params.AllNodes))
+func newQueueController(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
+	m := dsl.NewModule(mc.Self)
 
 	ownQueueIdx := slices.Index(params.AllNodes, nodeID)
 	if ownQueueIdx == -1 {
-		return nil, fmt.Errorf("nodeID not present in AllNodes")
+		return nil, fmt.Errorf("own node not present in node list")
 	}
 
-	bcqueueConfig := bcqueue.ModuleConfig{
-		Self:         mc.Self,
-		Consumer:     mc.Self,
-		BatchDB:      mc.BatchDB,
-		Mempool:      mc.Mempool,
-		ReliableNet:  mc.ReliableNet,
-		ThreshCrypto: mc.ThreshCrypto,
-	}
-	bcqueueTunables := bcqueue.ModuleTunables{
-		MaxConcurrentVcb: tunables.MaxConcurrentVcbPerQueue,
-	}
-	for idx, queueOwner := range params.AllNodes {
-		config := bcqueueConfig
-		config.Self = mc.Self.Then(t.NewModuleIDFromInt(idx))
+	ownQueueModID := mc.Self.Then("queue").Then(t.NewModuleIDFromInt(ownQueueIdx))
 
-		uid := make([]byte, len(params.InstanceUID)+4)
-		uid = append(uid, params.InstanceUID...)
-		uid = append(uid, serializing.Uint32ToBytes(uint32(idx))...)
+	bcdsl.UponStartBroadcast(m, func(queueSlot aleatypes.QueueSlot, txs []*requestpb.Request) error {
+		bcqueuedsl.InputValue(m, ownQueueModID, &commontypes.Slot{
+			QueueIdx:  aleatypes.QueueIdx(ownQueueIdx),
+			QueueSlot: queueSlot,
+		}, txs)
+		return nil
+	})
 
-		queueBcModules[idx] = bcqueue.New(
-			&config,
-			&bcqueue.ModuleParams{
-				InstanceUID: uid,
-				AllNodes:    params.AllNodes,
-				QueueOwner:  queueOwner,
-			},
-			&bcqueueTunables,
-			nodeID,
-			logging.Decorate(logger, "AleaBcQueue: ", "queueIdx", idx),
-		)
-	}
+	bcqueuedsl.UponDeliver(m, func(slot *commontypes.Slot) error {
+		bcdsl.Deliver(m, mc.Consumer, slot)
+		return nil
+	})
 
-	return &bcModule{
-		config:         mc,
-		ownNodeID:      nodeID,
-		ownQueueIdx:    ownQueueIdx,
-		queueBcModules: queueBcModules,
-		logger:         logger,
-	}, nil
+	bcdsl.UponFreeSlot(m, func(slot *commontypes.Slot) error {
+		bcqueuedsl.FreeSlot(m, mc.Self.Then("queue").Then(t.NewModuleIDFromInt(slot.QueueIdx)), slot.QueueSlot)
+		return nil
+	})
+
+	return m, nil
 }
 
-func (m *bcModule) ApplyEvents(evs *events.EventList) (*events.EventList, error) {
-	return modules.ApplyEventsConcurrently(evs, m.applyEvent)
-}
-
-func (m *bcModule) ImplementsModule() {}
-
-func (m *bcModule) applyEvent(event *eventpb.Event) (*events.EventList, error) {
-	if event.DestModule != string(m.config.Self) {
-		return m.routeEventToQueue(event)
+func newBcQueueGenerator(queueMc *ModuleConfig, queueParams *ModuleParams, queueTunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) func(id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
+	tunables := &bcqueue.ModuleTunables{
+		MaxConcurrentVcb: queueTunables.MaxConcurrentVcbPerQueue,
 	}
 
-	switch e := event.Type.(type) {
-	case *eventpb.Event_Init:
-		return &events.EventList{}, nil // no-op
-	case *eventpb.Event_AleaBroadcast:
-		return m.handleBroadcastEvent(e.AleaBroadcast)
-	case *eventpb.Event_Vcb:
-		return m.handleVcbEvent(e.Vcb)
-	case *eventpb.Event_BatchDb:
-		return m.handleBatchDBEvent(e.BatchDb)
-	default:
-		return nil, fmt.Errorf("unsupported event type: %T", e)
+	return func(id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
+		mc := &bcqueue.ModuleConfig{
+			Self:         id,
+			Consumer:     queueMc.Self,
+			BatchDB:      queueMc.BatchDB,
+			Mempool:      queueMc.Mempool,
+			ReliableNet:  queueMc.ReliableNet,
+			ThreshCrypto: queueMc.ThreshCrypto,
+		}
+
+		params := &bcqueue.ModuleParams{
+			InstanceUID: queueParams.InstanceUID, // TODO: review
+			AllNodes:    queueParams.AllNodes,
+
+			QueueIdx:   aleatypes.QueueIdx(idx),
+			QueueOwner: queueParams.AllNodes[int(idx)],
+		}
+
+		mod, err := bcqueue.New(mc, params, tunables, nodeID, logging.Decorate(logger, "BcQueue", "queueIdx", idx))
+		if err != nil {
+			return nil, nil, err
+		}
+
+		return mod, events.EmptyList(), nil
 	}
-}
-
-func (m *bcModule) handleBroadcastEvent(event *bcpb.Event) (*events.EventList, error) {
-	switch e := event.Type.(type) {
-	case *bcpb.Event_StartBroadcast:
-		return m.handleStartBroadcast(e.StartBroadcast)
-	case *bcpb.Event_FreeSlot:
-		return m.handleFreeSlot(e.FreeSlot)
-	default:
-		return nil, fmt.Errorf("unexpected broadcast event type: %T", e)
-	}
-}
-
-func (m *bcModule) handleStartBroadcast(event *bcpb.StartBroadcast) (*events.EventList, error) {
-	return m.queueBcModules[m.ownQueueIdx].StartBroadcast(event.QueueSlot, event.Txs)
-}
-
-func (m *bcModule) handleFreeSlot(event *bcpb.FreeSlot) (*events.EventList, error) {
-	queueIdx := int(event.Slot.QueueIdx)
-	slotID := event.Slot.QueueSlot
-
-	return m.queueBcModules[queueIdx].FreeSlot(slotID)
-}
-
-func (m *bcModule) handleVcbEvent(event *vcbpb.Event) (*events.EventList, error) {
-	evWrapped, ok := event.Type.(*vcbpb.Event_Deliver)
-	if !ok {
-		return nil, fmt.Errorf("unexpected abba event: %v", event)
-	}
-	ev := evWrapped.Unwrap()
-
-	// TODO: define proper custom origin for slot tracking
-	originModuleSuffix := t.ModuleID(ev.Origin.Type.(*vcbpb.Origin_AleaBc).AleaBc.Module).StripParent(m.config.Self)
-	queueIdx, err1 := strconv.ParseUint(string(originModuleSuffix.Top()), 10, 32)
-	if err1 != nil {
-		return nil, fmt.Errorf("could not parse queue idx: %w", err1)
-	}
-	queueSlot, err2 := strconv.ParseUint(string(originModuleSuffix.Sub().Top()), 10, 64)
-	if err2 != nil {
-		return nil, fmt.Errorf("could not parse queue slot: %w", err2)
-	}
-
-	slot := &commontypes.Slot{
-		QueueIdx:  aleatypes.QueueIdx(queueIdx),
-		QueueSlot: aleatypes.QueueSlot(queueSlot),
-	}
-
-	// store delivered slot
-	m.logger.Log(logging.LevelDebug, "storing batch", "queueIdx", queueIdx, "queueSlot", queueSlot)
-	return events.ListOf(
-		batchdbpbevents.StoreBatch(
-			m.config.BatchDB,
-			common.FormatAleaBatchID(slot),
-			t.TxIDSlice(ev.TxIds),
-			ev.Txs,
-			ev.Signature,
-			AleaBcStoreBatchOrigin(m.config.Self, slot),
-		).Pb(),
-	), nil
-}
-
-func AleaBcStoreBatchOrigin(module t.ModuleID, slot *commontypes.Slot) *batchdbpbtypes.StoreBatchOrigin {
-	return &batchdbpbtypes.StoreBatchOrigin{
-		Module: module,
-		Type: &batchdbpbtypes.StoreBatchOrigin_AleaBroadcast{
-			AleaBroadcast: &bcpbtypes.StoreBatchOrigin{
-				Slot: slot,
-			},
-		},
-	}
-}
-
-func (m *bcModule) handleBatchDBEvent(event *batchdbpb.Event) (*events.EventList, error) {
-	evWrapped, ok := event.Type.(*batchdbpb.Event_Stored)
-	if !ok {
-		return nil, fmt.Errorf("unexpected batchdb event: %v", event)
-	}
-	ev := evWrapped.Unwrap()
-
-	origin, ok := ev.Origin.Type.(*batchdbpb.StoreBatchOrigin_AleaBroadcast)
-	if !ok {
-		return nil, fmt.Errorf("unexpected batchdb event (unknown origin): %v", event)
-	}
-
-	slot := origin.AleaBroadcast.Slot
-
-	m.logger.Log(logging.LevelInfo, "Delivered BC slot", "queueIdx", slot.QueueIdx, "queueSlot", slot.QueueSlot)
-
-	return events.ListOf(
-		abcevents.Deliver(m.config.Consumer, commontypes.SlotFromPb(slot)).Pb(),
-	), nil
-}
-
-func (m *bcModule) routeEventToQueue(event *eventpb.Event) (*events.EventList, error) {
-	destSub := t.ModuleID(event.DestModule).StripParent(m.config.Self)
-	idx, err := strconv.Atoi(string(destSub.Top()))
-	if err != nil || idx < 0 || idx >= len(m.queueBcModules) {
-		// bogus message
-		return &events.EventList{}, nil
-	}
-
-	slot, err := strconv.ParseUint(string(destSub.Sub().Top()), 10, 64)
-	if err != nil {
-		// bogus message
-		return &events.EventList{}, nil
-	}
-
-	return m.queueBcModules[idx].RouteEventToSlot(slot, event)
 }

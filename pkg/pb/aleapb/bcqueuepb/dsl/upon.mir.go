@@ -34,25 +34,8 @@ func UponDeliver(m dsl.Module, handler func(slot *types2.Slot) error) {
 	})
 }
 
-func UponFreeSlot(m dsl.Module, handler func(queueSlot aleatypes.QueueSlot, origin *types.FreeSlotOrigin) error) {
+func UponFreeSlot(m dsl.Module, handler func(queueSlot aleatypes.QueueSlot) error) {
 	UponEvent[*types.Event_FreeSlot](m, func(ev *types.FreeSlot) error {
-		return handler(ev.QueueSlot, ev.Origin)
-	})
-}
-
-func UponSlotFreed[C any](m dsl.Module, handler func(context *C) error) {
-	UponEvent[*types.Event_SlotFreed](m, func(ev *types.SlotFreed) error {
-		originWrapper, ok := ev.Origin.Type.(*types.FreeSlotOrigin_Dsl)
-		if !ok {
-			return nil
-		}
-
-		contextRaw := m.DslHandle().RecoverAndCleanupContext(dsl.ContextID(originWrapper.Dsl.ContextID))
-		context, ok := contextRaw.(*C)
-		if !ok {
-			return nil
-		}
-
-		return handler(context)
+		return handler(ev.QueueSlot)
 	})
 }

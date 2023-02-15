@@ -46,16 +46,3 @@ message FreeSlot {
 
   common.Slot slot = 1;
 }
-
-message StoreBatchOrigin {
-  option (mir.struct) = true;
-
-  common.Slot slot = 1;
-}
-
-// TODO: use a proper origin
-message BcOrigin {
-  option (mir.struct) = true;
-
-  string module = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.ModuleID"];
-}

@@ -3,7 +3,6 @@ package batchdbpbtypes
 import (
 	mirreflect "github.com/filecoin-project/mir/codegen/mirreflect"
 	types1 "github.com/filecoin-project/mir/codegen/model/types"
-	types4 "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/types"
 	batchdbpb "github.com/filecoin-project/mir/pkg/pb/availabilitypb/batchdbpb"
 	types2 "github.com/filecoin-project/mir/pkg/pb/contextstorepb/types"
 	types3 "github.com/filecoin-project/mir/pkg/pb/dslpb/types"
@@ -339,8 +338,6 @@ func StoreBatchOrigin_TypeFromPb(pb batchdbpb.StoreBatchOrigin_Type) StoreBatchO
 		return &StoreBatchOrigin_ContextStore{ContextStore: types2.OriginFromPb(pb.ContextStore)}
 	case *batchdbpb.StoreBatchOrigin_Dsl:
 		return &StoreBatchOrigin_Dsl{Dsl: types3.OriginFromPb(pb.Dsl)}
-	case *batchdbpb.StoreBatchOrigin_AleaBroadcast:
-		return &StoreBatchOrigin_AleaBroadcast{AleaBroadcast: types4.StoreBatchOriginFromPb(pb.AleaBroadcast)}
 	}
 	return nil
 }
@@ -379,24 +376,6 @@ func (w *StoreBatchOrigin_Dsl) Pb() batchdbpb.StoreBatchOrigin_Type {
 
 func (*StoreBatchOrigin_Dsl) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*batchdbpb.StoreBatchOrigin_Dsl]()}
-}
-
-type StoreBatchOrigin_AleaBroadcast struct {
-	AleaBroadcast *types4.StoreBatchOrigin
-}
-
-func (*StoreBatchOrigin_AleaBroadcast) isStoreBatchOrigin_Type() {}
-
-func (w *StoreBatchOrigin_AleaBroadcast) Unwrap() *types4.StoreBatchOrigin {
-	return w.AleaBroadcast
-}
-
-func (w *StoreBatchOrigin_AleaBroadcast) Pb() batchdbpb.StoreBatchOrigin_Type {
-	return &batchdbpb.StoreBatchOrigin_AleaBroadcast{AleaBroadcast: (w.AleaBroadcast).Pb()}
-}
-
-func (*StoreBatchOrigin_AleaBroadcast) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*batchdbpb.StoreBatchOrigin_AleaBroadcast]()}
 }
 
 func StoreBatchOriginFromPb(pb *batchdbpb.StoreBatchOrigin) *StoreBatchOrigin {

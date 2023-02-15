@@ -8,7 +8,6 @@ import "contextstorepb/contextstorepb.proto";
 import "dslpb/dslpb.proto";
 import "mir/codegen_extensions.proto";
 import "requestpb/requestpb.proto";
-import "aleapb/bcpb/bcpb.proto";
 
 // ============================================================
 // Events
@@ -84,6 +83,5 @@ message StoreBatchOrigin {
   oneof Type {
     contextstorepb.Origin context_store = 2;
     dslpb.Origin          dsl           = 3;
-    aleapb.bcpb.StoreBatchOrigin alea_broadcast = 4;
   }
 }
