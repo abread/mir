@@ -72,6 +72,8 @@ const (
 	VcbPhaseAwaitingFinal
 	VcbPhasePendingVerification
 	VcbPhaseVerifying
+	VcbPhaseAwaitingOkDelivery
+	VcbPhaseAwaitingNilDelivery
 	VcbPhaseDelivered
 )
 
@@ -152,14 +154,29 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 	})
 	threshDsl.UponVerifyFullResult(m, func(ok bool, error string, context *struct{}) error {
 		if ok {
+			state.phase = VcbPhaseAwaitingOkDelivery
+		} else {
+			state.phase = VcbPhaseAwaitingNilDelivery
+		}
+		return nil
+	})
+	dsl.UponCondition(m, func() error {
+		if state.origin == nil {
+			return nil
+		}
+
+		switch state.phase {
+		case VcbPhaseAwaitingNilDelivery:
+			vcbdsl.Deliver(m, state.origin.Module, nil, nil, nil, state.origin)
+		case VcbPhaseAwaitingOkDelivery:
 			vcbdsl.Deliver(m, state.origin.Module,
 				state.payload.Txs(),
 				state.payload.TxIDs(),
 				state.sig,
 				state.origin,
 			)
-		} else {
-			vcbdsl.Deliver(m, state.origin.Module, nil, nil, nil, state.origin)
+		default:
+			return nil
 		}
 
 		state.phase = VcbPhaseDelivered
