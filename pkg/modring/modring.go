@@ -46,110 +46,66 @@ func (m *Module) ApplyEvents(eventsIn *events.EventList) (*events.EventList, err
 	// modules, not all events.
 	ownEventsIn, subEventsIn := m.splitEventsByDest(eventsIn)
 
-	evsOut := events.EventList{}
+	resultChan := make(chan *events.EventList)
+	errorChan := make(chan error)
 
-	if ownEventsIn.Len() > 0 {
-		ownEvsOut, err := modules.ApplyEventsSequentially(ownEventsIn, m.applyEvent)
-		if err != nil {
-			return nil, err
-		}
-
-		evsOut.PushBackList(ownEvsOut)
-	}
-
-	for i := 0; i < len(subEventsIn); i++ {
-		if subEventsIn[i].Len() == 0 {
-			continue
-		}
-
-		mod, subInitEvsOut, err := m.getSubByRingIdx(i)
-		if err != nil {
-			return nil, err
-		}
-		if mod == nil {
-			continue // module already out of view
-			// TODO: allow custom handler for unhandled events?
-		}
-		evsOut.PushBackList(subInitEvsOut)
-
-		subEvsOut, err := applyAllSafely(mod, &subEventsIn[i])
-		if err != nil {
-			return nil, err
-		}
-		evsOut.PushBackList(subEvsOut)
-	}
-
-	return &evsOut, nil
-}
-
-// TODO: try concurrency again
-/* func (m *Module) ApplyEvents(eventsIn *events.EventList) (*events.EventList, error) {
-	// Note: this method is similar to ApplyEvents, but it only parallelizes execution across diferent
-	// modules, not all events.
-	ownEventsIn, subEventsIn := m.splitEventsByDest(eventsIn)
-
-	results := make([]chan *events.EventList, len(subEventsIn))
-	errors := make([]chan error, len(subEventsIn))
-	for i := 0; i < eventsIn.Len(); i++ {
-		results[i] = make(chan *events.EventList)
-		errors[i] = make(chan error)
-	}
+	// The event processing results will be aggregated here
+	var eventsOut *events.EventList
+	var firstError error
 
 	// Start one concurrent worker for each submodule
 	// Note that the processing starts concurrently for all eventlists, and only the writing of the results is synchronized.
+	nSubs := 0
 	for i := 0; i < len(subEventsIn); i++ {
 		if subEventsIn[i].Len() == 0 {
-			go func(j int) {
-				results[j] <- nil
-				errors[j] <- nil
-			}(i)
 			continue
 		}
 
 		mod, evsOut, err := m.getSubByRingIdx(i)
+		if mod == nil {
+			continue // module already out of view
+			// TODO: allow custom handler for unhandled events?
+		}
 		if err != nil {
-			return nil, err
+			firstError = err
+			break
 		}
 
 		go func(modring *Module, evsIn *events.EventList, initialEvsOut *events.EventList, j int) {
-
 			// Apply the input event, catching potential panics.
 			res, err := mod.ApplyEvents(evsIn)
 
-			// Write processing results to the output channels.
-			// Attention: Those (unbuffered) channels must be read by the aggregator in the same order
-			//            as they are being written here, otherwise the system gets stuck.
-			results[j] <- initialEvsOut.PushBackList(res)
-			errors[j] <- err
+			if err == nil {
+				resultChan <- initialEvsOut.PushBackList(res)
+			} else {
+				errorChan <- err
+			}
 
 		}(m, &subEventsIn[i], evsOut, i)
-		i++
+		nSubs++
 	}
 
-	// The event processing results will be aggregated here.
-	var firstError error
-	var eventsOut *events.EventList
-
 	// the modring's events will be handled in the current go routine
-	eventsOut, firstError = modules.ApplyEventsSequentially(ownEventsIn, m.applyEvent)
+	ownEventsOut, ownError := modules.ApplyEventsSequentially(ownEventsIn, m.applyEvent)
+	if ownError == nil {
+		eventsOut = ownEventsOut
+	} else {
+		if firstError == nil {
+			firstError = ownError
+		}
+		eventsOut = &events.EventList{}
+	}
 
 	// For each submodule, read the processing result from the common channels and aggregate it with the rest.
-	for i := 0; i < len(subEventsIn); i++ {
-		// Attention: The (unbuffered) errors and results channels must be read in the same order
-		//            as they are being written by the worker goroutines, otherwise the system gets stuck.
-
-		// Read results from common channel and add it to the accumulator.
-		if evList := <-results[i]; evList != nil {
+	for i := 0; i < nSubs; i++ {
+		select {
+		case evList := <-resultChan:
 			eventsOut.PushBackList(evList)
+		case err := <-errorChan:
+			if firstError == nil {
+				firstError = err
+			}
 		}
-
-		// Read error from common channel.
-		// We only consider the first error, as ApplyEventsConcurrently only returns a single error.
-		// TODO: Explore possibilities of aggregating multiple errors in one.
-		if err := <-errors[i]; err != nil && firstError == nil {
-			firstError = err
-		}
-
 	}
 
 	// Return the resulting events or an error.
@@ -157,7 +113,7 @@ func (m *Module) ApplyEvents(eventsIn *events.EventList) (*events.EventList, err
 		return nil, firstError
 	}
 	return eventsOut, nil
-}*/
+}
 
 func (m *Module) splitEventsByDest(eventsIn *events.EventList) (*events.EventList, []events.EventList) {
 	ownEventsIn := &events.EventList{}
