@@ -44,21 +44,8 @@ func (m *routedModule) ApplyEvents(evs *events.EventList) (*events.EventList, er
 		}
 	}
 
-	rootOutChan := make(chan *events.EventList)
-	rootErrChan := make(chan error)
-
-	go func(rootModule PassiveModule, evs *events.EventList) {
-		out, err := applyAllSafely(rootModule, evs)
-		rootOutChan <- out
-		rootErrChan <- err
-	}(m.root, rootEvsIn)
-
+	rootEvsOut, rootErr := applyAllSafely(m.root, rootEvsIn)
 	subRouterEvsOut, subRouterErr := applyAllSafely(m.subRouter, subRouterEvsIn)
-
-	// Attention: Those (unbuffered) channels must be read by the aggregator in the same order
-	//            as they are being written here, otherwise the system gets stuck.
-	rootEvsOut := <-rootOutChan
-	rootErr := <-rootErrChan
 
 	if subRouterErr != nil {
 		return nil, subRouterErr

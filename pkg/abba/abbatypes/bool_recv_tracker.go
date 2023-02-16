@@ -7,6 +7,12 @@ type BoolRecvTrackers struct {
 	trueTracker  RecvTracker
 }
 
+func NewBoolRecvTrackers(cap int) BoolRecvTrackers {
+	var res BoolRecvTrackers
+	res.Reset(cap)
+	return res
+}
+
 func (m *BoolRecvTrackers) Register(v bool, node t.NodeID) bool {
 	if v {
 		return m.trueTracker.Register(node)

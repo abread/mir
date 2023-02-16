@@ -62,3 +62,9 @@ message FinishAbbaMessage {
   uint64 round = 1;
   bool   value = 2;
 }
+
+message AbbaOrigin {
+  option (mir.struct) = true;
+
+  uint64 ag_round = 1;
+}

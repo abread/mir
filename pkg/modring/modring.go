@@ -2,19 +2,21 @@ package modring
 
 import (
 	"fmt"
-	"runtime/debug"
 	"strconv"
 
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
+	messagepbtypes "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
 	"github.com/filecoin-project/mir/pkg/pb/modringpb"
+	modringpbevents "github.com/filecoin-project/mir/pkg/pb/modringpb/events"
+	modringpbtypes "github.com/filecoin-project/mir/pkg/pb/modringpb/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
 type Module struct {
-	ownID     t.ModuleID
+	mc        *ModuleConfig
 	generator ModuleGenerator
 
 	ringController RingController
@@ -23,13 +25,13 @@ type Module struct {
 	logger logging.Logger
 }
 
-func New(ownID t.ModuleID, ringSize int, params ModuleParams, logger logging.Logger) *Module {
+func New(mc *ModuleConfig, ringSize int, params ModuleParams, logger logging.Logger) *Module {
 	if logger == nil {
 		logger = logging.ConsoleErrorLogger
 	}
 
 	return &Module{
-		ownID:     ownID,
+		mc:        mc,
 		generator: params.Generator,
 
 		ringController: NewRingController(ringSize),
@@ -42,9 +44,9 @@ func New(ownID t.ModuleID, ringSize int, params ModuleParams, logger logging.Log
 func (m *Module) ImplementsModule() {}
 
 func (m *Module) ApplyEvents(eventsIn *events.EventList) (*events.EventList, error) {
-	// Note: this method is similar to ApplyEvents, but it only parallelizes execution across diferent
+	// Note: this method is similar to ApplyEvents, but it only parallelizes execution across different
 	// modules, not all events.
-	ownEventsIn, subEventsIn := m.splitEventsByDest(eventsIn)
+	ownEventsIn, subEventsIn, pastMsgs := m.splitEventsByDest(eventsIn)
 
 	resultChan := make(chan *events.EventList)
 	errorChan := make(chan error)
@@ -62,13 +64,13 @@ func (m *Module) ApplyEvents(eventsIn *events.EventList) (*events.EventList, err
 		}
 
 		mod, evsOut, err := m.getSubByRingIdx(i)
-		if mod == nil {
-			continue // module already out of view
-			// TODO: allow custom handler for unhandled events?
-		}
 		if err != nil {
 			firstError = err
 			break
+		}
+		if mod == nil {
+			continue // module already out of view
+			// TODO: allow custom handler for unhandled events?
 		}
 
 		go func(modring *Module, evsIn *events.EventList, initialEvsOut *events.EventList, j int) {
@@ -112,22 +114,45 @@ func (m *Module) ApplyEvents(eventsIn *events.EventList) (*events.EventList, err
 	if firstError != nil {
 		return nil, firstError
 	}
+
+	if len(pastMsgs) > 0 && m.mc.PastMsgConsumer != "" {
+		eventsOut.PushBack(modringpbevents.PastMessagesRecvd(m.mc.PastMsgConsumer, pastMsgs).Pb())
+	}
+
 	return eventsOut, nil
 }
 
-func (m *Module) splitEventsByDest(eventsIn *events.EventList) (*events.EventList, []events.EventList) {
+func (m *Module) splitEventsByDest(eventsIn *events.EventList) (*events.EventList, []events.EventList, []*modringpbtypes.PastMessage) {
 	ownEventsIn := &events.EventList{}
 	subEventsIn := make([]events.EventList, len(m.ring))
+	pastMsgs := make([]*modringpbtypes.PastMessage, 0)
 
 	eventsInIter := eventsIn.Iterator()
 	for event := eventsInIter.Next(); event != nil; event = eventsInIter.Next() {
-		if event.DestModule == m.ownID.Pb() {
+		if event.DestModule == m.mc.Self.Pb() {
 			ownEventsIn.PushBack(event)
 		} else {
-			subIDStr := t.ModuleID(event.DestModule).StripParent(m.ownID).Top()
+			subIDStr := t.ModuleID(event.DestModule).StripParent(m.mc.Self).Top()
 			subID, err := strconv.ParseUint(string(subIDStr), 10, 64)
 			if err != nil {
 				m.logger.Log(logging.LevelWarn, "event received for invalid submodule index", "submoduleIdx", subIDStr)
+				continue
+			}
+
+			if m.ringController.IsPastSlot(subID) {
+				if ev, ok := event.Type.(*eventpb.Event_MessageReceived); ok {
+					pastMsgs = append(pastMsgs, &modringpbtypes.PastMessage{
+						DestId:  subID,
+						From:    t.NodeID(ev.MessageReceived.From),
+						Message: messagepbtypes.MessageFromPb(ev.MessageReceived.Msg),
+					})
+				}
+				continue
+			}
+
+			if !m.ringController.IsSlotInView(subID) {
+				m.logger.Log(logging.LevelWarn, "event received for out of view submodule", "submoduleID", subID)
+				continue
 			}
 
 			idx := int(subID % uint64(len(m.ring)))
@@ -135,7 +160,7 @@ func (m *Module) splitEventsByDest(eventsIn *events.EventList) (*events.EventLis
 		}
 	}
 
-	return ownEventsIn, subEventsIn
+	return ownEventsIn, subEventsIn, pastMsgs
 }
 
 func (m *Module) applyEvent(event *eventpb.Event) (*events.EventList, error) {
@@ -166,7 +191,7 @@ func (m *Module) getSubByRingIdx(ringIdx int) (modules.PassiveModule, *events.Ev
 			return nil, nil, nil
 		}
 
-		subFullID := m.ownID.Then(t.NewModuleIDFromInt(subID))
+		subFullID := m.mc.Self.Then(t.NewModuleIDFromInt(subID))
 		sub, initialEvs, err := (m.generator)(subFullID, subID)
 		if err != nil {
 			return nil, nil, err
@@ -196,32 +221,24 @@ func (m *Module) applyModringEvent(event *modringpb.Event) (*events.EventList, e
 }
 
 func (m *Module) applyFreeSubmodule(event *modringpb.FreeSubmodule) (*events.EventList, error) {
+	if m.ringController.IsFutureSlot(event.Id) {
+		return nil, fmt.Errorf("cannot free future slot (id=%v)", event.Id)
+	}
+
 	if m.ringController.TryFree(event.Id) {
 		// zero slot just in case (and to let the GC do its job)
 		ringIdx := int(event.Id % uint64(len(m.ring)))
 		m.ring[ringIdx] = nil
 
 		m.logger.Log(logging.LevelDebug, "module freed", "id", event.Id, "ringIdx", ringIdx)
-		return &events.EventList{}, nil
-	} else if m.ringController.IsFutureSlot(event.Id) {
-		return nil, fmt.Errorf("cannot free future slot (id=%v)", event.Id)
 	} else {
 		m.logger.Log(logging.LevelDebug, "tried to double-free module", "id", event.Id)
-		// already freed, but that's alright
-		return &events.EventList{}, nil
 	}
-}
 
-func applyAllSafely(m modules.PassiveModule, evs *events.EventList) (result *events.EventList, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			if rErr, ok := r.(error); ok {
-				err = fmt.Errorf("event application panicked: %w\nStack trace:\n%s", rErr, string(debug.Stack()))
-			} else {
-				err = fmt.Errorf("event application panicked: %v\nStack trace:\n%s", r, string(debug.Stack()))
-			}
-		}
-	}()
-
-	return m.ApplyEvents(evs)
+	return events.ListOf(
+		modringpbevents.FreedSubmodule(
+			t.ModuleID(event.Origin.Module),
+			modringpbtypes.FreeSubmoduleOriginFromPb(event.Origin),
+		).Pb(),
+	), nil
 }

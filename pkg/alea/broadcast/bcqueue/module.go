@@ -16,7 +16,7 @@ import (
 	bcqueuedsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/dsl"
 	bcqueuepbtypes "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/types"
 	commontypes "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
-	modringdsl "github.com/filecoin-project/mir/pkg/pb/modringpb/dsl"
+	modringpbdsl "github.com/filecoin-project/mir/pkg/pb/modringpb/dsl"
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"
 	vcbpbdsl "github.com/filecoin-project/mir/pkg/pb/vcbpb/dsl"
 	vcbpbevents "github.com/filecoin-project/mir/pkg/pb/vcbpb/events"
@@ -32,7 +32,7 @@ func New(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeI
 
 	controller := newQueueController(mc, params, tunables, nodeID, logger)
 
-	slots := modring.New(mc.Self.Then("slot"), tunables.MaxConcurrentVcb, modring.ModuleParams{
+	slots := modring.New(&modring.ModuleConfig{Self: mc.Self.Then("slot")}, tunables.MaxConcurrentVcb, modring.ModuleParams{
 		Generator: newVcbGenerator(mc, params, nodeID, logger),
 	}, logging.Decorate(logger, "Modring controller: "))
 
@@ -82,7 +82,10 @@ func newQueueController(mc *ModuleConfig, params *ModuleParams, tunables *Module
 	})
 
 	bcqueuedsl.UponFreeSlot(m, func(queueSlot aleatypes.QueueSlot) error {
-		modringdsl.FreeSubmodule(m, mc.Self.Then("slot"), queueSlot.Pb())
+		modringpbdsl.FreeSubmodule(m, mc.Self.Then("slot"), uint64(queueSlot), &struct{}{})
+		return nil
+	})
+	modringpbdsl.UponFreedSubmodule(m, func(context *struct{}) error {
 		return nil
 	})
 
@@ -107,7 +110,7 @@ func newVcbGenerator(queueMc *ModuleConfig, queueParams *ModuleParams, nodeID t.
 		mc := *baseConfig
 		mc.Self = id
 
-		mod := vcb.NewModule(&mc, params, nodeID, logging.Decorate(logger, "slot", idx))
+		mod := vcb.NewModule(&mc, params, nodeID, logging.Decorate(logger, "Vcb: ", "slot", idx))
 
 		initialEvs := &events.EventList{}
 		// events.Init is taken care of by modring

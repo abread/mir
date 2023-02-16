@@ -46,6 +46,7 @@ package protos
 //go:generate protoc-events aleapb/agreementpb/agreementpb.proto
 //go:generate protoc-events vcbpb/vcbpb.proto
 //go:generate protoc-events abbapb/abbapb.proto
+//go:generate protoc-events abbapb/roundpb.proto
 //go:generate protoc-events reliablenetpb/reliablenetpb.proto
 //go:generate protoc-events reliablenetpb/messages/messages.proto
 

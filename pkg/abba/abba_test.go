@@ -62,6 +62,10 @@ func runHappyTest(t *testing.T, F int, decision bool, customInputs map[types.Nod
 	assert.Equal(t, r, decision)
 }
 
+func TestAbbaHappyUnanimousTrueOneNode(t *testing.T) {
+	runHappyTest(t, 0, true, nil)
+}
+
 func TestAbbaHappyUnanimousTrue(t *testing.T) {
 	runHappyTest(t, 2, true, nil)
 }
@@ -149,13 +153,11 @@ func runTest(t *testing.T, conf *TestConfig) (result bool, heapObjects int64, he
 	}
 
 	app0 := deployment.TestReplicas[0].Modules["app"].(*countingApp)
-	assert.Equal(t, app0.firstDeliveredOrigin, types.ModuleID("abba"))
 	for _, replica := range deployment.TestReplicas {
 		// Check if all requests were delivered exactly once in all replicas.
 		app := replica.Modules["app"].(*countingApp)
 		assert.Equal(t, 1, app.deliveredCount)
 		assert.Equal(t, app0.firstDelivered, app.firstDelivered)
-		assert.Equal(t, app0.firstDeliveredOrigin, app.firstDeliveredOrigin)
 
 		// Check if all messages were ACKed
 		rnet := replica.Modules["reliablenet"].(*reliablenet.Module)
@@ -204,10 +206,21 @@ func newDeployment(conf *TestConfig) (*deploytest.Deployment, error) {
 		}
 
 		abbaConfig := DefaultModuleConfig("app")
-		abba := NewModule(abbaConfig, &ModuleParams{
-			InstanceUID: []byte{0},
-			AllNodes:    nodeIDs,
-		}, nodeID, nodeLogger)
+		abba, err := NewModule(
+			abbaConfig,
+			&ModuleParams{
+				InstanceUID: []byte{0},
+				AllNodes:    nodeIDs,
+			},
+			&ModuleTunables{
+				MaxRoundLookahead: 1,
+			},
+			nodeID,
+			nodeLogger,
+		)
+		if err != nil {
+			return nil, err
+		}
 
 		inputValue, ok := conf.InputValues[nodeID]
 		if !ok {
@@ -216,7 +229,6 @@ func newDeployment(conf *TestConfig) (*deploytest.Deployment, error) {
 
 		// Use a small retransmission delay to increase likelihood of duplicate messages
 		rnetParams := reliablenet.DefaultModuleParams(nodeIDs)
-		rnetParams.RetransmissionLoopInterval = 10 * time.Millisecond
 
 		rnet, err := reliablenet.New(
 			nodeID,
@@ -233,7 +245,7 @@ func newDeployment(conf *TestConfig) (*deploytest.Deployment, error) {
 		}
 
 		modulesWithDefaults := map[types.ModuleID]modules.Module{
-			abbaConfig.Consumer:     newCountingApp(inputValue),
+			"app":                   newCountingApp(inputValue),
 			abbaConfig.Self:         abba,
 			abbaConfig.ThreshCrypto: threshCryptoSystem.Module(nodeID),
 			abbaConfig.Hasher:       mirCrypto.NewHasher(crypto.SHA256),
@@ -262,9 +274,8 @@ func newDeployment(conf *TestConfig) (*deploytest.Deployment, error) {
 type countingApp struct {
 	module dsl.Module
 
-	deliveredCount       int
-	firstDelivered       bool
-	firstDeliveredOrigin types.ModuleID
+	deliveredCount int
+	firstDelivered bool
 }
 
 func newCountingApp(inputValue bool) *countingApp {
@@ -276,15 +287,14 @@ func newCountingApp(inputValue bool) *countingApp {
 	}
 
 	dsl.UponInit(m, func() error {
-		abbadsl.InputValue(m, "abba", inputValue)
+		abbadsl.InputValue(m, "abba", inputValue, &struct{}{})
 
 		return nil
 	})
 
-	abbadsl.UponDeliver(m, func(result bool, from types.ModuleID) error {
+	abbadsl.UponDeliver(m, func(result bool, _ctx *struct{}) error {
 		if app.deliveredCount == 0 {
 			app.firstDelivered = result
-			app.firstDeliveredOrigin = from
 		}
 
 		app.deliveredCount++

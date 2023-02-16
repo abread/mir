@@ -62,7 +62,7 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables,
 		return nil, err
 	}
 
-	queues := modring.New(mc.Self.Then("queue"), len(params.AllNodes), modring.ModuleParams{
+	queues := modring.New(&modring.ModuleConfig{Self: mc.Self.Then("queue")}, len(params.AllNodes), modring.ModuleParams{
 		Generator: newBcQueueGenerator(mc, params, tunables, nodeID, logger),
 	}, logging.Decorate(logger, "Modring controller: "))
 
@@ -123,7 +123,7 @@ func newBcQueueGenerator(queueMc *ModuleConfig, queueParams *ModuleParams, queue
 			QueueOwner: queueParams.AllNodes[int(idx)],
 		}
 
-		mod, err := bcqueue.New(mc, params, tunables, nodeID, logging.Decorate(logger, "BcQueue", "queueIdx", idx))
+		mod, err := bcqueue.New(mc, params, tunables, nodeID, logging.Decorate(logger, "BcQueue: ", "queueIdx", idx))
 		if err != nil {
 			return nil, nil, err
 		}

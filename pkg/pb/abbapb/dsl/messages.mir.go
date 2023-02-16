@@ -24,31 +24,42 @@ func UponMessageReceived[W types.Message_TypeWrapper[M], M any](m dsl.Module, ha
 }
 
 func UponFinishMessageReceived(m dsl.Module, handler func(from types1.NodeID, value bool) error) {
-	UponMessageReceived[*types.Message_FinishMessage](m, func(from types1.NodeID, msg *types.FinishMessage) error {
+	UponMessageReceived[*types.Message_Finish](m, func(from types1.NodeID, msg *types.FinishMessage) error {
 		return handler(from, msg.Value)
 	})
 }
 
-func UponInitMessageReceived(m dsl.Module, handler func(from types1.NodeID, roundNumber uint64, estimate bool) error) {
-	UponMessageReceived[*types.Message_InitMessage](m, func(from types1.NodeID, msg *types.InitMessage) error {
-		return handler(from, msg.RoundNumber, msg.Estimate)
+func UponRoundMessageReceived[W types.RoundMessage_TypeWrapper[M], M any](m dsl.Module, handler func(from types1.NodeID, msg *M) error) {
+	UponMessageReceived[*types.Message_Round](m, func(from types1.NodeID, msg *types.RoundMessage) error {
+		w, ok := msg.Type.(W)
+		if !ok {
+			return nil
+		}
+
+		return handler(from, w.Unwrap())
 	})
 }
 
-func UponAuxMessageReceived(m dsl.Module, handler func(from types1.NodeID, roundNumber uint64, value bool) error) {
-	UponMessageReceived[*types.Message_AuxMessage](m, func(from types1.NodeID, msg *types.AuxMessage) error {
-		return handler(from, msg.RoundNumber, msg.Value)
+func UponRoundInitMessageReceived(m dsl.Module, handler func(from types1.NodeID, estimate bool) error) {
+	UponRoundMessageReceived[*types.RoundMessage_Init](m, func(from types1.NodeID, msg *types.RoundInitMessage) error {
+		return handler(from, msg.Estimate)
 	})
 }
 
-func UponConfMessageReceived(m dsl.Module, handler func(from types1.NodeID, roundNumber uint64, values abbatypes.ValueSet) error) {
-	UponMessageReceived[*types.Message_ConfMessage](m, func(from types1.NodeID, msg *types.ConfMessage) error {
-		return handler(from, msg.RoundNumber, msg.Values)
+func UponRoundAuxMessageReceived(m dsl.Module, handler func(from types1.NodeID, value bool) error) {
+	UponRoundMessageReceived[*types.RoundMessage_Aux](m, func(from types1.NodeID, msg *types.RoundAuxMessage) error {
+		return handler(from, msg.Value)
 	})
 }
 
-func UponCoinMessageReceived(m dsl.Module, handler func(from types1.NodeID, roundNumber uint64, coinShare tctypes.SigShare) error) {
-	UponMessageReceived[*types.Message_CoinMessage](m, func(from types1.NodeID, msg *types.CoinMessage) error {
-		return handler(from, msg.RoundNumber, msg.CoinShare)
+func UponRoundConfMessageReceived(m dsl.Module, handler func(from types1.NodeID, values abbatypes.ValueSet) error) {
+	UponRoundMessageReceived[*types.RoundMessage_Conf](m, func(from types1.NodeID, msg *types.RoundConfMessage) error {
+		return handler(from, msg.Values)
+	})
+}
+
+func UponRoundCoinMessageReceived(m dsl.Module, handler func(from types1.NodeID, coinShare tctypes.SigShare) error) {
+	UponRoundMessageReceived[*types.RoundMessage_Coin](m, func(from types1.NodeID, msg *types.RoundCoinMessage) error {
+		return handler(from, msg.CoinShare)
 	})
 }

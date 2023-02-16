@@ -4,7 +4,6 @@ import (
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
 	types "github.com/filecoin-project/mir/pkg/pb/abbapb/types"
 	types1 "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
-	types2 "github.com/filecoin-project/mir/pkg/types"
 )
 
 // Module-specific dsl functions for processing events.
@@ -20,14 +19,65 @@ func UponEvent[W types.Event_TypeWrapper[Ev], Ev any](m dsl.Module, handler func
 	})
 }
 
-func UponInputValue(m dsl.Module, handler func(input bool) error) {
+func UponInputValue(m dsl.Module, handler func(input bool, origin *types.Origin) error) {
 	UponEvent[*types.Event_InputValue](m, func(ev *types.InputValue) error {
-		return handler(ev.Input)
+		return handler(ev.Input, ev.Origin)
 	})
 }
 
-func UponDeliver(m dsl.Module, handler func(result bool, originModule types2.ModuleID) error) {
+func UponDeliver[C any](m dsl.Module, handler func(result bool, context *C) error) {
 	UponEvent[*types.Event_Deliver](m, func(ev *types.Deliver) error {
-		return handler(ev.Result, ev.OriginModule)
+		originWrapper, ok := ev.Origin.Type.(*types.Origin_Dsl)
+		if !ok {
+			return nil
+		}
+
+		contextRaw := m.DslHandle().RecoverAndCleanupContext(dsl.ContextID(originWrapper.Dsl.ContextID))
+		context, ok := contextRaw.(*C)
+		if !ok {
+			return nil
+		}
+
+		return handler(ev.Result, context)
+	})
+}
+
+func UponRoundEvent[W types.RoundEvent_TypeWrapper[Ev], Ev any](m dsl.Module, handler func(ev *Ev) error) {
+	UponEvent[*types.Event_Round](m, func(ev *types.RoundEvent) error {
+		w, ok := ev.Type.(W)
+		if !ok {
+			return nil
+		}
+
+		return handler(w.Unwrap())
+	})
+}
+
+func UponRoundInputValue(m dsl.Module, handler func(input bool, origin *types.RoundOrigin) error) {
+	UponRoundEvent[*types.RoundEvent_InputValue](m, func(ev *types.RoundInputValue) error {
+		return handler(ev.Input, ev.Origin)
+	})
+}
+
+func UponRoundDeliver[C any](m dsl.Module, handler func(nextEstimate bool, context *C) error) {
+	UponRoundEvent[*types.RoundEvent_Deliver](m, func(ev *types.RoundDeliver) error {
+		originWrapper, ok := ev.Origin.Type.(*types.RoundOrigin_Dsl)
+		if !ok {
+			return nil
+		}
+
+		contextRaw := m.DslHandle().RecoverAndCleanupContext(dsl.ContextID(originWrapper.Dsl.ContextID))
+		context, ok := contextRaw.(*C)
+		if !ok {
+			return nil
+		}
+
+		return handler(ev.NextEstimate, context)
+	})
+}
+
+func UponRoundFinishAll(m dsl.Module, handler func(decision bool) error) {
+	UponRoundEvent[*types.RoundEvent_Finish](m, func(ev *types.RoundFinishAll) error {
+		return handler(ev.Decision)
 	})
 }

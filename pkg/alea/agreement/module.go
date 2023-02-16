@@ -2,21 +2,26 @@ package agreement
 
 import (
 	"fmt"
-	"strconv"
 
 	"github.com/filecoin-project/mir/pkg/abba"
+	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/logging"
+	"github.com/filecoin-project/mir/pkg/modring"
 	"github.com/filecoin-project/mir/pkg/modules"
-	"github.com/filecoin-project/mir/pkg/pb/abbapb"
-	abbaEvents "github.com/filecoin-project/mir/pkg/pb/abbapb/events"
-	"github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb"
-	aagEvents "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/events"
-	aagMsgs "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/msgs"
+	abbapbdsl "github.com/filecoin-project/mir/pkg/pb/abbapb/dsl"
+	abbapbevents "github.com/filecoin-project/mir/pkg/pb/abbapb/events"
+	abbapbmsgs "github.com/filecoin-project/mir/pkg/pb/abbapb/msgs"
+	abbapbtypes "github.com/filecoin-project/mir/pkg/pb/abbapb/types"
+	agreementpbdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/dsl"
+	agreementpbmsgs "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/msgs"
+	agreementpbtypes "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/types"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
-	"github.com/filecoin-project/mir/pkg/pb/messagepb"
-	rnEvents "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/events"
-	"github.com/filecoin-project/mir/pkg/serializing"
+	eventpbevents "github.com/filecoin-project/mir/pkg/pb/eventpb/events"
+	messagepbtypes "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
+	modringpbdsl "github.com/filecoin-project/mir/pkg/pb/modringpb/dsl"
+	modringpbtypes "github.com/filecoin-project/mir/pkg/pb/modringpb/types"
+	reliablenetpbdsl "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/dsl"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -49,248 +54,191 @@ type ModuleParams struct {
 	AllNodes    []t.NodeID // the list of participating nodes, which must be the same as the set of nodes in the threshcrypto module
 }
 
-type agModule struct {
-	config *ModuleConfig
-	params *ModuleParams
-	nodeID t.NodeID
-	logger logging.Logger
+// ModuleTunables sets the values of protocol tunables that need not be the same across all nodes.
+type ModuleTunables struct {
+	// Maximum number of agreement rounds for which we process messages
+	// Must be at least 1
+	MaxRoundLookahead int
 
+	// Maximum number of ABBA rounds for which we process messages
+	// Must be at least 1
+	MaxAbbaRoundLookahead int
+}
+
+const modringSubName = t.ModuleID("round")
+
+func NewModule(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
+	if tunables.MaxRoundLookahead <= 0 {
+		return nil, fmt.Errorf("MaxRoundLookahead must be at least 1")
+	} else if tunables.MaxAbbaRoundLookahead <= 0 {
+		return nil, fmt.Errorf("MaxAbbaRoundLookahead must be at least 1")
+	}
+
+	controller := newAgController(mc, params, nodeID, logger)
+
+	slots := modring.New(
+		&modring.ModuleConfig{
+			Self:            mc.Self.Then(modringSubName),
+			PastMsgConsumer: mc.Self,
+		},
+		tunables.MaxRoundLookahead,
+		modring.ModuleParams{
+			Generator: newAbbaGenerator(mc, params, tunables, nodeID, logger),
+		},
+		logging.Decorate(logger, "Modring controller: "),
+	)
+
+	return modules.RoutedModule(mc.Self, controller, slots), nil
+}
+
+func (mc *ModuleConfig) agRoundModuleID(id uint64) t.ModuleID {
+	return mc.Self.Then(modringSubName).Then(t.NewModuleIDFromInt(id))
+}
+
+func (mc *ModuleConfig) agRoundOrigin(roundID uint64) *abbapbtypes.Origin {
+	return &abbapbtypes.Origin{
+		Module: mc.Self,
+		Type: &abbapbtypes.Origin_AleaAg{
+			AleaAg: &agreementpbtypes.AbbaOrigin{
+				AgRound: roundID,
+			},
+		},
+	}
+}
+
+type state struct {
 	roundDecisionHistory []bool
 
-	currentAbba modules.PassiveModule
-
 	currentRound uint64
-	inputDone    bool
-	delivered    bool
 }
 
-func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging.Logger) modules.PassiveModule {
-	return &agModule{
-		config: mc,
-		params: params,
-		nodeID: nodeID,
-		logger: logger,
-
-		roundDecisionHistory: nil, // TODO: consider using a bitvec (will reduce space and batch reallocations as a bonus)
-
-		currentAbba: nil,
-
-		currentRound: 0,
-		inputDone:    false,
-		delivered:    false,
-	}
+type roundDeliverCtx struct {
+	round    uint64
+	decision bool
 }
 
-func (m *agModule) ApplyEvents(eventsIn *events.EventList) (*events.EventList, error) {
-	return modules.ApplyEventsSequentially(eventsIn, m.applyEvent)
-}
+func newAgController(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging.Logger) modules.PassiveModule {
+	m := dsl.NewModule(mc.Self)
 
-func (m *agModule) ImplementsModule() {}
+	state := state{}
 
-func (m *agModule) applyEvent(event *eventpb.Event) (*events.EventList, error) {
-	if event.DestModule != m.config.Self.Pb() {
-		return m.proxyABBAEvent(event)
-	}
+	dsl.UponOtherEvent(m, func(ev *eventpb.Event) error {
+		logger.Log(logging.LevelDebug, "unknown event", "ev", ev)
+		return nil
+	})
 
-	switch e := event.Type.(type) {
-	case *eventpb.Event_Init:
-		m.currentRound = 0
-		return m.initializeRound() // first round is not lazy, for simplicity
-	case *eventpb.Event_MessageReceived:
-		return m.handleMessageReceived(e.MessageReceived.Msg, t.NodeID(e.MessageReceived.From))
-	case *eventpb.Event_AleaAgreement:
-		return m.handleAgreementEvent(e.AleaAgreement)
-	case *eventpb.Event_Abba:
-		return m.handleABBAEvent(e.Abba)
-	// TODO: WAL and app snapshot handling
-	default:
-		return nil, fmt.Errorf("unsupported event type: %T", e)
-	}
-}
-
-func (m *agModule) handleMessageReceived(message *messagepb.Message, from t.NodeID) (*events.EventList, error) {
-	msgWrapper, ok := message.Type.(*messagepb.Message_AleaAgreement)
-	if !ok {
-		m.logger.Log(logging.LevelDebug, "unknown message type")
-		return &events.EventList{}, nil
-	}
-
-	msg, ok := msgWrapper.AleaAgreement.Type.(*agreementpb.Message_FinishAbba)
-	if !ok {
-		m.logger.Log(logging.LevelDebug, "unknown agreement message type")
-		return &events.EventList{}, nil
-	}
-
-	if msg.FinishAbba.Round == m.currentRound {
-		// we've fallen back, and this replica is trying to help us catch up
-		destModuleID := m.abbaModuleID()
-
-		return m.currentAbba.ApplyEvents(events.ListOf(
-			events.MessageReceived(
-				destModuleID,
-				from,
-				abba.FinishMessage(destModuleID, msg.FinishAbba.Value).Pb(),
-			),
-		))
-	}
-	// message is stale
-
-	return &events.EventList{}, nil
-}
-
-func (m *agModule) proxyABBAEvent(event *eventpb.Event) (*events.EventList, error) {
-	destSub := t.ModuleID(event.DestModule).StripParent(m.config.Self)
-	r, ok := strconv.ParseUint(string(destSub.Top()), 10, 64)
-	if ok != nil {
-		return &events.EventList{}, nil // bogus message
-	}
-
-	if r == m.currentRound {
-		// all good, event can be safely forwarded
-	} else if ev, isMsg := event.Type.(*eventpb.Event_MessageReceived); r < m.currentRound && isMsg {
-		// old round: can be a replica trying to help us catch up, or one stalled in the past.
-		// we'll inform its agreement component that we're done, and help propagate the final decision
-		// see agModule::handleMessageReceived
-
-		from := t.NodeID(ev.MessageReceived.From)
-		return events.ListOf(
-			events.SendMessage(m.config.Net, aagMsgs.FinishAbbaMessage(
-				m.config.Self,
-				r,
-				m.roundDecisionHistory[r],
-			).Pb(), []t.NodeID{from}),
-
-			// ABBA does not mark FINISH(_) messages as received, so we must acknowledge any we may receive
-			rnEvents.Ack(
-				m.config.ReliableNet,
-				m.config.Self.Then(t.NewModuleIDFromInt(r)).Then(t.ModuleID("__global")), // TODO: use constant from abba
-				abba.FinishMsgID(),
-				from,
-			).Pb(),
-		), nil
-	} else if m.delivered && r == m.currentRound+1 {
-		// other nodes are moving to the next agreement round, follow suit
-		eventsOut, err := m.advanceRound()
-
-		// only process the original event later, to allow the new ABBA instance to initialize
-		eventsOut.PushBack(event)
-
-		return eventsOut, err
-	} else {
-		// stray event (stale and we shouldn't touch it or from the future and we can't handle it yet)
-		return &events.EventList{}, nil
-	}
-
-	evsOut, err := m.currentAbba.ApplyEvents((&events.EventList{}).PushBack(event))
-
-	if err == nil && !m.inputDone {
-		// request input value into new agreement round
-		// may end up happening multiple times.
-		evsOut.PushBack(aagEvents.RequestInput(m.config.Consumer, m.currentRound).Pb())
-	}
-
-	return evsOut, err
-}
-
-func (m *agModule) handleAgreementEvent(event *agreementpb.Event) (*events.EventList, error) {
-	evWrapped, ok := event.Type.(*agreementpb.Event_InputValue)
-	if !ok {
-		return nil, fmt.Errorf("unexpected agreement event: %v", event)
-	}
-	ev := evWrapped.Unwrap()
-
-	evsOut := &events.EventList{}
-
-	if ev.Round == m.currentRound+1 && m.delivered {
-		// time for a new round
-		evsOut, err := m.advanceRound()
-		m.logger.Log(logging.LevelDebug, "Advanced agreement round", "agreementRound", m.currentRound)
-		if err != nil {
-			return evsOut, err
+	agreementpbdsl.UponInputValue(m, func(round uint64, input bool) error {
+		if round != state.currentRound {
+			return fmt.Errorf("round input provided out-of-order. expected round %v got %v", state.currentRound, round)
 		}
-	} else if m.inputDone || m.currentRound != ev.Round {
-		// stale message
-		m.logger.Log(logging.LevelDebug, "discarding stale InputValue event", "agreementRound", ev.Round, "input", ev.Input)
-		return &events.EventList{}, nil
-	}
 
-	m.inputDone = true
+		logger.Log(logging.LevelDebug, "inputting value to agreement round", "agRound", round, "value", input)
+		dsl.EmitMirEvent(m, abbapbevents.InputValue(
+			mc.agRoundModuleID(round),
+			input,
+			mc.agRoundOrigin(round),
+		))
+		return nil
+	})
 
-	moreEvsOut, err := m.currentAbba.ApplyEvents((&events.EventList{}).PushBack(
-		abbaEvents.InputValue(m.abbaModuleID(), ev.Input).Pb(),
-	))
-	if err != nil {
-		return evsOut, err
-	}
+	abbapbdsl.UponEvent[*abbapbtypes.Event_Deliver](m, func(ev *abbapbtypes.Deliver) error {
+		round := ev.Origin.Type.(*abbapbtypes.Origin_AleaAg).AleaAg.AgRound
 
-	return evsOut.PushBackList(moreEvsOut), nil
+		if round != state.currentRound {
+			return fmt.Errorf("rounds delivered out-of-order. expected round %v got %v", state.currentRound, round)
+		}
+
+		context := &roundDeliverCtx{
+			round:    round,
+			decision: ev.Result,
+		}
+		modringpbdsl.FreeSubmodule(m, mc.Self.Then(modringSubName), round, context)
+
+		return nil
+	})
+	modringpbdsl.UponFreedSubmodule(m, func(context *roundDeliverCtx) error {
+		if context.round != state.currentRound {
+			return fmt.Errorf("race in round cleanup. expected round %v got %v", state.currentRound, context.round)
+		}
+
+		logger.Log(logging.LevelDebug, "delivering round", "round", "agRound", context.round, "decision", context.decision)
+		agreementpbdsl.Deliver(m, mc.Consumer, context.round, context.decision)
+
+		if len(state.roundDecisionHistory) != int(state.currentRound) {
+			return fmt.Errorf("inconsistent agreement historical data")
+		}
+		state.roundDecisionHistory = append(state.roundDecisionHistory, context.decision)
+
+		state.currentRound++
+		return nil
+	})
+
+	agreementpbdsl.UponFinishAbbaMessageReceived(m, func(from t.NodeID, round uint64, value bool) error {
+		if state.currentRound != round {
+			return nil
+		}
+
+		destModule := mc.agRoundModuleID(round)
+
+		dsl.EmitMirEvent(m, eventpbevents.MessageReceived(
+			destModule,
+			from,
+			abbapbmsgs.FinishMessage(destModule, value),
+		))
+
+		return nil
+	})
+
+	modringpbdsl.UponPastMessagesRecvd(m, func(messages []*modringpbtypes.PastMessage) error {
+		for _, msg := range messages {
+			if msg.DestId >= uint64(len(state.roundDecisionHistory)) {
+				continue // we can't help
+				// TODO: report byz(?) node?
+			}
+
+			if _, ok := msg.Message.Type.(*messagepbtypes.Message_Abba); ok {
+				dsl.SendMessage(m, mc.Net,
+					agreementpbmsgs.FinishAbbaMessage(
+						mc.Self,
+						msg.DestId,
+						state.roundDecisionHistory[int(msg.DestId)],
+					).Pb(),
+					[]t.NodeID{msg.From},
+				)
+
+				// TODO: explain
+				reliablenetpbdsl.Ack(m, mc.ReliableNet, mc.agRoundModuleID(msg.DestId), abba.FinishMsgID(), msg.From)
+			}
+		}
+		return nil
+	})
+
+	return m
 }
 
-func (m *agModule) handleABBAEvent(event *abbapb.Event) (*events.EventList, error) {
-	evWrapped, ok := event.Type.(*abbapb.Event_Deliver)
-	if !ok {
-		return nil, fmt.Errorf("unexpected abba event: %v", event)
+func newAbbaGenerator(agMc *ModuleConfig, agParams *ModuleParams, agTunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) func(id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
+	params := &abba.ModuleParams{
+		InstanceUID: agParams.InstanceUID, // TODO: review
+		AllNodes:    agParams.AllNodes,
 	}
-	ev := evWrapped.Unwrap()
-
-	if m.delivered {
-		return nil, fmt.Errorf("abba module double-delivered result")
+	tunables := &abba.ModuleTunables{
+		MaxRoundLookahead: agTunables.MaxAbbaRoundLookahead,
 	}
 
-	evsOut := &events.EventList{}
+	return func(id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
+		mc := &abba.ModuleConfig{
+			Self:         id,
+			ReliableNet:  agMc.ReliableNet,
+			ThreshCrypto: agMc.ThreshCrypto,
+			Hasher:       agMc.Hasher,
+		}
 
-	// notify Alea of delivery
-	m.delivered = true
-	evsOut.PushBack(aagEvents.Deliver(m.config.Consumer, m.currentRound, ev.Result).Pb())
+		mod, err := abba.NewModule(mc, params, tunables, nodeID, logging.Decorate(logger, "Abba: ", "agRound", idx))
+		if err != nil {
+			return nil, nil, err
+		}
 
-	// free up message queues for past round (we'll just re-send the FINAL message later if needed)
-	if len(m.roundDecisionHistory) != int(m.currentRound) {
-		return nil, fmt.Errorf("inconsistent agreement historical data")
+		initialEvs := &events.EventList{}
+		return mod, initialEvs, nil
 	}
-	m.roundDecisionHistory = append(m.roundDecisionHistory, ev.Result)
-
-	return evsOut, nil
-}
-
-func (m *agModule) abbaModuleID() t.ModuleID {
-	return m.config.Self.Then(t.NewModuleIDFromInt(m.currentRound))
-}
-
-func (m *agModule) advanceRound() (*events.EventList, error) {
-	clearOldMessageQueue := rnEvents.MarkModuleMsgsRecvd(
-		m.config.ReliableNet,
-		m.config.Self.Then(t.NewModuleIDFromInt(m.currentRound)),
-		m.params.AllNodes,
-	).Pb()
-
-	m.currentRound++
-
-	evsOut, err := m.initializeRound()
-	evsOut.PushBack(clearOldMessageQueue)
-
-	return evsOut, err
-}
-
-func (m *agModule) initializeRound() (*events.EventList, error) {
-	m.delivered = false
-	m.inputDone = false
-
-	abbaModuleID := m.abbaModuleID()
-
-	instanceUID := make([]byte, len(m.params.InstanceUID)+8)
-	instanceUID = append(instanceUID, m.params.InstanceUID...)
-	instanceUID = append(instanceUID, serializing.Uint64ToBytes(m.currentRound)...)
-
-	m.currentAbba = abba.NewModule(&abba.ModuleConfig{
-		Self:         abbaModuleID,
-		Consumer:     m.config.Self,
-		ReliableNet:  m.config.ReliableNet,
-		ThreshCrypto: m.config.ThreshCrypto,
-		Hasher:       m.config.Hasher,
-	}, &abba.ModuleParams{
-		InstanceUID: instanceUID,
-		AllNodes:    m.params.AllNodes,
-	}, m.nodeID, logging.Decorate(m.logger, "Abba: ", "agreementRound", m.currentRound))
-
-	return m.currentAbba.ApplyEvents((&events.EventList{}).PushBack(events.Init(abbaModuleID)))
 }

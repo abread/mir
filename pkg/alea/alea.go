@@ -50,6 +50,12 @@ type Params struct {
 	// Time to wait before retrying batch creation
 	// Must be non-negative
 	BatchCutFailRetryDelay t.TimeDuration
+
+	// TODO
+	MaxAbbaRoundLookahead int
+
+	// TODO
+	MaxAgRoundLookahead int
 }
 
 // DefaultConfig returns a valid module config with default names for all modules.
@@ -82,6 +88,8 @@ func DefaultParams(membership map[t.NodeID]t.NodeAddress) *Params {
 		MaxConcurrentVcbPerQueue:    10,
 		TargetOwnUnagreedBatchCount: 1,
 		BatchCutFailRetryDelay:      t.TimeDuration(500 * time.Millisecond),
+		MaxAbbaRoundLookahead:       1,
+		MaxAgRoundLookahead:         1,
 	}
 }
 
@@ -159,7 +167,7 @@ func New(ownID t.NodeID, config *Config, params *Params, startingChkp *checkpoin
 		return nil, fmt.Errorf("error creating alea broadcast: %w", errAleaBc)
 	}
 
-	aleaAg := agreement.NewModule(
+	aleaAg, errAleaAg := agreement.NewModule(
 		&agreement.ModuleConfig{
 			Self:         config.AleaAgreement,
 			Consumer:     config.AleaDirector,
@@ -172,9 +180,16 @@ func New(ownID t.NodeID, config *Config, params *Params, startingChkp *checkpoin
 			InstanceUID: append(params.InstanceUID, 'a'),
 			AllNodes:    allNodes,
 		},
+		&agreement.ModuleTunables{
+			MaxRoundLookahead:     params.MaxAgRoundLookahead,
+			MaxAbbaRoundLookahead: params.MaxAbbaRoundLookahead,
+		},
 		ownID,
 		logging.Decorate(logger, "AleaAgreement: "),
 	)
+	if errAleaAg != nil {
+		return nil, fmt.Errorf("error creating alea agreement: %w", errAleaAg)
+	}
 
 	moduleSet := modules.Modules{
 		config.AleaDirector:  aleaDir,

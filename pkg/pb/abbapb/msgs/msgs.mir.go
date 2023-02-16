@@ -13,8 +13,8 @@ func FinishMessage(destModule types.ModuleID, value bool) *types1.Message {
 		DestModule: destModule,
 		Type: &types1.Message_Abba{
 			Abba: &types2.Message{
-				Type: &types2.Message_FinishMessage{
-					FinishMessage: &types2.FinishMessage{
+				Type: &types2.Message_Finish{
+					Finish: &types2.FinishMessage{
 						Value: value,
 					},
 				},
@@ -23,15 +23,18 @@ func FinishMessage(destModule types.ModuleID, value bool) *types1.Message {
 	}
 }
 
-func InitMessage(destModule types.ModuleID, roundNumber uint64, estimate bool) *types1.Message {
+func RoundInitMessage(destModule types.ModuleID, estimate bool) *types1.Message {
 	return &types1.Message{
 		DestModule: destModule,
 		Type: &types1.Message_Abba{
 			Abba: &types2.Message{
-				Type: &types2.Message_InitMessage{
-					InitMessage: &types2.InitMessage{
-						RoundNumber: roundNumber,
-						Estimate:    estimate,
+				Type: &types2.Message_Round{
+					Round: &types2.RoundMessage{
+						Type: &types2.RoundMessage_Init{
+							Init: &types2.RoundInitMessage{
+								Estimate: estimate,
+							},
+						},
 					},
 				},
 			},
@@ -39,15 +42,18 @@ func InitMessage(destModule types.ModuleID, roundNumber uint64, estimate bool) *
 	}
 }
 
-func AuxMessage(destModule types.ModuleID, roundNumber uint64, value bool) *types1.Message {
+func RoundAuxMessage(destModule types.ModuleID, value bool) *types1.Message {
 	return &types1.Message{
 		DestModule: destModule,
 		Type: &types1.Message_Abba{
 			Abba: &types2.Message{
-				Type: &types2.Message_AuxMessage{
-					AuxMessage: &types2.AuxMessage{
-						RoundNumber: roundNumber,
-						Value:       value,
+				Type: &types2.Message_Round{
+					Round: &types2.RoundMessage{
+						Type: &types2.RoundMessage_Aux{
+							Aux: &types2.RoundAuxMessage{
+								Value: value,
+							},
+						},
 					},
 				},
 			},
@@ -55,15 +61,18 @@ func AuxMessage(destModule types.ModuleID, roundNumber uint64, value bool) *type
 	}
 }
 
-func ConfMessage(destModule types.ModuleID, roundNumber uint64, values abbatypes.ValueSet) *types1.Message {
+func RoundConfMessage(destModule types.ModuleID, values abbatypes.ValueSet) *types1.Message {
 	return &types1.Message{
 		DestModule: destModule,
 		Type: &types1.Message_Abba{
 			Abba: &types2.Message{
-				Type: &types2.Message_ConfMessage{
-					ConfMessage: &types2.ConfMessage{
-						RoundNumber: roundNumber,
-						Values:      values,
+				Type: &types2.Message_Round{
+					Round: &types2.RoundMessage{
+						Type: &types2.RoundMessage_Conf{
+							Conf: &types2.RoundConfMessage{
+								Values: values,
+							},
+						},
 					},
 				},
 			},
@@ -71,15 +80,18 @@ func ConfMessage(destModule types.ModuleID, roundNumber uint64, values abbatypes
 	}
 }
 
-func CoinMessage(destModule types.ModuleID, roundNumber uint64, coinShare tctypes.SigShare) *types1.Message {
+func RoundCoinMessage(destModule types.ModuleID, coinShare tctypes.SigShare) *types1.Message {
 	return &types1.Message{
 		DestModule: destModule,
 		Type: &types1.Message_Abba{
 			Abba: &types2.Message{
-				Type: &types2.Message_CoinMessage{
-					CoinMessage: &types2.CoinMessage{
-						RoundNumber: roundNumber,
-						CoinShare:   coinShare,
+				Type: &types2.Message_Round{
+					Round: &types2.RoundMessage{
+						Type: &types2.RoundMessage_Coin{
+							Coin: &types2.RoundCoinMessage{
+								CoinShare: coinShare,
+							},
+						},
 					},
 				},
 			},

@@ -43,7 +43,7 @@ func (s *RingController) GetSlotStatus(slot uint64) RingSlotStatus {
 	return *s.uncheckedSlotStatusRingPtr(slot)
 }
 
-func (s *RingController) isSlotInView(slot uint64) bool {
+func (s *RingController) IsSlotInView(slot uint64) bool {
 	return slot >= s.minSlot && slot < s.minSlot+uint64(len(s.slotStatus))
 }
 
@@ -60,7 +60,7 @@ func (s *RingController) IsPastSlot(slot uint64) bool {
 }
 
 func (s *RingController) TryAcquire(slot uint64) bool {
-	if !(s.isSlotInView(slot) && s.IsFutureSlot(slot)) {
+	if !(s.IsSlotInView(slot) && s.IsFutureSlot(slot)) {
 		return false
 	}
 
@@ -80,7 +80,7 @@ func (s *RingController) TryFree(slot uint64) bool {
 		return true // nothing to do, already freed by definition
 	}
 
-	if !s.isSlotInView(slot) {
+	if !s.IsSlotInView(slot) {
 		return false
 	}
 

@@ -4,6 +4,9 @@ import (
 	mirreflect "github.com/filecoin-project/mir/codegen/mirreflect"
 	abbatypes "github.com/filecoin-project/mir/pkg/abba/abbatypes"
 	abbapb "github.com/filecoin-project/mir/pkg/pb/abbapb"
+	types3 "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/types"
+	types1 "github.com/filecoin-project/mir/pkg/pb/contextstorepb/types"
+	types2 "github.com/filecoin-project/mir/pkg/pb/dslpb/types"
 	tctypes "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 	types "github.com/filecoin-project/mir/pkg/types"
 	reflectutil "github.com/filecoin-project/mir/pkg/util/reflectutil"
@@ -30,6 +33,8 @@ func Event_TypeFromPb(pb abbapb.Event_Type) Event_Type {
 		return &Event_InputValue{InputValue: InputValueFromPb(pb.InputValue)}
 	case *abbapb.Event_Deliver:
 		return &Event_Deliver{Deliver: DeliverFromPb(pb.Deliver)}
+	case *abbapb.Event_Round:
+		return &Event_Round{Round: RoundEventFromPb(pb.Round)}
 	}
 	return nil
 }
@@ -70,6 +75,24 @@ func (*Event_Deliver) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Event_Deliver]()}
 }
 
+type Event_Round struct {
+	Round *RoundEvent
+}
+
+func (*Event_Round) isEvent_Type() {}
+
+func (w *Event_Round) Unwrap() *RoundEvent {
+	return w.Round
+}
+
+func (w *Event_Round) Pb() abbapb.Event_Type {
+	return &abbapb.Event_Round{Round: (w.Round).Pb()}
+}
+
+func (*Event_Round) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Event_Round]()}
+}
+
 func EventFromPb(pb *abbapb.Event) *Event {
 	return &Event{
 		Type: Event_TypeFromPb(pb.Type),
@@ -87,18 +110,21 @@ func (*Event) MirReflect() mirreflect.Type {
 }
 
 type InputValue struct {
-	Input bool
+	Input  bool
+	Origin *Origin
 }
 
 func InputValueFromPb(pb *abbapb.InputValue) *InputValue {
 	return &InputValue{
-		Input: pb.Input,
+		Input:  pb.Input,
+		Origin: OriginFromPb(pb.Origin),
 	}
 }
 
 func (m *InputValue) Pb() *abbapb.InputValue {
 	return &abbapb.InputValue{
-		Input: m.Input,
+		Input:  m.Input,
+		Origin: (m.Origin).Pb(),
 	}
 }
 
@@ -107,21 +133,21 @@ func (*InputValue) MirReflect() mirreflect.Type {
 }
 
 type Deliver struct {
-	Result       bool
-	OriginModule types.ModuleID
+	Result bool
+	Origin *Origin
 }
 
 func DeliverFromPb(pb *abbapb.Deliver) *Deliver {
 	return &Deliver{
-		Result:       pb.Result,
-		OriginModule: (types.ModuleID)(pb.OriginModule),
+		Result: pb.Result,
+		Origin: OriginFromPb(pb.Origin),
 	}
 }
 
 func (m *Deliver) Pb() *abbapb.Deliver {
 	return &abbapb.Deliver{
-		Result:       m.Result,
-		OriginModule: (string)(m.OriginModule),
+		Result: m.Result,
+		Origin: (m.Origin).Pb(),
 	}
 }
 
@@ -146,108 +172,48 @@ type Message_TypeWrapper[T any] interface {
 
 func Message_TypeFromPb(pb abbapb.Message_Type) Message_Type {
 	switch pb := pb.(type) {
-	case *abbapb.Message_FinishMessage:
-		return &Message_FinishMessage{FinishMessage: FinishMessageFromPb(pb.FinishMessage)}
-	case *abbapb.Message_InitMessage:
-		return &Message_InitMessage{InitMessage: InitMessageFromPb(pb.InitMessage)}
-	case *abbapb.Message_AuxMessage:
-		return &Message_AuxMessage{AuxMessage: AuxMessageFromPb(pb.AuxMessage)}
-	case *abbapb.Message_ConfMessage:
-		return &Message_ConfMessage{ConfMessage: ConfMessageFromPb(pb.ConfMessage)}
-	case *abbapb.Message_CoinMessage:
-		return &Message_CoinMessage{CoinMessage: CoinMessageFromPb(pb.CoinMessage)}
+	case *abbapb.Message_Finish:
+		return &Message_Finish{Finish: FinishMessageFromPb(pb.Finish)}
+	case *abbapb.Message_Round:
+		return &Message_Round{Round: RoundMessageFromPb(pb.Round)}
 	}
 	return nil
 }
 
-type Message_FinishMessage struct {
-	FinishMessage *FinishMessage
+type Message_Finish struct {
+	Finish *FinishMessage
 }
 
-func (*Message_FinishMessage) isMessage_Type() {}
+func (*Message_Finish) isMessage_Type() {}
 
-func (w *Message_FinishMessage) Unwrap() *FinishMessage {
-	return w.FinishMessage
+func (w *Message_Finish) Unwrap() *FinishMessage {
+	return w.Finish
 }
 
-func (w *Message_FinishMessage) Pb() abbapb.Message_Type {
-	return &abbapb.Message_FinishMessage{FinishMessage: (w.FinishMessage).Pb()}
+func (w *Message_Finish) Pb() abbapb.Message_Type {
+	return &abbapb.Message_Finish{Finish: (w.Finish).Pb()}
 }
 
-func (*Message_FinishMessage) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Message_FinishMessage]()}
+func (*Message_Finish) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Message_Finish]()}
 }
 
-type Message_InitMessage struct {
-	InitMessage *InitMessage
+type Message_Round struct {
+	Round *RoundMessage
 }
 
-func (*Message_InitMessage) isMessage_Type() {}
+func (*Message_Round) isMessage_Type() {}
 
-func (w *Message_InitMessage) Unwrap() *InitMessage {
-	return w.InitMessage
+func (w *Message_Round) Unwrap() *RoundMessage {
+	return w.Round
 }
 
-func (w *Message_InitMessage) Pb() abbapb.Message_Type {
-	return &abbapb.Message_InitMessage{InitMessage: (w.InitMessage).Pb()}
+func (w *Message_Round) Pb() abbapb.Message_Type {
+	return &abbapb.Message_Round{Round: (w.Round).Pb()}
 }
 
-func (*Message_InitMessage) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Message_InitMessage]()}
-}
-
-type Message_AuxMessage struct {
-	AuxMessage *AuxMessage
-}
-
-func (*Message_AuxMessage) isMessage_Type() {}
-
-func (w *Message_AuxMessage) Unwrap() *AuxMessage {
-	return w.AuxMessage
-}
-
-func (w *Message_AuxMessage) Pb() abbapb.Message_Type {
-	return &abbapb.Message_AuxMessage{AuxMessage: (w.AuxMessage).Pb()}
-}
-
-func (*Message_AuxMessage) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Message_AuxMessage]()}
-}
-
-type Message_ConfMessage struct {
-	ConfMessage *ConfMessage
-}
-
-func (*Message_ConfMessage) isMessage_Type() {}
-
-func (w *Message_ConfMessage) Unwrap() *ConfMessage {
-	return w.ConfMessage
-}
-
-func (w *Message_ConfMessage) Pb() abbapb.Message_Type {
-	return &abbapb.Message_ConfMessage{ConfMessage: (w.ConfMessage).Pb()}
-}
-
-func (*Message_ConfMessage) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Message_ConfMessage]()}
-}
-
-type Message_CoinMessage struct {
-	CoinMessage *CoinMessage
-}
-
-func (*Message_CoinMessage) isMessage_Type() {}
-
-func (w *Message_CoinMessage) Unwrap() *CoinMessage {
-	return w.CoinMessage
-}
-
-func (w *Message_CoinMessage) Pb() abbapb.Message_Type {
-	return &abbapb.Message_CoinMessage{CoinMessage: (w.CoinMessage).Pb()}
-}
-
-func (*Message_CoinMessage) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Message_CoinMessage]()}
+func (*Message_Round) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Message_Round]()}
 }
 
 func MessageFromPb(pb *abbapb.Message) *Message {
@@ -286,94 +252,542 @@ func (*FinishMessage) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.FinishMessage]()}
 }
 
-type InitMessage struct {
-	RoundNumber uint64
-	Estimate    bool
+type Origin struct {
+	Module types.ModuleID
+	Type   Origin_Type
 }
 
-func InitMessageFromPb(pb *abbapb.InitMessage) *InitMessage {
-	return &InitMessage{
-		RoundNumber: pb.RoundNumber,
-		Estimate:    pb.Estimate,
+type Origin_Type interface {
+	mirreflect.GeneratedType
+	isOrigin_Type()
+	Pb() abbapb.Origin_Type
+}
+
+type Origin_TypeWrapper[T any] interface {
+	Origin_Type
+	Unwrap() *T
+}
+
+func Origin_TypeFromPb(pb abbapb.Origin_Type) Origin_Type {
+	switch pb := pb.(type) {
+	case *abbapb.Origin_ContextStore:
+		return &Origin_ContextStore{ContextStore: types1.OriginFromPb(pb.ContextStore)}
+	case *abbapb.Origin_Dsl:
+		return &Origin_Dsl{Dsl: types2.OriginFromPb(pb.Dsl)}
+	case *abbapb.Origin_AleaAg:
+		return &Origin_AleaAg{AleaAg: types3.AbbaOriginFromPb(pb.AleaAg)}
+	}
+	return nil
+}
+
+type Origin_ContextStore struct {
+	ContextStore *types1.Origin
+}
+
+func (*Origin_ContextStore) isOrigin_Type() {}
+
+func (w *Origin_ContextStore) Unwrap() *types1.Origin {
+	return w.ContextStore
+}
+
+func (w *Origin_ContextStore) Pb() abbapb.Origin_Type {
+	return &abbapb.Origin_ContextStore{ContextStore: (w.ContextStore).Pb()}
+}
+
+func (*Origin_ContextStore) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Origin_ContextStore]()}
+}
+
+type Origin_Dsl struct {
+	Dsl *types2.Origin
+}
+
+func (*Origin_Dsl) isOrigin_Type() {}
+
+func (w *Origin_Dsl) Unwrap() *types2.Origin {
+	return w.Dsl
+}
+
+func (w *Origin_Dsl) Pb() abbapb.Origin_Type {
+	return &abbapb.Origin_Dsl{Dsl: (w.Dsl).Pb()}
+}
+
+func (*Origin_Dsl) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Origin_Dsl]()}
+}
+
+type Origin_AleaAg struct {
+	AleaAg *types3.AbbaOrigin
+}
+
+func (*Origin_AleaAg) isOrigin_Type() {}
+
+func (w *Origin_AleaAg) Unwrap() *types3.AbbaOrigin {
+	return w.AleaAg
+}
+
+func (w *Origin_AleaAg) Pb() abbapb.Origin_Type {
+	return &abbapb.Origin_AleaAg{AleaAg: (w.AleaAg).Pb()}
+}
+
+func (*Origin_AleaAg) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Origin_AleaAg]()}
+}
+
+func OriginFromPb(pb *abbapb.Origin) *Origin {
+	return &Origin{
+		Module: (types.ModuleID)(pb.Module),
+		Type:   Origin_TypeFromPb(pb.Type),
 	}
 }
 
-func (m *InitMessage) Pb() *abbapb.InitMessage {
-	return &abbapb.InitMessage{
-		RoundNumber: m.RoundNumber,
-		Estimate:    m.Estimate,
+func (m *Origin) Pb() *abbapb.Origin {
+	return &abbapb.Origin{
+		Module: (string)(m.Module),
+		Type:   (m.Type).Pb(),
 	}
 }
 
-func (*InitMessage) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.InitMessage]()}
+func (*Origin) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Origin]()}
 }
 
-type AuxMessage struct {
-	RoundNumber uint64
-	Value       bool
+type RoundEvent struct {
+	Type RoundEvent_Type
 }
 
-func AuxMessageFromPb(pb *abbapb.AuxMessage) *AuxMessage {
-	return &AuxMessage{
-		RoundNumber: pb.RoundNumber,
-		Value:       pb.Value,
+type RoundEvent_Type interface {
+	mirreflect.GeneratedType
+	isRoundEvent_Type()
+	Pb() abbapb.RoundEvent_Type
+}
+
+type RoundEvent_TypeWrapper[T any] interface {
+	RoundEvent_Type
+	Unwrap() *T
+}
+
+func RoundEvent_TypeFromPb(pb abbapb.RoundEvent_Type) RoundEvent_Type {
+	switch pb := pb.(type) {
+	case *abbapb.RoundEvent_InputValue:
+		return &RoundEvent_InputValue{InputValue: RoundInputValueFromPb(pb.InputValue)}
+	case *abbapb.RoundEvent_Deliver:
+		return &RoundEvent_Deliver{Deliver: RoundDeliverFromPb(pb.Deliver)}
+	case *abbapb.RoundEvent_Finish:
+		return &RoundEvent_Finish{Finish: RoundFinishAllFromPb(pb.Finish)}
+	}
+	return nil
+}
+
+type RoundEvent_InputValue struct {
+	InputValue *RoundInputValue
+}
+
+func (*RoundEvent_InputValue) isRoundEvent_Type() {}
+
+func (w *RoundEvent_InputValue) Unwrap() *RoundInputValue {
+	return w.InputValue
+}
+
+func (w *RoundEvent_InputValue) Pb() abbapb.RoundEvent_Type {
+	return &abbapb.RoundEvent_InputValue{InputValue: (w.InputValue).Pb()}
+}
+
+func (*RoundEvent_InputValue) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.RoundEvent_InputValue]()}
+}
+
+type RoundEvent_Deliver struct {
+	Deliver *RoundDeliver
+}
+
+func (*RoundEvent_Deliver) isRoundEvent_Type() {}
+
+func (w *RoundEvent_Deliver) Unwrap() *RoundDeliver {
+	return w.Deliver
+}
+
+func (w *RoundEvent_Deliver) Pb() abbapb.RoundEvent_Type {
+	return &abbapb.RoundEvent_Deliver{Deliver: (w.Deliver).Pb()}
+}
+
+func (*RoundEvent_Deliver) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.RoundEvent_Deliver]()}
+}
+
+type RoundEvent_Finish struct {
+	Finish *RoundFinishAll
+}
+
+func (*RoundEvent_Finish) isRoundEvent_Type() {}
+
+func (w *RoundEvent_Finish) Unwrap() *RoundFinishAll {
+	return w.Finish
+}
+
+func (w *RoundEvent_Finish) Pb() abbapb.RoundEvent_Type {
+	return &abbapb.RoundEvent_Finish{Finish: (w.Finish).Pb()}
+}
+
+func (*RoundEvent_Finish) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.RoundEvent_Finish]()}
+}
+
+func RoundEventFromPb(pb *abbapb.RoundEvent) *RoundEvent {
+	return &RoundEvent{
+		Type: RoundEvent_TypeFromPb(pb.Type),
 	}
 }
 
-func (m *AuxMessage) Pb() *abbapb.AuxMessage {
-	return &abbapb.AuxMessage{
-		RoundNumber: m.RoundNumber,
-		Value:       m.Value,
+func (m *RoundEvent) Pb() *abbapb.RoundEvent {
+	return &abbapb.RoundEvent{
+		Type: (m.Type).Pb(),
 	}
 }
 
-func (*AuxMessage) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.AuxMessage]()}
+func (*RoundEvent) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.RoundEvent]()}
 }
 
-type ConfMessage struct {
-	RoundNumber uint64
-	Values      abbatypes.ValueSet
+type RoundInputValue struct {
+	Input  bool
+	Origin *RoundOrigin
 }
 
-func ConfMessageFromPb(pb *abbapb.ConfMessage) *ConfMessage {
-	return &ConfMessage{
-		RoundNumber: pb.RoundNumber,
-		Values:      (abbatypes.ValueSet)(pb.Values),
+func RoundInputValueFromPb(pb *abbapb.RoundInputValue) *RoundInputValue {
+	return &RoundInputValue{
+		Input:  pb.Input,
+		Origin: RoundOriginFromPb(pb.Origin),
 	}
 }
 
-func (m *ConfMessage) Pb() *abbapb.ConfMessage {
-	return &abbapb.ConfMessage{
-		RoundNumber: m.RoundNumber,
-		Values:      (uint32)(m.Values),
+func (m *RoundInputValue) Pb() *abbapb.RoundInputValue {
+	return &abbapb.RoundInputValue{
+		Input:  m.Input,
+		Origin: (m.Origin).Pb(),
 	}
 }
 
-func (*ConfMessage) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.ConfMessage]()}
+func (*RoundInputValue) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.RoundInputValue]()}
 }
 
-type CoinMessage struct {
-	RoundNumber uint64
-	CoinShare   tctypes.SigShare
+type RoundDeliver struct {
+	NextEstimate bool
+	Origin       *RoundOrigin
 }
 
-func CoinMessageFromPb(pb *abbapb.CoinMessage) *CoinMessage {
-	return &CoinMessage{
-		RoundNumber: pb.RoundNumber,
-		CoinShare:   (tctypes.SigShare)(pb.CoinShare),
+func RoundDeliverFromPb(pb *abbapb.RoundDeliver) *RoundDeliver {
+	return &RoundDeliver{
+		NextEstimate: pb.NextEstimate,
+		Origin:       RoundOriginFromPb(pb.Origin),
 	}
 }
 
-func (m *CoinMessage) Pb() *abbapb.CoinMessage {
-	return &abbapb.CoinMessage{
-		RoundNumber: m.RoundNumber,
-		CoinShare:   ([]uint8)(m.CoinShare),
+func (m *RoundDeliver) Pb() *abbapb.RoundDeliver {
+	return &abbapb.RoundDeliver{
+		NextEstimate: m.NextEstimate,
+		Origin:       (m.Origin).Pb(),
 	}
 }
 
-func (*CoinMessage) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.CoinMessage]()}
+func (*RoundDeliver) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.RoundDeliver]()}
+}
+
+type RoundFinishAll struct {
+	Decision bool
+}
+
+func RoundFinishAllFromPb(pb *abbapb.RoundFinishAll) *RoundFinishAll {
+	return &RoundFinishAll{
+		Decision: pb.Decision,
+	}
+}
+
+func (m *RoundFinishAll) Pb() *abbapb.RoundFinishAll {
+	return &abbapb.RoundFinishAll{
+		Decision: m.Decision,
+	}
+}
+
+func (*RoundFinishAll) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.RoundFinishAll]()}
+}
+
+type RoundMessage struct {
+	Type RoundMessage_Type
+}
+
+type RoundMessage_Type interface {
+	mirreflect.GeneratedType
+	isRoundMessage_Type()
+	Pb() abbapb.RoundMessage_Type
+}
+
+type RoundMessage_TypeWrapper[T any] interface {
+	RoundMessage_Type
+	Unwrap() *T
+}
+
+func RoundMessage_TypeFromPb(pb abbapb.RoundMessage_Type) RoundMessage_Type {
+	switch pb := pb.(type) {
+	case *abbapb.RoundMessage_Init:
+		return &RoundMessage_Init{Init: RoundInitMessageFromPb(pb.Init)}
+	case *abbapb.RoundMessage_Aux:
+		return &RoundMessage_Aux{Aux: RoundAuxMessageFromPb(pb.Aux)}
+	case *abbapb.RoundMessage_Conf:
+		return &RoundMessage_Conf{Conf: RoundConfMessageFromPb(pb.Conf)}
+	case *abbapb.RoundMessage_Coin:
+		return &RoundMessage_Coin{Coin: RoundCoinMessageFromPb(pb.Coin)}
+	}
+	return nil
+}
+
+type RoundMessage_Init struct {
+	Init *RoundInitMessage
+}
+
+func (*RoundMessage_Init) isRoundMessage_Type() {}
+
+func (w *RoundMessage_Init) Unwrap() *RoundInitMessage {
+	return w.Init
+}
+
+func (w *RoundMessage_Init) Pb() abbapb.RoundMessage_Type {
+	return &abbapb.RoundMessage_Init{Init: (w.Init).Pb()}
+}
+
+func (*RoundMessage_Init) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.RoundMessage_Init]()}
+}
+
+type RoundMessage_Aux struct {
+	Aux *RoundAuxMessage
+}
+
+func (*RoundMessage_Aux) isRoundMessage_Type() {}
+
+func (w *RoundMessage_Aux) Unwrap() *RoundAuxMessage {
+	return w.Aux
+}
+
+func (w *RoundMessage_Aux) Pb() abbapb.RoundMessage_Type {
+	return &abbapb.RoundMessage_Aux{Aux: (w.Aux).Pb()}
+}
+
+func (*RoundMessage_Aux) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.RoundMessage_Aux]()}
+}
+
+type RoundMessage_Conf struct {
+	Conf *RoundConfMessage
+}
+
+func (*RoundMessage_Conf) isRoundMessage_Type() {}
+
+func (w *RoundMessage_Conf) Unwrap() *RoundConfMessage {
+	return w.Conf
+}
+
+func (w *RoundMessage_Conf) Pb() abbapb.RoundMessage_Type {
+	return &abbapb.RoundMessage_Conf{Conf: (w.Conf).Pb()}
+}
+
+func (*RoundMessage_Conf) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.RoundMessage_Conf]()}
+}
+
+type RoundMessage_Coin struct {
+	Coin *RoundCoinMessage
+}
+
+func (*RoundMessage_Coin) isRoundMessage_Type() {}
+
+func (w *RoundMessage_Coin) Unwrap() *RoundCoinMessage {
+	return w.Coin
+}
+
+func (w *RoundMessage_Coin) Pb() abbapb.RoundMessage_Type {
+	return &abbapb.RoundMessage_Coin{Coin: (w.Coin).Pb()}
+}
+
+func (*RoundMessage_Coin) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.RoundMessage_Coin]()}
+}
+
+func RoundMessageFromPb(pb *abbapb.RoundMessage) *RoundMessage {
+	return &RoundMessage{
+		Type: RoundMessage_TypeFromPb(pb.Type),
+	}
+}
+
+func (m *RoundMessage) Pb() *abbapb.RoundMessage {
+	return &abbapb.RoundMessage{
+		Type: (m.Type).Pb(),
+	}
+}
+
+func (*RoundMessage) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.RoundMessage]()}
+}
+
+type RoundInitMessage struct {
+	Estimate bool
+}
+
+func RoundInitMessageFromPb(pb *abbapb.RoundInitMessage) *RoundInitMessage {
+	return &RoundInitMessage{
+		Estimate: pb.Estimate,
+	}
+}
+
+func (m *RoundInitMessage) Pb() *abbapb.RoundInitMessage {
+	return &abbapb.RoundInitMessage{
+		Estimate: m.Estimate,
+	}
+}
+
+func (*RoundInitMessage) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.RoundInitMessage]()}
+}
+
+type RoundAuxMessage struct {
+	Value bool
+}
+
+func RoundAuxMessageFromPb(pb *abbapb.RoundAuxMessage) *RoundAuxMessage {
+	return &RoundAuxMessage{
+		Value: pb.Value,
+	}
+}
+
+func (m *RoundAuxMessage) Pb() *abbapb.RoundAuxMessage {
+	return &abbapb.RoundAuxMessage{
+		Value: m.Value,
+	}
+}
+
+func (*RoundAuxMessage) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.RoundAuxMessage]()}
+}
+
+type RoundConfMessage struct {
+	Values abbatypes.ValueSet
+}
+
+func RoundConfMessageFromPb(pb *abbapb.RoundConfMessage) *RoundConfMessage {
+	return &RoundConfMessage{
+		Values: (abbatypes.ValueSet)(pb.Values),
+	}
+}
+
+func (m *RoundConfMessage) Pb() *abbapb.RoundConfMessage {
+	return &abbapb.RoundConfMessage{
+		Values: (uint32)(m.Values),
+	}
+}
+
+func (*RoundConfMessage) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.RoundConfMessage]()}
+}
+
+type RoundCoinMessage struct {
+	CoinShare tctypes.SigShare
+}
+
+func RoundCoinMessageFromPb(pb *abbapb.RoundCoinMessage) *RoundCoinMessage {
+	return &RoundCoinMessage{
+		CoinShare: (tctypes.SigShare)(pb.CoinShare),
+	}
+}
+
+func (m *RoundCoinMessage) Pb() *abbapb.RoundCoinMessage {
+	return &abbapb.RoundCoinMessage{
+		CoinShare: ([]uint8)(m.CoinShare),
+	}
+}
+
+func (*RoundCoinMessage) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.RoundCoinMessage]()}
+}
+
+type RoundOrigin struct {
+	Module types.ModuleID
+	Type   RoundOrigin_Type
+}
+
+type RoundOrigin_Type interface {
+	mirreflect.GeneratedType
+	isRoundOrigin_Type()
+	Pb() abbapb.RoundOrigin_Type
+}
+
+type RoundOrigin_TypeWrapper[T any] interface {
+	RoundOrigin_Type
+	Unwrap() *T
+}
+
+func RoundOrigin_TypeFromPb(pb abbapb.RoundOrigin_Type) RoundOrigin_Type {
+	switch pb := pb.(type) {
+	case *abbapb.RoundOrigin_ContextStore:
+		return &RoundOrigin_ContextStore{ContextStore: types1.OriginFromPb(pb.ContextStore)}
+	case *abbapb.RoundOrigin_Dsl:
+		return &RoundOrigin_Dsl{Dsl: types2.OriginFromPb(pb.Dsl)}
+	}
+	return nil
+}
+
+type RoundOrigin_ContextStore struct {
+	ContextStore *types1.Origin
+}
+
+func (*RoundOrigin_ContextStore) isRoundOrigin_Type() {}
+
+func (w *RoundOrigin_ContextStore) Unwrap() *types1.Origin {
+	return w.ContextStore
+}
+
+func (w *RoundOrigin_ContextStore) Pb() abbapb.RoundOrigin_Type {
+	return &abbapb.RoundOrigin_ContextStore{ContextStore: (w.ContextStore).Pb()}
+}
+
+func (*RoundOrigin_ContextStore) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.RoundOrigin_ContextStore]()}
+}
+
+type RoundOrigin_Dsl struct {
+	Dsl *types2.Origin
+}
+
+func (*RoundOrigin_Dsl) isRoundOrigin_Type() {}
+
+func (w *RoundOrigin_Dsl) Unwrap() *types2.Origin {
+	return w.Dsl
+}
+
+func (w *RoundOrigin_Dsl) Pb() abbapb.RoundOrigin_Type {
+	return &abbapb.RoundOrigin_Dsl{Dsl: (w.Dsl).Pb()}
+}
+
+func (*RoundOrigin_Dsl) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.RoundOrigin_Dsl]()}
+}
+
+func RoundOriginFromPb(pb *abbapb.RoundOrigin) *RoundOrigin {
+	return &RoundOrigin{
+		Module: (types.ModuleID)(pb.Module),
+		Type:   RoundOrigin_TypeFromPb(pb.Type),
+	}
+}
+
+func (m *RoundOrigin) Pb() *abbapb.RoundOrigin {
+	return &abbapb.RoundOrigin{
+		Module: (string)(m.Module),
+		Type:   (m.Type).Pb(),
+	}
+}
+
+func (*RoundOrigin) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.RoundOrigin]()}
 }
