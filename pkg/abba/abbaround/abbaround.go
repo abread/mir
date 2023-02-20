@@ -11,7 +11,6 @@ import (
 	abbapbevents "github.com/filecoin-project/mir/pkg/pb/abbapb/events"
 	abbapbmsgs "github.com/filecoin-project/mir/pkg/pb/abbapb/msgs"
 	abbapbtypes "github.com/filecoin-project/mir/pkg/pb/abbapb/types"
-	"github.com/filecoin-project/mir/pkg/pb/eventpb"
 	rnetdsl "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/dsl"
 	threshDsl "github.com/filecoin-project/mir/pkg/pb/threshcryptopb/dsl"
 	"github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
@@ -53,6 +52,7 @@ type state struct {
 	origin *abbapbtypes.RoundOrigin
 }
 
+// nolint: gocognit
 func New(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging.Logger) modules.PassiveModule {
 	m := dsl.NewModule(mc.Self)
 
@@ -64,16 +64,6 @@ func New(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging
 		coinRecvdOkShares: make([]tctypes.SigShare, 0, len(params.AllNodes)),
 	}
 	coinData := genCoinData(mc, params)
-
-	dsl.UponInit(m, func() error {
-		logger.Log(logging.LevelDebug, "init round", "nodeid", nodeID)
-		return nil
-	})
-
-	dsl.UponOtherEvent(m, func(ev *eventpb.Event) error {
-		logger.Log(logging.LevelDebug, "received unexpected event", "event", ev)
-		return nil
-	})
 
 	abbadsl.UponRoundInputValue(m, func(input bool, origin *abbapbtypes.RoundOrigin) error {
 		// 10. est^r+1_i = v OR 3. set est^r_i = v_in
@@ -178,6 +168,7 @@ func New(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging
 	})
 
 	abbadsl.UponRoundConfMessageReceived(m, func(from t.NodeID, values abbat.ValueSet) error {
+		values = values.Sanitized()
 		rnetdsl.Ack(m, mc.ReliableNet, mc.Self, ConfMsgID(), from)
 
 		if !state.confRecvd.Register(from) {
@@ -202,14 +193,14 @@ func New(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging
 
 			// 9. sample coin
 			state.phase = phaseTossingCoin
-			threshDsl.SignShare(m, mc.ThreshCrypto, coinData, &struct{}{})
+			threshDsl.SignShare[struct{}](m, mc.ThreshCrypto, coinData, nil)
 		}
 
 		return nil
 	})
 
 	// still in 9. sample coin
-	threshDsl.UponSignShareResult(m, func(sigShare tctypes.SigShare, context *struct{}) error {
+	threshDsl.UponSignShareResult(m, func(sigShare tctypes.SigShare, _ctx *struct{}) error {
 		if state.phase != phaseTossingCoin {
 			return nil // already over/not tossing
 		}
@@ -259,7 +250,7 @@ func New(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging
 		}
 
 		if len(state.coinRecvdOkShares) > state.coinRecoverMinShareCount && !state.coinRecoverInProgress {
-			threshDsl.Recover(m, mc.ThreshCrypto, coinData, state.coinRecvdOkShares, &struct{}{})
+			threshDsl.Recover[struct{}](m, mc.ThreshCrypto, coinData, state.coinRecvdOkShares, nil)
 
 			state.coinRecoverInProgress = true
 			state.coinRecoverMinShareCount = len(state.coinRecvdOkShares)
@@ -269,14 +260,14 @@ func New(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging
 	})
 
 	// still in 9. sample coin
-	threshDsl.UponRecoverResult(m, func(fullSig tctypes.FullSig, ok bool, err string, context *struct{}) error {
+	threshDsl.UponRecoverResult(m, func(fullSig tctypes.FullSig, ok bool, err string, _ctx *struct{}) error {
 		if state.phase != phaseTossingCoin {
 			return fmt.Errorf("impossible state reached: coin being tossed but round is already over")
 		}
 
 		if ok {
 			// we have a signature, all we need to do is hash it and
-			dsl.HashOneMessage(m, mc.Hasher, [][]byte{fullSig}, context)
+			dsl.HashOneMessage(m, mc.Hasher, [][]byte{fullSig}, _ctx)
 		} else {
 			logger.Log(logging.LevelDebug, "could not recover coin ...YET")
 			// will attempt to recover when more signature shares arrive
@@ -287,7 +278,7 @@ func New(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging
 	})
 
 	// still in 9. sample coin
-	dsl.UponOneHashResult(m, func(hash []byte, context *struct{}) error {
+	dsl.UponOneHashResult(m, func(hash []byte, _ctx *struct{}) error {
 		if state.phase != phaseTossingCoin {
 			return fmt.Errorf("impossible state reached: coin being tossed but round is already over")
 		}

@@ -280,14 +280,13 @@ type countingApp struct {
 
 func newCountingApp(inputValue bool) *countingApp {
 	m := dsl.NewModule("app")
-	m.DslHandle().StoreContext(&struct{}{}) // fill context id 0
 
 	app := &countingApp{
 		module: m,
 	}
 
 	dsl.UponInit(m, func() error {
-		abbadsl.InputValue(m, "abba", inputValue, &struct{}{})
+		abbadsl.InputValue[struct{}](m, "abba", inputValue, nil)
 
 		return nil
 	})

@@ -82,10 +82,10 @@ func newQueueController(mc *ModuleConfig, params *ModuleParams, tunables *Module
 	})
 
 	bcqueuedsl.UponFreeSlot(m, func(queueSlot aleatypes.QueueSlot) error {
-		modringpbdsl.FreeSubmodule(m, mc.Self.Then("slot"), uint64(queueSlot), &struct{}{})
+		modringpbdsl.FreeSubmodule[struct{}](m, mc.Self.Then("slot"), uint64(queueSlot), nil)
 		return nil
 	})
-	modringpbdsl.UponFreedSubmodule(m, func(context *struct{}) error {
+	modringpbdsl.UponFreedSubmodule(m, func(_ctx *struct{}) error {
 		return nil
 	})
 

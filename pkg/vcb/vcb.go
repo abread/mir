@@ -136,23 +136,25 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 	})
 	dsl.UponCondition(m, func() error {
 		if state.phase == VcbPhasePendingVerification && state.payload.SigData() != nil && state.origin != nil {
+			var nilStructPtr *struct{}
+
 			if nodeID == params.Leader {
 				// bypass verification, it came from ourselves
-				contextID := m.DslHandle().StoreContext(&struct{}{})
+				contextID := m.DslHandle().StoreContext(nilStructPtr)
 				origin := &threshcryptopbtypes.VerifyFullOrigin{
 					Module: mc.ThreshCrypto,
 					Type:   &threshcryptopbtypes.VerifyFullOrigin_Dsl{Dsl: dsl.MirOrigin(contextID)},
 				}
 				threshDsl.VerifyFullResult(m, mc.Self, true, "", origin)
 			} else {
-				threshDsl.VerifyFull(m, mc.ThreshCrypto, state.payload.SigData(), state.sig, &struct{}{})
+				threshDsl.VerifyFull[struct{}](m, mc.ThreshCrypto, state.payload.SigData(), state.sig, nil)
 			}
 
 			state.phase = VcbPhaseVerifying
 		}
 		return nil
 	})
-	threshDsl.UponVerifyFullResult(m, func(ok bool, error string, context *struct{}) error {
+	threshDsl.UponVerifyFullResult(m, func(ok bool, error string, _ctx *struct{}) error {
 		if ok {
 			state.phase = VcbPhaseAwaitingOkDelivery
 		} else {
@@ -197,12 +199,12 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 	})
 	dsl.UponCondition(m, func() error {
 		if state.phase == VcbPhaseAwaitingSigData && state.payload.SigData() != nil {
-			threshDsl.SignShare(m, mc.ThreshCrypto, state.payload.SigData(), &struct{}{})
+			threshDsl.SignShare[struct{}](m, mc.ThreshCrypto, state.payload.SigData(), nil)
 			state.phase = VcbPhaseAwaitingSigShare
 		}
 		return nil
 	})
-	threshDsl.UponSignShareResult(m, func(signatureShare tctypes.SigShare, context *struct{}) error {
+	threshDsl.UponSignShareResult(m, func(signatureShare tctypes.SigShare, _ctx *struct{}) error {
 		if state.phase == VcbPhaseAwaitingSigShare {
 			rnetdsl.SendMessage(m, mc.ReliableNet,
 				EchoMsgID(),
@@ -250,13 +252,13 @@ func setupVcbLeader(m dsl.Module, mc *ModuleConfig, params *ModuleParams, nodeID
 
 	dsl.UponCondition(m, func() error {
 		if leaderState.phase == VcbLeaderPhaseAwaitingEchoes && len(leaderState.sigShares) >= params.GetF()+1 && len(leaderState.sigShares) > leaderState.lastCombineAttemptSize {
-			threshDsl.Recover(m, mc.ThreshCrypto, state.payload.SigData(), leaderState.sigShares, &struct{}{})
+			threshDsl.Recover[struct{}](m, mc.ThreshCrypto, state.payload.SigData(), leaderState.sigShares, nil)
 			leaderState.phase = VcbLeaderPhaseCombining
 			leaderState.lastCombineAttemptSize = len(leaderState.sigShares)
 		}
 		return nil
 	})
-	threshDsl.UponRecoverResult(m, func(fullSignature tctypes.FullSig, ok bool, error string, context *struct{}) error {
+	threshDsl.UponRecoverResult(m, func(fullSignature tctypes.FullSig, ok bool, error string, _ctx *struct{}) error {
 		if ok {
 			rnetdsl.SendMessage(m, mc.ReliableNet, FinalMsgID(), vcbmsgs.FinalMessage(
 				mc.Self,

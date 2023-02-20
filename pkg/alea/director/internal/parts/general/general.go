@@ -118,13 +118,15 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 	dsl.UponCondition(m, func() error {
 		if !state.batchCutInProgress && state.unagreedBroadcastedOwnSlotCount < tunables.TargetOwnUnagreedBatchCount {
 			logger.Log(logging.LevelDebug, "requesting more transactions")
-			mempooldsl.RequestBatch(m, mc.Mempool, &struct{}{})
+			mempooldsl.RequestBatch[struct{}](m, mc.Mempool, nil)
 			state.batchCutInProgress = true
 		}
 		return nil
 	})
-	mempooldsl.UponNewBatch(m, func(txIDs []t.TxID, txs []*requestpb.Request, context *struct{}) error {
+	mempooldsl.UponNewBatch(m, func(txIDs []t.TxID, txs []*requestpb.Request, _ctx *struct{}) error {
 		if len(txs) == 0 {
+			var nilStructPtr *struct{}
+
 			// batch is empty, try again after a bit
 			dsl.EmitEvent(
 				m,
@@ -136,7 +138,7 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 						// we don't really use it, but DSL modules demand context
 						Type: &mempoolpb.RequestBatchOrigin_Dsl{
 							Dsl: dsl.Origin(
-								m.DslHandle().StoreContext(&struct{}{}),
+								m.DslHandle().StoreContext(nilStructPtr),
 							),
 						},
 					})},

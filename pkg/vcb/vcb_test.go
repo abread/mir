@@ -243,7 +243,6 @@ type countingApp struct {
 
 func newCountingApp(isLeader bool) *countingApp {
 	m := dsl.NewModule("app")
-	m.DslHandle().StoreContext(&struct{}{}) // fill context id 0
 
 	app := &countingApp{
 		module: m,
@@ -266,17 +265,17 @@ func newCountingApp(isLeader bool) *countingApp {
 		}
 
 		dsl.UponInit(m, func() error {
-			mpdsl.RequestTransactionIDs(m, "mempool", txs, &struct{}{})
+			mpdsl.RequestTransactionIDs[struct{}](m, "mempool", txs, nil)
 			return nil
 		})
 
-		mpdsl.UponTransactionIDsResponse(m, func(txIDs []types.TxID, _context *struct{}) error {
-			vcbdsl.InputValue(m, "vcb", txs, &struct{}{})
+		mpdsl.UponTransactionIDsResponse(m, func(txIDs []types.TxID, _ctx *struct{}) error {
+			vcbdsl.InputValue[struct{}](m, "vcb", txs, nil)
 			return nil
 		})
 	} else {
 		dsl.UponInit(m, func() error {
-			vcbdsl.InputValue(m, "vcb", nil, &struct{}{})
+			vcbdsl.InputValue[struct{}](m, "vcb", nil, nil)
 			return nil
 		})
 	}
