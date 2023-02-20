@@ -107,7 +107,7 @@ func (mc *ModuleConfig) agRoundOrigin(roundID uint64) *abbapbtypes.Origin {
 }
 
 type state struct {
-	roundDecisionHistory []bool
+	roundDecisionHistory AgRoundHistory
 
 	currentRound uint64
 }
@@ -164,10 +164,7 @@ func newAgController(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, lo
 		logger.Log(logging.LevelDebug, "delivering round", "round", "agRound", context.round, "decision", context.decision)
 		agreementpbdsl.Deliver(m, mc.Consumer, context.round, context.decision)
 
-		if len(state.roundDecisionHistory) != int(state.currentRound) {
-			return fmt.Errorf("inconsistent agreement historical data")
-		}
-		state.roundDecisionHistory = append(state.roundDecisionHistory, context.decision)
+		state.roundDecisionHistory.Push(context.decision)
 
 		state.currentRound++
 		return nil
@@ -191,9 +188,9 @@ func newAgController(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, lo
 
 	modringpbdsl.UponPastMessagesRecvd(m, func(messages []*modringpbtypes.PastMessage) error {
 		for _, msg := range messages {
-			if msg.DestId >= uint64(len(state.roundDecisionHistory)) {
+			decision, ok := state.roundDecisionHistory.Get(msg.DestId)
+			if !ok {
 				continue // we can't help
-				// TODO: report byz(?) node?
 			}
 
 			if _, ok := msg.Message.Type.(*messagepbtypes.Message_Abba); ok {
@@ -201,7 +198,7 @@ func newAgController(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, lo
 					agreementpbmsgs.FinishAbbaMessage(
 						mc.Self,
 						msg.DestId,
-						state.roundDecisionHistory[int(msg.DestId)],
+						decision,
 					).Pb(),
 					[]t.NodeID{msg.From},
 				)
