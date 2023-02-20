@@ -8,9 +8,9 @@ package deploytest
 
 import (
 	"encoding/binary"
-	"fmt"
 
 	"github.com/filecoin-project/mir/pkg/checkpoint"
+	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
@@ -23,12 +23,14 @@ type FakeApp struct {
 
 	// The state of the FakeApp only consists of a counter of processed requests.
 	RequestsProcessed uint64
+
+	Logger logging.Logger
 }
 
 func (fa *FakeApp) ApplyTXs(txs []*requestpb.Request) error {
 	for _, req := range txs {
 		fa.RequestsProcessed++
-		fmt.Printf("Received request: %q. Processed requests: %d\n", string(req.Data), fa.RequestsProcessed)
+		fa.Logger.Log(logging.LevelDebug, "Received request: %q. Processed requests: %d\n", string(req.Data), fa.RequestsProcessed)
 	}
 	return nil
 }
@@ -46,9 +48,10 @@ func (fa *FakeApp) Checkpoint(_ *checkpoint.StableCheckpoint) error {
 	return nil
 }
 
-func NewFakeApp() *FakeApp {
+func NewFakeApp(logger logging.Logger) *FakeApp {
 	return &FakeApp{
 		RequestsProcessed: 0,
+		Logger:            logger,
 	}
 }
 

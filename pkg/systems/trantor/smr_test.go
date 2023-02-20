@@ -370,7 +370,7 @@ func newDeployment(conf *TestConfig) (*deploytest.Deployment, error) {
 	for i, nodeID := range nodeIDs {
 		nodeLogger := logging.Decorate(logger, fmt.Sprintf("Node %d: ", i))
 		// Dummy application
-		fakeApp := deploytest.NewFakeApp()
+		fakeApp := deploytest.NewFakeApp(logging.Decorate(nodeLogger, "FakeApp: "))
 		initialSnapshot, err := fakeApp.Snapshot()
 		if err != nil {
 			return nil, err

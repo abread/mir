@@ -323,7 +323,7 @@ func newDeploymentAlea(conf *TestConfig) (*deploytest.Deployment, error) {
 			commonLoggers...,
 		))
 		nodeLogger = logging.Decorate(nodeLogger, fmt.Sprintf("Node %s: ", nodeID))
-		fakeApp := deploytest.NewFakeApp()
+		fakeApp := deploytest.NewFakeApp(logging.Decorate(nodeLogger, "FakeApp: "))
 
 		transport, err := transportLayer.Link(nodeID)
 		if err != nil {
