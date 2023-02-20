@@ -155,21 +155,14 @@ func benchmarkIntegrationWithAlea(b *testing.B) {
 		Desc   string // test description
 		Config *TestConfig
 	}{
-		0: {"Runs for 10s with 4 nodes",
+		0: {"Runs for 20s/400txs with 4 nodes",
 			&TestConfig{
-				NumReplicas: 4,
-				NumClients:  1,
-				Transport:   "fake",
-				Duration:    10 * time.Second,
-				Logger:      logging.ConsoleErrorLogger,
-			}},
-		1: {"Runs for 100s with 4 nodes",
-			&TestConfig{
-				NumReplicas: 4,
-				NumClients:  1,
-				Transport:   "fake",
-				Duration:    100 * time.Second,
-				Logger:      logging.ConsoleErrorLogger,
+				NumReplicas:     4,
+				NumClients:      1,
+				Transport:       "sim",
+				NumFakeRequests: 100,
+				Duration:        20 * time.Second,
+				Logger:          logging.ConsoleErrorLogger,
 			}},
 	}
 
