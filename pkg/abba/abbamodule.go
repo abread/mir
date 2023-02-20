@@ -70,7 +70,7 @@ type state struct {
 	origin *abbapbtypes.Origin
 }
 
-const ModringSubName t.ModuleID = t.ModuleID("round")
+const ModringSubName t.ModuleID = t.ModuleID("r")
 
 func NewModule(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
 	if tunables.MaxRoundLookahead <= 0 {

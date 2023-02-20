@@ -65,7 +65,7 @@ type ModuleTunables struct {
 	MaxAbbaRoundLookahead int
 }
 
-const modringSubName = t.ModuleID("round")
+const modringSubName = t.ModuleID("r")
 
 func NewModule(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
 	if tunables.MaxRoundLookahead <= 0 {

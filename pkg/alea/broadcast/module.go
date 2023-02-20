@@ -56,13 +56,15 @@ type ModuleTunables struct {
 	MaxConcurrentVcbPerQueue int
 }
 
+const modringSubName = t.ModuleID("q")
+
 func NewModule(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
 	controller, err := newQueueController(mc, params, tunables, nodeID, logger)
 	if err != nil {
 		return nil, err
 	}
 
-	queues := modring.New(&modring.ModuleConfig{Self: mc.Self.Then("queue")}, len(params.AllNodes), modring.ModuleParams{
+	queues := modring.New(&modring.ModuleConfig{Self: mc.Self.Then(modringSubName)}, len(params.AllNodes), modring.ModuleParams{
 		Generator: newBcQueueGenerator(mc, params, tunables, nodeID, logger),
 	}, logging.Decorate(logger, "Modring controller: "))
 
@@ -77,7 +79,7 @@ func newQueueController(mc *ModuleConfig, params *ModuleParams, tunables *Module
 		return nil, fmt.Errorf("own node not present in node list")
 	}
 
-	ownQueueModID := mc.Self.Then("queue").Then(t.NewModuleIDFromInt(ownQueueIdx))
+	ownQueueModID := mc.Self.Then(modringSubName).Then(t.NewModuleIDFromInt(ownQueueIdx))
 
 	bcdsl.UponStartBroadcast(m, func(queueSlot aleatypes.QueueSlot, txs []*requestpb.Request) error {
 		bcqueuedsl.InputValue(m, ownQueueModID, &commontypes.Slot{
@@ -93,7 +95,7 @@ func newQueueController(mc *ModuleConfig, params *ModuleParams, tunables *Module
 	})
 
 	bcdsl.UponFreeSlot(m, func(slot *commontypes.Slot) error {
-		bcqueuedsl.FreeSlot(m, mc.Self.Then("queue").Then(t.NewModuleIDFromInt(slot.QueueIdx)), slot.QueueSlot)
+		bcqueuedsl.FreeSlot(m, mc.Self.Then(modringSubName).Then(t.NewModuleIDFromInt(slot.QueueIdx)), slot.QueueSlot)
 		return nil
 	})
 

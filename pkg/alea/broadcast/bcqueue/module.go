@@ -25,6 +25,8 @@ import (
 	"github.com/filecoin-project/mir/pkg/vcb"
 )
 
+const modringSubName = t.ModuleID("s")
+
 func New(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
 	if slices.Index(params.AllNodes, params.QueueOwner) != int(params.QueueIdx) {
 		return nil, fmt.Errorf("invalid queue index/owner combination: %v - %v", params.QueueIdx, params.QueueOwner)
@@ -32,7 +34,7 @@ func New(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeI
 
 	controller := newQueueController(mc, params, tunables, nodeID, logger)
 
-	slots := modring.New(&modring.ModuleConfig{Self: mc.Self.Then("slot")}, tunables.MaxConcurrentVcb, modring.ModuleParams{
+	slots := modring.New(&modring.ModuleConfig{Self: mc.Self.Then(modringSubName)}, tunables.MaxConcurrentVcb, modring.ModuleParams{
 		Generator: newVcbGenerator(mc, params, nodeID, logger),
 	}, logging.Decorate(logger, "Modring controller: "))
 
@@ -48,7 +50,7 @@ func newQueueController(mc *ModuleConfig, params *ModuleParams, tunables *Module
 		}
 
 		dsl.EmitMirEvent(m, vcbpbevents.InputValue(
-			mc.Self.Then("slot").Then(t.NewModuleIDFromInt(slot.QueueSlot)),
+			mc.Self.Then(modringSubName).Then(t.NewModuleIDFromInt(slot.QueueSlot)),
 			txs,
 			&vcbpbtypes.Origin{
 				Module: mc.Self,
@@ -82,7 +84,7 @@ func newQueueController(mc *ModuleConfig, params *ModuleParams, tunables *Module
 	})
 
 	bcqueuedsl.UponFreeSlot(m, func(queueSlot aleatypes.QueueSlot) error {
-		modringpbdsl.FreeSubmodule[struct{}](m, mc.Self.Then("slot"), uint64(queueSlot), nil)
+		modringpbdsl.FreeSubmodule[struct{}](m, mc.Self.Then(modringSubName), uint64(queueSlot), nil)
 		return nil
 	})
 	modringpbdsl.UponFreedSubmodule(m, func(_ctx *struct{}) error {
