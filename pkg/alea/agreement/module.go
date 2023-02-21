@@ -171,17 +171,25 @@ func newAgController(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, lo
 	})
 
 	agreementpbdsl.UponFinishAbbaMessageReceived(m, func(from t.NodeID, round uint64, value bool) error {
-		if state.currentRound != round {
-			return nil
-		}
-
 		destModule := mc.agRoundModuleID(round)
 
-		dsl.EmitMirEvent(m, eventpbevents.MessageReceived(
-			destModule,
-			from,
-			abbapbmsgs.FinishMessage(destModule, value),
-		))
+		// receiving this is also an implicit acknowdledgement of all protocol messages
+		// the ABBA instance has terminated in the sender and does not require any further message
+		// Note: this must always be done regardless of the current round to ensure there are no leftover
+		// messages in reliablenet queues for old ABBA instances
+		reliablenetpbdsl.MarkModuleMsgsRecvd(m, mc.ReliableNet, destModule, []t.NodeID{from})
+
+		if state.currentRound <= round {
+			// we're behind, so we can make use of this information
+			// Note: this must not be done after the relevant round delivers, or it will lead to an
+			// infinite loop of FinishAbbaMessages, as it will trigger the PastMessagesRecvd handler.
+
+			dsl.EmitMirEvent(m, eventpbevents.MessageReceived(
+				destModule,
+				from,
+				abbapbmsgs.FinishMessage(destModule, value),
+			))
+		}
 
 		return nil
 	})
@@ -202,9 +210,6 @@ func newAgController(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, lo
 					).Pb(),
 					[]t.NodeID{msg.From},
 				)
-
-				// TODO: explain
-				reliablenetpbdsl.Ack(m, mc.ReliableNet, mc.agRoundModuleID(msg.DestId), abba.FinishMsgID(), msg.From)
 			}
 		}
 		return nil
