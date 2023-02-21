@@ -227,12 +227,12 @@ func runIntegrationWithAleaConfig(tb testing.TB, conf *TestConfig) (heapObjects 
 	}
 
 	// Check event logs
-	require.NoError(tb, checkEventTraces(deployment.EventLogFiles(), conf.NumNetRequests+conf.NumFakeRequests))
+	require.NoError(tb, checkEventTraces(deployment.EventLogFiles(), conf.NumNetRequests*conf.NumClients+conf.NumFakeRequests))
 
 	for _, replica := range deployment.TestReplicas {
 		// Check if all requests were delivered.
 		app := deployment.TestConfig.FakeApps[replica.ID]
-		assert.Equalf(tb, conf.NumNetRequests+conf.NumFakeRequests, int(app.RequestsProcessed), "replica %v missed requests", replica.ID)
+		assert.Equal(tb, conf.NumNetRequests*conf.NumClients+conf.NumFakeRequests, int(app.RequestsProcessed))
 
 		// Check if there are no un-acked messages
 		rnet := replica.Modules["reliablenet"].(*reliablenet.Module)
@@ -309,7 +309,8 @@ func newDeploymentAlea(conf *TestConfig) (*deploytest.Deployment, error) {
 	for i, nodeID := range nodeIDs {
 		smrParams := DefaultParams(transportLayer.Nodes())
 		smrParams.Mempool.MaxTransactionsInBatch = 16
-		smrParams.Alea.BatchCutFailRetryDelay = t.TimeDuration(100 * time.Millisecond)
+		smrParams.AdjustSpeed(100 * time.Millisecond)
+		smrParams.ReliableNet.RetransmissionLoopInterval = 5 * time.Second
 
 		nodeLogger := logging.NewMultiLogger(append(
 			[]logging.Logger{nodeFileLoggers[i]},

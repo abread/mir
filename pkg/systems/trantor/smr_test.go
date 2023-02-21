@@ -302,12 +302,12 @@ func runIntegrationWithISSConfig(tb testing.TB, conf *TestConfig) (heapObjects i
 	}
 
 	// Check event logs
-	require.NoError(tb, checkEventTraces(deployment.EventLogFiles(), conf.NumNetRequests+conf.NumFakeRequests))
+	require.NoError(tb, checkEventTraces(deployment.EventLogFiles(), conf.NumNetRequests*conf.NumClients+conf.NumFakeRequests))
 
 	// Check if all requests were delivered.
 	for _, replica := range deployment.TestReplicas {
 		app := deployment.TestConfig.FakeApps[replica.ID]
-		assert.Equal(tb, conf.NumNetRequests+conf.NumFakeRequests, int(app.RequestsProcessed))
+		assert.Equal(tb, conf.NumNetRequests*conf.NumClients+conf.NumFakeRequests, int(app.RequestsProcessed))
 	}
 
 	// If the test failed, keep the generated data.
