@@ -80,7 +80,7 @@ func (m *Module) ApplyEvents(eventsIn *events.EventList) (*events.EventList, err
 			if err == nil {
 				resultChan <- initialEvsOut.PushBackList(res)
 			} else {
-				errorChan <- err
+				errorChan <- fmt.Errorf("failed to process submodule #%d events: %w", j, err)
 			}
 
 		}(m, &subEventsIn[i], evsOut, i)
