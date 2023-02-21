@@ -30,7 +30,7 @@ type FakeApp struct {
 func (fa *FakeApp) ApplyTXs(txs []*requestpb.Request) error {
 	for _, req := range txs {
 		fa.RequestsProcessed++
-		fa.Logger.Log(logging.LevelDebug, "Received request: %q. Processed requests: %d\n", string(req.Data), fa.RequestsProcessed)
+		fa.Logger.Log(logging.LevelDebug, "Processing (already ordered) request", "requestData", string(req.Data), "totalReqsProcessedCount", fa.RequestsProcessed)
 	}
 	return nil
 }
