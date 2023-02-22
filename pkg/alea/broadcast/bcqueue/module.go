@@ -16,6 +16,7 @@ import (
 	bcqueuedsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/dsl"
 	bcqueuepbtypes "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/types"
 	commontypes "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
+	reliablenetpbdsl "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/dsl"
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"
 	vcbpbdsl "github.com/filecoin-project/mir/pkg/pb/vcbpb/dsl"
 	vcbpbevents "github.com/filecoin-project/mir/pkg/pb/vcbpb/events"
@@ -88,6 +89,11 @@ func newQueueController(mc *ModuleConfig, params *ModuleParams, tunables *Module
 		if err := slots.MarkSubmodulePast(uint64(queueSlot)); err != nil {
 			return fmt.Errorf("failed to free queue slot: %w", err)
 		}
+
+		// free all module messages
+		// if another node fails to receive the FINAL message, it will get it as a FILL-GAP message
+		reliablenetpbdsl.MarkModuleMsgsRecvd(m, mc.ReliableNet, mc.Self.Then(t.NewModuleIDFromInt(queueSlot)), params.AllNodes)
+
 		return nil
 	})
 
