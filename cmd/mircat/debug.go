@@ -177,7 +177,7 @@ func debuggerNode(id t.NodeID, membership map[t.NodeID]t.NodeAddress) (*mir.Node
 		"net":    nullTransport,
 		"crypto": mirCrypto.New(cryptoImpl),
 		"app": trantor.NewAppModule(
-			trantor.AppLogicFromStatic(deploytest.NewFakeApp(), map[t.NodeID]t.NodeAddress{}),
+			trantor.AppLogicFromStatic(deploytest.NewFakeApp(logger), map[t.NodeID]t.NodeAddress{}),
 			nullTransport,
 			"iss",
 		),
