@@ -30,9 +30,9 @@ type state struct {
 
 	agQueueHeads []aleatypes.QueueSlot
 
-	slotsReadyToDeliver   []set[aleatypes.QueueSlot]
-	stalledAgreementSlot  *commontypes.Slot
-	stalledAgreementRound uint64
+	slotsReadyToDeliver []set[aleatypes.QueueSlot]
+	agRound             uint64
+	agRoundInProgress   bool
 }
 
 func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams, tunables *common.ModuleTunables, nodeID t.NodeID, logger logging.Logger) {
@@ -167,44 +167,39 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 
 	// upon agreement round completion, prepare next round
 	aagdsl.UponDeliver(m, func(round uint64, decision bool) error {
-		// prepare next round
-		nextQueueIdx := aleatypes.QueueIdx((round + 1) % uint64(len(params.AllNodes)))
-		nextQueueSlot := state.agQueueHeads[nextQueueIdx]
-
-		// start next round if corresponding slot's broadcast is complete (or if we have pending requests)
-		// otherwise stall until vcb completes (for this slot or one of ours) or another node starts the round
-		// TODO: don't stall if *any* queue can deliver
-		if _, bcDone := state.slotsReadyToDeliver[nextQueueIdx][nextQueueSlot]; bcDone || state.unagreedBroadcastedOwnSlotCount > 0 { // TODO: track unagreedBcOwnSlotCount separately
-			logger.Log(logging.LevelDebug, "progressing to next round", "agreementRound", round+1, "input", bcDone)
-			aagdsl.InputValue(m, mc.AleaAgreement, round+1, bcDone)
-			state.stalledAgreementSlot = nil
-		} else {
-			logger.Log(logging.LevelDebug, "stalling next round", "agreementRound", round+1)
-			state.stalledAgreementSlot = &commontypes.Slot{
-				QueueIdx:  nextQueueIdx,
-				QueueSlot: nextQueueSlot,
-			}
-			state.stalledAgreementRound = round + 1
-		}
-
+		state.agRoundInProgress = false
+		state.agRound++
 		return nil
 	})
 
-	// upon vcb completion for the stalled agreement slot or one of ours, start the stalled agreement round
-	abcdsl.UponDeliver(m, func(slot *commontypes.Slot) error {
-		if state.stalledAgreementSlot == nil {
+	// if no agreement round is running, and any queue is able to deliver in this node, start the next round
+	// a queue is able to deliver in this node if its head has been broadcast to it
+	dsl.UponCondition(m, func() error {
+		if state.agRoundInProgress {
 			return nil // nothing to do
 		}
 
-		recvdStalledSlotBc := slot.QueueIdx == state.stalledAgreementSlot.QueueIdx && slot.QueueSlot == state.stalledAgreementSlot.QueueSlot
+		shouldResumeAg := false
+		for queueIdx := 0; queueIdx < len(state.slotsReadyToDeliver); queueIdx++ {
+			queueSlot := state.agQueueHeads[queueIdx]
+			if _, bcDone := state.slotsReadyToDeliver[queueIdx][queueSlot]; bcDone {
+				shouldResumeAg = true
+				break
+			}
+		}
 
-		if slot.QueueIdx == ownQueueIdx || recvdStalledSlotBc {
-			// input value to kickstart stalled agreement round
-			// previously we did not receive the stalled slot, so we either received now and vote
-			// for delivery or vote against it
-			logger.Log(logging.LevelDebug, "resuming stalled agreement round", "agreementRound", state.stalledAgreementRound, "input", recvdStalledSlotBc)
-			aagdsl.InputValue(m, mc.AleaAgreement, state.stalledAgreementRound, recvdStalledSlotBc)
-			state.stalledAgreementSlot = nil
+		nextQueueIdx := aleatypes.QueueIdx((state.agRound + 1) % uint64(len(params.AllNodes)))
+		nextQueueSlot := state.agQueueHeads[nextQueueIdx]
+
+		if shouldResumeAg {
+			state.agRoundInProgress = true
+
+			_, bcDone := state.slotsReadyToDeliver[nextQueueIdx][nextQueueSlot]
+			logger.Log(logging.LevelDebug, "progressing to next agreement round", "agreementRound", state.agRound, "input", bcDone)
+
+			aagdsl.InputValue(m, mc.AleaAgreement, state.agRound, bcDone)
+		} else {
+			logger.Log(logging.LevelDebug, "stalling agreement", "agreementRound", state.agRound)
 		}
 
 		return nil
@@ -212,14 +207,14 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 
 	// upon another node starting the agreement round, input a value to it
 	aagdsl.UponRequestInput(m, func(round uint64) error {
-		if round != state.stalledAgreementRound || state.stalledAgreementSlot == nil {
-			return nil // out of order message
+		if state.agRoundInProgress || state.agRound != round {
+			return nil // out-of-order message
 		}
 
 		// we're here, so vcb hasn't completed for this slot yet: we must vote against delivery :(
-		logger.Log(logging.LevelDebug, "resuming stalled agreement round", "agreementRound", state.stalledAgreementRound, "input", false)
+		logger.Log(logging.LevelDebug, "resumption of stalled agreement round forced by another node", "agreementRound", state.agRound, "input", false)
 		aagdsl.InputValue(m, mc.AleaAgreement, round, false)
-		state.stalledAgreementSlot = nil
+		state.agRoundInProgress = true
 
 		return nil
 	})
@@ -237,13 +232,6 @@ func newState(params *common.ModuleParams, tunables *common.ModuleTunables, node
 		agQueueHeads: make([]aleatypes.QueueSlot, N),
 
 		slotsReadyToDeliver: make([]set[aleatypes.QueueSlot], N),
-
-		// the first round is stalled until requests come in
-		stalledAgreementSlot: &commontypes.Slot{
-			QueueIdx:  0,
-			QueueSlot: 0,
-		},
-		stalledAgreementRound: 0,
 	}
 
 	ownQueueIdx := uint32(slices.Index(params.AllNodes, nodeID))
