@@ -17,7 +17,7 @@ import "ordererspb/ordererspb.proto";
 import "vcbpb/vcbpb.proto";
 import "abbapb/abbapb.proto";
 import "aleapb/aleapb.proto";
-import "aleapb/agreementpb/agreementpb.proto";
+import "aleapb/agreementpb/messages.proto";
 import "reliablenetpb/messages/messages.proto";
 
 import "mir/codegen_extensions.proto";

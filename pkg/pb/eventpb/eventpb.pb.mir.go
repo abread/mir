@@ -44,7 +44,6 @@ func (*Event) ReflectTypeOptions() []reflect.Type {
 		reflect.TypeOf((*Event_PingPong)(nil)),
 		reflect.TypeOf((*Event_Checkpoint)(nil)),
 		reflect.TypeOf((*Event_SbEvent)(nil)),
-		reflect.TypeOf((*Event_Modring)(nil)),
 		reflect.TypeOf((*Event_ReliableNet)(nil)),
 		reflect.TypeOf((*Event_Vcb)(nil)),
 		reflect.TypeOf((*Event_Abba)(nil)),

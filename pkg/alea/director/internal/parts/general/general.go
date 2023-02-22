@@ -11,7 +11,7 @@ import (
 	mempooldsl "github.com/filecoin-project/mir/pkg/mempool/dsl"
 	mempoolevents "github.com/filecoin-project/mir/pkg/mempool/events"
 	"github.com/filecoin-project/mir/pkg/pb/aleapb"
-	aagdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/dsl"
+	aagdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents/dsl"
 	abcdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/dsl"
 	commontypes "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
 	"github.com/filecoin-project/mir/pkg/pb/availabilitypb"

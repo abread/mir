@@ -25,11 +25,10 @@ import "threshcryptopb/threshcryptopb.proto";
 import "pingpongpb/pingpongpb.proto";
 import "checkpointpb/checkpointpb.proto";
 import "ordererspb/ordererspb.proto";
-import "modringpb/modringpb.proto";
 import "vcbpb/vcbpb.proto";
 import "abbapb/abbapb.proto";
 import "aleapb/bcpb/bcpb.proto";
-import "aleapb/agreementpb/agreementpb.proto";
+import "aleapb/agreementpb/agevents/agevents.proto";
 import "aleapb/bcqueuepb/bcqueuepb.proto";
 import "reliablenetpb/reliablenetpb.proto";
 
@@ -83,13 +82,12 @@ message Event {
     pingpongpb.Event        ping_pong               = 37;
     checkpointpb.Event      checkpoint              = 38;
     ordererspb.SBInstanceEvent sb_event             = 39;
-    modringpb.Event         modring                 = 40;
-    reliablenetpb.Event     reliable_net            = 41;
-    vcbpb.Event             vcb                     = 42;
-    abbapb.Event            abba                    = 43;
-    aleapb.bcpb.Event       alea_broadcast          = 44;
-    aleapb.agreementpb.Event alea_agreement         = 45;
-    aleapb.bcqueuepb.Event  alea_bcqueue            = 46;
+    reliablenetpb.Event     reliable_net            = 40;
+    vcbpb.Event             vcb                     = 41;
+    abbapb.Event            abba                    = 42;
+    aleapb.bcpb.Event       alea_broadcast          = 43;
+    aleapb.agreementpb.Event alea_agreement         = 44;
+    aleapb.bcqueuepb.Event  alea_bcqueue            = 45;
 
     // for unit-tests
     google.protobuf.StringValue testingString = 301;

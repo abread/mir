@@ -13,13 +13,14 @@ import (
 	abbapbevents "github.com/filecoin-project/mir/pkg/pb/abbapb/events"
 	abbapbmsgs "github.com/filecoin-project/mir/pkg/pb/abbapb/msgs"
 	abbapbtypes "github.com/filecoin-project/mir/pkg/pb/abbapb/types"
-	agreementpbdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/dsl"
+	agreementpbdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents/dsl"
+	agreementpbevents "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents/events"
+	agreementpbmsgdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/dsl"
 	agreementpbmsgs "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/msgs"
 	agreementpbtypes "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/types"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
 	eventpbevents "github.com/filecoin-project/mir/pkg/pb/eventpb/events"
 	messagepbtypes "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
-	modringpbdsl "github.com/filecoin-project/mir/pkg/pb/modringpb/dsl"
 	modringpbtypes "github.com/filecoin-project/mir/pkg/pb/modringpb/types"
 	reliablenetpbdsl "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/dsl"
 	t "github.com/filecoin-project/mir/pkg/types"
@@ -65,8 +66,6 @@ type ModuleTunables struct {
 	MaxAbbaRoundLookahead int
 }
 
-const modringSubName = t.ModuleID("r")
-
 func NewModule(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
 	if tunables.MaxRoundLookahead <= 0 {
 		return nil, fmt.Errorf("MaxRoundLookahead must be at least 1")
@@ -74,25 +73,23 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables,
 		return nil, fmt.Errorf("MaxAbbaRoundLookahead must be at least 1")
 	}
 
-	controller := newAgController(mc, params, nodeID, logger)
-
-	slots := modring.New(
-		&modring.ModuleConfig{
-			Self:            mc.Self.Then(modringSubName),
-			PastMsgConsumer: mc.Self,
-		},
+	agRounds := modring.New(
+		mc.Self,
 		tunables.MaxRoundLookahead,
 		modring.ModuleParams{
-			Generator: newAbbaGenerator(mc, params, tunables, nodeID, logger),
+			Generator:      newAbbaGenerator(mc, params, tunables, nodeID, logger),
+			PastMsgHandler: newPastMessageHandler(mc),
 		},
 		logging.Decorate(logger, "Modring controller: "),
 	)
 
-	return modules.RoutedModule(mc.Self, controller, slots), nil
+	controller := newAgController(mc, params, nodeID, logger, agRounds)
+
+	return modules.RoutedModule(mc.Self, controller, agRounds), nil
 }
 
 func (mc *ModuleConfig) agRoundModuleID(id uint64) t.ModuleID {
-	return mc.Self.Then(modringSubName).Then(t.NewModuleIDFromInt(id))
+	return mc.Self.Then(t.NewModuleIDFromInt(id))
 }
 
 func (mc *ModuleConfig) agRoundOrigin(roundID uint64) *abbapbtypes.Origin {
@@ -112,12 +109,7 @@ type state struct {
 	currentRound uint64
 }
 
-type roundDeliverCtx struct {
-	round    uint64
-	decision bool
-}
-
-func newAgController(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging.Logger) modules.PassiveModule {
+func newAgController(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging.Logger, agRounds *modring.Module) modules.PassiveModule {
 	m := dsl.NewModule(mc.Self)
 
 	state := state{}
@@ -143,34 +135,29 @@ func newAgController(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, lo
 
 	abbapbdsl.UponEvent[*abbapbtypes.Event_Deliver](m, func(ev *abbapbtypes.Deliver) error {
 		round := ev.Origin.Type.(*abbapbtypes.Origin_AleaAg).AleaAg.AgRound
+		decision := ev.Result
 
 		if round != state.currentRound {
 			return fmt.Errorf("rounds delivered out-of-order. expected round %v got %v", state.currentRound, round)
 		}
 
-		context := &roundDeliverCtx{
-			round:    round,
-			decision: ev.Result,
-		}
-		modringpbdsl.FreeSubmodule(m, mc.Self.Then(modringSubName), round, context)
+		logger.Log(logging.LevelDebug, "delivering round", "round", "agRound", round, "decision", decision)
 
-		return nil
-	})
-	modringpbdsl.UponFreedSubmodule(m, func(context *roundDeliverCtx) error {
-		if context.round != state.currentRound {
-			return fmt.Errorf("race in round cleanup. expected round %v got %v", state.currentRound, context.round)
-		}
+		agreementpbdsl.Deliver(m, mc.Consumer, round, decision)
 
-		logger.Log(logging.LevelDebug, "delivering round", "round", "agRound", context.round, "decision", context.decision)
-		agreementpbdsl.Deliver(m, mc.Consumer, context.round, context.decision)
-
-		state.roundDecisionHistory.Push(context.decision)
-
+		state.roundDecisionHistory.Push(decision)
 		state.currentRound++
+
+		if err := agRounds.MarkSubmodulePast(round); err != nil {
+			return fmt.Errorf("failed to clean up finished agreement round: %w", err)
+		}
+
 		return nil
 	})
 
-	agreementpbdsl.UponFinishAbbaMessageReceived(m, func(from t.NodeID, round uint64, value bool) error {
+	// TODO: find a way to avoid this weird double-package split. it harms both sight and soul.
+	// the problem is that go and protoc's errors do the same.
+	agreementpbmsgdsl.UponFinishAbbaMessageReceived(m, func(from t.NodeID, round uint64, value bool) error {
 		destModule := mc.agRoundModuleID(round)
 
 		// receiving this is also an implicit acknowdledgement of all protocol messages
@@ -194,7 +181,7 @@ func newAgController(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, lo
 		return nil
 	})
 
-	modringpbdsl.UponPastMessagesRecvd(m, func(messages []*modringpbtypes.PastMessage) error {
+	agreementpbdsl.UponStaleMsgsRecvd(m, func(messages []*modringpbtypes.PastMessage) error {
 		for _, msg := range messages {
 			decision, ok := state.roundDecisionHistory.Get(msg.DestId)
 			if !ok {
@@ -212,10 +199,19 @@ func newAgController(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, lo
 				)
 			}
 		}
+
 		return nil
 	})
 
 	return m
+}
+
+func newPastMessageHandler(mc *ModuleConfig) func(pastMessages []*modringpbtypes.PastMessage) (*events.EventList, error) {
+	return func(pastMessages []*modringpbtypes.PastMessage) (*events.EventList, error) {
+		return events.ListOf(
+			agreementpbevents.StaleMsgsRecvd(mc.Self, pastMessages).Pb(),
+		), nil
+	}
 }
 
 func newAbbaGenerator(agMc *ModuleConfig, agParams *ModuleParams, agTunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) func(id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {

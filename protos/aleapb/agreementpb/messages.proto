@@ -1,0 +1,29 @@
+// separate file to avoid circular protobuf dependencies
+syntax = "proto3";
+
+package aleapb.agreementpb;
+
+option go_package = "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb";
+
+import "net/codegen_extensions.proto";
+
+// ============================================================
+// Messages
+// ============================================================
+
+message Message {
+  option (net.message_class) = true;
+
+  oneof type {
+    option (net.message_type) = true;
+
+    FinishAbbaMessage finish_abba = 1;
+  }
+}
+
+message FinishAbbaMessage {
+  option (net.message) = true;
+
+  uint64 round = 1;
+  bool   value = 2;
+}

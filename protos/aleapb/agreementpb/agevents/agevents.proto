@@ -1,0 +1,54 @@
+// separate file to avoid circular protobuf dependencies
+syntax = "proto3";
+
+package aleapb.agreementpb;
+
+// different package to avoid circular go dependencies (messagepb-><this>->messagepb)
+option go_package = "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents";
+
+import "modringpb/modringpb.proto";
+
+import "mir/codegen_extensions.proto";
+
+// ============================================================
+// Events
+// ============================================================
+
+message Event {
+  option (mir.event_class) = true;
+
+  oneof type {
+    option (mir.event_type) = true;
+
+    RequestInput   request_input    = 1;
+    InputValue     input_value      = 2;
+    Deliver        deliver          = 3;
+    StaleMsgsRecvd stale_msgs_revcd = 4;
+  }
+}
+
+message RequestInput {
+  option (mir.event) = true;
+
+  uint64 round = 1;
+}
+
+message InputValue {
+  option (mir.event) = true;
+
+  uint64 round = 1;
+  bool   input = 2;
+}
+
+message Deliver {
+  option (mir.event) = true;
+
+  uint64 round    = 1;
+  bool   decision = 2;
+}
+
+message StaleMsgsRecvd {
+  option (mir.event) = true;
+
+  repeated modringpb.PastMessage messages = 1;
+}

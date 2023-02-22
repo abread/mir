@@ -1,5 +1,7 @@
 package modring
 
+import "fmt"
+
 type RingSlotStatus uint8
 
 const (
@@ -47,6 +49,10 @@ func (s *RingController) IsSlotInView(slot uint64) bool {
 	return slot >= s.minSlot && slot < s.minSlot+uint64(len(s.slotStatus))
 }
 
+func (s *RingController) GetCurrentView() (uint64, uint64) {
+	return s.minSlot, s.minSlot + uint64(len(s.slotStatus))
+}
+
 func (s *RingController) IsFutureSlot(slot uint64) bool {
 	return s.GetSlotStatus(slot) == RingSlotFuture
 }
@@ -59,7 +65,7 @@ func (s *RingController) IsPastSlot(slot uint64) bool {
 	return s.GetSlotStatus(slot) == RingSlotPast
 }
 
-func (s *RingController) TryAcquire(slot uint64) bool {
+func (s *RingController) MarkCurrentIfFuture(slot uint64) bool {
 	if !(s.IsSlotInView(slot) && s.IsFutureSlot(slot)) {
 		return false
 	}
@@ -69,19 +75,13 @@ func (s *RingController) TryAcquire(slot uint64) bool {
 	return true
 }
 
-func (s *RingController) Acquire(slot uint64) {
-	if !s.TryAcquire(slot) {
-		panic("failed to acquire window slot")
-	}
-}
-
-func (s *RingController) TryFree(slot uint64) bool {
+func (s *RingController) MarkPast(slot uint64) error {
 	if slot < s.minSlot {
-		return true // nothing to do, already freed by definition
+		return nil // nothing to do, already freed by definition
 	}
 
 	if !s.IsSlotInView(slot) {
-		return false
+		return fmt.Errorf("cannot mark slot %d as past", slot)
 	}
 
 	*s.uncheckedSlotStatusRingPtr(slot) = RingSlotPast
@@ -93,13 +93,33 @@ func (s *RingController) TryFree(slot uint64) bool {
 		s.minIdx = (s.minIdx + 1) % len(s.slotStatus)
 	}
 
-	return true
+	return nil
 }
 
-func (s *RingController) Free(slot uint64) {
-	s.TryFree(slot)
+func (s *RingController) AdvanceViewToSlot(slot uint64) error {
+	beginSlot, endSlot := s.GetCurrentView()
+	if slot < beginSlot {
+		return fmt.Errorf("cannot advance view: view already advanced past slot %d", slot)
+	} else if slot < endSlot {
+		return nil // slot already in view
+	}
+
+	for slot := beginSlot; slot < endSlot; slot++ {
+		if *s.uncheckedSlotStatusRingPtr(slot) == RingSlotCurrent {
+			return fmt.Errorf("cannot advance view: slot %d still in use", slot)
+		}
+	}
+
+	s.minIdx = int(slot % uint64(len(s.slotStatus)))
+	s.minSlot = slot
+
+	// all slots start out as future
+	for i := 0; i < len(s.slotStatus); i++ {
+		s.slotStatus[i] = RingSlotFuture
+	}
+	return nil
 }
 
 func (s *RingController) uncheckedSlotStatusRingPtr(slot uint64) *RingSlotStatus {
-	return &s.slotStatus[(int(slot-s.minSlot)+s.minIdx)%len(s.slotStatus)]
+	return &s.slotStatus[int(slot%uint64(len(s.slotStatus)))]
 }

@@ -4,7 +4,7 @@ import (
 	wrapperspb "google.golang.org/protobuf/types/known/wrapperspb"
 
 	abbapb "github.com/filecoin-project/mir/pkg/pb/abbapb"
-	agreementpb "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb"
+	agevents "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents"
 	bcpb "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb"
 	bcqueuepb "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb"
 	availabilitypb "github.com/filecoin-project/mir/pkg/pb/availabilitypb"
@@ -17,7 +17,6 @@ import (
 	factorymodulepb "github.com/filecoin-project/mir/pkg/pb/factorymodulepb"
 	isspb "github.com/filecoin-project/mir/pkg/pb/isspb"
 	mempoolpb "github.com/filecoin-project/mir/pkg/pb/mempoolpb"
-	modringpb "github.com/filecoin-project/mir/pkg/pb/modringpb"
 	ordererspb "github.com/filecoin-project/mir/pkg/pb/ordererspb"
 	pingpongpb "github.com/filecoin-project/mir/pkg/pb/pingpongpb"
 	reliablenetpb "github.com/filecoin-project/mir/pkg/pb/reliablenetpb"
@@ -184,10 +183,6 @@ func (w *Event_SbEvent) Unwrap() *ordererspb.SBInstanceEvent {
 	return w.SbEvent
 }
 
-func (w *Event_Modring) Unwrap() *modringpb.Event {
-	return w.Modring
-}
-
 func (w *Event_ReliableNet) Unwrap() *reliablenetpb.Event {
 	return w.ReliableNet
 }
@@ -204,7 +199,7 @@ func (w *Event_AleaBroadcast) Unwrap() *bcpb.Event {
 	return w.AleaBroadcast
 }
 
-func (w *Event_AleaAgreement) Unwrap() *agreementpb.Event {
+func (w *Event_AleaAgreement) Unwrap() *agevents.Event {
 	return w.AleaAgreement
 }
 

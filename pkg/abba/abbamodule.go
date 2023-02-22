@@ -13,7 +13,6 @@ import (
 	abbadsl "github.com/filecoin-project/mir/pkg/pb/abbapb/dsl"
 	abbapbmsgs "github.com/filecoin-project/mir/pkg/pb/abbapb/msgs"
 	abbapbtypes "github.com/filecoin-project/mir/pkg/pb/abbapb/types"
-	modringpbdsl "github.com/filecoin-project/mir/pkg/pb/modringpb/dsl"
 	rnetdsl "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/dsl"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
@@ -70,33 +69,29 @@ type state struct {
 	origin *abbapbtypes.Origin
 }
 
-const ModringSubName t.ModuleID = t.ModuleID("r")
+const modringSubName t.ModuleID = t.ModuleID("r")
 
 func NewModule(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
 	if tunables.MaxRoundLookahead <= 0 {
 		return nil, fmt.Errorf("MaxRoundLookahead must be at least 1")
 	}
 
+	// rounds use a submodule namespace to allow us to mark all round messages as received at once
+	rounds := modring.New(mc.Self.Then(modringSubName), tunables.MaxRoundLookahead, modring.ModuleParams{
+		Generator: newRoundGenerator(mc, params, nodeID, logger),
+	}, logging.Decorate(logger, "Modring controller: "))
+
 	state := &state{
 		phase:       phaseAwaitingInput,
 		finishRecvd: make(abbat.RecvTracker, params.GetN()),
 		finishSent:  false,
 	}
-	controller := newController(mc, params, tunables, nodeID, logger, state)
+	controller := newController(mc, params, tunables, nodeID, logger, state, rounds)
 
-	slots := modring.New(&modring.ModuleConfig{Self: mc.Self.Then(ModringSubName)}, tunables.MaxRoundLookahead, modring.ModuleParams{
-		Generator: newRoundGenerator(mc, params, nodeID, logger),
-	}, logging.Decorate(logger, "Modring controller: "))
-
-	return modules.RoutedModule(mc.Self, controller, wrapModuleStopAfterDelivered(slots, state)), nil
+	return modules.RoutedModule(mc.Self, controller, wrapModuleStopAfterDelivered(rounds, state)), nil
 }
 
-type roundAdvanceCtx struct {
-	prevRoundNumber uint64
-	nextEstimate    bool
-}
-
-func newController(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger, state *state) modules.PassiveModule {
+func newController(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger, state *state, rounds *modring.Module) modules.PassiveModule {
 	m := dsl.NewModule(mc.Self)
 
 	abbadsl.UponRoundFinishAll(m, func(decision bool) error {
@@ -142,7 +137,7 @@ func newController(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunab
 
 			// only care about finish messages from now on
 			// eventually instances that are out-of-date will receive them and be happy
-			rnetdsl.MarkModuleMsgsRecvd(m, mc.ReliableNet, mc.Self.Then(ModringSubName), params.AllNodes)
+			rnetdsl.MarkModuleMsgsRecvd(m, mc.ReliableNet, mc.Self.Then(modringSubName), params.AllNodes)
 		}
 
 		return nil
@@ -172,22 +167,13 @@ func newController(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunab
 		}
 
 		// clean up old round
-		context := &roundAdvanceCtx{
-			prevRoundNumber: state.currentRound,
-			nextEstimate:    nextEstimate,
-		}
-		modringpbdsl.FreeSubmodule(m, mc.Self.Then(ModringSubName), state.currentRound, context)
-
-		return nil
-	})
-	modringpbdsl.UponFreedSubmodule(m, func(context *roundAdvanceCtx) error {
-		if context.prevRoundNumber != state.currentRound {
-			return fmt.Errorf("round number mismatch: expected %v, but round %v was freed", state.currentRound, context.prevRoundNumber)
+		if err := rounds.MarkSubmodulePast(state.currentRound); err != nil {
+			return fmt.Errorf("failed to clean up previous round: %w", err)
 		}
 
 		state.currentRound++
 		roundNum := state.currentRound // copy of round number, to make our previous sanity check work
-		abbadsl.RoundInputValue(m, mc.RoundID(state.currentRound), context.nextEstimate, &roundNum)
+		abbadsl.RoundInputValue(m, mc.RoundID(state.currentRound), nextEstimate, &roundNum)
 
 		return nil
 	})
@@ -257,5 +243,5 @@ func (params *ModuleParams) strongSupportThresh() int {
 }
 
 func (mc *ModuleConfig) RoundID(roundNumber uint64) t.ModuleID {
-	return mc.Self.Then(ModringSubName).Then(t.NewModuleIDFromInt(roundNumber))
+	return mc.Self.Then(modringSubName).Then(t.NewModuleIDFromInt(roundNumber))
 }

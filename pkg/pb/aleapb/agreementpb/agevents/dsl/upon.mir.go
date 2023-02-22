@@ -1,9 +1,10 @@
-package agreementpbdsl
+package ageventsdsl
 
 import (
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
-	types "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/types"
+	types "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents/types"
 	types1 "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
+	types2 "github.com/filecoin-project/mir/pkg/pb/modringpb/types"
 )
 
 // Module-specific dsl functions for processing events.
@@ -34,5 +35,11 @@ func UponInputValue(m dsl.Module, handler func(round uint64, input bool) error) 
 func UponDeliver(m dsl.Module, handler func(round uint64, decision bool) error) {
 	UponEvent[*types.Event_Deliver](m, func(ev *types.Deliver) error {
 		return handler(ev.Round, ev.Decision)
+	})
+}
+
+func UponStaleMsgsRecvd(m dsl.Module, handler func(messages []*types2.PastMessage) error) {
+	UponEvent[*types.Event_StaleMsgsRevcd](m, func(ev *types.StaleMsgsRecvd) error {
+		return handler(ev.Messages)
 	})
 }

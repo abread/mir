@@ -12,346 +12,6 @@ import (
 	reflectutil "github.com/filecoin-project/mir/pkg/util/reflectutil"
 )
 
-type Event struct {
-	Type Event_Type
-}
-
-type Event_Type interface {
-	mirreflect.GeneratedType
-	isEvent_Type()
-	Pb() abbapb.Event_Type
-}
-
-type Event_TypeWrapper[T any] interface {
-	Event_Type
-	Unwrap() *T
-}
-
-func Event_TypeFromPb(pb abbapb.Event_Type) Event_Type {
-	switch pb := pb.(type) {
-	case *abbapb.Event_InputValue:
-		return &Event_InputValue{InputValue: InputValueFromPb(pb.InputValue)}
-	case *abbapb.Event_Deliver:
-		return &Event_Deliver{Deliver: DeliverFromPb(pb.Deliver)}
-	case *abbapb.Event_Round:
-		return &Event_Round{Round: RoundEventFromPb(pb.Round)}
-	}
-	return nil
-}
-
-type Event_InputValue struct {
-	InputValue *InputValue
-}
-
-func (*Event_InputValue) isEvent_Type() {}
-
-func (w *Event_InputValue) Unwrap() *InputValue {
-	return w.InputValue
-}
-
-func (w *Event_InputValue) Pb() abbapb.Event_Type {
-	return &abbapb.Event_InputValue{InputValue: (w.InputValue).Pb()}
-}
-
-func (*Event_InputValue) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Event_InputValue]()}
-}
-
-type Event_Deliver struct {
-	Deliver *Deliver
-}
-
-func (*Event_Deliver) isEvent_Type() {}
-
-func (w *Event_Deliver) Unwrap() *Deliver {
-	return w.Deliver
-}
-
-func (w *Event_Deliver) Pb() abbapb.Event_Type {
-	return &abbapb.Event_Deliver{Deliver: (w.Deliver).Pb()}
-}
-
-func (*Event_Deliver) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Event_Deliver]()}
-}
-
-type Event_Round struct {
-	Round *RoundEvent
-}
-
-func (*Event_Round) isEvent_Type() {}
-
-func (w *Event_Round) Unwrap() *RoundEvent {
-	return w.Round
-}
-
-func (w *Event_Round) Pb() abbapb.Event_Type {
-	return &abbapb.Event_Round{Round: (w.Round).Pb()}
-}
-
-func (*Event_Round) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Event_Round]()}
-}
-
-func EventFromPb(pb *abbapb.Event) *Event {
-	return &Event{
-		Type: Event_TypeFromPb(pb.Type),
-	}
-}
-
-func (m *Event) Pb() *abbapb.Event {
-	return &abbapb.Event{
-		Type: (m.Type).Pb(),
-	}
-}
-
-func (*Event) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Event]()}
-}
-
-type InputValue struct {
-	Input  bool
-	Origin *Origin
-}
-
-func InputValueFromPb(pb *abbapb.InputValue) *InputValue {
-	return &InputValue{
-		Input:  pb.Input,
-		Origin: OriginFromPb(pb.Origin),
-	}
-}
-
-func (m *InputValue) Pb() *abbapb.InputValue {
-	return &abbapb.InputValue{
-		Input:  m.Input,
-		Origin: (m.Origin).Pb(),
-	}
-}
-
-func (*InputValue) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.InputValue]()}
-}
-
-type Deliver struct {
-	Result bool
-	Origin *Origin
-}
-
-func DeliverFromPb(pb *abbapb.Deliver) *Deliver {
-	return &Deliver{
-		Result: pb.Result,
-		Origin: OriginFromPb(pb.Origin),
-	}
-}
-
-func (m *Deliver) Pb() *abbapb.Deliver {
-	return &abbapb.Deliver{
-		Result: m.Result,
-		Origin: (m.Origin).Pb(),
-	}
-}
-
-func (*Deliver) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Deliver]()}
-}
-
-type Message struct {
-	Type Message_Type
-}
-
-type Message_Type interface {
-	mirreflect.GeneratedType
-	isMessage_Type()
-	Pb() abbapb.Message_Type
-}
-
-type Message_TypeWrapper[T any] interface {
-	Message_Type
-	Unwrap() *T
-}
-
-func Message_TypeFromPb(pb abbapb.Message_Type) Message_Type {
-	switch pb := pb.(type) {
-	case *abbapb.Message_Finish:
-		return &Message_Finish{Finish: FinishMessageFromPb(pb.Finish)}
-	case *abbapb.Message_Round:
-		return &Message_Round{Round: RoundMessageFromPb(pb.Round)}
-	}
-	return nil
-}
-
-type Message_Finish struct {
-	Finish *FinishMessage
-}
-
-func (*Message_Finish) isMessage_Type() {}
-
-func (w *Message_Finish) Unwrap() *FinishMessage {
-	return w.Finish
-}
-
-func (w *Message_Finish) Pb() abbapb.Message_Type {
-	return &abbapb.Message_Finish{Finish: (w.Finish).Pb()}
-}
-
-func (*Message_Finish) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Message_Finish]()}
-}
-
-type Message_Round struct {
-	Round *RoundMessage
-}
-
-func (*Message_Round) isMessage_Type() {}
-
-func (w *Message_Round) Unwrap() *RoundMessage {
-	return w.Round
-}
-
-func (w *Message_Round) Pb() abbapb.Message_Type {
-	return &abbapb.Message_Round{Round: (w.Round).Pb()}
-}
-
-func (*Message_Round) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Message_Round]()}
-}
-
-func MessageFromPb(pb *abbapb.Message) *Message {
-	return &Message{
-		Type: Message_TypeFromPb(pb.Type),
-	}
-}
-
-func (m *Message) Pb() *abbapb.Message {
-	return &abbapb.Message{
-		Type: (m.Type).Pb(),
-	}
-}
-
-func (*Message) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Message]()}
-}
-
-type FinishMessage struct {
-	Value bool
-}
-
-func FinishMessageFromPb(pb *abbapb.FinishMessage) *FinishMessage {
-	return &FinishMessage{
-		Value: pb.Value,
-	}
-}
-
-func (m *FinishMessage) Pb() *abbapb.FinishMessage {
-	return &abbapb.FinishMessage{
-		Value: m.Value,
-	}
-}
-
-func (*FinishMessage) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.FinishMessage]()}
-}
-
-type Origin struct {
-	Module types.ModuleID
-	Type   Origin_Type
-}
-
-type Origin_Type interface {
-	mirreflect.GeneratedType
-	isOrigin_Type()
-	Pb() abbapb.Origin_Type
-}
-
-type Origin_TypeWrapper[T any] interface {
-	Origin_Type
-	Unwrap() *T
-}
-
-func Origin_TypeFromPb(pb abbapb.Origin_Type) Origin_Type {
-	switch pb := pb.(type) {
-	case *abbapb.Origin_ContextStore:
-		return &Origin_ContextStore{ContextStore: types1.OriginFromPb(pb.ContextStore)}
-	case *abbapb.Origin_Dsl:
-		return &Origin_Dsl{Dsl: types2.OriginFromPb(pb.Dsl)}
-	case *abbapb.Origin_AleaAg:
-		return &Origin_AleaAg{AleaAg: types3.AbbaOriginFromPb(pb.AleaAg)}
-	}
-	return nil
-}
-
-type Origin_ContextStore struct {
-	ContextStore *types1.Origin
-}
-
-func (*Origin_ContextStore) isOrigin_Type() {}
-
-func (w *Origin_ContextStore) Unwrap() *types1.Origin {
-	return w.ContextStore
-}
-
-func (w *Origin_ContextStore) Pb() abbapb.Origin_Type {
-	return &abbapb.Origin_ContextStore{ContextStore: (w.ContextStore).Pb()}
-}
-
-func (*Origin_ContextStore) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Origin_ContextStore]()}
-}
-
-type Origin_Dsl struct {
-	Dsl *types2.Origin
-}
-
-func (*Origin_Dsl) isOrigin_Type() {}
-
-func (w *Origin_Dsl) Unwrap() *types2.Origin {
-	return w.Dsl
-}
-
-func (w *Origin_Dsl) Pb() abbapb.Origin_Type {
-	return &abbapb.Origin_Dsl{Dsl: (w.Dsl).Pb()}
-}
-
-func (*Origin_Dsl) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Origin_Dsl]()}
-}
-
-type Origin_AleaAg struct {
-	AleaAg *types3.AbbaOrigin
-}
-
-func (*Origin_AleaAg) isOrigin_Type() {}
-
-func (w *Origin_AleaAg) Unwrap() *types3.AbbaOrigin {
-	return w.AleaAg
-}
-
-func (w *Origin_AleaAg) Pb() abbapb.Origin_Type {
-	return &abbapb.Origin_AleaAg{AleaAg: (w.AleaAg).Pb()}
-}
-
-func (*Origin_AleaAg) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Origin_AleaAg]()}
-}
-
-func OriginFromPb(pb *abbapb.Origin) *Origin {
-	return &Origin{
-		Module: (types.ModuleID)(pb.Module),
-		Type:   Origin_TypeFromPb(pb.Type),
-	}
-}
-
-func (m *Origin) Pb() *abbapb.Origin {
-	return &abbapb.Origin{
-		Module: (string)(m.Module),
-		Type:   (m.Type).Pb(),
-	}
-}
-
-func (*Origin) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Origin]()}
-}
-
 type RoundEvent struct {
 	Type RoundEvent_Type
 }
@@ -790,4 +450,344 @@ func (m *RoundOrigin) Pb() *abbapb.RoundOrigin {
 
 func (*RoundOrigin) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.RoundOrigin]()}
+}
+
+type Event struct {
+	Type Event_Type
+}
+
+type Event_Type interface {
+	mirreflect.GeneratedType
+	isEvent_Type()
+	Pb() abbapb.Event_Type
+}
+
+type Event_TypeWrapper[T any] interface {
+	Event_Type
+	Unwrap() *T
+}
+
+func Event_TypeFromPb(pb abbapb.Event_Type) Event_Type {
+	switch pb := pb.(type) {
+	case *abbapb.Event_InputValue:
+		return &Event_InputValue{InputValue: InputValueFromPb(pb.InputValue)}
+	case *abbapb.Event_Deliver:
+		return &Event_Deliver{Deliver: DeliverFromPb(pb.Deliver)}
+	case *abbapb.Event_Round:
+		return &Event_Round{Round: RoundEventFromPb(pb.Round)}
+	}
+	return nil
+}
+
+type Event_InputValue struct {
+	InputValue *InputValue
+}
+
+func (*Event_InputValue) isEvent_Type() {}
+
+func (w *Event_InputValue) Unwrap() *InputValue {
+	return w.InputValue
+}
+
+func (w *Event_InputValue) Pb() abbapb.Event_Type {
+	return &abbapb.Event_InputValue{InputValue: (w.InputValue).Pb()}
+}
+
+func (*Event_InputValue) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Event_InputValue]()}
+}
+
+type Event_Deliver struct {
+	Deliver *Deliver
+}
+
+func (*Event_Deliver) isEvent_Type() {}
+
+func (w *Event_Deliver) Unwrap() *Deliver {
+	return w.Deliver
+}
+
+func (w *Event_Deliver) Pb() abbapb.Event_Type {
+	return &abbapb.Event_Deliver{Deliver: (w.Deliver).Pb()}
+}
+
+func (*Event_Deliver) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Event_Deliver]()}
+}
+
+type Event_Round struct {
+	Round *RoundEvent
+}
+
+func (*Event_Round) isEvent_Type() {}
+
+func (w *Event_Round) Unwrap() *RoundEvent {
+	return w.Round
+}
+
+func (w *Event_Round) Pb() abbapb.Event_Type {
+	return &abbapb.Event_Round{Round: (w.Round).Pb()}
+}
+
+func (*Event_Round) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Event_Round]()}
+}
+
+func EventFromPb(pb *abbapb.Event) *Event {
+	return &Event{
+		Type: Event_TypeFromPb(pb.Type),
+	}
+}
+
+func (m *Event) Pb() *abbapb.Event {
+	return &abbapb.Event{
+		Type: (m.Type).Pb(),
+	}
+}
+
+func (*Event) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Event]()}
+}
+
+type InputValue struct {
+	Input  bool
+	Origin *Origin
+}
+
+func InputValueFromPb(pb *abbapb.InputValue) *InputValue {
+	return &InputValue{
+		Input:  pb.Input,
+		Origin: OriginFromPb(pb.Origin),
+	}
+}
+
+func (m *InputValue) Pb() *abbapb.InputValue {
+	return &abbapb.InputValue{
+		Input:  m.Input,
+		Origin: (m.Origin).Pb(),
+	}
+}
+
+func (*InputValue) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.InputValue]()}
+}
+
+type Deliver struct {
+	Result bool
+	Origin *Origin
+}
+
+func DeliverFromPb(pb *abbapb.Deliver) *Deliver {
+	return &Deliver{
+		Result: pb.Result,
+		Origin: OriginFromPb(pb.Origin),
+	}
+}
+
+func (m *Deliver) Pb() *abbapb.Deliver {
+	return &abbapb.Deliver{
+		Result: m.Result,
+		Origin: (m.Origin).Pb(),
+	}
+}
+
+func (*Deliver) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Deliver]()}
+}
+
+type Message struct {
+	Type Message_Type
+}
+
+type Message_Type interface {
+	mirreflect.GeneratedType
+	isMessage_Type()
+	Pb() abbapb.Message_Type
+}
+
+type Message_TypeWrapper[T any] interface {
+	Message_Type
+	Unwrap() *T
+}
+
+func Message_TypeFromPb(pb abbapb.Message_Type) Message_Type {
+	switch pb := pb.(type) {
+	case *abbapb.Message_Finish:
+		return &Message_Finish{Finish: FinishMessageFromPb(pb.Finish)}
+	case *abbapb.Message_Round:
+		return &Message_Round{Round: RoundMessageFromPb(pb.Round)}
+	}
+	return nil
+}
+
+type Message_Finish struct {
+	Finish *FinishMessage
+}
+
+func (*Message_Finish) isMessage_Type() {}
+
+func (w *Message_Finish) Unwrap() *FinishMessage {
+	return w.Finish
+}
+
+func (w *Message_Finish) Pb() abbapb.Message_Type {
+	return &abbapb.Message_Finish{Finish: (w.Finish).Pb()}
+}
+
+func (*Message_Finish) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Message_Finish]()}
+}
+
+type Message_Round struct {
+	Round *RoundMessage
+}
+
+func (*Message_Round) isMessage_Type() {}
+
+func (w *Message_Round) Unwrap() *RoundMessage {
+	return w.Round
+}
+
+func (w *Message_Round) Pb() abbapb.Message_Type {
+	return &abbapb.Message_Round{Round: (w.Round).Pb()}
+}
+
+func (*Message_Round) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Message_Round]()}
+}
+
+func MessageFromPb(pb *abbapb.Message) *Message {
+	return &Message{
+		Type: Message_TypeFromPb(pb.Type),
+	}
+}
+
+func (m *Message) Pb() *abbapb.Message {
+	return &abbapb.Message{
+		Type: (m.Type).Pb(),
+	}
+}
+
+func (*Message) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Message]()}
+}
+
+type FinishMessage struct {
+	Value bool
+}
+
+func FinishMessageFromPb(pb *abbapb.FinishMessage) *FinishMessage {
+	return &FinishMessage{
+		Value: pb.Value,
+	}
+}
+
+func (m *FinishMessage) Pb() *abbapb.FinishMessage {
+	return &abbapb.FinishMessage{
+		Value: m.Value,
+	}
+}
+
+func (*FinishMessage) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.FinishMessage]()}
+}
+
+type Origin struct {
+	Module types.ModuleID
+	Type   Origin_Type
+}
+
+type Origin_Type interface {
+	mirreflect.GeneratedType
+	isOrigin_Type()
+	Pb() abbapb.Origin_Type
+}
+
+type Origin_TypeWrapper[T any] interface {
+	Origin_Type
+	Unwrap() *T
+}
+
+func Origin_TypeFromPb(pb abbapb.Origin_Type) Origin_Type {
+	switch pb := pb.(type) {
+	case *abbapb.Origin_ContextStore:
+		return &Origin_ContextStore{ContextStore: types1.OriginFromPb(pb.ContextStore)}
+	case *abbapb.Origin_Dsl:
+		return &Origin_Dsl{Dsl: types2.OriginFromPb(pb.Dsl)}
+	case *abbapb.Origin_AleaAg:
+		return &Origin_AleaAg{AleaAg: types3.AbbaOriginFromPb(pb.AleaAg)}
+	}
+	return nil
+}
+
+type Origin_ContextStore struct {
+	ContextStore *types1.Origin
+}
+
+func (*Origin_ContextStore) isOrigin_Type() {}
+
+func (w *Origin_ContextStore) Unwrap() *types1.Origin {
+	return w.ContextStore
+}
+
+func (w *Origin_ContextStore) Pb() abbapb.Origin_Type {
+	return &abbapb.Origin_ContextStore{ContextStore: (w.ContextStore).Pb()}
+}
+
+func (*Origin_ContextStore) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Origin_ContextStore]()}
+}
+
+type Origin_Dsl struct {
+	Dsl *types2.Origin
+}
+
+func (*Origin_Dsl) isOrigin_Type() {}
+
+func (w *Origin_Dsl) Unwrap() *types2.Origin {
+	return w.Dsl
+}
+
+func (w *Origin_Dsl) Pb() abbapb.Origin_Type {
+	return &abbapb.Origin_Dsl{Dsl: (w.Dsl).Pb()}
+}
+
+func (*Origin_Dsl) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Origin_Dsl]()}
+}
+
+type Origin_AleaAg struct {
+	AleaAg *types3.AbbaOrigin
+}
+
+func (*Origin_AleaAg) isOrigin_Type() {}
+
+func (w *Origin_AleaAg) Unwrap() *types3.AbbaOrigin {
+	return w.AleaAg
+}
+
+func (w *Origin_AleaAg) Pb() abbapb.Origin_Type {
+	return &abbapb.Origin_AleaAg{AleaAg: (w.AleaAg).Pb()}
+}
+
+func (*Origin_AleaAg) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Origin_AleaAg]()}
+}
+
+func OriginFromPb(pb *abbapb.Origin) *Origin {
+	return &Origin{
+		Module: (types.ModuleID)(pb.Module),
+		Type:   Origin_TypeFromPb(pb.Type),
+	}
+}
+
+func (m *Origin) Pb() *abbapb.Origin {
+	return &abbapb.Origin{
+		Module: (string)(m.Module),
+		Type:   (m.Type).Pb(),
+	}
+}
+
+func (*Origin) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Origin]()}
 }

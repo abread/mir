@@ -43,7 +43,9 @@ package protos
 //go:generate protoc-events aleapb/common/common.proto
 //go:generate protoc-events aleapb/bcqueuepb/bcqueuepb.proto
 //go:generate protoc-events aleapb/bcpb/bcpb.proto
-//go:generate protoc-events aleapb/agreementpb/agreementpb.proto
+//go:generate protoc-events aleapb/agreementpb/agevents/agevents.proto
+//go:generate protoc-events aleapb/agreementpb/types.proto
+//go:generate protoc-events aleapb/agreementpb/messages.proto
 //go:generate protoc-events vcbpb/vcbpb.proto
 //go:generate protoc-events abbapb/abbapb.proto
 //go:generate protoc-events abbapb/roundpb.proto
@@ -72,6 +74,7 @@ package protos
 //go:generate std-gen "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb"
 //go:generate std-gen "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb"
 //go:generate std-gen "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb"
+//go:generate std-gen "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents"
 //go:generate std-gen "github.com/filecoin-project/mir/pkg/pb/vcbpb"
 //go:generate std-gen "github.com/filecoin-project/mir/pkg/pb/abbapb"
 //go:generate std-gen "github.com/filecoin-project/mir/pkg/pb/reliablenetpb"

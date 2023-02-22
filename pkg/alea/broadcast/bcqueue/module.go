@@ -16,7 +16,6 @@ import (
 	bcqueuedsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/dsl"
 	bcqueuepbtypes "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/types"
 	commontypes "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
-	modringpbdsl "github.com/filecoin-project/mir/pkg/pb/modringpb/dsl"
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"
 	vcbpbdsl "github.com/filecoin-project/mir/pkg/pb/vcbpb/dsl"
 	vcbpbevents "github.com/filecoin-project/mir/pkg/pb/vcbpb/events"
@@ -25,23 +24,21 @@ import (
 	"github.com/filecoin-project/mir/pkg/vcb"
 )
 
-const modringSubName = t.ModuleID("s")
-
 func New(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
 	if slices.Index(params.AllNodes, params.QueueOwner) != int(params.QueueIdx) {
 		return nil, fmt.Errorf("invalid queue index/owner combination: %v - %v", params.QueueIdx, params.QueueOwner)
 	}
 
-	controller := newQueueController(mc, params, tunables, nodeID, logger)
-
-	slots := modring.New(&modring.ModuleConfig{Self: mc.Self.Then(modringSubName)}, tunables.MaxConcurrentVcb, modring.ModuleParams{
+	slots := modring.New(mc.Self, tunables.MaxConcurrentVcb, modring.ModuleParams{
 		Generator: newVcbGenerator(mc, params, nodeID, logger),
 	}, logging.Decorate(logger, "Modring controller: "))
+
+	controller := newQueueController(mc, params, tunables, nodeID, logger, slots)
 
 	return modules.RoutedModule(mc.Self, controller, slots), nil
 }
 
-func newQueueController(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) modules.PassiveModule {
+func newQueueController(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger, slots *modring.Module) modules.PassiveModule {
 	m := dsl.NewModule(mc.Self)
 
 	bcqueuedsl.UponInputValue(m, func(slot *commontypes.Slot, txs []*requestpb.Request) error {
@@ -50,7 +47,7 @@ func newQueueController(mc *ModuleConfig, params *ModuleParams, tunables *Module
 		}
 
 		dsl.EmitMirEvent(m, vcbpbevents.InputValue(
-			mc.Self.Then(modringSubName).Then(t.NewModuleIDFromInt(slot.QueueSlot)),
+			mc.Self.Then(t.NewModuleIDFromInt(slot.QueueSlot)),
 			txs,
 			&vcbpbtypes.Origin{
 				Module: mc.Self,
@@ -84,10 +81,13 @@ func newQueueController(mc *ModuleConfig, params *ModuleParams, tunables *Module
 	})
 
 	bcqueuedsl.UponFreeSlot(m, func(queueSlot aleatypes.QueueSlot) error {
-		modringpbdsl.FreeSubmodule[struct{}](m, mc.Self.Then(modringSubName), uint64(queueSlot), nil)
-		return nil
-	})
-	modringpbdsl.UponFreedSubmodule(m, func(_ctx *struct{}) error {
+		if err := slots.AdvanceViewToAtLeastSubmodule(uint64(queueSlot)); err != nil {
+			return fmt.Errorf("could not advance view to free queue slot: %w", err)
+		}
+
+		if err := slots.MarkSubmodulePast(uint64(queueSlot)); err != nil {
+			return fmt.Errorf("failed to free queue slot: %w", err)
+		}
 		return nil
 	})
 

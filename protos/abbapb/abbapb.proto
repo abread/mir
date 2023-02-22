@@ -7,7 +7,7 @@ option go_package = "github.com/filecoin-project/mir/pkg/pb/abbapb";
 import "abbapb/roundpb.proto";
 import "dslpb/dslpb.proto";
 import "contextstorepb/contextstorepb.proto";
-import "aleapb/agreementpb/agreementpb.proto";
+import "aleapb/agreementpb/types.proto";
 
 import "mir/codegen_extensions.proto";
 import "net/codegen_extensions.proto";
@@ -23,8 +23,8 @@ message Event {
   oneof type {
     option (mir.event_type) = true;
 
-    InputValue    input_value = 1;
-    Deliver       deliver     = 2;
+    InputValue input_value = 1;
+    Deliver    deliver     = 2;
     RoundEvent round       = 3;
   }
 }
