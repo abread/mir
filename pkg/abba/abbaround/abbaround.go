@@ -62,6 +62,8 @@ func New(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging
 		confRecvd:         make(abbat.RecvTracker, len(params.AllNodes)),
 		coinRecvd:         make(abbat.RecvTracker, len(params.AllNodes)),
 		coinRecvdOkShares: make([]tctypes.SigShare, 0, len(params.AllNodes)),
+
+		coinRecoverMinShareCount: params.strongSupportThresh(),
 	}
 	coinData := genCoinData(mc, params)
 
@@ -249,11 +251,11 @@ func New(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging
 			return nil
 		}
 
-		if len(state.coinRecvdOkShares) > state.coinRecoverMinShareCount && !state.coinRecoverInProgress {
+		if len(state.coinRecvdOkShares) >= state.coinRecoverMinShareCount && !state.coinRecoverInProgress {
 			threshDsl.Recover[struct{}](m, mc.ThreshCrypto, coinData, state.coinRecvdOkShares, nil)
 
 			state.coinRecoverInProgress = true
-			state.coinRecoverMinShareCount = len(state.coinRecvdOkShares)
+			state.coinRecoverMinShareCount = len(state.coinRecvdOkShares) + 1
 		}
 
 		return nil
