@@ -23,6 +23,7 @@ message Event {
     StartBroadcast start_broadcast = 1;
     Deliver        deliver         = 2;
     FreeSlot       free_slot       = 3;
+    DoFillGap      fill_gap        = 4;
   }
 }
 
@@ -34,7 +35,6 @@ message StartBroadcast {
   repeated requestpb.Request txs        = 2;
 }
 
-
 message Deliver {
   option (mir.event) = true;
 
@@ -42,6 +42,12 @@ message Deliver {
 }
 
 message FreeSlot {
+  option (mir.event) = true;
+
+  common.Slot slot = 1;
+}
+
+message DoFillGap {
   option (mir.event) = true;
 
   common.Slot slot = 1;

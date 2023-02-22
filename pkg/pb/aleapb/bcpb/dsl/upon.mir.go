@@ -39,3 +39,9 @@ func UponFreeSlot(m dsl.Module, handler func(slot *types2.Slot) error) {
 		return handler(ev.Slot)
 	})
 }
+
+func UponDoFillGap(m dsl.Module, handler func(slot *types2.Slot) error) {
+	UponEvent[*types.Event_FillGap](m, func(ev *types.DoFillGap) error {
+		return handler(ev.Slot)
+	})
+}

@@ -9,13 +9,17 @@ import (
 	batchdbdsl "github.com/filecoin-project/mir/pkg/availability/batchdb/dsl"
 	adsl "github.com/filecoin-project/mir/pkg/availability/dsl"
 	"github.com/filecoin-project/mir/pkg/dsl"
+	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/logging"
 	mempooldsl "github.com/filecoin-project/mir/pkg/mempool/dsl"
 	abcdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/dsl"
+	bcdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/dsl"
+	bcpbevents "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/events"
 	commontypes "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
-	bcdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/dsl"
+	aleadsl "github.com/filecoin-project/mir/pkg/pb/aleapb/dsl"
 	aleamsgs "github.com/filecoin-project/mir/pkg/pb/aleapb/msgs"
 	apb "github.com/filecoin-project/mir/pkg/pb/availabilitypb"
+	"github.com/filecoin-project/mir/pkg/pb/eventpb"
 	rnetdsl "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/dsl"
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"
 	threshDsl "github.com/filecoin-project/mir/pkg/pb/threshcryptopb/dsl"
@@ -33,8 +37,9 @@ type batchFetchingState struct {
 // RequestsState represents the state related to a request on the source node of the request.
 // The node disposes of this state as soon as the request is completed.
 type RequestsState struct {
-	ReqOrigins []*apb.RequestTransactionsOrigin
-	Replies    map[t.NodeID]struct{}
+	ReqOrigins  []*apb.RequestTransactionsOrigin
+	SentFillGap bool
+	Replies     map[t.NodeID]struct{}
 }
 
 // IncludeBatchFetching registers event handlers for processing availabilitypb.RequestTransactions events.
@@ -42,6 +47,7 @@ func IncludeBatchFetching(
 	m dsl.Module,
 	mc *director.ModuleConfig,
 	params *director.ModuleParams,
+	tunables *director.ModuleTunables,
 	nodeID t.NodeID,
 	logger logging.Logger,
 ) {
@@ -51,50 +57,104 @@ func IncludeBatchFetching(
 
 	// When receive a request for transactions, first check the local storage.
 	adsl.UponRequestTransactions(m, func(anyCert *apb.Cert, origin *apb.RequestTransactionsOrigin) error {
-		certWrapper, ok := anyCert.Type.(*apb.Cert_Alea)
-		if !ok {
+		certWrapper, present := anyCert.Type.(*apb.Cert_Alea)
+		if !present {
 			return fmt.Errorf("unexpected certificate type. Expected: %T, got %T", certWrapper, anyCert.Type)
 		}
+		// NOTE: it is assumed that cert is valid.
 		cert := certWrapper.Alea
 		slot := commontypes.SlotFromPb(cert.Slot)
 
-		// NOTE: it is assumed that cert is valid.
-		batchdbdsl.LookupBatch(m, mc.BatchDB, common.FormatAleaBatchID(slot), &lookupBatchLocallyContext{slot, origin})
+		reqState, present := state.RequestsState[*slot]
+		if !present {
+			// new request
+			reqState = &RequestsState{
+				ReqOrigins: make([]*apb.RequestTransactionsOrigin, 0, 1),
+			}
+			state.RequestsState[*slot] = reqState
+
+			// try resolving locally first
+			batchdbdsl.LookupBatch(m, mc.BatchDB, common.FormatAleaBatchID(slot), slot)
+		}
+
+		// add ourselves to the list of requestors in order to receive a reply
+		reqState.ReqOrigins = append(reqState.ReqOrigins, origin)
+
+		return nil
+	})
+
+	// if broadcast delivers for a batch being requested, we can *now* resolve it locally
+	abcdsl.UponDeliver(m, func(slot *commontypes.Slot) error {
+		if _, present := state.RequestsState[*slot]; present {
+			// TODO: avoid concurrent lookups of the same batch?
+			// if bc delivers right after the transaction starts, two lookups will be performed.
+
+			// retry locally, you will now succeed!
+			batchdbdsl.LookupBatch(m, mc.BatchDB, common.FormatAleaBatchID(slot), slot)
+		}
+
 		return nil
 	})
 
 	// If the batch is present in the local storage, return it. Otherwise, ask other nodes.
-	batchdbdsl.UponLookupBatchResponse(m, func(found bool, txs []*requestpb.Request, metadata []byte, context *lookupBatchLocallyContext) error {
+	batchdbdsl.UponLookupBatchResponse(m, func(found bool, txs []*requestpb.Request, metadata []byte, slot *commontypes.Slot) error {
+		reqState, ok := state.RequestsState[*slot]
+		if !ok {
+			return nil // stale request
+		}
+
 		if found {
-			adsl.ProvideTransactions(m, t.ModuleID(context.origin.Module), txs, context.origin)
+			for _, origin := range reqState.ReqOrigins {
+				adsl.ProvideTransactions(m, t.ModuleID(origin.Module), txs, origin)
+			}
+
+			if reqState.SentFillGap {
+				// no need for FILLER anymore
+				rnetdsl.MarkRecvd(m, mc.ReliableNet, mc.Self, FillGapMsgID(slot), params.AllNodes)
+			}
+
 			return nil
 		}
 
-		slot := *context.slot
-		if _, present := state.RequestsState[slot]; !present {
-			state.RequestsState[slot] = &RequestsState{
-				ReqOrigins: make([]*apb.RequestTransactionsOrigin, 0, 1),
-				Replies:    make(map[t.NodeID]struct{}, len(params.AllNodes)),
-			}
+		if reqState.SentFillGap {
+			return fmt.Errorf("tried to send FILL-GAP twice")
 		}
-		reqState := state.RequestsState[slot]
-		reqState.ReqOrigins = append(reqState.ReqOrigins, context.origin)
+		reqState.SentFillGap = true
+
+		// send FILL-GAP after a timeout (if request was not satisfied)
+		// this way bc has more chances of completing before even trying to send a fill-gap message
+		dsl.EmitEvent(m, events.TimerDelay(mc.Timer, []*eventpb.Event{
+			bcpbevents.DoFillGap(mc.Self, slot).Pb(),
+		}, tunables.FillGapDelay))
+
+		return nil
+	})
+
+	// TODO: move this event to the right component
+	bcdsl.UponDoFillGap(m, func(slot *commontypes.Slot) error {
+		reqState, present := state.RequestsState[*slot]
+		if !present {
+			return nil // already handled
+		}
+
+		reqState.Replies = make(map[t.NodeID]struct{}, len(params.AllNodes))
+
+		logger.Log(logging.LevelDebug, "broadcast component fell behind. requesting slot from other replicas with FILL-GAP", "queueIdx", slot.QueueIdx, "queueSlot", slot.QueueSlot)
 
 		// TODO: do this more inteligently: only contact some nodes, and try others if a timer expires
 		// until all were tried or a response is received.
 		// It would also be nice to pass a hint in the certificate that says which nodes to try first,
 		// this could be provided by the agreement component based on INIT(v, 0) messages received by the abba instances.
-		logger.Log(logging.LevelDebug, "broadcast component fell behind. requesting slot from other replicas with FILL-GAP", "queueIdx", slot.QueueIdx, "queueSlot", slot.QueueSlot)
 		rnetdsl.SendMessage(m, mc.ReliableNet,
-			FillGapMsgID(&slot),
-			aleamsgs.FillGapMessage(mc.Self, &slot),
+			FillGapMsgID(slot),
+			aleamsgs.FillGapMessage(mc.Self, slot),
 			params.AllNodes,
 		)
 		return nil
 	})
 
 	// When receive a request for batch from another node, lookup the batch in the local storage.
-	bcdsl.UponFillGapMessageReceived(m, func(from t.NodeID, slot *commontypes.Slot) error {
+	aleadsl.UponFillGapMessageReceived(m, func(from t.NodeID, slot *commontypes.Slot) error {
 		// do not ACK message - acknowledging means sending a FILLER reply
 
 		logger.Log(logging.LevelDebug, "satisfying FILL-GAP request", "queueIdx", slot.QueueIdx, "queueSlot", slot.QueueSlot, "from", from)
@@ -117,11 +177,11 @@ func IncludeBatchFetching(
 	})
 
 	// When receive a requested batch, compute the ids of the received transactions.
-	bcdsl.UponFillerMessageReceived(m, func(from t.NodeID, slot *commontypes.Slot, txs []*requestpb.Request, signature tctypes.FullSig) error {
+	aleadsl.UponFillerMessageReceived(m, func(from t.NodeID, slot *commontypes.Slot, txs []*requestpb.Request, signature tctypes.FullSig) error {
 		rnetdsl.MarkRecvd(m, mc.ReliableNet, mc.Self, FillGapMsgID(slot), []t.NodeID{from})
 
 		reqState, present := state.RequestsState[*slot]
-		if !present {
+		if !present || reqState.Replies == nil {
 			return nil // no request needs this message to be satisfied
 		}
 

@@ -56,6 +56,9 @@ type Params struct {
 
 	// TODO
 	MaxAgRoundLookahead int
+
+	// Time to wait before resorting to FILL-GAP messages
+	FillGapDelay t.TimeDuration
 }
 
 // DefaultConfig returns a valid module config with default names for all modules.
@@ -85,11 +88,12 @@ func DefaultParams(membership map[t.NodeID]t.NodeAddress) *Params {
 	return &Params{
 		InstanceUID:                 []byte{42},
 		Membership:                  membership,
-		MaxConcurrentVcbPerQueue:    10,
+		MaxConcurrentVcbPerQueue:    16,
 		TargetOwnUnagreedBatchCount: 1,
 		BatchCutFailRetryDelay:      t.TimeDuration(500 * time.Millisecond),
 		MaxAbbaRoundLookahead:       4,
 		MaxAgRoundLookahead:         4,
+		FillGapDelay:                t.TimeDuration(1 * time.Second),
 	}
 }
 
@@ -139,6 +143,7 @@ func New(ownID t.NodeID, config *Config, params *Params, startingChkp *checkpoin
 			MaxConcurrentVcbPerQueue:    params.MaxConcurrentVcbPerQueue,
 			TargetOwnUnagreedBatchCount: params.TargetOwnUnagreedBatchCount,
 			BatchCutFailRetryDelay:      params.BatchCutFailRetryDelay,
+			FillGapDelay:                params.FillGapDelay,
 		},
 		ownID,
 		logging.Decorate(logger, "AleaDirector: "),

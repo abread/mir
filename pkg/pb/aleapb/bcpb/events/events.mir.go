@@ -54,3 +54,18 @@ func FreeSlot(destModule types.ModuleID, slot *types3.Slot) *types1.Event {
 		},
 	}
 }
+
+func DoFillGap(destModule types.ModuleID, slot *types3.Slot) *types1.Event {
+	return &types1.Event{
+		DestModule: destModule,
+		Type: &types1.Event_AleaBroadcast{
+			AleaBroadcast: &types2.Event{
+				Type: &types2.Event_FillGap{
+					FillGap: &types2.DoFillGap{
+						Slot: slot,
+					},
+				},
+			},
+		},
+	}
+}

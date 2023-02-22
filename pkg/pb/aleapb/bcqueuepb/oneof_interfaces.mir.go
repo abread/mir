@@ -18,3 +18,7 @@ func (w *Event_Deliver) Unwrap() *Deliver {
 func (w *Event_FreeSlot) Unwrap() *FreeSlot {
 	return w.FreeSlot
 }
+
+func (w *Event_PastVcbFinal) Unwrap() *PastVcbFinal {
+	return w.PastVcbFinal
+}

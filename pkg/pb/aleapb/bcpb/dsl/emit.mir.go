@@ -22,3 +22,7 @@ func Deliver(m dsl.Module, destModule types.ModuleID, slot *types1.Slot) {
 func FreeSlot(m dsl.Module, destModule types.ModuleID, slot *types1.Slot) {
 	dsl.EmitMirEvent(m, events.FreeSlot(destModule, slot))
 }
+
+func DoFillGap(m dsl.Module, destModule types.ModuleID, slot *types1.Slot) {
+	dsl.EmitMirEvent(m, events.DoFillGap(destModule, slot))
+}

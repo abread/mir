@@ -37,4 +37,7 @@ type ModuleTunables struct {
 
 	// Time to wait before retrying batch creation
 	BatchCutFailRetryDelay t.TimeDuration
+
+	// Time to wait before resorting to FILL-GAP messages
+	FillGapDelay t.TimeDuration
 }

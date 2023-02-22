@@ -7,6 +7,7 @@ import (
 	types2 "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
 	types1 "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 	requestpb "github.com/filecoin-project/mir/pkg/pb/requestpb"
+	tctypes "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 )
 
 // Module-specific dsl functions for processing events.
@@ -37,5 +38,11 @@ func UponDeliver(m dsl.Module, handler func(slot *types2.Slot) error) {
 func UponFreeSlot(m dsl.Module, handler func(queueSlot aleatypes.QueueSlot) error) {
 	UponEvent[*types.Event_FreeSlot](m, func(ev *types.FreeSlot) error {
 		return handler(ev.QueueSlot)
+	})
+}
+
+func UponPastVcbFinal(m dsl.Module, handler func(queueSlot aleatypes.QueueSlot, txs []*requestpb.Request, signature tctypes.FullSig) error) {
+	UponEvent[*types.Event_PastVcbFinal](m, func(ev *types.PastVcbFinal) error {
+		return handler(ev.QueueSlot, ev.Txs, ev.Signature)
 	})
 }

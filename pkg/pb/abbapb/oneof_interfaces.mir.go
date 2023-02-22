@@ -6,6 +6,59 @@ import (
 	dslpb "github.com/filecoin-project/mir/pkg/pb/dslpb"
 )
 
+type Event_Type = isEvent_Type
+
+type Event_TypeWrapper[T any] interface {
+	Event_Type
+	Unwrap() *T
+}
+
+func (w *Event_InputValue) Unwrap() *InputValue {
+	return w.InputValue
+}
+
+func (w *Event_Deliver) Unwrap() *Deliver {
+	return w.Deliver
+}
+
+func (w *Event_Round) Unwrap() *RoundEvent {
+	return w.Round
+}
+
+type Message_Type = isMessage_Type
+
+type Message_TypeWrapper[T any] interface {
+	Message_Type
+	Unwrap() *T
+}
+
+func (w *Message_Finish) Unwrap() *FinishMessage {
+	return w.Finish
+}
+
+func (w *Message_Round) Unwrap() *RoundMessage {
+	return w.Round
+}
+
+type Origin_Type = isOrigin_Type
+
+type Origin_TypeWrapper[T any] interface {
+	Origin_Type
+	Unwrap() *T
+}
+
+func (w *Origin_ContextStore) Unwrap() *contextstorepb.Origin {
+	return w.ContextStore
+}
+
+func (w *Origin_Dsl) Unwrap() *dslpb.Origin {
+	return w.Dsl
+}
+
+func (w *Origin_AleaAg) Unwrap() *agreementpb.AbbaOrigin {
+	return w.AleaAg
+}
+
 type RoundEvent_Type = isRoundEvent_Type
 
 type RoundEvent_TypeWrapper[T any] interface {
@@ -61,57 +114,4 @@ func (w *RoundOrigin_ContextStore) Unwrap() *contextstorepb.Origin {
 
 func (w *RoundOrigin_Dsl) Unwrap() *dslpb.Origin {
 	return w.Dsl
-}
-
-type Event_Type = isEvent_Type
-
-type Event_TypeWrapper[T any] interface {
-	Event_Type
-	Unwrap() *T
-}
-
-func (w *Event_InputValue) Unwrap() *InputValue {
-	return w.InputValue
-}
-
-func (w *Event_Deliver) Unwrap() *Deliver {
-	return w.Deliver
-}
-
-func (w *Event_Round) Unwrap() *RoundEvent {
-	return w.Round
-}
-
-type Message_Type = isMessage_Type
-
-type Message_TypeWrapper[T any] interface {
-	Message_Type
-	Unwrap() *T
-}
-
-func (w *Message_Finish) Unwrap() *FinishMessage {
-	return w.Finish
-}
-
-func (w *Message_Round) Unwrap() *RoundMessage {
-	return w.Round
-}
-
-type Origin_Type = isOrigin_Type
-
-type Origin_TypeWrapper[T any] interface {
-	Origin_Type
-	Unwrap() *T
-}
-
-func (w *Origin_ContextStore) Unwrap() *contextstorepb.Origin {
-	return w.ContextStore
-}
-
-func (w *Origin_Dsl) Unwrap() *dslpb.Origin {
-	return w.Dsl
-}
-
-func (w *Origin_AleaAg) Unwrap() *agreementpb.AbbaOrigin {
-	return w.AleaAg
 }

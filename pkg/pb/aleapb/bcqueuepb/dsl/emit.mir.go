@@ -6,6 +6,7 @@ import (
 	events "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/events"
 	types1 "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
 	requestpb "github.com/filecoin-project/mir/pkg/pb/requestpb"
+	tctypes "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 	types "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -21,4 +22,8 @@ func Deliver(m dsl.Module, destModule types.ModuleID, slot *types1.Slot) {
 
 func FreeSlot(m dsl.Module, destModule types.ModuleID, queueSlot aleatypes.QueueSlot) {
 	dsl.EmitMirEvent(m, events.FreeSlot(destModule, queueSlot))
+}
+
+func PastVcbFinal(m dsl.Module, destModule types.ModuleID, queueSlot aleatypes.QueueSlot, txs []*requestpb.Request, signature tctypes.FullSig) {
+	dsl.EmitMirEvent(m, events.PastVcbFinal(destModule, queueSlot, txs, signature))
 }

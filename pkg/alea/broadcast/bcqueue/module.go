@@ -14,13 +14,19 @@ import (
 	"github.com/filecoin-project/mir/pkg/modring"
 	"github.com/filecoin-project/mir/pkg/modules"
 	bcqueuedsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/dsl"
+	bcqueuepbevents "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/events"
 	bcqueuepbtypes "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/types"
 	commontypes "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
+	mempooldsl "github.com/filecoin-project/mir/pkg/pb/mempoolpb/dsl"
+	messagepbtypes "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
+	modringpbtypes "github.com/filecoin-project/mir/pkg/pb/modringpb/types"
 	reliablenetpbdsl "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/dsl"
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"
+	threshcryptopbdsl "github.com/filecoin-project/mir/pkg/pb/threshcryptopb/dsl"
 	vcbpbdsl "github.com/filecoin-project/mir/pkg/pb/vcbpb/dsl"
 	vcbpbevents "github.com/filecoin-project/mir/pkg/pb/vcbpb/events"
 	vcbpbtypes "github.com/filecoin-project/mir/pkg/pb/vcbpb/types"
+	"github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 	t "github.com/filecoin-project/mir/pkg/types"
 	"github.com/filecoin-project/mir/pkg/vcb"
 )
@@ -31,7 +37,8 @@ func New(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeI
 	}
 
 	slots := modring.New(mc.Self, tunables.MaxConcurrentVcb, modring.ModuleParams{
-		Generator: newVcbGenerator(mc, params, nodeID, logger),
+		Generator:      newVcbGenerator(mc, params, nodeID, logger),
+		PastMsgHandler: newPastMsgHandler(mc, params),
 	}, logging.Decorate(logger, "Modring controller: "))
 
 	controller := newQueueController(mc, params, tunables, nodeID, logger, slots)
@@ -63,6 +70,7 @@ func newQueueController(mc *ModuleConfig, params *ModuleParams, tunables *Module
 	})
 
 	// we can't use .UponDeliver because that assumes a DSL origin
+	// upon vcb deliver, store batch and deliver to broadcast component
 	vcbpbdsl.UponEvent[*vcbpbtypes.Event_Deliver](m, func(ev *vcbpbtypes.Deliver) error {
 		origin, ok := ev.Origin.Type.(*vcbpbtypes.Origin_AleaBcqueue)
 		if !ok {
@@ -76,6 +84,41 @@ func newQueueController(mc *ModuleConfig, params *ModuleParams, tunables *Module
 		batchdbdsl.StoreBatch(m, mc.BatchDB, aleaCommon.FormatAleaBatchID(slot), ev.TxIds, ev.Txs, ev.Signature, slot)
 		return nil
 	})
+
+	// upon stale vcb final message, validate signature, store and deliver batch
+	bcqueuedsl.UponPastVcbFinal(m, func(queueSlot aleatypes.QueueSlot, txs []*requestpb.Request, signature tctypes.FullSig) error {
+		context := &processPastVcbCtx{
+			queueSlot: queueSlot,
+			txs:       txs,
+			signature: signature,
+		}
+		mempooldsl.RequestTransactionIDs(m, mc.Mempool, txs, context)
+
+		reliablenetpbdsl.Ack(m, mc.ReliableNet, mc.Self.Then(t.NewModuleIDFromInt(queueSlot)), vcb.FinalMsgID(), params.QueueOwner)
+
+		return nil
+	})
+	mempooldsl.UponTransactionIDsResponse(m, func(txIDs []t.TxID, context *processPastVcbCtx) error {
+		context.txIDs = txIDs
+		threshcryptopbdsl.VerifyFull(m, mc.ThreshCrypto, vcb.SigData(params.InstanceUID, txIDs), context.signature, context)
+		return nil
+	})
+	threshcryptopbdsl.UponVerifyFullResult(m, func(ok bool, error string, context *processPastVcbCtx) error {
+		if !ok {
+			return nil // bad batch
+			// TODO: report byz node?
+		}
+
+		logger.Log(logging.LevelDebug, "processed stale VCB Final", "queueIdx", params.QueueIdx, "queueSlot", context.queueSlot)
+
+		slot := &commontypes.Slot{
+			QueueIdx:  params.QueueIdx,
+			QueueSlot: context.queueSlot,
+		}
+		batchdbdsl.StoreBatch(m, mc.BatchDB, aleaCommon.FormatAleaBatchID(slot), context.txIDs, context.txs, context.signature, slot)
+		return nil
+	})
+
 	batchdbdsl.UponBatchStored(m, func(slot *commontypes.Slot) error {
 		bcqueuedsl.Deliver(m, mc.Consumer, slot)
 		return nil
@@ -90,9 +133,7 @@ func newQueueController(mc *ModuleConfig, params *ModuleParams, tunables *Module
 			return fmt.Errorf("failed to free queue slot: %w", err)
 		}
 
-		// free all module messages
-		// if another node fails to receive the FINAL message, it will get it as a FILL-GAP message
-		reliablenetpbdsl.MarkModuleMsgsRecvd(m, mc.ReliableNet, mc.Self.Then(t.NewModuleIDFromInt(queueSlot)), params.AllNodes)
+		// do not mark VCB FINAL messages as received, as they can avoid FILL-GAP messages
 
 		return nil
 	})
@@ -135,4 +176,43 @@ func newVcbGenerator(queueMc *ModuleConfig, queueParams *ModuleParams, nodeID t.
 
 		return mod, initialEvs, nil
 	}
+}
+
+func newPastMsgHandler(mc *ModuleConfig, params *ModuleParams) func([]*modringpbtypes.PastMessage) (*events.EventList, error) {
+	return func(pastMessages []*modringpbtypes.PastMessage) (*events.EventList, error) {
+		evsOut := &events.EventList{}
+
+		for _, msg := range pastMessages {
+			if msg.From != params.QueueOwner {
+				continue
+			}
+
+			vcbMsgWrapper, ok := msg.Message.Type.(*messagepbtypes.Message_Vcb)
+			if !ok {
+				continue
+			}
+
+			vcbFinalMsgWrapper, ok := vcbMsgWrapper.Unwrap().Type.(*vcbpbtypes.Message_FinalMessage)
+			if !ok {
+				continue
+			}
+			vcbFinalMsg := vcbFinalMsgWrapper.Unwrap()
+
+			evsOut.PushBack(bcqueuepbevents.PastVcbFinal(
+				mc.Self,
+				aleatypes.QueueSlot(msg.DestId),
+				vcbFinalMsg.Txs,
+				vcbFinalMsg.Signature,
+			).Pb())
+		}
+
+		return evsOut, nil
+	}
+}
+
+type processPastVcbCtx struct {
+	queueSlot aleatypes.QueueSlot
+	txs       []*requestpb.Request
+	txIDs     []t.TxID
+	signature tctypes.FullSig
 }

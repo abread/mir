@@ -6,6 +6,7 @@ import (
 	bcqueuepb "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb"
 	types "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
 	requestpb "github.com/filecoin-project/mir/pkg/pb/requestpb"
+	tctypes "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 	reflectutil "github.com/filecoin-project/mir/pkg/util/reflectutil"
 )
 
@@ -32,6 +33,8 @@ func Event_TypeFromPb(pb bcqueuepb.Event_Type) Event_Type {
 		return &Event_Deliver{Deliver: DeliverFromPb(pb.Deliver)}
 	case *bcqueuepb.Event_FreeSlot:
 		return &Event_FreeSlot{FreeSlot: FreeSlotFromPb(pb.FreeSlot)}
+	case *bcqueuepb.Event_PastVcbFinal:
+		return &Event_PastVcbFinal{PastVcbFinal: PastVcbFinalFromPb(pb.PastVcbFinal)}
 	}
 	return nil
 }
@@ -88,6 +91,24 @@ func (w *Event_FreeSlot) Pb() bcqueuepb.Event_Type {
 
 func (*Event_FreeSlot) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*bcqueuepb.Event_FreeSlot]()}
+}
+
+type Event_PastVcbFinal struct {
+	PastVcbFinal *PastVcbFinal
+}
+
+func (*Event_PastVcbFinal) isEvent_Type() {}
+
+func (w *Event_PastVcbFinal) Unwrap() *PastVcbFinal {
+	return w.PastVcbFinal
+}
+
+func (w *Event_PastVcbFinal) Pb() bcqueuepb.Event_Type {
+	return &bcqueuepb.Event_PastVcbFinal{PastVcbFinal: (w.PastVcbFinal).Pb()}
+}
+
+func (*Event_PastVcbFinal) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*bcqueuepb.Event_PastVcbFinal]()}
 }
 
 func EventFromPb(pb *bcqueuepb.Event) *Event {
@@ -167,6 +188,32 @@ func (m *FreeSlot) Pb() *bcqueuepb.FreeSlot {
 
 func (*FreeSlot) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*bcqueuepb.FreeSlot]()}
+}
+
+type PastVcbFinal struct {
+	QueueSlot aleatypes.QueueSlot
+	Txs       []*requestpb.Request
+	Signature tctypes.FullSig
+}
+
+func PastVcbFinalFromPb(pb *bcqueuepb.PastVcbFinal) *PastVcbFinal {
+	return &PastVcbFinal{
+		QueueSlot: (aleatypes.QueueSlot)(pb.QueueSlot),
+		Txs:       pb.Txs,
+		Signature: (tctypes.FullSig)(pb.Signature),
+	}
+}
+
+func (m *PastVcbFinal) Pb() *bcqueuepb.PastVcbFinal {
+	return &bcqueuepb.PastVcbFinal{
+		QueueSlot: (uint64)(m.QueueSlot),
+		Txs:       m.Txs,
+		Signature: ([]uint8)(m.Signature),
+	}
+}
+
+func (*PastVcbFinal) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*bcqueuepb.PastVcbFinal]()}
 }
 
 type VcbOrigin struct {

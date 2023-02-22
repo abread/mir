@@ -20,9 +20,10 @@ message Event {
   oneof type {
     option (mir.event_type) = true;
 
-    InputValue input_value = 1;
-    Deliver    deliver     = 2;
-    FreeSlot   free_slot   = 3;
+    InputValue   input_value    = 1;
+    Deliver      deliver        = 2;
+    FreeSlot     free_slot      = 3;
+    PastVcbFinal past_vcb_final = 4;
   }
 }
 
@@ -46,6 +47,14 @@ message FreeSlot {
   option (mir.event) = true;
 
   uint64 queue_slot = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/alea/aleatypes.QueueSlot"];
+}
+
+message PastVcbFinal {
+  option (mir.event) = true;
+
+  uint64                     queue_slot      = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/alea/aleatypes.QueueSlot"];
+  repeated requestpb.Request txs             = 2;
+  bytes                      signature       = 3 [(mir.type) = "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes.FullSig"];
 }
 
 // ============================================================
