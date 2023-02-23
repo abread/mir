@@ -18,16 +18,17 @@ func (h *AgRoundHistory) Get(num uint64) (bool, bool) {
 		return false, false
 	}
 
-	return (*h)[num/subSliceSize][num%subSliceSize], true
+	subslice := (*h)[num/subSliceSize]
+	return subslice[num%subSliceSize], true
 }
 
 func (h *AgRoundHistory) Len() uint64 {
-	fullSubslices := uint64(len(*h)) * uint64(subSliceSize)
-	if fullSubslices != 0 {
-		fullSubslices += uint64(len(*h.tail()))
+	if len(*h) == 0 {
+		return 0
 	}
 
-	return fullSubslices
+	fullSubslices := uint64(len(*h)-1) * uint64(subSliceSize)
+	return fullSubslices + uint64(len(*h.tail()))
 }
 
 func (h *AgRoundHistory) cap() int {
