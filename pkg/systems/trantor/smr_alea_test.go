@@ -310,7 +310,11 @@ func newDeploymentAlea(conf *TestConfig) (*deploytest.Deployment, error) {
 		smrParams := DefaultParams(transportLayer.Nodes())
 		smrParams.Mempool.MaxTransactionsInBatch = 16
 		smrParams.AdjustSpeed(100 * time.Millisecond)
-		smrParams.ReliableNet.RetransmissionLoopInterval = 5 * time.Second
+		smrParams.ReliableNet.RetransmissionLoopInterval = 150 * time.Millisecond
+		smrParams.Alea.MaxConcurrentVcbPerQueue = 2
+		smrParams.Alea.TargetOwnUnagreedBatchCount = 2
+		smrParams.Alea.MaxAbbaRoundLookahead = 1
+		smrParams.Alea.MaxAgRoundLookahead = 1
 
 		nodeLogger := logging.NewMultiLogger(append(
 			[]logging.Logger{nodeFileLoggers[i]},
