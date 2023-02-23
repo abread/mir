@@ -9,12 +9,13 @@ import (
 	"strconv"
 	"strings"
 
-	"gopkg.in/alecthomas/kingpin.v2"
-
 	"github.com/ttacon/chalk"
 	"google.golang.org/protobuf/encoding/protojson"
+	"gopkg.in/alecthomas/kingpin.v2"
 
 	"github.com/filecoin-project/mir/pkg/eventlog"
+	"github.com/filecoin-project/mir/pkg/events"
+	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
 	"github.com/filecoin-project/mir/pkg/pb/recordingpb"
 	t "github.com/filecoin-project/mir/pkg/types"
@@ -22,7 +23,8 @@ import (
 
 // extracts events from eventlog entries and
 // forwards them for display
-func displayEvents(args *arguments) error {
+func displayEvents(args *arguments) error { //nolint:gocognit
+	// TODO: linting is disabled, since this code needs to be substantially re-written anyway.
 
 	// new reader
 
@@ -30,6 +32,12 @@ func displayEvents(args *arguments) error {
 	index := 0
 
 	filenames := strings.Split(*args.src, " ")
+
+	// If debugging a module, instantiate it.
+	var module modules.PassiveModule
+	if args.dbgModule {
+		module = customModule()
+	}
 
 	// Create a reader for the input event log file.
 	for _, filename := range filenames {
@@ -70,6 +78,12 @@ func displayEvents(args *arguments) error {
 				if validEvent && validDest && event != nil && index >= args.offset && (args.limit == 0 || index < args.offset+args.limit) {
 					// If event type has been selected for displaying
 					displayEvent(event, metadata)
+
+					if args.dbgModule {
+						if _, err := module.ApplyEvents(events.ListOf(event)); err != nil {
+							return fmt.Errorf("error replaying event to module: %w", err)
+						}
+					}
 				}
 
 				index++

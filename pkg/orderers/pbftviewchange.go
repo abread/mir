@@ -20,7 +20,7 @@ import (
 // The Preprepare message produced by this function has the same digest as the original preprepare,
 // since the view number is not used for hash computation.
 func copyPreprepareToNewView(preprepare *ordererspbftpb.Preprepare, view t.PBFTViewNr) *ordererspbftpb.Preprepare {
-	return pbftPreprepareMsg(t.SeqNr(preprepare.Sn), view, preprepare.CertData, preprepare.Aborted)
+	return pbftPreprepareMsg(t.SeqNr(preprepare.Sn), view, preprepare.Data, preprepare.Aborted)
 }
 
 // ============================================================
@@ -104,7 +104,7 @@ func (orderer *Orderer) applyViewChangeSignResult(signature []byte, viewChange *
 	msgView := t.PBFTViewNr(viewChange.View)
 
 	// Compute the primary of this view (using round-robin on the membership)
-	primary := primaryNode(orderer.segment, msgView)
+	primary := orderer.segment.PrimaryNode(msgView)
 
 	// Assemble signature and viewChange to a SignedViewChange message.
 	signedViewChange := pbftSignedViewChangeMsg(viewChange, signature)
@@ -158,7 +158,7 @@ func (orderer *Orderer) applyVerifiedViewChange(svc *ordererspbftpb.SignedViewCh
 	}
 
 	// Discard ViewChange message if this node is not the primary for the referenced view
-	primary := primaryNode(orderer.segment, vcView)
+	primary := orderer.segment.PrimaryNode(vcView)
 	if orderer.ownID != primary {
 		orderer.logger.Log(logging.LevelDebug, "Ignoring ViewChange. Not the primary of view",
 			"sender", from,
@@ -187,7 +187,7 @@ func (orderer *Orderer) applyVerifiedViewChange(svc *ordererspbftpb.SignedViewCh
 		orderer.logger.Log(logging.LevelDebug, "Received enough ViewChanges.")
 
 		// Fill in empty Preprepare messages for all sequence numbers where nothing was prepared in the old view.
-		emptyPreprepareData := state.SetEmptyPreprepares(vcView)
+		emptyPreprepareData := state.SetEmptyPreprepares(vcView, orderer.segment.Proposals)
 
 		// Request hashing of the new Preprepare messages
 		return events.ListOf(
@@ -350,13 +350,13 @@ func (orderer *Orderer) sendNewView(view t.PBFTViewNr, vcState *pbftViewChangeSt
 			PbftNewViewSBMessage(newView),
 			orderer.moduleConfig.Self,
 		),
-		orderer.segment.Membership))
+		orderer.segment.NodeIDs()))
 }
 
 func (orderer *Orderer) applyMsgNewView(newView *ordererspbftpb.NewView, from t.NodeID) *events.EventList {
 
 	// Ignore message if the sender is not the primary of the view.
-	if from != primaryNode(orderer.segment, t.PBFTViewNr(newView.View)) {
+	if from != orderer.segment.PrimaryNode(t.PBFTViewNr(newView.View)) {
 		return events.EmptyList()
 	}
 
@@ -407,7 +407,7 @@ func (orderer *Orderer) applyNewViewHashResult(digests [][]byte, newView *ordere
 
 	// Create a temporary view change state object
 	// to use for reconstructing the re-proposals from the obtained view change messages.
-	vcState := newPbftViewChangeState(orderer.segment.SeqNrs, orderer.segment.Membership, orderer.logger)
+	vcState := newPbftViewChangeState(orderer.segment.SeqNrs(), orderer.segment.NodeIDs(), orderer.logger)
 
 	// Feed all obtained ViewChange messages to the view chnage state.
 	for i, signedViewChange := range newView.SignedViewChanges {
@@ -427,7 +427,7 @@ func (orderer *Orderer) applyNewViewHashResult(digests [][]byte, newView *ordere
 		// If the expected digest is empty, it means that the corresponding Preprepare is an "aborted" one.
 		// In this case, check the Preprepare directly.
 		if len(digest) == 0 {
-			prepreparesMatching = validEmptyPreprepare(newView.Preprepares[i], msgView, sn)
+			prepreparesMatching = validFreshPreprepare(newView.Preprepares[i], msgView, sn)
 		} else {
 			prepreparesMatching = bytes.Equal(digest, digests[i])
 		}
@@ -447,7 +447,7 @@ func (orderer *Orderer) applyNewViewHashResult(digests [][]byte, newView *ordere
 	eventsOut := orderer.initView(msgView)
 
 	// Apply all the Preprepares contained in the NewView
-	primary := primaryNode(orderer.segment, msgView)
+	primary := orderer.segment.PrimaryNode(msgView)
 	for _, preprepare := range newView.Preprepares {
 		eventsOut.PushBackList(orderer.applyMsgPreprepare(preprepare, primary))
 	}
@@ -458,11 +458,10 @@ func (orderer *Orderer) applyNewViewHashResult(digests [][]byte, newView *ordere
 // Auxiliary functions
 // ============================================================
 
-func validEmptyPreprepare(preprepare *ordererspbftpb.Preprepare, view t.PBFTViewNr, sn t.SeqNr) bool {
+func validFreshPreprepare(preprepare *ordererspbftpb.Preprepare, view t.PBFTViewNr, sn t.SeqNr) bool {
 	return preprepare.Aborted &&
 		t.SeqNr(preprepare.Sn) == sn &&
-		t.PBFTViewNr(preprepare.View) == view &&
-		len(preprepare.CertData) == 0
+		t.PBFTViewNr(preprepare.View) == view
 }
 
 // viewChangeState returns the state of the view change sub-protocol associated with the given view,
@@ -475,7 +474,7 @@ func (orderer *Orderer) getViewChangeState(view t.PBFTViewNr) *pbftViewChangeSta
 	}
 
 	// If no view change state is yet associated with this view, allocate a new one and return it.
-	orderer.viewChangeStates[view] = newPbftViewChangeState(orderer.segment.SeqNrs, orderer.segment.Membership, orderer.logger)
+	orderer.viewChangeStates[view] = newPbftViewChangeState(orderer.segment.SeqNrs(), orderer.segment.NodeIDs(), orderer.logger)
 
 	return orderer.viewChangeStates[view]
 }
@@ -650,7 +649,7 @@ func (orderer *Orderer) getPSetQSet() (pSet viewChangePSet, qSet viewChangeQSet)
 	qSet = make(map[t.SeqNr]map[string]t.PBFTViewNr)
 
 	// For each sequence number, compute the PSet and the QSet.
-	for _, sn := range orderer.segment.SeqNrs {
+	for _, sn := range orderer.segment.SeqNrs() {
 
 		// Initialize QSet.
 		// (No need to initialize the PSet, as, unlike the PSet,

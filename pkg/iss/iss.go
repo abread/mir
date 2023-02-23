@@ -102,10 +102,16 @@ type ISS struct {
 	// The first sequence number to be delivered in the new epoch.
 	newEpochSN t.SeqNr
 
-	// Stores the stable checkpoint with the highest sequence number observed so far.
+	// Stores the stable checkpoint with the highest sequence number agreed-upon so far.
 	// If no stable checkpoint has been observed yet, lastStableCheckpoint is initialized to a stable checkpoint value
 	// corresponding to the initial state and associated with sequence number 0.
 	lastStableCheckpoint *checkpoint.StableCheckpoint
+
+	// Stores the highest stable checkpoint sequence number received from the checkpointing protocol so far.
+	// This value is set immediately on reception of the checkpoint, without waiting for agreement on it.
+	// This is only necessary if the checkpointing protocol announces a stable checkpoint multiple times,
+	// in which case we use this value to only start a single agreement protocol for the same checkpoint.
+	lastPendingCheckpointSN t.SeqNr
 
 	// The logic for selecting leader nodes in each epoch.
 	// For details see the documentation of the LeaderSelectionPolicy type.
@@ -159,22 +165,23 @@ func New(
 
 	// Initialize a new ISS object.
 	iss := &ISS{
-		ownID:                ownID,
-		moduleConfig:         moduleConfig,
-		Params:               params,
-		hashImpl:             hashImpl,
-		chkpVerifier:         chkpVerifier,
-		logger:               logger,
-		epoch:                nil, // Initialized later.
-		epochs:               make(map[t.EpochNr]*epochInfo),
-		nodeEpochMap:         make(map[t.NodeID]t.EpochNr),
-		memberships:          startingChkp.Memberships(),
-		nextNewMembership:    nil,
-		commitLog:            make(map[t.SeqNr]*CommitLogEntry),
-		nextDeliveredSN:      startingChkp.SeqNr(),
-		newEpochSN:           startingChkp.SeqNr(),
-		lastStableCheckpoint: startingChkp,
-		LeaderPolicy:         leaderPolicy,
+		ownID:                   ownID,
+		moduleConfig:            moduleConfig,
+		Params:                  params,
+		hashImpl:                hashImpl,
+		chkpVerifier:            chkpVerifier,
+		logger:                  logger,
+		epoch:                   nil, // Initialized later.
+		epochs:                  make(map[t.EpochNr]*epochInfo),
+		nodeEpochMap:            make(map[t.NodeID]t.EpochNr),
+		memberships:             startingChkp.Memberships(),
+		nextNewMembership:       nil,
+		commitLog:               make(map[t.SeqNr]*CommitLogEntry),
+		nextDeliveredSN:         startingChkp.SeqNr(),
+		newEpochSN:              startingChkp.SeqNr(),
+		lastStableCheckpoint:    startingChkp,
+		lastPendingCheckpointSN: 0,
+		LeaderPolicy:            leaderPolicy,
 		// TODO: Make sure that verification of the stable checkpoint certificate for epoch 0 is handled properly.
 		//       (Probably "always valid", if the membership is right.) There is no epoch -1 with nodes to sign it.
 	}
@@ -296,37 +303,14 @@ func (iss *ISS) applyInit() (*events.EventList, error) {
 	return eventsOut, nil
 }
 
-// applySBInstDeliver processes the event of an SB instance delivering a certificate (or the special abort value)
-// for a sequence number. It creates a corresponding commitLog entry and requests the computation of its hash.
-// Note that applySBInstDeliver does not yet insert the entry to the commitLog. This will be done later.
-// Operation continues on reception of the HashResult event.
+// applySBInstDeliver processes the event of an SB instance delivering data.
+// It invokes the appropriate handler depending on whether this data is
+// an availability certificate (or the special abort value) or a common checkpoint.
 func (iss *ISS) applySBInstDeliver(deliver *isspb.SBDeliver) (*events.EventList, error) {
-
-	// Create a new preliminary log entry based on the delivered certificate and hash it.
-	// Note that, although tempting, the hash used internally by the SB implementation cannot be re-used.
-	// Apart from making the SB abstraction extremely leaky (reason enough not to do it), it would also be incorrect.
-	// E.g., in PBFT, if the digest of the corresponding Preprepare message was used, the hashes at different nodes
-	// might mismatch, if they commit in different PBFT views (and thus using different Preprepares).
-	logEntry := &CommitLogEntry{
-		Sn:       t.SeqNr(deliver.Sn),
-		CertData: deliver.CertData,
-		Digest:   nil,
-		Aborted:  deliver.Aborted,
-		Suspect:  t.NodeID(deliver.Leader),
+	if t.ModuleID(deliver.InstanceId).Sub().Sub() == "chkp" {
+		return iss.deliverCommonCheckpoint(deliver.Data)
 	}
-
-	digest := iss.computeHash(serializeLogEntryForHashing(logEntry))
-
-	// Attach digest to entry.
-	logEntry.Digest = digest
-
-	// Insert the entry in the commitLog.
-	iss.commitLog[logEntry.Sn] = logEntry
-
-	// Deliver commitLog entries to the application in sequence number order.
-	// This is relevant in the case when the sequence number of the currently SB-delivered certificate
-	// is the first sequence number not yet delivered to the application.
-	return iss.processCommitted()
+	return iss.deliverCert(deliver)
 }
 
 func (iss *ISS) applyNewConfig(config *eventpb.NewConfig) (*events.EventList, error) {
@@ -393,74 +377,58 @@ func (iss *ISS) applyEpochProgress(epochProgress *checkpointpb.EpochProgress) (*
 }
 
 // applyStableCheckpoint handles a new stable checkpoint produced by the checkpoint protocol.
-// It performs the necessary cleanup, mostly garbage-collecting state subsumed by the stable checkpoint.
-func (iss *ISS) applyStableCheckpoint(stableCheckpoint *checkpoint.StableCheckpoint) (*events.EventList, error) {
-	eventsOut := events.EmptyList()
+// It serializes and submits the checkpoint for agreement.
+func (iss *ISS) applyStableCheckpoint(chkp *checkpoint.StableCheckpoint) (*events.EventList, error) {
 
-	if stableCheckpoint.SeqNr() > iss.lastStableCheckpoint.SeqNr() {
-		// If this is the most recent checkpoint observed, save it.
-		iss.logger.Log(logging.LevelInfo, "New stable checkpoint.",
-			"epoch", stableCheckpoint.Epoch(),
-			"sn", stableCheckpoint.SeqNr(),
-			"replacingEpoch", iss.lastStableCheckpoint.Epoch(),
-			"replacingSn", iss.lastStableCheckpoint.SeqNr(),
-			"numMemberships", len(stableCheckpoint.Memberships()),
-		)
-		iss.lastStableCheckpoint = stableCheckpoint
+	// Ignore old checkpoints.
+	if chkp.SeqNr() <= iss.lastPendingCheckpointSN {
+		iss.logger.Log(logging.LevelDebug, "Ignoring outdated stable checkpoint.", "sn", chkp.SeqNr())
+		return events.EmptyList(), nil
+	}
+	iss.lastPendingCheckpointSN = chkp.SeqNr()
 
-		// Deliver the stable checkpoint (and potential batches committed in the meantime,
-		// but blocked from being delivered due to this missing checkpoint) to the application.
-		eventsOut.PushBack(chkpprotos.StableCheckpointEvent(iss.moduleConfig.App, stableCheckpoint.Pb()))
-		pcResult, err := iss.processCommitted()
-		if err != nil {
-			return nil, err
-		}
-		eventsOut.PushBackList(pcResult)
+	// If this is the most recent checkpoint observed, save it.
+	iss.logger.Log(logging.LevelInfo, "New stable checkpoint.",
+		"currentEpoch", iss.epoch.Nr(),
+		"chkpEpoch", chkp.Epoch(),
+		"sn", chkp.SeqNr(),
+		"replacingEpoch", iss.lastStableCheckpoint.Epoch(),
+		"replacingSn", iss.lastStableCheckpoint.SeqNr(),
+		"numMemberships", len(chkp.Memberships()),
+	)
 
-		// Prune the state of all related modules.
-		// The state to prune is determined according to the retention index
-		// which is derived from the epoch number the new
-		// stable checkpoint is associated with.
-		pruneIndex := int(stableCheckpoint.Epoch()) - iss.Params.RetainedEpochs
-		if pruneIndex > 0 { // "> 0" and not ">= 0", since only entries strictly smaller than the index are pruned.
+	// Convenience variables
+	membership := chkp.PreviousMembership()
+	epoch := chkp.Epoch()
 
-			// Prune timer, checkpointing, availability, and orderers.
-			eventsOut.PushBackSlice([]*eventpb.Event{
-				events.TimerGarbageCollect(iss.moduleConfig.Timer, t.RetentionIndex(pruneIndex)),
-				factoryevents.GarbageCollect(iss.moduleConfig.Checkpoint, t.RetentionIndex(pruneIndex)),
-				factoryevents.GarbageCollect(iss.moduleConfig.Availability, t.RetentionIndex(pruneIndex)),
-				factoryevents.GarbageCollect(iss.moduleConfig.Ordering, t.RetentionIndex(pruneIndex)),
-			})
-			// TODO: Make EventList.PushBack accept a variable number of arguments and use it here.
+	// The remainder of this function creates a new orderer instance to agree on a common checkpoint.
+	// This is only necessary because different nodes might have different checkpoint certificates
+	// (as they consist of quorums of collected signatures, which might differ at different nodes).
+	// Since we want all nodes to deliver the same checkpoint certificate to the application,
+	// we first need to agree on one (any of them).
 
-			// Prune epoch state.
-			for epoch := range iss.epochs {
-				if epoch < t.EpochNr(pruneIndex) {
-					delete(iss.epochs, epoch)
-				}
-			}
+	// Choose a leader for the new orderer instance.
+	// TODO: Use the corresponding epoch's leader set to pick a leader, instead of just selecting one from all nodes.
+	leader := maputil.GetSortedKeys(membership)[int(epoch)%len(membership)]
 
-			// Start state catch-up.
-			// Using a periodic PushCheckpoint event instead of directly starting a periodic re-transmission
-			// of StableCheckpoint messages makes it possible to stop sending checkpoints to nodes that caught up
-			// before the re-transmission is garbage-collected.
-			eventsOut.PushBack(events.TimerRepeat(
-				iss.moduleConfig.Timer,
-				[]*eventpb.Event{PushCheckpoint(iss.moduleConfig.Self)},
-				t.TimeDuration(iss.Params.CatchUpTimerPeriod),
-
-				// Note that we are not using the current epoch number here, because it is not relevant for checkpoints.
-				// Using pruneIndex makes sure that the re-transmission is stopped
-				// on every stable checkpoint (when another one is started).
-				t.RetentionIndex(pruneIndex),
-			))
-
-		}
-	} else {
-		iss.logger.Log(logging.LevelDebug, "Ignoring outdated stable checkpoint.", "sn", stableCheckpoint.SeqNr())
+	// Serialize checkpoint, so it can be proposed as a value.
+	chkpData, err := chkp.Serialize()
+	if err != nil {
+		return nil, fmt.Errorf("failed serializing stable checkpoint: %w", err)
 	}
 
-	return eventsOut, nil
+	// Instantiate a new PBFT orderer.
+	return events.ListOf(factoryevents.NewModule(
+		iss.moduleConfig.Ordering,
+		iss.moduleConfig.Ordering.Then(t.ModuleID(fmt.Sprintf("%v", epoch))).Then("chkp"),
+		t.RetentionIndex(epoch),
+		orderers.InstanceParams(
+			orderers.NewSegment(leader, membership, map[t.SeqNr][]byte{0: chkpData}),
+			"", // The checkpoint orderer should never talk to the availability module, as it has a set proposal.
+			epoch,
+			orderers.CheckpointValidityChecker,
+		),
+	)), nil
 }
 
 // applyPushCheckpoint handles the periodic event of pushing the latest stable checkpoint
@@ -480,7 +448,7 @@ func (iss *ISS) applyPushCheckpoint() (*events.EventList, error) {
 	// catching up with state transfer.
 	var delayed []t.NodeID
 	lastStableCheckpointEpoch := iss.lastStableCheckpoint.Epoch()
-	for n := range iss.epoch.nodeIDs {
+	for n := range iss.epoch.Membership {
 		if lastStableCheckpointEpoch > iss.nodeEpochMap[n]+t.EpochNr(iss.Params.RetainedEpochs) {
 			delayed = append(delayed, n)
 		}
@@ -488,7 +456,7 @@ func (iss *ISS) applyPushCheckpoint() (*events.EventList, error) {
 
 	if len(delayed) > 0 {
 		iss.logger.Log(logging.LevelDebug, "Pushing state to nodes.",
-			"delayed", delayed, "numNodes", len(iss.epoch.nodeIDs), "nodeEpochMap", iss.nodeEpochMap)
+			"delayed", delayed, "numNodes", len(iss.epoch.Membership), "nodeEpochMap", iss.nodeEpochMap)
 	}
 
 	m := StableCheckpointMessage(iss.lastStableCheckpoint)
@@ -611,11 +579,11 @@ func (iss *ISS) startEpoch(epochNr t.EpochNr) *events.EventList {
 	eventsOut := events.EmptyList()
 
 	// Initialize the internal data structures for the new epoch.
-	nodeIDs := maputil.GetSortedKeys(iss.memberships[0])
-	epoch := newEpochInfo(epochNr, iss.newEpochSN, nodeIDs, iss.LeaderPolicy)
+	epoch := newEpochInfo(epochNr, iss.newEpochSN, iss.memberships[0], iss.LeaderPolicy)
 	iss.epochs[epochNr] = &epoch
 	iss.epoch = &epoch
-	iss.logger.Log(logging.LevelInfo, "Initializing new epoch", "epochNr", epochNr, "nodes", nodeIDs, "leaders", iss.LeaderPolicy.Leaders())
+	iss.logger.Log(logging.LevelInfo, "Initializing new epoch",
+		"epochNr", epochNr, "nodes", maputil.GetSortedKeys(iss.memberships[0]), "leaders", iss.LeaderPolicy.Leaders())
 
 	// Signal the new epoch to the application.
 	eventsOut.PushBack(events.NewEpoch(iss.moduleConfig.App, iss.epoch.Nr()))
@@ -651,15 +619,10 @@ func (iss *ISS) initOrderers() *events.EventList {
 	for i, leader := range leaders {
 
 		// Create segment.
-		seg := &orderers.Segment{
-			Leader:     leader,
-			Membership: maputil.GetSortedKeys(iss.epoch.nodeIDs),
-			SeqNrs: sequenceNumbers(
-				iss.nextDeliveredSN+t.SeqNr(i),
-				t.SeqNr(len(leaders)),
-				iss.Params.SegmentLength),
-		}
-		iss.newEpochSN += t.SeqNr(len(seg.SeqNrs))
+		// The sequence proposals are all set to nil, so that the orderer proposes new availability certificates.
+		proposals := freeProposals(iss.nextDeliveredSN+t.SeqNr(i), t.SeqNr(len(leaders)), iss.Params.SegmentLength)
+		seg := orderers.NewSegment(leader, iss.epoch.Membership, proposals)
+		iss.newEpochSN += t.SeqNr(seg.Len())
 
 		// Instantiate a new PBFT orderer.
 		eventsOut.PushBack(factoryevents.NewModule(
@@ -670,6 +633,7 @@ func (iss *ISS) initOrderers() *events.EventList {
 				seg,
 				iss.moduleConfig.Availability.Then(t.ModuleID(fmt.Sprintf("%v", iss.epoch.Nr()))),
 				iss.epoch.Nr(),
+				orderers.PermissiveValidityChecker,
 			),
 		))
 
@@ -817,6 +781,116 @@ func (iss *ISS) advanceEpoch() (*events.EventList, error) {
 	return eventsOut, nil
 }
 
+// deliverCert creates a commitLog entry from an availability certificate delivered by an orderer
+// and requests the computation of its hash.
+// Note that applySBInstDeliver does not yet insert the entry to the commitLog. This will be done later.
+// Operation continues on reception of the HashResult event.
+func (iss *ISS) deliverCert(deliverEvent *isspb.SBDeliver) (*events.EventList, error) {
+
+	// Create a new preliminary log entry based on the delivered certificate and hash it.
+	// Note that, although tempting, the hash used internally by the SB implementation cannot be re-used.
+	// Apart from making the SB abstraction extremely leaky (reason enough not to do it), it would also be incorrect.
+	// E.g., in PBFT, if the digest of the corresponding Preprepare message was used, the hashes at different nodes
+	// might mismatch, if they commit in different PBFT views (and thus using different Preprepares).
+	logEntry := &CommitLogEntry{
+		Sn:       t.SeqNr(deliverEvent.Sn),
+		CertData: deliverEvent.Data,
+		Digest:   nil,
+		Aborted:  deliverEvent.Aborted,
+		Suspect:  t.NodeID(deliverEvent.Leader),
+	}
+
+	digest := iss.computeHash(serializeLogEntryForHashing(logEntry))
+
+	// Attach digest to entry.
+	logEntry.Digest = digest
+
+	// Insert the entry in the commitLog.
+	iss.commitLog[logEntry.Sn] = logEntry
+
+	// Deliver commitLog entries to the application in sequence number order.
+	// This is relevant in the case when the sequence number of the currently SB-delivered certificate
+	// is the first sequence number not yet delivered to the application.
+	return iss.processCommitted()
+}
+
+func (iss *ISS) deliverCommonCheckpoint(chkpData []byte) (*events.EventList, error) {
+	eventsOut := events.EmptyList()
+
+	chkp := &checkpoint.StableCheckpoint{}
+	if err := chkp.Deserialize(chkpData); err != nil {
+		return nil, fmt.Errorf("could not deserialize common checkpoint: %w", err)
+	}
+
+	// Ignore old checkpoints.
+	if chkp.SeqNr() <= iss.lastStableCheckpoint.SeqNr() {
+		iss.logger.Log(logging.LevelDebug, "Ignoring outdated stable checkpoint.", "sn", chkp.SeqNr())
+		return eventsOut, nil
+	}
+
+	// If this is the most recent checkpoint observed, save it.
+	iss.logger.Log(logging.LevelInfo, "Agreed on new common checkpoint.",
+		"currentEpoch", iss.epoch.Nr(),
+		"chkpEpoch", chkp.Epoch(),
+		"sn", chkp.SeqNr(),
+		"replacingEpoch", iss.lastStableCheckpoint.Epoch(),
+		"replacingSn", iss.lastStableCheckpoint.SeqNr(),
+		"numMemberships", len(chkp.Memberships()),
+	)
+	iss.lastStableCheckpoint = chkp
+
+	// Deliver the stable checkpoint (and potential batches committed in the meantime,
+	// but blocked from being delivered due to this missing checkpoint) to the application.
+	eventsOut.PushBack(chkpprotos.StableCheckpointEvent(iss.moduleConfig.App, chkp.Pb()))
+	pcResult, err := iss.processCommitted()
+	if err != nil {
+		return nil, err
+	}
+	eventsOut.PushBackList(pcResult)
+
+	// Prune the state of all related modules.
+	// The state to prune is determined according to the retention index
+	// which is derived from the epoch number the new
+	// stable checkpoint is associated with.
+	pruneIndex := int(chkp.Epoch()) - iss.Params.RetainedEpochs
+	if pruneIndex > 0 { // "> 0" and not ">= 0", since only entries strictly smaller than the index are pruned.
+
+		// Prune timer, checkpointing, availability, and orderers.
+		eventsOut.PushBackSlice([]*eventpb.Event{
+			events.TimerGarbageCollect(iss.moduleConfig.Timer, t.RetentionIndex(pruneIndex)),
+			factoryevents.GarbageCollect(iss.moduleConfig.Checkpoint, t.RetentionIndex(pruneIndex)),
+			factoryevents.GarbageCollect(iss.moduleConfig.Availability, t.RetentionIndex(pruneIndex)),
+			factoryevents.GarbageCollect(iss.moduleConfig.Ordering, t.RetentionIndex(pruneIndex)),
+		})
+		// TODO: Make EventList.PushBack accept a variable number of arguments and use it here.
+
+		// Prune epoch state.
+		for epoch := range iss.epochs {
+			if epoch < t.EpochNr(pruneIndex) {
+				delete(iss.epochs, epoch)
+			}
+		}
+
+		// Start state catch-up.
+		// Using a periodic PushCheckpoint event instead of directly starting a periodic re-transmission
+		// of StableCheckpoint messages makes it possible to stop sending checkpoints to nodes that caught up
+		// before the re-transmission is garbage-collected.
+		eventsOut.PushBack(events.TimerRepeat(
+			iss.moduleConfig.Timer,
+			[]*eventpb.Event{PushCheckpoint(iss.moduleConfig.Self)},
+			t.TimeDuration(iss.Params.CatchUpTimerPeriod),
+
+			// Note that we are not using the current epoch number here, because it is not relevant for checkpoints.
+			// Using pruneIndex makes sure that the re-transmission is stopped
+			// on every stable checkpoint (when another one is started).
+			t.RetentionIndex(pruneIndex),
+		))
+
+	}
+
+	return eventsOut, nil
+}
+
 func (iss *ISS) computeHash(data [][]byte) []byte {
 
 	// One data item consists of potentially multiple byte slices.
@@ -835,15 +909,16 @@ func (iss *ISS) computeHash(data [][]byte) []byte {
 // Auxiliary functions
 // ============================================================
 
-// sequenceNumbers returns a list of sequence numbers of length `length`,
-// starting with sequence number `start`, with the difference between two consecutive sequence number being `step`.
+// freeProposals returns a map of sequence numbers with associated "free" proposals (nil values).
+// The returned map has length `length`, starting with sequence number `start`,
+// with the difference between two consecutive sequence number being `step`.
 // This function is used to compute the sequence numbers of a Segment.
 // When there is `step` segments, their interleaving creates a consecutive block of sequence numbers
 // that constitutes an epoch.
-func sequenceNumbers(start t.SeqNr, step t.SeqNr, length int) []t.SeqNr {
-	seqNrs := make([]t.SeqNr, length)
+func freeProposals(start t.SeqNr, step t.SeqNr, length int) map[t.SeqNr][]byte {
+	seqNrs := make(map[t.SeqNr][]byte, length)
 	for i, nextSn := 0, start; i < length; i, nextSn = i+1, nextSn+step {
-		seqNrs[i] = nextSn
+		seqNrs[nextSn] = nil
 	}
 	return seqNrs
 }

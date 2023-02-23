@@ -54,7 +54,7 @@ type pbftProposalState struct {
 
 // applyProposeTimeout applies the event of the proposal timeout firing.
 // It updates the proposal state accordingly and triggers a new proposal if possible.
-func (orderer *Orderer) applyProposeTimeout(numProposals int) *events.EventList {
+func (orderer *Orderer) applyProposeTimeout(numProposals int) (*events.EventList, error) {
 
 	// If we are still waiting for this timeout
 	if numProposals > orderer.proposal.proposalTimeout {
@@ -64,11 +64,19 @@ func (orderer *Orderer) applyProposeTimeout(numProposals int) *events.EventList 
 
 		// If this was the last bit missing, start a new proposal.
 		if orderer.canPropose() {
-			return orderer.requestNewCert()
+
+			// If a proposal already has been set as a parameter of the segment, propose it directly.
+			sn := orderer.segment.SeqNrs()[orderer.proposal.proposalsMade]
+			if proposal := orderer.segment.Proposals[sn]; proposal != nil {
+				return orderer.propose(proposal)
+			}
+
+			// Otherwise, obtain a fresh availability certificate first.
+			return orderer.requestNewCert(), nil
 		}
 	}
 
-	return events.EmptyList()
+	return events.EmptyList(), nil
 }
 
 // requestNewCert asks (by means of a CertRequest event) ISS to provide a new availability certificate.
@@ -100,7 +108,13 @@ func (orderer *Orderer) applyCertReady(cert *availabilitypb.Cert) (*events.Event
 	if orderer.proposal.certRequestedView == orderer.view {
 		// If the protocol is still in the same PBFT view as when the certificate was requested,
 		// propose the received certificate.
-		l, err := orderer.propose(cert)
+
+		certBytes, err := proto.Marshal(cert)
+		if err != nil {
+			return nil, fmt.Errorf("error marshalling certificate: %w", err)
+		}
+
+		l, err := orderer.propose(certBytes)
 		if err != nil {
 			return nil, fmt.Errorf("failed to propose: %w", err)
 		}
@@ -118,15 +132,10 @@ func (orderer *Orderer) applyCertReady(cert *availabilitypb.Cert) (*events.Event
 // propose proposes a new availability certificate by sending a Preprepare message.
 // propose assumes that the state of the PBFT Orderer allows sending a new proposal
 // and does not perform any checks in this regard.
-func (orderer *Orderer) propose(cert *availabilitypb.Cert) (*events.EventList, error) {
-
-	certBytes, err := proto.Marshal(cert)
-	if err != nil {
-		return nil, fmt.Errorf("error marshalling certificate: %w", err)
-	}
+func (orderer *Orderer) propose(data []byte) (*events.EventList, error) {
 
 	// Update proposal counter.
-	sn := orderer.segment.SeqNrs[orderer.proposal.proposalsMade]
+	sn := orderer.segment.SeqNrs()[orderer.proposal.proposalsMade]
 	orderer.proposal.proposalsMade++
 
 	// Log debug message.
@@ -134,7 +143,7 @@ func (orderer *Orderer) propose(cert *availabilitypb.Cert) (*events.EventList, e
 		"sn", sn)
 
 	// Create the proposal (consisting of a Preprepare message).
-	preprepare := pbftPreprepareMsg(sn, orderer.view, certBytes, false)
+	preprepare := pbftPreprepareMsg(sn, orderer.view, data, false)
 
 	// Create a Preprepare message send OrdererEvent.
 	// No need for periodic re-transmission.
@@ -142,7 +151,7 @@ func (orderer *Orderer) propose(cert *availabilitypb.Cert) (*events.EventList, e
 	msgSendEvent := events.SendMessage(orderer.moduleConfig.Net,
 		OrdererMessage(PbftPreprepareSBMessage(preprepare),
 			orderer.moduleConfig.Self), //same moduleID as destination
-		orderer.segment.Membership)
+		orderer.segment.NodeIDs())
 
 	// Set up a new timer for the next proposal.
 
@@ -172,6 +181,12 @@ func (orderer *Orderer) applyMsgPreprepare(preprepare *ordererspbftpb.Preprepare
 		return events.EmptyList()
 	}
 
+	// Check whether valid data has been proposed.
+	if err := orderer.externalValidator.Check(preprepare.Data); err != nil {
+		orderer.logger.Log(logging.LevelWarn, "Ignoring Preprepare message with invalid proposal.",
+			"sn", sn, "from", from, "err", err)
+	}
+
 	// Check that this is the first Preprepare message received.
 	// Note that checking the orderer.Preprepared flag instead would be incorrect,
 	// as that flag is only set upon receiving the RequestsReady OrdererEvent.
@@ -182,7 +197,7 @@ func (orderer *Orderer) applyMsgPreprepare(preprepare *ordererspbftpb.Preprepare
 	}
 
 	// Check whether the sender is the legitimate leader of the segment in the current view.
-	primary := primaryNode(orderer.segment, orderer.view)
+	primary := orderer.segment.PrimaryNode(orderer.view)
 	if from != primary {
 		orderer.logger.Log(logging.LevelWarn, "Ignoring Preprepare message. Invalid Leader.",
 			"expectedLeader", primary,
@@ -235,7 +250,7 @@ func (orderer *Orderer) sendPrepare(prepare *ordererspbftpb.Prepare) *events.Eve
 	// In the worst case, dropping of these messages may result in a view change, but will not compromise correctness.
 	return events.ListOf(events.SendMessage(orderer.moduleConfig.Net,
 		OrdererMessage(PbftPrepareSBMessage(prepare), orderer.moduleConfig.Self),
-		orderer.segment.Membership,
+		orderer.segment.NodeIDs(),
 	))
 }
 
@@ -275,7 +290,7 @@ func (orderer *Orderer) sendCommit(commit *ordererspbftpb.Commit) *events.EventL
 	// In the worst case, dropping of these messages may result in a view change, but will not compromise correctness.
 	return events.ListOf(events.SendMessage(orderer.moduleConfig.Net,
 		OrdererMessage(PbftCommitSBMessage(commit), orderer.moduleConfig.Self),
-		orderer.segment.Membership))
+		orderer.segment.NodeIDs()))
 }
 
 // applyMsgCommit applies a received commit message.

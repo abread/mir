@@ -9,16 +9,15 @@ package orderers
 import (
 	"fmt"
 
+	"github.com/filecoin-project/mir/pkg/events"
 	issconfig "github.com/filecoin-project/mir/pkg/iss/config"
+	"github.com/filecoin-project/mir/pkg/logging"
+	"github.com/filecoin-project/mir/pkg/messagebuffer"
 	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/pb/availabilitypb"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
 	"github.com/filecoin-project/mir/pkg/pb/messagepb"
 	"github.com/filecoin-project/mir/pkg/pb/ordererspb"
-
-	"github.com/filecoin-project/mir/pkg/events"
-	"github.com/filecoin-project/mir/pkg/logging"
-	"github.com/filecoin-project/mir/pkg/messagebuffer"
 	"github.com/filecoin-project/mir/pkg/pb/ordererspbftpb"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
@@ -27,19 +26,13 @@ import (
 // PBFT Orderer type and constructor
 // ============================================================
 
-// The Segment type represents an ISS Segment.
-// It is used to parametrize an orderer (i.e. the SB instance).
-type Segment struct {
+// ValidityChecker is the interface of an external checker of validity of proposed data.
+// Each orderer is provided with an object implementing this interface
+// and applies its Check method to all received proposals.
+type ValidityChecker interface {
 
-	// The leader node of the orderer.
-	Leader t.NodeID
-
-	// List of all nodes executing the orderer implementation.
-	Membership []t.NodeID
-
-	// List of sequence numbers for which the orderer is responsible.
-	// This is the actual "segment" of the commit log.
-	SeqNrs []t.SeqNr
+	// Check returns nil if the provided proposal data is valid, a non-nil error otherwise.
+	Check(data []byte) error
 }
 
 // Orderer represents a PBFT Orderer.
@@ -89,6 +82,9 @@ type Orderer struct {
 	// The map itself is allocated on creation of the pbftInstance, but the entries are initialized lazily,
 	// only when needed (when the node initiates a view change).
 	viewChangeStates map[t.PBFTViewNr]*pbftViewChangeState
+
+	// Contains the application-specific code for validating incoming proposals.
+	externalValidator ValidityChecker
 }
 
 // NewOrdererModule allocates and initializes a new instance of the PBFT Orderer.
@@ -107,6 +103,7 @@ func NewOrdererModule(
 	ownID t.NodeID,
 	segment *Segment,
 	config *PBFTConfig,
+	externalValidator ValidityChecker,
 	logger logging.Logger) *Orderer {
 
 	// Set all the necessary fields of the new instance and return it.
@@ -115,6 +112,7 @@ func NewOrdererModule(
 		segment:           segment,
 		moduleConfig:      moduleConfig,
 		config:            config,
+		externalValidator: externalValidator,
 		slots:             make(map[t.PBFTViewNr]map[t.SeqNr]*pbftSlot),
 		segmentCheckpoint: newPbftSegmentChkp(),
 		proposal: pbftProposalState{
@@ -178,7 +176,7 @@ func (orderer *Orderer) ApplyEvent(event *eventpb.Event) (*events.EventList, err
 		case *ordererspb.SBInstanceEvent_Init:
 			return orderer.applyInit(), nil
 		case *ordererspb.SBInstanceEvent_PbftProposeTimeout:
-			return orderer.applyProposeTimeout(int(e.PbftProposeTimeout)), nil
+			return orderer.applyProposeTimeout(int(e.PbftProposeTimeout))
 		case *ordererspb.SBInstanceEvent_PbftViewChangeSnTimeout:
 			return orderer.applyViewChangeSNTimeout(e.PbftViewChangeSnTimeout), nil
 		case *ordererspb.SBInstanceEvent_PbftViewChangeSegTimeout:
@@ -324,7 +322,7 @@ func (orderer *Orderer) canPropose() bool {
 		!orderer.proposal.certRequested &&
 
 		// There must still be a free sequence number for which a proposal can be made.
-		orderer.proposal.proposalsMade < len(orderer.segment.SeqNrs) &&
+		orderer.proposal.proposalsMade < orderer.segment.Len() &&
 
 		// The proposal timeout must have passed.
 		orderer.proposal.proposalTimeout > orderer.proposal.proposalsMade &&
@@ -390,7 +388,7 @@ func (orderer *Orderer) initView(view t.PBFTViewNr) *events.EventList {
 
 	// Initialize PBFT slots for the new view, one for each sequence number.
 	orderer.slots[view] = make(map[t.SeqNr]*pbftSlot)
-	for _, sn := range orderer.segment.SeqNrs {
+	for _, sn := range orderer.segment.SeqNrs() {
 
 		// Create a fresh, empty slot.
 		// For n being the membership size, f = (n-1) / 3
@@ -452,19 +450,6 @@ func (orderer *Orderer) lookUpPreprepare(sn t.SeqNr, digest []byte) *ordererspbf
 // ============================================================
 // Auxiliary functions
 // ============================================================
-
-func primaryNode(seg *Segment, view t.PBFTViewNr) t.NodeID {
-	return seg.Membership[(leaderIndex(seg)+int(view))%len(seg.Membership)]
-}
-
-func leaderIndex(seg *Segment) int {
-	for i, nodeID := range seg.Membership {
-		if nodeID == seg.Leader {
-			return i
-		}
-	}
-	panic("invalid segment: leader not in membership")
-}
 
 // computeTimeout adapts a view change timeout to the view in which it is used.
 // This is to implement the doubling of timeouts on every view change.

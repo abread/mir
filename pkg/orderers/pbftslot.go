@@ -136,9 +136,10 @@ func (slot *pbftSlot) advanceState(pbft *Orderer, sn t.SeqNr) *events.EventList 
 			Type: &eventpb.Event_Iss{
 				Iss: SBDeliverEvent(
 					sn,
-					slot.Preprepare.CertData,
+					slot.Preprepare.Data,
 					slot.Preprepare.Aborted,
 					pbft.segment.Leader,
+					pbft.moduleConfig.Self,
 				),
 			},
 		})

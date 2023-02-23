@@ -62,16 +62,14 @@ func InstanceParams(
 	segment *Segment,
 	availabilityID t.ModuleID,
 	epoch t.EpochNr,
+	validityCheckerType ValidityCheckerType,
 ) *factorymodulepb.GeneratorParams {
 	return &factorymodulepb.GeneratorParams{Type: &factorymodulepb.GeneratorParams_PbftModule{
 		PbftModule: &ordererspb.PBFTModule{
-			Segment: &ordererspb.PBFTSegment{
-				Leader:     segment.Leader.Pb(),
-				Membership: t.NodeIDSlicePb(segment.Membership),
-				SeqNrs:     t.SeqNrSlicePb(segment.SeqNrs),
-			},
-			AvailabilityId: availabilityID.Pb(),
-			Epoch:          epoch.Pb(),
+			Segment:         segment.Pb(),
+			AvailabilityId:  availabilityID.Pb(),
+			Epoch:           epoch.Pb(),
+			ValidityChecker: uint64(validityCheckerType),
 		},
 	}}
 }
@@ -80,11 +78,12 @@ func OrdererMessage(msg *ordererspb.SBInstanceMessage, destModule t.ModuleID) *m
 	return &messagepb.Message{DestModule: string(destModule), Type: &messagepb.Message_SbMessage{SbMessage: msg}}
 }
 
-func SBDeliverEvent(sn t.SeqNr, certData []byte, aborted bool, leader t.NodeID) *isspb.ISSEvent {
+func SBDeliverEvent(sn t.SeqNr, data []byte, aborted bool, leader t.NodeID, instanceID t.ModuleID) *isspb.ISSEvent {
 	return &isspb.ISSEvent{Type: &isspb.ISSEvent_SbDeliver{SbDeliver: &isspb.SBDeliver{
-		Sn:       sn.Pb(),
-		CertData: certData,
-		Aborted:  aborted,
-		Leader:   leader.Pb(),
+		Sn:         sn.Pb(),
+		Data:       data,
+		Aborted:    aborted,
+		Leader:     leader.Pb(),
+		InstanceId: instanceID.Pb(),
 	}}}
 }

@@ -1,6 +1,8 @@
 package orderers
 
 import (
+	"github.com/filecoin-project/mir/pkg/checkpoint"
+	"github.com/filecoin-project/mir/pkg/crypto"
 	"github.com/filecoin-project/mir/pkg/factorymodule"
 	issconfig "github.com/filecoin-project/mir/pkg/iss/config"
 	"github.com/filecoin-project/mir/pkg/logging"
@@ -9,7 +11,21 @@ import (
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
-func Factory(mc *ModuleConfig, issParams *issconfig.ModuleParams, ownID t.NodeID, logger logging.Logger) modules.PassiveModule {
+type ValidityCheckerType uint64
+
+const (
+	PermissiveValidityChecker = iota
+	CheckpointValidityChecker
+)
+
+func Factory(
+	mc *ModuleConfig,
+	issParams *issconfig.ModuleParams,
+	ownID t.NodeID,
+	hashImpl crypto.HashImpl,
+	chkpVerifier checkpoint.Verifier,
+	logger logging.Logger,
+) modules.PassiveModule {
 	if logger == nil {
 		logger = logging.ConsoleErrorLogger
 	}
@@ -25,32 +41,37 @@ func Factory(mc *ModuleConfig, issParams *issconfig.ModuleParams, ownID t.NodeID
 				submc := *mc
 				submc.Self = submoduleID
 
+				// Load parameters from received protobuf
 				p := params.Type.(*factorymodulepb.GeneratorParams_PbftModule).PbftModule
-
 				availabilityID := t.ModuleID(p.AvailabilityId)
 				submc.Ava = availabilityID
-
 				epoch := t.EpochNr(p.Epoch)
-				// Get the segment parameters
-				membership := t.NodeIDSlice(p.Segment.Membership)
-				seqNrs := t.SeqNrSlice(p.Segment.SeqNrs)
-				leader := t.NodeID(p.Segment.Leader)
+				segment := SegmentFromPb(p.Segment)
 
-				segment := &Segment{
-					Leader:     leader,
-					Membership: membership,
-					SeqNrs:     seqNrs,
+				// Create new configuration for this particular orderer instance.
+				ordererConfig := newOrdererConfig(issParams, segment.NodeIDs(), epoch)
+
+				// Select validity checker
+				var validityChecker ValidityChecker
+				switch ValidityCheckerType(p.ValidityChecker) {
+				case PermissiveValidityChecker:
+					validityChecker = newPermissiveValidityChecker()
+				case CheckpointValidityChecker:
+					validityChecker = newCheckpointValidityChecker(hashImpl, chkpVerifier, segment.Membership)
+
+					// TODO: This is a dirty hack! Put (at least the relevant parts of) the configuration in params.
+					// Make the agreement on a checkpoint start immediately.
+					ordererConfig.MaxProposeDelay = 0
+
 				}
 
+				// Instantiate new protocol instance.
 				protocol := NewOrdererModule(
 					&submc,
 					ownID,
 					segment,
-					newOrdererConfig(
-						issParams,
-						membership,
-						epoch,
-					),
+					ordererConfig,
+					validityChecker,
 
 					//TODO better logging here
 					logging.Decorate(logger, "", "submoduleID", submoduleID),
