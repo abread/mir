@@ -89,7 +89,7 @@ func DefaultParams(membership map[t.NodeID]t.NodeAddress) *Params {
 		InstanceUID:                 []byte{42},
 		Membership:                  membership,
 		MaxConcurrentVcbPerQueue:    16,
-		TargetOwnUnagreedBatchCount: 1,
+		TargetOwnUnagreedBatchCount: 2,
 		BatchCutFailRetryDelay:      t.TimeDuration(500 * time.Millisecond),
 		MaxAbbaRoundLookahead:       4,
 		MaxAgRoundLookahead:         4,
