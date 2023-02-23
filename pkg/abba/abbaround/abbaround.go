@@ -87,7 +87,7 @@ func New(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging
 		rnetdsl.Ack(m, mc.ReliableNet, mc.Self, InitMsgID(est), from)
 
 		if !state.initRecvd.Register(est, from) {
-			logger.Log(logging.LevelDebug, "duplicate INIT", "est", est, "from", from)
+			logger.Log(logging.LevelWarn, "duplicate INIT", "est", est, "from", from)
 			return nil // duplicate message
 		}
 
@@ -104,7 +104,7 @@ func New(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging
 		for _, est := range []bool{false, true} {
 			// 5. upon receiving weak support for INIT(r, v), add v to values and broadcast INIT(r, v)
 			if !state.initWeakSupportReachedForValue.Get(est) && state.initRecvdEstimateCounts.Get(est) >= params.weakSupportThresh() {
-				logger.Log(logging.LevelDebug, "received weak support for INIT(est)", "est", est)
+				logger.Log(logging.LevelTrace, "received weak support for INIT(est)", "est", est)
 
 				state.values.Add(est)
 
@@ -122,7 +122,7 @@ func New(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging
 
 			// 6. upon receiving strong support for INIT(r, v), broadcast AUX(r, v) if we have not already broadcast AUX(r, _)
 			if !state.auxSent && state.initRecvdEstimateCounts.Get(est) >= params.strongSupportThresh() {
-				logger.Log(logging.LevelDebug, "received strong support for INIT(est)", "est", est)
+				logger.Log(logging.LevelTrace, "received strong support for INIT(est)", "est", est)
 				rnetdsl.SendMessage(m, mc.ReliableNet,
 					AuxMsgID(),
 					abbapbmsgs.RoundAuxMessage(mc.Self, est),
@@ -139,12 +139,12 @@ func New(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging
 		rnetdsl.Ack(m, mc.ReliableNet, mc.Self, AuxMsgID(), from)
 
 		if !state.auxRecvd.Register(from) {
-			logger.Log(logging.LevelDebug, "duplicate AUX(_)", "from", from)
+			logger.Log(logging.LevelWarn, "duplicate AUX(_)", "from", from)
 			return nil // duplicate message
 		}
 		state.auxRecvdValueCounts.Increment(value)
 
-		logger.Log(logging.LevelDebug, "recvd AUX(v)", "v", value)
+		logger.Log(logging.LevelTrace, "recvd AUX(v)", "v", value)
 
 		return nil
 	})
@@ -156,7 +156,7 @@ func New(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging
 		}
 
 		if state.isNiceAuxValueCount(params) {
-			logger.Log(logging.LevelDebug, "received enough support for AUX(v in values)", "values", state.values)
+			logger.Log(logging.LevelTrace, "received enough support for AUX(v in values)", "values", state.values)
 			rnetdsl.SendMessage(m, mc.ReliableNet,
 				ConfMsgID(),
 				abbapbmsgs.RoundConfMessage(mc.Self, state.values),
@@ -174,11 +174,11 @@ func New(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging
 		rnetdsl.Ack(m, mc.ReliableNet, mc.Self, ConfMsgID(), from)
 
 		if !state.confRecvd.Register(from) {
-			logger.Log(logging.LevelDebug, "duplicate CONF(_)", "from", from)
+			logger.Log(logging.LevelWarn, "duplicate CONF(_)", "from", from)
 			return nil // duplicate message
 		}
 
-		logger.Log(logging.LevelDebug, "recvd CONF(C)", "C", values)
+		logger.Log(logging.LevelTrace, "recvd CONF(C)", "C", values)
 		state.confRecvdValueSetCounts.Increment(values)
 
 		return nil
@@ -191,7 +191,7 @@ func New(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging
 		}
 
 		if state.isNiceConfValuesCount(params) {
-			logger.Log(logging.LevelDebug, "received enough support for CONF(C subset of values)", "values", state.values)
+			logger.Log(logging.LevelTrace, "received enough support for CONF(C subset of values)", "values", state.values)
 
 			// 9. sample coin
 			state.phase = phaseTossingCoin
@@ -221,15 +221,15 @@ func New(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging
 		rnetdsl.Ack(m, mc.ReliableNet, mc.Self, CoinMsgID(), from)
 
 		if state.phase == phaseDone {
-			logger.Log(logging.LevelDebug, "already terminated (recvd COIN)")
+			logger.Log(logging.LevelWarn, "already terminated (recvd COIN)")
 			return nil // already terminated
 		}
 
 		if !state.coinRecvd.Register(from) {
-			logger.Log(logging.LevelDebug, "duplicate COIN(_)", "from", from)
+			logger.Log(logging.LevelWarn, "duplicate COIN(_)", "from", from)
 			return nil // duplicate message
 		}
-		logger.Log(logging.LevelDebug, "recvd COIN(share)", "from", from)
+		logger.Log(logging.LevelTrace, "recvd COIN(share)", "from", from)
 
 		threshDsl.VerifyShare(m, mc.ThreshCrypto, coinData, coinShare, from, &coinShare)
 
@@ -271,7 +271,7 @@ func New(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging
 			// we have a signature, all we need to do is hash it and
 			dsl.HashOneMessage(m, mc.Hasher, [][]byte{fullSig}, _ctx)
 		} else {
-			logger.Log(logging.LevelDebug, "could not recover coin ...YET")
+			logger.Log(logging.LevelWarn, "could not recover coin ...YET")
 			// will attempt to recover when more signature shares arrive
 			state.coinRecoverInProgress = false
 		}

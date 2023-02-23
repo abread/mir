@@ -107,7 +107,7 @@ func newController(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunab
 		rnetdsl.Ack(m, mc.ReliableNet, mc.Self, FinishMsgID(), from)
 
 		if !state.finishRecvd.Register(from) {
-			logger.Log(logging.LevelDebug, "duplicate FINISH(v)", "v", value)
+			logger.Log(logging.LevelWarn, "duplicate FINISH(v)", "v", value)
 			return nil // duplicate message
 		}
 
@@ -119,7 +119,7 @@ func newController(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunab
 
 		// 1. upon receiving weak support for FINISH(v), broadcast FINISH(v)
 		if !state.finishSent && state.finishRecvdValueCounts.Get(value) >= params.weakSupportThresh() {
-			logger.Log(logging.LevelDebug, "received weak support for FINISH(v)", "v", value)
+			logger.Log(logging.LevelTrace, "received weak support for FINISH(v)", "v", value)
 			rnetdsl.SendMessage(m, mc.ReliableNet,
 				FinishMsgID(),
 				abbapbmsgs.FinishMessage(mc.Self, value),
@@ -130,7 +130,7 @@ func newController(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunab
 
 		// 2. upon receiving strong support for FINISH(v), output v and terminate
 		if state.origin != nil && state.finishRecvdValueCounts.Get(value) >= params.strongSupportThresh() {
-			logger.Log(logging.LevelDebug, "received strong support for FINISH(v)", "v", value)
+			logger.Log(logging.LevelTrace, "received strong support for FINISH(v)", "v", value)
 
 			abbadsl.Deliver(m, state.origin.Module, value, state.origin)
 			state.phase = phaseDelivered

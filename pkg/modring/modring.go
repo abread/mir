@@ -187,6 +187,7 @@ func (m *Module) getSubByRingIdx(ringIdx int) (modules.PassiveModule, *events.Ev
 			return nil, nil, err
 		}
 
+		m.logger.Log(logging.LevelDebug, "module created", "id", subID)
 		return m.ring[ringIdx], evsOut, err
 	default:
 		return nil, nil, fmt.Errorf("unknown slot status: %v", m.ringController.GetSlotStatus(subID))
@@ -210,6 +211,8 @@ func (m *Module) AdvanceViewToAtLeastSubmodule(id uint64) error {
 		return fmt.Errorf("cannot advance view: %w", err)
 	}
 
+	m.logger.Log(logging.LevelDebug, "fast-forwarded view", "id", id, "newMinSlot", m.ringController.minSlot)
+
 	return nil
 }
 
@@ -227,6 +230,6 @@ func (m *Module) MarkSubmodulePast(id uint64) error {
 	ringIdx := int(id % uint64(len(m.ring)))
 	m.ring[ringIdx] = nil
 
-	m.logger.Log(logging.LevelDebug, "module freed", "id", id)
+	m.logger.Log(logging.LevelDebug, "module freed", "id", id, "newMinSlot", m.ringController.minSlot)
 	return nil
 }

@@ -54,6 +54,11 @@ func newQueueController(mc *ModuleConfig, params *ModuleParams, tunables *Module
 			return fmt.Errorf("input value given to wrong queue")
 		}
 
+		if len(txs) == 0 {
+			return fmt.Errorf("cannot broadcast an empty batch")
+		}
+
+		logger.Log(logging.LevelDebug, "starting broadcast", "queueSlot", slot.QueueSlot, "txs", txs)
 		dsl.EmitMirEvent(m, vcbpbevents.InputValue(
 			mc.Self.Then(t.NewModuleIDFromInt(slot.QueueSlot)),
 			txs,
@@ -87,6 +92,8 @@ func newQueueController(mc *ModuleConfig, params *ModuleParams, tunables *Module
 
 	// upon stale vcb final message, validate signature, store and deliver batch
 	bcqueuedsl.UponPastVcbFinal(m, func(queueSlot aleatypes.QueueSlot, txs []*requestpb.Request, signature tctypes.FullSig) error {
+		logger.Log(logging.LevelDebug, "processing out-of-order VCB final message", "queueSlot", queueSlot)
+
 		context := &processPastVcbCtx{
 			queueSlot: queueSlot,
 			txs:       txs,
@@ -109,7 +116,7 @@ func newQueueController(mc *ModuleConfig, params *ModuleParams, tunables *Module
 			// TODO: report byz node?
 		}
 
-		logger.Log(logging.LevelDebug, "processed stale VCB Final", "queueIdx", params.QueueIdx, "queueSlot", context.queueSlot)
+		logger.Log(logging.LevelDebug, "out-of-order VCB Final is valid. storing batch for delivery", "queueIdx", params.QueueIdx, "queueSlot", context.queueSlot)
 
 		slot := &commontypes.Slot{
 			QueueIdx:  params.QueueIdx,
@@ -120,6 +127,7 @@ func newQueueController(mc *ModuleConfig, params *ModuleParams, tunables *Module
 	})
 
 	batchdbdsl.UponBatchStored(m, func(slot *commontypes.Slot) error {
+		logger.Log(logging.LevelDebug, "delivering broadcast", "queueSlot", slot.QueueSlot)
 		bcqueuedsl.Deliver(m, mc.Consumer, slot)
 		return nil
 	})
