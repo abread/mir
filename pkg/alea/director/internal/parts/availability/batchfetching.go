@@ -113,6 +113,7 @@ func IncludeBatchFetching(
 				rnetdsl.MarkRecvd(m, mc.ReliableNet, mc.Self, FillGapMsgID(slot), params.AllNodes)
 			}
 
+			delete(state.RequestsState, *slot)
 			return nil
 		}
 
