@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"runtime/pprof"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -359,58 +360,59 @@ func (n *Node) startModules(ctx context.Context, wg *sync.WaitGroup) {
 	// The modules mostly read events from their respective channels in n.workChans,
 	// process them correspondingly, and write the results (also represented as events) in the appropriate channels.
 	for moduleID, module := range n.modules {
-
-		// For each module, we start a worker function reads a single work item (EventList) and processes it.
-		wg.Add(1)
-		go func(mID t.ModuleID, m modules.Module, workChan chan *events.EventList) {
-			defer wg.Done()
-
-			// Create a context that is passed to the module event application function
-			// and canceled when module processing is stopped (i.e. this function returns).
-			// This is to make sure that the event processing is properly aborted if needed.
-			processingCtx, cancelProcessing := context.WithCancel(ctx)
-			defer cancelProcessing()
-
-			var continueProcessing = true
-			var err error
-
-			for continueProcessing {
-				if n.debugMode {
-					// In debug mode, all produced events are routed to the debug output.
-					continueProcessing, err = n.processModuleEvents(processingCtx, m, workChan, n.debugOut)
-				} else {
-					// During normal operation, feed all produced events back into the event loop.
-					continueProcessing, err = n.processModuleEvents(processingCtx, m, workChan, n.eventsIn)
-				}
-				if err != nil {
-					n.workErrNotifier.Fail(fmt.Errorf("could not process PassiveModule (%v) events: %w", mID, err))
-					return
-				}
-			}
-
-		}(moduleID, module, n.workChans[moduleID])
-
-		// Depending on the module type (and the way output events are communicated back to the node),
-		// start a goroutine importing the modules' output events
-		switch m := module.(type) {
-		case modules.PassiveModule:
-			// Nothing else to be done for a PassiveModule
-		case modules.ActiveModule:
-			// Start a goroutine to import the ActiveModule's output events to workItemInput.
+		pprof.Do(ctx, pprof.Labels("moduleID", string(moduleID)), func(ctx context.Context) {
+			// For each module, we start a worker function reads a single work item (EventList) and processes it.
 			wg.Add(1)
-			go func() {
+			go func(mID t.ModuleID, m modules.Module, workChan chan *events.EventList) {
 				defer wg.Done()
-				if n.debugMode {
-					// In debug mode, all produced events are routed to the debug output.
-					n.importEvents(ctx, m.EventsOut(), n.debugOut)
-				} else {
-					// During normal operation, feed all produced events back into the event loop.
-					n.importEvents(ctx, m.EventsOut(), n.eventsIn)
+
+				// Create a context that is passed to the module event application function
+				// and canceled when module processing is stopped (i.e. this function returns).
+				// This is to make sure that the event processing is properly aborted if needed.
+				processingCtx, cancelProcessing := context.WithCancel(ctx)
+				defer cancelProcessing()
+
+				var continueProcessing = true
+				var err error
+
+				for continueProcessing {
+					if n.debugMode {
+						// In debug mode, all produced events are routed to the debug output.
+						continueProcessing, err = n.processModuleEvents(processingCtx, m, workChan, n.debugOut)
+					} else {
+						// During normal operation, feed all produced events back into the event loop.
+						continueProcessing, err = n.processModuleEvents(processingCtx, m, workChan, n.eventsIn)
+					}
+					if err != nil {
+						n.workErrNotifier.Fail(fmt.Errorf("could not process PassiveModule (%v) events: %w", mID, err))
+						return
+					}
 				}
-			}()
-		default:
-			n.workErrNotifier.Fail(fmt.Errorf("unknown module type: %T", m))
-		}
+
+			}(moduleID, module, n.workChans[moduleID])
+
+			// Depending on the module type (and the way output events are communicated back to the node),
+			// start a goroutine importing the modules' output events
+			switch m := module.(type) {
+			case modules.PassiveModule:
+				// Nothing else to be done for a PassiveModule
+			case modules.ActiveModule:
+				// Start a goroutine to import the ActiveModule's output events to workItemInput.
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					if n.debugMode {
+						// In debug mode, all produced events are routed to the debug output.
+						n.importEvents(ctx, m.EventsOut(), n.debugOut)
+					} else {
+						// During normal operation, feed all produced events back into the event loop.
+						n.importEvents(ctx, m.EventsOut(), n.eventsIn)
+					}
+				}()
+			default:
+				n.workErrNotifier.Fail(fmt.Errorf("unknown module type: %T", m))
+			}
+		})
 	}
 }
 

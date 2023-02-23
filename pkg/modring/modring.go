@@ -1,7 +1,9 @@
 package modring
 
 import (
+	"context"
 	"fmt"
+	"runtime/pprof"
 	"strconv"
 
 	"github.com/filecoin-project/mir/pkg/events"
@@ -58,12 +60,14 @@ func (m *Module) ApplyEvents(eventsIn *events.EventList) (*events.EventList, err
 	// Start one concurrent worker for each submodule
 	// Note that the processing starts concurrently for all eventlists, and only the writing of the results is synchronized.
 	nSubs := 0
-	for i := 0; i < len(subEventsIn); i++ {
-		if subEventsIn[i].Len() == 0 {
+	for ringIdx := 0; ringIdx < len(subEventsIn); ringIdx++ {
+		subID := subIDInRingIdx(&m.ringController, ringIdx)
+
+		if subEventsIn[ringIdx].Len() == 0 {
 			continue
 		}
 
-		mod, evsOut, err := m.getSubByRingIdx(i)
+		mod, evsOut, err := m.getSub(subID)
 		if err != nil {
 			firstError = err
 			break
@@ -72,17 +76,20 @@ func (m *Module) ApplyEvents(eventsIn *events.EventList) (*events.EventList, err
 			continue // module out of view
 		}
 
-		go func(modring *Module, evsIn *events.EventList, initialEvsOut *events.EventList, j int) {
-			// Apply the input event, catching potential panics.
-			res, err := mod.ApplyEvents(evsIn)
+		pprof.Do(context.TODO(), pprof.Labels("moduleID", string(m.ownID.Then(t.NewModuleIDFromInt(subID)))), func(ctx context.Context) {
+			go func(modring *Module, evsIn *events.EventList, initialEvsOut *events.EventList, j int) {
+				// Apply the input event
+				res, err := mod.ApplyEvents(evsIn)
 
-			if err == nil {
-				resultChan <- initialEvsOut.PushBackList(res)
-			} else {
-				errorChan <- fmt.Errorf("failed to process submodule #%d events: %w", j, err)
-			}
+				if err == nil {
+					resultChan <- initialEvsOut.PushBackList(res)
+				} else {
+					errorChan <- fmt.Errorf("failed to process submodule #%d events: %w", j, err)
+				}
 
-		}(m, &subEventsIn[i], evsOut, i)
+			}(m, &subEventsIn[ringIdx], evsOut, ringIdx)
+		})
+
 		nSubs++
 	}
 
@@ -165,8 +172,8 @@ func subIDInRingIdx(rc *RingController, ringIdx int) uint64 {
 	return minSlot + uint64(int(ringSize)-minIdx) + uint64(ringIdx)
 }
 
-func (m *Module) getSubByRingIdx(ringIdx int) (modules.PassiveModule, *events.EventList, error) {
-	subID := subIDInRingIdx(&m.ringController, ringIdx)
+func (m *Module) getSub(subID uint64) (modules.PassiveModule, *events.EventList, error) {
+	ringIdx := int(subID % uint64(len(m.ring)))
 
 	switch m.ringController.GetSlotStatus(subID) {
 	case RingSlotPast:
@@ -191,9 +198,13 @@ func (m *Module) getSubByRingIdx(ringIdx int) (modules.PassiveModule, *events.Ev
 		m.ring[ringIdx] = sub
 		initialEvs.PushBack(events.Init(subFullID))
 
-		evsOut, err := m.ring[ringIdx].ApplyEvents(initialEvs)
-		if err != nil {
-			return nil, nil, err
+		var evsOut *events.EventList
+		var errMod error
+		pprof.Do(context.TODO(), pprof.Labels("moduleID", string(subFullID)), func(ctx context.Context) {
+			evsOut, errMod = m.ring[ringIdx].ApplyEvents(initialEvs)
+		})
+		if errMod != nil {
+			return nil, nil, errMod
 		}
 
 		m.logger.Log(logging.LevelDebug, "module created", "id", subID)
