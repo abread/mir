@@ -94,7 +94,7 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 	// =============================================================================================
 
 	abcdsl.UponDeliver(m, func(slot *commontypes.Slot) error {
-		if slot.QueueIdx == ownQueueIdx {
+		if slot.QueueIdx == ownQueueIdx && slot.QueueSlot == state.bcOwnQueueHead-1 {
 			state.unagreedBroadcastedOwnSlotCount++
 		}
 
