@@ -153,11 +153,20 @@ func (m *Module) splitEventsByDest(eventsIn *events.EventList) ([]events.EventLi
 	return subEventsIn, pastMsgs
 }
 
-func (m *Module) getSubByRingIdx(ringIdx int) (modules.PassiveModule, *events.EventList, error) {
-	minSlot, _ := m.ringController.GetCurrentView()
-	minIdx := minSlot % uint64(len(m.ring))
+func subIDInRingIdx(rc *RingController, ringIdx int) uint64 {
+	minSlot, endSlot := rc.GetCurrentView()
+	ringSize := endSlot - minSlot
+	minIdx := int(minSlot % ringSize)
 
-	subID := m.ringController.minSlot + uint64(ringIdx) - minIdx
+	if ringIdx >= minIdx {
+		return minSlot + uint64(ringIdx-minIdx)
+	}
+
+	return minSlot + uint64(int(ringSize)-minIdx) + uint64(ringIdx)
+}
+
+func (m *Module) getSubByRingIdx(ringIdx int) (modules.PassiveModule, *events.EventList, error) {
+	subID := subIDInRingIdx(&m.ringController, ringIdx)
 
 	switch m.ringController.GetSlotStatus(subID) {
 	case RingSlotPast:

@@ -90,8 +90,8 @@ func (s *RingController) MarkPast(slot uint64) error {
 	for s.IsPastSlot(s.minSlot) {
 		*s.uncheckedSlotStatusRingPtr(s.minSlot) = RingSlotFuture
 		s.minSlot++
-		s.minIdx = (s.minIdx + 1) % len(s.slotStatus)
 	}
+	s.minIdx = int(s.minSlot % uint64(len(s.slotStatus)))
 
 	return nil
 }
