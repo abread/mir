@@ -188,7 +188,7 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 			}
 		}
 
-		nextQueueIdx := aleatypes.QueueIdx((state.agRound + 1) % uint64(len(params.AllNodes)))
+		nextQueueIdx := aleatypes.QueueIdx(state.agRound % uint64(len(params.AllNodes)))
 		nextQueueSlot := state.agQueueHeads[nextQueueIdx]
 
 		if shouldResumeAg {
@@ -198,8 +198,6 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 			logger.Log(logging.LevelDebug, "progressing to next agreement round", "agreementRound", state.agRound, "input", bcDone)
 
 			aagdsl.InputValue(m, mc.AleaAgreement, state.agRound, bcDone)
-		} else {
-			logger.Log(logging.LevelDebug, "stalling agreement", "agreementRound", state.agRound)
 		}
 
 		return nil
