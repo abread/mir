@@ -24,9 +24,8 @@ import (
 type set[T comparable] map[T]struct{}
 
 type state struct {
-	unagreedBroadcastedOwnSlotCount int
-	batchCutInProgress              bool
-	bcOwnQueueHead                  aleatypes.QueueSlot
+	batchCutInProgress bool
+	bcOwnQueueHead     aleatypes.QueueSlot
 
 	agQueueHeads []aleatypes.QueueSlot
 
@@ -93,30 +92,14 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 	// Batch Cutting / Own Queue Broadcast Control
 	// =============================================================================================
 
-	abcdsl.UponDeliver(m, func(slot *commontypes.Slot) error {
-		if slot.QueueIdx == ownQueueIdx && slot.QueueSlot == state.bcOwnQueueHead-1 {
-			state.unagreedBroadcastedOwnSlotCount++
-		}
-
-		return nil
-	})
-	aagdsl.UponDeliver(m, func(round uint64, decision bool) error {
-		if decision {
-			queueIdx := aleatypes.QueueIdx(round % uint64(len(params.AllNodes)))
-
-			// track unagreed own slots
-			if queueIdx == ownQueueIdx {
-				state.unagreedBroadcastedOwnSlotCount--
-			}
-		}
-
-		return nil
-	})
-
 	// upon unagreed own slots < max, cut a new batch and broadcast it
 	// TODO: move to bc component
 	dsl.UponCondition(m, func() error {
-		if !state.batchCutInProgress && state.unagreedBroadcastedOwnSlotCount < tunables.TargetOwnUnagreedBatchCount {
+		// bcOwnQueueHead is the next slot to be broadcast
+		// agQueueHeads[ownQueueIdx] is the next slot to be agreed on
+		unagreedOwnBatchCount := uint64(state.bcOwnQueueHead - state.agQueueHeads[ownQueueIdx])
+
+		if !state.batchCutInProgress && unagreedOwnBatchCount < tunables.TargetOwnUnagreedBatchCount {
 			logger.Log(logging.LevelDebug, "requesting more transactions")
 			mempooldsl.RequestBatch[struct{}](m, mc.Mempool, nil)
 			state.batchCutInProgress = true
@@ -223,9 +206,8 @@ func newState(params *common.ModuleParams, tunables *common.ModuleTunables, node
 	N := len(params.AllNodes)
 
 	state := &state{
-		unagreedBroadcastedOwnSlotCount: 0,
-		batchCutInProgress:              false,
-		bcOwnQueueHead:                  0,
+		batchCutInProgress: false,
+		bcOwnQueueHead:     0,
 
 		agQueueHeads: make([]aleatypes.QueueSlot, N),
 

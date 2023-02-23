@@ -33,7 +33,7 @@ type ModuleTunables struct {
 
 	// Number of batches that the broadcast component tries to have broadcast at all times in own queue
 	// Must be at least 1
-	TargetOwnUnagreedBatchCount int
+	TargetOwnUnagreedBatchCount uint64
 
 	// Time to wait before retrying batch creation
 	BatchCutFailRetryDelay t.TimeDuration
