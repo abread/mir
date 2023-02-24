@@ -21,49 +21,67 @@ var (
 	cpuprofile     string
 	memprofile     string
 
+	cpuprofileFile *os.File
+	memprofileFile *os.File
+
 	rootCmd = &cobra.Command{
 		Use:   "bench",
 		Short: "Mir benchmarking tool",
 		Long: "Mir benchmarking tool can run a Mir nodes, measuring latency and" +
 			"throughput. The tool can also generate and submit requests to the Mir" +
 			"cluster at a specified rate.",
+
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			var err error
+
+			if cpuprofile != "" {
+				fmt.Printf("saving CPU profile to %s\n", cpuprofile)
+
+				cpuprofileFile, err = os.Create(cpuprofile)
+				if err != nil {
+					return fmt.Errorf("could not create CPU profile: %w", err)
+				}
+
+				err = pprof.StartCPUProfile(cpuprofileFile)
+				if err != nil {
+					return fmt.Errorf("could not start CPU profile: %w", err)
+				}
+			}
+			if memprofile != "" {
+				fmt.Printf("saving memory profile to %s\n", memprofile)
+
+				memprofileFile, err = os.Create(memprofile)
+				if err != nil {
+					return fmt.Errorf("could not create memory profile: %w", err)
+				}
+			}
+
+			return nil
+		},
+		PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
+			if cpuprofileFile != nil {
+				pprof.StopCPUProfile()
+				if err := cpuprofileFile.Close(); err != nil {
+					return fmt.Errorf("could not close CPU profile file: %w", err)
+				}
+			}
+			if memprofileFile != nil {
+				runtime.GC() // get up-to-date statistics
+				if err := pprof.WriteHeapProfile(memprofileFile); err != nil {
+					return fmt.Errorf("could not write memory profile: %w", err)
+				}
+				if err := memprofileFile.Close(); err != nil {
+					return fmt.Errorf("could not close memory profile file: %w", err)
+				}
+			}
+
+			return nil
+		},
 	}
 )
 
-func Execute() {
 func Execute(ctx context.Context) error {
-	if cpuprofile != "" {
-		f, err := os.Create(cpuprofile)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "could not create CPU profile: %v", err)
-		}
-
-		defer f.Close()
-
-		if err := pprof.StartCPUProfile(f); err != nil {
-			fmt.Fprintf(os.Stderr, "could not start CPU profile: %v", err)
-		}
-		defer pprof.StopCPUProfile()
-	}
-
-	err := rootCmd.Execute()
-	err := rootCmd.ExecuteContext(ctx)
-	if err != nil {
-		os.Exit(1)
-	}
-
-	if memprofile != "" {
-		f, err := os.Create(memprofile)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "could not create memory profile: %v", err)
-		}
-
-		defer f.Close()
-		runtime.GC() // get up-to-date statistics
-		if err := pprof.WriteHeapProfile(f); err != nil {
-			fmt.Fprintf(os.Stderr, "could not write memory profile: %v", err)
-		}
-	}
+	return rootCmd.ExecuteContext(ctx)
 }
 
 func init() {
