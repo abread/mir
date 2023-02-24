@@ -33,7 +33,8 @@ var (
 		Use:   "client",
 		Short: "Generate and submit requests to a Mir cluster",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runClient()
+			ctx := cmd.Context()
+			return runClient(ctx)
 		},
 	}
 )
@@ -46,7 +47,7 @@ func init() {
 	clientCmd.Flags().DurationVarP(&duration, "duration", "T", 10*time.Second, "benchmarking duration")
 }
 
-func runClient() error {
+func runClient(ctx context.Context) error {
 	var logger logging.Logger
 	if verbose {
 		logger = logging.ConsoleDebugLogger
@@ -80,7 +81,7 @@ func runClient() error {
 		// break // sending to all nodes is more reproducible
 	}
 
-	ctx, stop := context.WithCancel(context.Background())
+	ctx, stop := context.WithCancel(ctx)
 
 	client := dummyclient.NewDummyClient(
 		t.ClientID(id),

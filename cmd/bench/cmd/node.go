@@ -7,6 +7,7 @@ package cmd
 import (
 	"context"
 	"encoding/csv"
+	"errors"
 	"fmt"
 	gonet "net"
 	"os"
@@ -48,7 +49,8 @@ var (
 		Use:   "node",
 		Short: "Start a Mir node",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runNode()
+			ctx := cmd.Context()
+			return runNode(ctx)
 		},
 	}
 )
@@ -102,15 +104,13 @@ var smrFactories = map[string]smrFactory{
 	"alea": aleaSMRFactory,
 }
 
-func runNode() error {
+func runNode(ctx context.Context) error {
 	var logger logging.Logger
 	if verbose {
 		logger = logging.ConsoleDebugLogger
 	} else {
 		logger = logging.ConsoleWarnLogger
 	}
-
-	ctx := context.Background()
 
 	// Load system membership.
 	nodeAddrs, err := membership.FromFileName(membershipFile)
@@ -241,7 +241,11 @@ func runNode() error {
 	}()
 
 	defer node.Stop()
-	return node.Run(ctx)
+	nodeErr := node.Run(ctx)
+	if nodeErr != nil && errors.Is(nodeErr, mir.ErrStopped) {
+		nodeErr = nil
+	}
+	return nodeErr
 }
 
 func getPortStr(address t.NodeAddress) (string, error) {
