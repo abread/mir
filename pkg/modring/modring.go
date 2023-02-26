@@ -2,6 +2,7 @@ package modring
 
 import (
 	"fmt"
+	"runtime/debug"
 	"strconv"
 
 	"github.com/filecoin-project/mir/pkg/events"
@@ -86,7 +87,7 @@ func (m *Module) ApplyEvents(eventsIn *events.EventList) (*events.EventList, err
 
 		go func(modring *Module, evsIn *events.EventList, j int) {
 			// Apply the input event
-			res, err := mod.ApplyEvents(evsIn)
+			res, err := multiApplySafely(mod, evsIn)
 
 			if err == nil {
 				resultChan <- res
@@ -248,4 +249,22 @@ func (m *Module) MarkSubmodulePast(id uint64) error {
 
 	m.logger.Log(logging.LevelDebug, "module freed", "id", id, "newMinSlot", m.ringController.minSlot)
 	return nil
+}
+
+// multiApplySafely is a wrapper around an event processing function that catches its panic and returns it as an error.
+func multiApplySafely(
+	module modules.PassiveModule,
+	events *events.EventList,
+) (result *events.EventList, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			if rErr, ok := r.(error); ok {
+				err = fmt.Errorf("event application panicked: %w\nStack trace:\n%s", rErr, string(debug.Stack()))
+			} else {
+				err = fmt.Errorf("event application panicked: %v\nStack trace:\n%s", r, string(debug.Stack()))
+			}
+		}
+	}()
+
+	return module.ApplyEvents(events)
 }
