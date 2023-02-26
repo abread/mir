@@ -52,7 +52,7 @@ func (m *Module) ApplyEvents(eventsIn *events.EventList) (*events.EventList, err
 	errorChan := make(chan error)
 
 	// The event processing results will be aggregated here
-	var eventsOut *events.EventList
+	eventsOut := &events.EventList{}
 	var firstError error
 
 	// Start one concurrent worker for each submodule
@@ -63,7 +63,7 @@ func (m *Module) ApplyEvents(eventsIn *events.EventList) (*events.EventList, err
 			continue
 		}
 
-		mod, evsOut, err := m.getSubByRingIdx(i)
+		mod, initEvent, err := m.getSubByRingIdx(i)
 		if err != nil {
 			firstError = err
 			break
@@ -72,21 +72,30 @@ func (m *Module) ApplyEvents(eventsIn *events.EventList) (*events.EventList, err
 			continue // module out of view
 		}
 
-		go func(modring *Module, evsIn *events.EventList, initialEvsOut *events.EventList, j int) {
-			// Apply the input event, catching potential panics.
+		if initEvent != nil {
+			// created module, loop events in the system again
+
+			// TODO: INIT event may be processed *after* other events directed at this module
+			// possible solution: track which modules are pending initialization, and loop events back in
+			// until INIT is processed
+			initEvent.Next = append(initEvent.Next, subEventsIn[i].Slice()...)
+			eventsOut.PushBack(initEvent)
+
+			continue
+		}
+
+		go func(modring *Module, evsIn *events.EventList, j int) {
+			// Apply the input event
 			res, err := mod.ApplyEvents(evsIn)
 
 			if err == nil {
-				resultChan <- initialEvsOut.PushBackList(res)
+				resultChan <- res
 			} else {
 				errorChan <- fmt.Errorf("failed to process submodule #%d events: %w", j, err)
 			}
-
-		}(m, &subEventsIn[i], evsOut, i)
+		}(m, &subEventsIn[i], i)
 		nSubs++
 	}
-
-	eventsOut = &events.EventList{}
 
 	// For each submodule, read the processing result from the common channels and aggregate it with the rest.
 	for i := 0; i < nSubs; i++ {
@@ -165,7 +174,7 @@ func subIDInRingIdx(rc *RingController, ringIdx int) uint64 {
 	return minSlot + uint64(int(ringSize)-minIdx) + uint64(ringIdx)
 }
 
-func (m *Module) getSubByRingIdx(ringIdx int) (modules.PassiveModule, *events.EventList, error) {
+func (m *Module) getSubByRingIdx(ringIdx int) (modules.PassiveModule, *eventpb.Event, error) {
 	subID := subIDInRingIdx(&m.ringController, ringIdx)
 
 	switch m.ringController.GetSlotStatus(subID) {
@@ -176,7 +185,7 @@ func (m *Module) getSubByRingIdx(ringIdx int) (modules.PassiveModule, *events.Ev
 			return nil, nil, fmt.Errorf("module %v disappeared", subID)
 		}
 
-		return m.ring[ringIdx], &events.EventList{}, nil
+		return m.ring[ringIdx], nil, nil
 	case RingSlotFuture:
 		if !m.ringController.MarkCurrentIfFuture(subID) {
 			return nil, nil, nil
@@ -188,16 +197,14 @@ func (m *Module) getSubByRingIdx(ringIdx int) (modules.PassiveModule, *events.Ev
 			return nil, nil, err
 		}
 
+		// construct init event
+		initEvent := events.Init(subFullID)
+		initEvent.Next = append(initEvent.Next, initialEvs.Slice()...)
+
 		m.ring[ringIdx] = sub
-		initialEvs.PushBack(events.Init(subFullID))
-
-		evsOut, err := m.ring[ringIdx].ApplyEvents(initialEvs)
-		if err != nil {
-			return nil, nil, err
-		}
-
 		m.logger.Log(logging.LevelDebug, "module created", "id", subID)
-		return m.ring[ringIdx], evsOut, err
+
+		return m.ring[ringIdx], initEvent, err
 	default:
 		return nil, nil, fmt.Errorf("unknown slot status: %v", m.ringController.GetSlotStatus(subID))
 	}
