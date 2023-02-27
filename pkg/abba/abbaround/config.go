@@ -29,6 +29,8 @@ func DefaultModuleConfig(consumer t.ModuleID) *ModuleConfig {
 type ModuleParams struct {
 	InstanceUID []byte
 	AllNodes    []t.NodeID // the list of participating nodes, which must be the same as the set of nodes in the threshcrypto module
+
+	RoundNumber uint64
 }
 
 // GetN returns the total number of nodes.

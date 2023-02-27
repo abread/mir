@@ -4,9 +4,6 @@ package abbapb;
 
 option go_package = "github.com/filecoin-project/mir/pkg/pb/abbapb";
 
-import "dslpb/dslpb.proto";
-import "contextstorepb/contextstorepb.proto";
-
 import "mir/codegen_extensions.proto";
 import "net/codegen_extensions.proto";
 
@@ -32,14 +29,13 @@ message RoundInputValue {
   option (mir.event) = true;
 
   bool        input  = 1;
-  RoundOrigin origin = 2 [(mir.origin_request) = true];
 }
 
 message RoundDeliver {
   option (mir.event) = true;
 
   bool        next_estimate = 1;
-  RoundOrigin origin        = 2 [(mir.origin_response) = true];
+  uint64      round_number  = 2;
 }
 
 message RoundFinishAll {
@@ -87,18 +83,4 @@ message RoundCoinMessage {
   option (net.message) = true;
 
   bytes coin_share = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes.SigShare"];
-}
-
-// ============================================================
-// Data structures
-// ============================================================
-
-message RoundOrigin {
-  option (mir.struct) = true;
-
-  string module = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.ModuleID"];
-  oneof Type {
-    contextstorepb.Origin context_store = 2;
-    dslpb.Origin          dsl           = 3;
-  }
 }

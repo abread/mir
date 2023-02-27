@@ -11,7 +11,6 @@ import (
 	abbadsl "github.com/filecoin-project/mir/pkg/pb/abbapb/dsl"
 	abbapbevents "github.com/filecoin-project/mir/pkg/pb/abbapb/events"
 	abbapbmsgs "github.com/filecoin-project/mir/pkg/pb/abbapb/msgs"
-	abbapbtypes "github.com/filecoin-project/mir/pkg/pb/abbapb/types"
 	rnetdsl "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/dsl"
 	threshDsl "github.com/filecoin-project/mir/pkg/pb/threshcryptopb/dsl"
 	"github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
@@ -49,8 +48,6 @@ type state struct {
 	auxSent                        bool
 	coinRecoverInProgress          bool
 	coinRecoverMinShareCount       int
-
-	origin *abbapbtypes.RoundOrigin
 }
 
 // nolint: gocognit
@@ -68,10 +65,9 @@ func New(ctx context.Context, mc *ModuleConfig, params *ModuleParams, nodeID t.N
 	}
 	coinData := genCoinData(mc, params)
 
-	abbadsl.UponRoundInputValue(m, func(input bool, origin *abbapbtypes.RoundOrigin) error {
+	abbadsl.UponRoundInputValue(m, func(input bool) error {
 		// 10. est^r+1_i = v OR 3. set est^r_i = v_in
 		state.estimate = input
-		state.origin = origin
 
 		// 4. Broadcast INIT(est_r_i, v)
 		rnetdsl.SendMessage(m, mc.ReliableNet, InitMsgID(state.estimate), abbapbmsgs.RoundInitMessage(
@@ -307,7 +303,7 @@ func New(ctx context.Context, mc *ModuleConfig, params *ModuleParams, nodeID t.N
 		dsl.EmitMirEvent(m, abbapbevents.RoundDeliver(
 			mc.Consumer,
 			state.estimate,
-			state.origin,
+			params.RoundNumber,
 		))
 
 		state.phase = phaseDone

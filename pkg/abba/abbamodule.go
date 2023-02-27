@@ -151,20 +151,19 @@ func newController(ctx context.Context, mc *ModuleConfig, params *ModuleParams, 
 
 		state.origin = origin
 
-		roundNum := uint64(0)
-		abbadsl.RoundInputValue(m, mc.RoundID(0), input, &roundNum)
+		abbadsl.RoundInputValue(m, mc.RoundID(0), input)
 
 		state.phase = phaseRunning
 
 		return nil
 	})
 
-	abbadsl.UponRoundDeliver(m, func(nextEstimate bool, prevRoundNum *uint64) error {
+	abbadsl.UponRoundDeliver(m, func(nextEstimate bool, prevRoundNum uint64) error {
 		if state.phase != phaseRunning {
 			return nil // already done
 		}
-		if *prevRoundNum != state.currentRound {
-			return fmt.Errorf("round number mismatch: expected %v, but round %v delivered", state.currentRound, *prevRoundNum)
+		if prevRoundNum != state.currentRound {
+			return fmt.Errorf("round number mismatch: expected %v, but round %v delivered", state.currentRound, prevRoundNum)
 		}
 
 		// clean up old round
@@ -173,8 +172,7 @@ func newController(ctx context.Context, mc *ModuleConfig, params *ModuleParams, 
 		}
 
 		state.currentRound++
-		roundNum := state.currentRound // copy of round number, to make our previous sanity check work
-		abbadsl.RoundInputValue(m, mc.RoundID(state.currentRound), nextEstimate, &roundNum)
+		abbadsl.RoundInputValue(m, mc.RoundID(state.currentRound), nextEstimate)
 
 		return nil
 	})
@@ -183,10 +181,6 @@ func newController(ctx context.Context, mc *ModuleConfig, params *ModuleParams, 
 }
 
 func newRoundGenerator(controllerMc *ModuleConfig, controllerParams *ModuleParams, nodeID t.NodeID, logger logging.Logger) func(id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
-	params := &abbaround.ModuleParams{
-		InstanceUID: controllerParams.InstanceUID, // TODO: review
-		AllNodes:    controllerParams.AllNodes,
-	}
 
 	return func(id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
 		mc := &abbaround.ModuleConfig{
@@ -195,6 +189,12 @@ func newRoundGenerator(controllerMc *ModuleConfig, controllerParams *ModuleParam
 			ReliableNet:  controllerMc.ReliableNet,
 			ThreshCrypto: controllerMc.ThreshCrypto,
 			Hasher:       controllerMc.Hasher,
+		}
+
+		params := &abbaround.ModuleParams{
+			InstanceUID: controllerParams.InstanceUID, // TODO: review
+			AllNodes:    controllerParams.AllNodes,
+			RoundNumber: idx,
 		}
 
 		mod := abbaround.New(context.TODO(), mc, params, nodeID, logging.Decorate(logger, "Abba Round: ", "abbaRound", idx))
