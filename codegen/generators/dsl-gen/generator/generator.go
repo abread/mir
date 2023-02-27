@@ -79,4 +79,10 @@ var (
 	dslMirOrigin    jen.Code = jen.Qual(dslPackagePath, "MirOrigin")
 	dslEmitMirEvent jen.Code = jen.Qual(dslPackagePath, "EmitMirEvent")
 	dslUponMirEvent jen.Code = jen.Qual(dslPackagePath, "UponMirEvent")
+
+	tracePackagePath = "go.opentelemetry.io/otel/trace"
+
+	traceWithSpanKind     *jen.Statement = jen.Qual(tracePackagePath, "WithSpanKind")
+	traceSpanKindProducer *jen.Statement = jen.Qual(tracePackagePath, "SpanKindProducer")
+	traceSpanKindConsumer *jen.Statement = jen.Qual(tracePackagePath, "SpanKindConsumer")
 )

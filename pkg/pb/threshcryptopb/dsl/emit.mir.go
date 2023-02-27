@@ -1,6 +1,8 @@
 package threshcryptopbdsl
 
 import (
+	trace "go.opentelemetry.io/otel/trace"
+
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
 	events "github.com/filecoin-project/mir/pkg/pb/threshcryptopb/events"
 	types1 "github.com/filecoin-project/mir/pkg/pb/threshcryptopb/types"
@@ -11,6 +13,10 @@ import (
 // Module-specific dsl functions for emitting events.
 
 func SignShare[C any](m dsl.Module, destModule types.ModuleID, data [][]uint8, context *C) {
+	kind := trace.WithSpanKind(trace.SpanKindProducer)
+	m.DslHandle().PushSpan("SignShare", kind)
+	defer m.DslHandle().PopSpan()
+
 	contextID := m.DslHandle().StoreContext(context)
 	traceCtx := m.DslHandle().TraceContextAsMap()
 
@@ -27,6 +33,10 @@ func SignShareResult(m dsl.Module, destModule types.ModuleID, signatureShare tct
 }
 
 func VerifyShare[C any](m dsl.Module, destModule types.ModuleID, data [][]uint8, signatureShare tctypes.SigShare, nodeId types.NodeID, context *C) {
+	kind := trace.WithSpanKind(trace.SpanKindProducer)
+	m.DslHandle().PushSpan("VerifyShare", kind)
+	defer m.DslHandle().PopSpan()
+
 	contextID := m.DslHandle().StoreContext(context)
 	traceCtx := m.DslHandle().TraceContextAsMap()
 
@@ -43,6 +53,10 @@ func VerifyShareResult(m dsl.Module, destModule types.ModuleID, ok bool, error s
 }
 
 func VerifyFull[C any](m dsl.Module, destModule types.ModuleID, data [][]uint8, fullSignature tctypes.FullSig, context *C) {
+	kind := trace.WithSpanKind(trace.SpanKindProducer)
+	m.DslHandle().PushSpan("VerifyFull", kind)
+	defer m.DslHandle().PopSpan()
+
 	contextID := m.DslHandle().StoreContext(context)
 	traceCtx := m.DslHandle().TraceContextAsMap()
 
@@ -59,6 +73,10 @@ func VerifyFullResult(m dsl.Module, destModule types.ModuleID, ok bool, error st
 }
 
 func Recover[C any](m dsl.Module, destModule types.ModuleID, data [][]uint8, signatureShares []tctypes.SigShare, context *C) {
+	kind := trace.WithSpanKind(trace.SpanKindProducer)
+	m.DslHandle().PushSpan("Recover", kind)
+	defer m.DslHandle().PopSpan()
+
 	contextID := m.DslHandle().StoreContext(context)
 	traceCtx := m.DslHandle().TraceContextAsMap()
 

@@ -74,6 +74,10 @@ func generateDslFunctionForEmittingRequestWithOrigin(eventNode *events.EventNode
 
 	// Example:
 	//		func RequestCert[C any](m dsl.Module, dest t.ModuleID, context *C) {
+	//			kind := trace.WithSpanKind(trace.SpanKindProducer)
+	//			m.DslHandle().PushSpan("RequestCert", kind)
+	//			defer m.DslHandle().PopSpan()
+	//
 	//			contextID := m.DslHandle().StoreContext(context)
 	//			traceCtx := m.DslHandle().TraceContextAsMap()
 	//
@@ -103,6 +107,11 @@ func generateDslFunctionForEmittingRequestWithOrigin(eventNode *events.EventNode
 	funcParams = append(funcParams, jen.Id("context").Op("*").Id("C"))
 
 	jenFile.Func().Id(eventNode.Name()).Types(jen.Id("C").Any()).Params(funcParams...).Block(
+		jen.Id("kind").Op(":=").Add(traceWithSpanKind).Params(traceSpanKindProducer),
+		jen.Id("m").Dot("DslHandle").Params().Dot("PushSpan").Params(jen.Lit(eventNode.Name()), jen.Id("kind")),
+		jen.Defer().Add(jen.Id("m").Dot("DslHandle").Call().Dot("PopSpan").Call()),
+		jen.Line(), // empty line
+
 		jen.Id("contextID").Op(":=").Id("m").Dot("DslHandle").Call().Dot("StoreContext").Call(jen.Id("context")),
 		jen.Id("traceCtx").Op(":=").Id("m").Dot("DslHandle").Call().Dot("TraceContextAsMap").Call(),
 		jen.Line(), // empty line
@@ -234,7 +243,8 @@ func generateDslFunctionForHandlingRequestWithOrigin(eventNode *events.EventNode
 	//					m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
 	//				}
 	//
-	//				m.DslHandle().PushSpan("SignRequest")
+	//				kind := trace.WithSpanKind(trace.SpanKindConsumer)
+	//				m.DslHandle().PushSpan("SignRequest", kind)
 	//				defer m.DslHandle().PopSpan()
 	//
 	//				return handler(ev.Data, ev.Origin)
@@ -267,7 +277,8 @@ func generateDslFunctionForHandlingRequestWithOrigin(eventNode *events.EventNode
 				jen.Line(), // empty line
 
 				// TODO: add message fields to span attributes?
-				jen.Id("m").Dot("DslHandle").Call().Dot("PushSpan").Call(jen.Lit(eventNode.Name())),
+				jen.Id("kind").Op(":=").Add(traceWithSpanKind).Params(traceSpanKindConsumer),
+				jen.Id("m").Dot("DslHandle").Call().Dot("PushSpan").Call(jen.Lit(eventNode.Name()), jen.Id("kind")),
 				jen.Defer().Add(jen.Id("m").Dot("DslHandle").Call().Dot("PopSpan").Call()),
 				jen.Line(), // empty line
 
@@ -304,6 +315,10 @@ func generateDslFunctionForHandlingResponseWithOrigin(
 	//				}
 	//
 	//				m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
+	//
+	//				kind := trace.WithSpanKind(trace.SpanKindConsumer)
+	//				m.DslHandle().PushSpan("SignResult", kind)
+	//				defer m.DslHandle().PopSpan()
 	//
 	//				return handler(ev.Signature, context)
 	//			})
@@ -346,6 +361,11 @@ func generateDslFunctionForHandlingResponseWithOrigin(
 				jen.Line(), // empty line
 
 				jen.Id("m").Dot("DslHandle").Call().Dot("ImportTraceContextFromMap").Call(jen.Id("originWrapper").Dot("Dsl").Dot("TraceContext")),
+				jen.Line(), // empty line
+
+				jen.Id("kind").Op(":=").Add(traceWithSpanKind).Params(traceSpanKindConsumer),
+				jen.Id("m").Dot("DslHandle").Call().Dot("PushSpan").Call(jen.Lit(eventNode.Name()), jen.Id("kind")),
+				jen.Defer().Add(jen.Id("m").Dot("DslHandle").Call().Dot("PopSpan").Call()),
 				jen.Line(), // empty line
 
 				jen.Return(jen.Id("handler").ParamsFunc(func(group *jen.Group) {

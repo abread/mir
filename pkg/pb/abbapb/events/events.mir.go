@@ -38,7 +38,7 @@ func Deliver(destModule types.ModuleID, result bool, origin *types1.Origin) *typ
 	}
 }
 
-func RoundInputValue(destModule types.ModuleID, input bool, origin *types1.RoundOrigin) *types2.Event {
+func RoundInputValue(destModule types.ModuleID, input bool) *types2.Event {
 	return &types2.Event{
 		DestModule: destModule,
 		Type: &types2.Event_Abba{
@@ -47,8 +47,7 @@ func RoundInputValue(destModule types.ModuleID, input bool, origin *types1.Round
 					Round: &types1.RoundEvent{
 						Type: &types1.RoundEvent_InputValue{
 							InputValue: &types1.RoundInputValue{
-								Input:  input,
-								Origin: origin,
+								Input: input,
 							},
 						},
 					},
@@ -58,7 +57,7 @@ func RoundInputValue(destModule types.ModuleID, input bool, origin *types1.Round
 	}
 }
 
-func RoundDeliver(destModule types.ModuleID, nextEstimate bool, origin *types1.RoundOrigin) *types2.Event {
+func RoundDeliver(destModule types.ModuleID, nextEstimate bool, roundNumber uint64) *types2.Event {
 	return &types2.Event{
 		DestModule: destModule,
 		Type: &types2.Event_Abba{
@@ -68,7 +67,7 @@ func RoundDeliver(destModule types.ModuleID, nextEstimate bool, origin *types1.R
 						Type: &types1.RoundEvent_Deliver{
 							Deliver: &types1.RoundDeliver{
 								NextEstimate: nextEstimate,
-								Origin:       origin,
+								RoundNumber:  roundNumber,
 							},
 						},
 					},

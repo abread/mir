@@ -1,6 +1,8 @@
 package eventpbdsl
 
 import (
+	trace "go.opentelemetry.io/otel/trace"
+
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
 	types "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 	types2 "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
@@ -16,7 +18,8 @@ func UponSignRequest(m dsl.Module, handler func(data [][]uint8, origin *types.Si
 			m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
 		}
 
-		m.DslHandle().PushSpan("SignRequest")
+		kind := trace.WithSpanKind(trace.SpanKindConsumer)
+		m.DslHandle().PushSpan("SignRequest", kind)
 		defer m.DslHandle().PopSpan()
 
 		return handler(ev.Data, ev.Origin)
@@ -38,6 +41,10 @@ func UponSignResult[C any](m dsl.Module, handler func(signature []uint8, context
 
 		m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
 
+		kind := trace.WithSpanKind(trace.SpanKindConsumer)
+		m.DslHandle().PushSpan("SignResult", kind)
+		defer m.DslHandle().PopSpan()
+
 		return handler(ev.Signature, context)
 	})
 }
@@ -49,7 +56,8 @@ func UponVerifyNodeSigs(m dsl.Module, handler func(data []*types.SigVerData, sig
 			m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
 		}
 
-		m.DslHandle().PushSpan("VerifyNodeSigs")
+		kind := trace.WithSpanKind(trace.SpanKindConsumer)
+		m.DslHandle().PushSpan("VerifyNodeSigs", kind)
 		defer m.DslHandle().PopSpan()
 
 		return handler(ev.Data, ev.Signatures, ev.Origin, ev.NodeIds)
@@ -70,6 +78,10 @@ func UponNodeSigsVerified[C any](m dsl.Module, handler func(nodeIds []types1.Nod
 		}
 
 		m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
+
+		kind := trace.WithSpanKind(trace.SpanKindConsumer)
+		m.DslHandle().PushSpan("NodeSigsVerified", kind)
+		defer m.DslHandle().PopSpan()
 
 		return handler(ev.NodeIds, ev.Valid, ev.Errors, ev.AllOk, context)
 	})

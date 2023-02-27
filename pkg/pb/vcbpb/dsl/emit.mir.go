@@ -1,6 +1,8 @@
 package vcbpbdsl
 
 import (
+	trace "go.opentelemetry.io/otel/trace"
+
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
 	requestpb "github.com/filecoin-project/mir/pkg/pb/requestpb"
 	events "github.com/filecoin-project/mir/pkg/pb/vcbpb/events"
@@ -12,6 +14,10 @@ import (
 // Module-specific dsl functions for emitting events.
 
 func InputValue[C any](m dsl.Module, destModule types.ModuleID, txs []*requestpb.Request, context *C) {
+	kind := trace.WithSpanKind(trace.SpanKindProducer)
+	m.DslHandle().PushSpan("InputValue", kind)
+	defer m.DslHandle().PopSpan()
+
 	contextID := m.DslHandle().StoreContext(context)
 	traceCtx := m.DslHandle().TraceContextAsMap()
 

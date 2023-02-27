@@ -20,10 +20,3 @@ func (*RoundMessage) ReflectTypeOptions() []reflect.Type {
 		reflect.TypeOf((*RoundMessage_Coin)(nil)),
 	}
 }
-
-func (*RoundOrigin) ReflectTypeOptions() []reflect.Type {
-	return []reflect.Type{
-		reflect.TypeOf((*RoundOrigin_ContextStore)(nil)),
-		reflect.TypeOf((*RoundOrigin_Dsl)(nil)),
-	}
-}

@@ -1,6 +1,8 @@
 package batchdbpbdsl
 
 import (
+	trace "go.opentelemetry.io/otel/trace"
+
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
 	types "github.com/filecoin-project/mir/pkg/pb/availabilitypb/batchdbpb/types"
 	types1 "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
@@ -28,7 +30,8 @@ func UponLookupBatch(m dsl.Module, handler func(batchId []uint8, origin *types.L
 			m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
 		}
 
-		m.DslHandle().PushSpan("LookupBatch")
+		kind := trace.WithSpanKind(trace.SpanKindConsumer)
+		m.DslHandle().PushSpan("LookupBatch", kind)
 		defer m.DslHandle().PopSpan()
 
 		return handler(ev.BatchId, ev.Origin)
@@ -50,6 +53,10 @@ func UponLookupBatchResponse[C any](m dsl.Module, handler func(found bool, txs [
 
 		m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
 
+		kind := trace.WithSpanKind(trace.SpanKindConsumer)
+		m.DslHandle().PushSpan("LookupBatchResponse", kind)
+		defer m.DslHandle().PopSpan()
+
 		return handler(ev.Found, ev.Txs, ev.Metadata, context)
 	})
 }
@@ -61,7 +68,8 @@ func UponStoreBatch(m dsl.Module, handler func(batchId types2.BatchID, txIds []t
 			m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
 		}
 
-		m.DslHandle().PushSpan("StoreBatch")
+		kind := trace.WithSpanKind(trace.SpanKindConsumer)
+		m.DslHandle().PushSpan("StoreBatch", kind)
 		defer m.DslHandle().PopSpan()
 
 		return handler(ev.BatchId, ev.TxIds, ev.Txs, ev.Metadata, ev.Origin)
@@ -82,6 +90,10 @@ func UponBatchStored[C any](m dsl.Module, handler func(context *C) error) {
 		}
 
 		m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
+
+		kind := trace.WithSpanKind(trace.SpanKindConsumer)
+		m.DslHandle().PushSpan("BatchStored", kind)
+		defer m.DslHandle().PopSpan()
 
 		return handler(context)
 	})

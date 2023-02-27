@@ -1,6 +1,8 @@
 package mempoolpbdsl
 
 import (
+	trace "go.opentelemetry.io/otel/trace"
+
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
 	types1 "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 	types "github.com/filecoin-project/mir/pkg/pb/mempoolpb/types"
@@ -28,7 +30,8 @@ func UponRequestBatch(m dsl.Module, handler func(origin *types.RequestBatchOrigi
 			m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
 		}
 
-		m.DslHandle().PushSpan("RequestBatch")
+		kind := trace.WithSpanKind(trace.SpanKindConsumer)
+		m.DslHandle().PushSpan("RequestBatch", kind)
 		defer m.DslHandle().PopSpan()
 
 		return handler(ev.Origin)
@@ -50,6 +53,10 @@ func UponNewBatch[C any](m dsl.Module, handler func(txIds []types2.TxID, txs []*
 
 		m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
 
+		kind := trace.WithSpanKind(trace.SpanKindConsumer)
+		m.DslHandle().PushSpan("NewBatch", kind)
+		defer m.DslHandle().PopSpan()
+
 		return handler(ev.TxIds, ev.Txs, context)
 	})
 }
@@ -61,7 +68,8 @@ func UponRequestTransactions(m dsl.Module, handler func(txIds []types2.TxID, ori
 			m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
 		}
 
-		m.DslHandle().PushSpan("RequestTransactions")
+		kind := trace.WithSpanKind(trace.SpanKindConsumer)
+		m.DslHandle().PushSpan("RequestTransactions", kind)
 		defer m.DslHandle().PopSpan()
 
 		return handler(ev.TxIds, ev.Origin)
@@ -83,6 +91,10 @@ func UponTransactionsResponse[C any](m dsl.Module, handler func(present []bool, 
 
 		m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
 
+		kind := trace.WithSpanKind(trace.SpanKindConsumer)
+		m.DslHandle().PushSpan("TransactionsResponse", kind)
+		defer m.DslHandle().PopSpan()
+
 		return handler(ev.Present, ev.Txs, context)
 	})
 }
@@ -94,7 +106,8 @@ func UponRequestTransactionIDs(m dsl.Module, handler func(txs []*requestpb.Reque
 			m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
 		}
 
-		m.DslHandle().PushSpan("RequestTransactionIDs")
+		kind := trace.WithSpanKind(trace.SpanKindConsumer)
+		m.DslHandle().PushSpan("RequestTransactionIDs", kind)
 		defer m.DslHandle().PopSpan()
 
 		return handler(ev.Txs, ev.Origin)
@@ -116,6 +129,10 @@ func UponTransactionIDsResponse[C any](m dsl.Module, handler func(txIds []types2
 
 		m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
 
+		kind := trace.WithSpanKind(trace.SpanKindConsumer)
+		m.DslHandle().PushSpan("TransactionIDsResponse", kind)
+		defer m.DslHandle().PopSpan()
+
 		return handler(ev.TxIds, context)
 	})
 }
@@ -127,7 +144,8 @@ func UponRequestBatchID(m dsl.Module, handler func(txIds []types2.TxID, origin *
 			m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
 		}
 
-		m.DslHandle().PushSpan("RequestBatchID")
+		kind := trace.WithSpanKind(trace.SpanKindConsumer)
+		m.DslHandle().PushSpan("RequestBatchID", kind)
 		defer m.DslHandle().PopSpan()
 
 		return handler(ev.TxIds, ev.Origin)
@@ -148,6 +166,10 @@ func UponBatchIDResponse[C any](m dsl.Module, handler func(batchId types2.BatchI
 		}
 
 		m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
+
+		kind := trace.WithSpanKind(trace.SpanKindConsumer)
+		m.DslHandle().PushSpan("BatchIDResponse", kind)
+		defer m.DslHandle().PopSpan()
 
 		return handler(ev.BatchId, context)
 	})

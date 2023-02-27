@@ -217,8 +217,6 @@ func (m *dslModuleImpl) ApplyEvents(evs *events.EventList) (*events.EventList, e
 	for ev := iter.Next(); ev != nil; ev = iter.Next() {
 		handlers, ok := m.eventHandlers[reflect.TypeOf(ev.Type)]
 
-		m.DslHandle().PushSpan("applyEvent")
-
 		// If no specific handler was defined for this event type, execute the default handler.
 		if !ok {
 			m.DslHandle().PushSpan(
@@ -239,12 +237,9 @@ func (m *dslModuleImpl) ApplyEvents(evs *events.EventList) (*events.EventList, e
 				return nil, err
 			}
 		}
-
-		m.DslHandle().PopSpan()
 	}
 
 	// Run condition handlers.
-	m.DslHandle().PushSpan("runConditionHandlers")
 	for _, condition := range m.conditionHandlers {
 		err := condition()
 
@@ -252,7 +247,6 @@ func (m *dslModuleImpl) ApplyEvents(evs *events.EventList) (*events.EventList, e
 			return nil, err
 		}
 	}
-	m.DslHandle().PopSpan()
 
 	// Cleanup used up context store entries
 	if len(m.eventCleanupContextIDs) > 0 {

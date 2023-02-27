@@ -1,6 +1,8 @@
 package mempoolpbdsl
 
 import (
+	trace "go.opentelemetry.io/otel/trace"
+
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
 	events "github.com/filecoin-project/mir/pkg/pb/mempoolpb/events"
 	types1 "github.com/filecoin-project/mir/pkg/pb/mempoolpb/types"
@@ -11,6 +13,10 @@ import (
 // Module-specific dsl functions for emitting events.
 
 func RequestBatch[C any](m dsl.Module, destModule types.ModuleID, context *C) {
+	kind := trace.WithSpanKind(trace.SpanKindProducer)
+	m.DslHandle().PushSpan("RequestBatch", kind)
+	defer m.DslHandle().PopSpan()
+
 	contextID := m.DslHandle().StoreContext(context)
 	traceCtx := m.DslHandle().TraceContextAsMap()
 
@@ -27,6 +33,10 @@ func NewBatch(m dsl.Module, destModule types.ModuleID, txIds []types.TxID, txs [
 }
 
 func RequestTransactions[C any](m dsl.Module, destModule types.ModuleID, txIds []types.TxID, context *C) {
+	kind := trace.WithSpanKind(trace.SpanKindProducer)
+	m.DslHandle().PushSpan("RequestTransactions", kind)
+	defer m.DslHandle().PopSpan()
+
 	contextID := m.DslHandle().StoreContext(context)
 	traceCtx := m.DslHandle().TraceContextAsMap()
 
@@ -43,6 +53,10 @@ func TransactionsResponse(m dsl.Module, destModule types.ModuleID, present []boo
 }
 
 func RequestTransactionIDs[C any](m dsl.Module, destModule types.ModuleID, txs []*requestpb.Request, context *C) {
+	kind := trace.WithSpanKind(trace.SpanKindProducer)
+	m.DslHandle().PushSpan("RequestTransactionIDs", kind)
+	defer m.DslHandle().PopSpan()
+
 	contextID := m.DslHandle().StoreContext(context)
 	traceCtx := m.DslHandle().TraceContextAsMap()
 
@@ -59,6 +73,10 @@ func TransactionIDsResponse(m dsl.Module, destModule types.ModuleID, txIds []typ
 }
 
 func RequestBatchID[C any](m dsl.Module, destModule types.ModuleID, txIds []types.TxID, context *C) {
+	kind := trace.WithSpanKind(trace.SpanKindProducer)
+	m.DslHandle().PushSpan("RequestBatchID", kind)
+	defer m.DslHandle().PopSpan()
+
 	contextID := m.DslHandle().StoreContext(context)
 	traceCtx := m.DslHandle().TraceContextAsMap()
 

@@ -1,6 +1,8 @@
 package threshcryptopbdsl
 
 import (
+	trace "go.opentelemetry.io/otel/trace"
+
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
 	types1 "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 	types "github.com/filecoin-project/mir/pkg/pb/threshcryptopb/types"
@@ -28,7 +30,8 @@ func UponSignShare(m dsl.Module, handler func(data [][]uint8, origin *types.Sign
 			m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
 		}
 
-		m.DslHandle().PushSpan("SignShare")
+		kind := trace.WithSpanKind(trace.SpanKindConsumer)
+		m.DslHandle().PushSpan("SignShare", kind)
 		defer m.DslHandle().PopSpan()
 
 		return handler(ev.Data, ev.Origin)
@@ -50,6 +53,10 @@ func UponSignShareResult[C any](m dsl.Module, handler func(signatureShare tctype
 
 		m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
 
+		kind := trace.WithSpanKind(trace.SpanKindConsumer)
+		m.DslHandle().PushSpan("SignShareResult", kind)
+		defer m.DslHandle().PopSpan()
+
 		return handler(ev.SignatureShare, context)
 	})
 }
@@ -61,7 +68,8 @@ func UponVerifyShare(m dsl.Module, handler func(data [][]uint8, signatureShare t
 			m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
 		}
 
-		m.DslHandle().PushSpan("VerifyShare")
+		kind := trace.WithSpanKind(trace.SpanKindConsumer)
+		m.DslHandle().PushSpan("VerifyShare", kind)
 		defer m.DslHandle().PopSpan()
 
 		return handler(ev.Data, ev.SignatureShare, ev.NodeId, ev.Origin)
@@ -83,6 +91,10 @@ func UponVerifyShareResult[C any](m dsl.Module, handler func(ok bool, error stri
 
 		m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
 
+		kind := trace.WithSpanKind(trace.SpanKindConsumer)
+		m.DslHandle().PushSpan("VerifyShareResult", kind)
+		defer m.DslHandle().PopSpan()
+
 		return handler(ev.Ok, ev.Error, context)
 	})
 }
@@ -94,7 +106,8 @@ func UponVerifyFull(m dsl.Module, handler func(data [][]uint8, fullSignature tct
 			m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
 		}
 
-		m.DslHandle().PushSpan("VerifyFull")
+		kind := trace.WithSpanKind(trace.SpanKindConsumer)
+		m.DslHandle().PushSpan("VerifyFull", kind)
 		defer m.DslHandle().PopSpan()
 
 		return handler(ev.Data, ev.FullSignature, ev.Origin)
@@ -116,6 +129,10 @@ func UponVerifyFullResult[C any](m dsl.Module, handler func(ok bool, error strin
 
 		m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
 
+		kind := trace.WithSpanKind(trace.SpanKindConsumer)
+		m.DslHandle().PushSpan("VerifyFullResult", kind)
+		defer m.DslHandle().PopSpan()
+
 		return handler(ev.Ok, ev.Error, context)
 	})
 }
@@ -127,7 +144,8 @@ func UponRecover(m dsl.Module, handler func(data [][]uint8, signatureShares []tc
 			m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
 		}
 
-		m.DslHandle().PushSpan("Recover")
+		kind := trace.WithSpanKind(trace.SpanKindConsumer)
+		m.DslHandle().PushSpan("Recover", kind)
 		defer m.DslHandle().PopSpan()
 
 		return handler(ev.Data, ev.SignatureShares, ev.Origin)
@@ -148,6 +166,10 @@ func UponRecoverResult[C any](m dsl.Module, handler func(fullSignature tctypes.F
 		}
 
 		m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
+
+		kind := trace.WithSpanKind(trace.SpanKindConsumer)
+		m.DslHandle().PushSpan("RecoverResult", kind)
+		defer m.DslHandle().PopSpan()
 
 		return handler(ev.FullSignature, ev.Ok, ev.Error, context)
 	})

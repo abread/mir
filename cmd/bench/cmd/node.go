@@ -17,6 +17,9 @@ import (
 	"github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
 	"github.com/spf13/cobra"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/jaeger"
+	"go.opentelemetry.io/otel/sdk/trace"
 
 	"github.com/filecoin-project/mir"
 	"github.com/filecoin-project/mir/cmd/bench/stats"
@@ -113,6 +116,8 @@ func runNode(ctx context.Context) error {
 	} else {
 		logger = logging.ConsoleWarnLogger
 	}
+
+	otel.SetTracerProvider(trace.NewTracerProvider(jaeger.New(jaeger.WithAgentEndpoint())))
 
 	// Load system membership.
 	nodeAddrs, err := membership.FromFileName(membershipFile)

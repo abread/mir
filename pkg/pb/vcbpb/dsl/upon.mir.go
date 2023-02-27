@@ -1,6 +1,8 @@
 package vcbpbdsl
 
 import (
+	trace "go.opentelemetry.io/otel/trace"
+
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
 	types1 "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 	requestpb "github.com/filecoin-project/mir/pkg/pb/requestpb"
@@ -29,7 +31,8 @@ func UponInputValue(m dsl.Module, handler func(txs []*requestpb.Request, origin 
 			m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
 		}
 
-		m.DslHandle().PushSpan("InputValue")
+		kind := trace.WithSpanKind(trace.SpanKindConsumer)
+		m.DslHandle().PushSpan("InputValue", kind)
 		defer m.DslHandle().PopSpan()
 
 		return handler(ev.Txs, ev.Origin)
@@ -50,6 +53,10 @@ func UponDeliver[C any](m dsl.Module, handler func(txs []*requestpb.Request, txI
 		}
 
 		m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
+
+		kind := trace.WithSpanKind(trace.SpanKindConsumer)
+		m.DslHandle().PushSpan("Deliver", kind)
+		defer m.DslHandle().PopSpan()
 
 		return handler(ev.Txs, ev.TxIds, ev.Signature, context)
 	})
