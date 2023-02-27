@@ -75,11 +75,12 @@ func generateDslFunctionForEmittingRequestWithOrigin(eventNode *events.EventNode
 	// Example:
 	//		func RequestCert[C any](m dsl.Module, dest t.ModuleID, context *C) {
 	//			contextID := m.DslHandle().StoreContext(context)
+	//			traceCtx := m.DslHandle().TraceContextAsMap()
 	//
 	//			origin := &apb.RequestCertOrigin{
 	//				Module: m.ModuleID().Pb(),
 	//				Type: &apb.RequestCertOrigin_Dsl{
-	//					Dsl: dsl.Origin(contextID),
+	//					Dsl: dsl.Origin(contextID, traceCtx),
 	//				},
 	//			}
 	//
@@ -103,11 +104,12 @@ func generateDslFunctionForEmittingRequestWithOrigin(eventNode *events.EventNode
 
 	jenFile.Func().Id(eventNode.Name()).Types(jen.Id("C").Any()).Params(funcParams...).Block(
 		jen.Id("contextID").Op(":=").Id("m").Dot("DslHandle").Call().Dot("StoreContext").Call(jen.Id("context")),
+		jen.Id("traceCtx").Op(":=").Id("m").Dot("DslHandle").Call().Dot("TraceContextAsMap").Call(),
 		jen.Line(), // empty line
 		jen.Id(originParam.Name()).Op(":=").Add(origin.Message.NewMirType()).Values(jen.Dict{
 			jen.Id("Module"): jen.Id("m").Dot("ModuleID").Call(),
 			jen.Id("Type"): dslOriginOption.NewMirWrapperType().Values(jen.Dict{
-				jen.Id("Dsl"): jen.Add(dslMirOrigin).Call(jen.Id("contextID")),
+				jen.Id("Dsl"): jen.Add(dslMirOrigin).Call(jen.Id("contextID"), jen.Id("traceCtx")),
 			}),
 		}),
 		jen.Line(), // empty line
@@ -191,6 +193,8 @@ func generateRecursivelyDslFunctionsForHandlingEvents(
 
 	if eventNode.OriginResponse() != nil {
 		return generateDslFunctionForHandlingResponseWithOrigin(eventNode, uponEvent, jenFile)
+	} else if eventNode.OriginRequest() != nil {
+		return generateDslFunctionForHandlingRequestWithOrigin(eventNode, uponEvent, jenFile)
 	}
 
 	generateDslFunctionForHandlingSimpleEvent(eventNode, uponEvent, jenFile)
@@ -221,6 +225,64 @@ func generateDslFunctionForHandlingEventClass(eventNode *events.EventNode, uponE
 	).Line()
 }
 
+func generateDslFunctionForHandlingRequestWithOrigin(eventNode *events.EventNode, uponEvent jen.Code, jenFile *jen.File) error {
+	// Example:
+	//		func UponSignRequest[C any](m Module, handler func(data [][]byte, origin *eventpb.SignOrigin) error) {
+	//			UponEvent[*eventpb.Event_SignRequest](m, func(ev *eventpb.SignRequest) error {
+	//				originWrapper, ok := ev.Origin.Type.(*eventpb.SignOrigin_Dsl)
+	//				if ok {
+	//					m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
+	//				}
+	//
+	//				m.DslHandle().PushSpan("SignRequest")
+	//				defer m.DslHandle().PopSpan()
+	//
+	//				return handler(ev.Data, ev.Origin)
+	//			})
+	//		}
+
+	origin := eventNode.OriginRequest()
+
+	dslOriginOption, ok := GetDslOriginOption(origin)
+	if !ok {
+		return fmt.Errorf("the 'Type' oneof of the Origin message %v in package %v must have an option named 'Dsl'",
+			origin.Message.Name(), origin.Message.PbPkgPath())
+	}
+
+	// TODO: consider if we need to propagate some parameters from the parent.
+	handlerParameters := eventNode.ThisNodeConstructorParameters()
+
+	jenFile.Func().Id("Upon"+eventNode.Name()).Params(
+		jen.Id("m").Add(dslModule),
+		jen.Id("handler").Func().Params(handlerParameters.MirCode()...).Id("error"),
+	).Block(
+		jen.Add(uponEvent).Types(eventNode.OneofOption().MirWrapperType()).Params(
+			jen.Id("m"),
+			jen.Func().Params(jen.Id("ev").Add(eventNode.Message().MirType())).Id("error").Block(
+				jen.List(jen.Id("originWrapper"), jen.Id("ok")).Op(":=").Id("ev").Dot(origin.Field.Name).Dot("Type").
+					Op(".").Parens(dslOriginOption.MirWrapperType()),
+				jen.If(jen.Id("ok")).Block(
+					jen.Id("m").Dot("DslHandle").Call().Dot("ImportTraceContextFromMap").Call(jen.Id("originWrapper").Dot("Dsl").Dot("TraceContext")),
+				),
+				jen.Line(), // empty line
+
+				// TODO: add message fields to span attributes?
+				jen.Id("m").Dot("DslHandle").Call().Dot("PushSpan").Call(jen.Lit(eventNode.Name())),
+				jen.Defer().Add(jen.Id("m").Dot("DslHandle").Call().Dot("PopSpan").Call()),
+				jen.Line(), // empty line
+
+				jen.Return(jen.Id("handler").ParamsFunc(func(group *jen.Group) {
+					for _, param := range handlerParameters.Slice() {
+						group.Id("ev").Dot(param.Field().Name)
+					}
+				})),
+			),
+		),
+	).Line()
+
+	return nil
+}
+
 func generateDslFunctionForHandlingResponseWithOrigin(
 	eventNode *events.EventNode,
 	uponEvent jen.Code,
@@ -240,6 +302,8 @@ func generateDslFunctionForHandlingResponseWithOrigin(
 	//				if !ok {
 	//					return nil
 	//				}
+	//
+	//				m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
 	//
 	//				return handler(ev.Signature, context)
 	//			})
@@ -279,6 +343,9 @@ func generateDslFunctionForHandlingResponseWithOrigin(
 				jen.If(jen.Op("!").Id("ok")).Block(
 					jen.Return(jen.Id("nil")),
 				),
+				jen.Line(), // empty line
+
+				jen.Id("m").Dot("DslHandle").Call().Dot("ImportTraceContextFromMap").Call(jen.Id("originWrapper").Dot("Dsl").Dot("TraceContext")),
 				jen.Line(), // empty line
 
 				jen.Return(jen.Id("handler").ParamsFunc(func(group *jen.Group) {

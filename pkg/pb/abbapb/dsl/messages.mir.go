@@ -25,6 +25,9 @@ func UponMessageReceived[W types.Message_TypeWrapper[M], M any](m dsl.Module, ha
 
 func UponFinishMessageReceived(m dsl.Module, handler func(from types1.NodeID, value bool) error) {
 	UponMessageReceived[*types.Message_Finish](m, func(from types1.NodeID, msg *types.FinishMessage) error {
+		m.DslHandle().PushSpan("UponFinishMessageReceived")
+		defer m.DslHandle().PopSpan()
+
 		return handler(from, msg.Value)
 	})
 }
@@ -42,24 +45,36 @@ func UponRoundMessageReceived[W types.RoundMessage_TypeWrapper[M], M any](m dsl.
 
 func UponRoundInitMessageReceived(m dsl.Module, handler func(from types1.NodeID, estimate bool) error) {
 	UponRoundMessageReceived[*types.RoundMessage_Init](m, func(from types1.NodeID, msg *types.RoundInitMessage) error {
+		m.DslHandle().PushSpan("UponRoundInitMessageReceived")
+		defer m.DslHandle().PopSpan()
+
 		return handler(from, msg.Estimate)
 	})
 }
 
 func UponRoundAuxMessageReceived(m dsl.Module, handler func(from types1.NodeID, value bool) error) {
 	UponRoundMessageReceived[*types.RoundMessage_Aux](m, func(from types1.NodeID, msg *types.RoundAuxMessage) error {
+		m.DslHandle().PushSpan("UponRoundAuxMessageReceived")
+		defer m.DslHandle().PopSpan()
+
 		return handler(from, msg.Value)
 	})
 }
 
 func UponRoundConfMessageReceived(m dsl.Module, handler func(from types1.NodeID, values abbatypes.ValueSet) error) {
 	UponRoundMessageReceived[*types.RoundMessage_Conf](m, func(from types1.NodeID, msg *types.RoundConfMessage) error {
+		m.DslHandle().PushSpan("UponRoundConfMessageReceived")
+		defer m.DslHandle().PopSpan()
+
 		return handler(from, msg.Values)
 	})
 }
 
 func UponRoundCoinMessageReceived(m dsl.Module, handler func(from types1.NodeID, coinShare tctypes.SigShare) error) {
 	UponRoundMessageReceived[*types.RoundMessage_Coin](m, func(from types1.NodeID, msg *types.RoundCoinMessage) error {
+		m.DslHandle().PushSpan("UponRoundCoinMessageReceived")
+		defer m.DslHandle().PopSpan()
+
 		return handler(from, msg.CoinShare)
 	})
 }

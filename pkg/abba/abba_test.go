@@ -197,6 +197,8 @@ func newDeployment(conf *TestConfig) (*deploytest.Deployment, error) {
 
 	nodeModules := make(map[types.NodeID]modules.Modules)
 
+	ctx := context.TODO()
+
 	for i, nodeID := range nodeIDs {
 		nodeLogger := logging.Decorate(logger, fmt.Sprintf("Node %d: ", i))
 
@@ -207,6 +209,7 @@ func newDeployment(conf *TestConfig) (*deploytest.Deployment, error) {
 
 		abbaConfig := DefaultModuleConfig("app")
 		abba, err := NewModule(
+			ctx,
 			abbaConfig,
 			&ModuleParams{
 				InstanceUID: []byte{0},
@@ -245,7 +248,7 @@ func newDeployment(conf *TestConfig) (*deploytest.Deployment, error) {
 		}
 
 		modulesWithDefaults := map[types.ModuleID]modules.Module{
-			"app":                   newCountingApp(inputValue),
+			"app":                   newCountingApp(ctx, inputValue),
 			abbaConfig.Self:         abba,
 			abbaConfig.ThreshCrypto: threshCryptoSystem.Module(nodeID),
 			abbaConfig.Hasher:       mirCrypto.NewHasher(crypto.SHA256),
@@ -278,8 +281,8 @@ type countingApp struct {
 	firstDelivered bool
 }
 
-func newCountingApp(inputValue bool) *countingApp {
-	m := dsl.NewModule("app")
+func newCountingApp(ctx context.Context, inputValue bool) *countingApp {
+	m := dsl.NewModule(ctx, "app")
 
 	app := &countingApp{
 		module: m,

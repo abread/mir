@@ -1,6 +1,7 @@
 package abba
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/filecoin-project/mir/pkg/abba/abbaround"
@@ -71,7 +72,7 @@ type state struct {
 
 const modringSubName t.ModuleID = t.ModuleID("r")
 
-func NewModule(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
+func NewModule(ctx context.Context, mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
 	if tunables.MaxRoundLookahead <= 0 {
 		return nil, fmt.Errorf("MaxRoundLookahead must be at least 1")
 	}
@@ -86,13 +87,13 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables,
 		finishRecvd: make(abbat.RecvTracker, params.GetN()),
 		finishSent:  false,
 	}
-	controller := newController(mc, params, tunables, nodeID, logger, state, rounds)
+	controller := newController(ctx, mc, params, tunables, nodeID, logger, state, rounds)
 
 	return modules.RoutedModule(mc.Self, controller, wrapModuleStopAfterDelivered(rounds, state)), nil
 }
 
-func newController(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger, state *state, rounds *modring.Module) modules.PassiveModule {
-	m := dsl.NewModule(mc.Self)
+func newController(ctx context.Context, mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger, state *state, rounds *modring.Module) modules.PassiveModule {
+	m := dsl.NewModule(ctx, mc.Self)
 
 	abbadsl.UponRoundFinishAll(m, func(decision bool) error {
 		if !state.finishSent && state.phase == phaseRunning {
@@ -196,7 +197,7 @@ func newRoundGenerator(controllerMc *ModuleConfig, controllerParams *ModuleParam
 			Hasher:       controllerMc.Hasher,
 		}
 
-		mod := abbaround.New(mc, params, nodeID, logging.Decorate(logger, "Abba Round: ", "abbaRound", idx))
+		mod := abbaround.New(context.TODO(), mc, params, nodeID, logging.Decorate(logger, "Abba Round: ", "abbaRound", idx))
 
 		initialEvs := &events.EventList{}
 		return mod, initialEvs, nil

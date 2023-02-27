@@ -11,6 +11,14 @@ import (
 
 func UponSignRequest(m dsl.Module, handler func(data [][]uint8, origin *types.SignOrigin) error) {
 	dsl.UponMirEvent[*types.Event_SignRequest](m, func(ev *types.SignRequest) error {
+		originWrapper, ok := ev.Origin.Type.(*types.SignOrigin_Dsl)
+		if ok {
+			m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
+		}
+
+		m.DslHandle().PushSpan("SignRequest")
+		defer m.DslHandle().PopSpan()
+
 		return handler(ev.Data, ev.Origin)
 	})
 }
@@ -28,12 +36,22 @@ func UponSignResult[C any](m dsl.Module, handler func(signature []uint8, context
 			return nil
 		}
 
+		m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
+
 		return handler(ev.Signature, context)
 	})
 }
 
 func UponVerifyNodeSigs(m dsl.Module, handler func(data []*types.SigVerData, signatures [][]uint8, origin *types.SigVerOrigin, nodeIds []types1.NodeID) error) {
 	dsl.UponMirEvent[*types.Event_VerifyNodeSigs](m, func(ev *types.VerifyNodeSigs) error {
+		originWrapper, ok := ev.Origin.Type.(*types.SigVerOrigin_Dsl)
+		if ok {
+			m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
+		}
+
+		m.DslHandle().PushSpan("VerifyNodeSigs")
+		defer m.DslHandle().PopSpan()
+
 		return handler(ev.Data, ev.Signatures, ev.Origin, ev.NodeIds)
 	})
 }
@@ -50,6 +68,8 @@ func UponNodeSigsVerified[C any](m dsl.Module, handler func(nodeIds []types1.Nod
 		if !ok {
 			return nil
 		}
+
+		m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
 
 		return handler(ev.NodeIds, ev.Valid, ev.Errors, ev.AllOk, context)
 	})

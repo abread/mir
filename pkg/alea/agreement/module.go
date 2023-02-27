@@ -1,6 +1,7 @@
 package agreement
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/filecoin-project/mir/pkg/abba"
@@ -66,7 +67,7 @@ type ModuleTunables struct {
 	MaxAbbaRoundLookahead int
 }
 
-func NewModule(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
+func NewModule(ctx context.Context, mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
 	if tunables.MaxRoundLookahead <= 0 {
 		return nil, fmt.Errorf("MaxRoundLookahead must be at least 1")
 	} else if tunables.MaxAbbaRoundLookahead <= 0 {
@@ -83,7 +84,7 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables,
 		logging.Decorate(logger, "Modring controller: "),
 	)
 
-	controller := newAgController(mc, params, nodeID, logger, agRounds)
+	controller := newAgController(ctx, mc, params, nodeID, logger, agRounds)
 
 	return modules.RoutedModule(mc.Self, controller, agRounds), nil
 }
@@ -109,8 +110,8 @@ type state struct {
 	currentRound uint64
 }
 
-func newAgController(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging.Logger, agRounds *modring.Module) modules.PassiveModule {
-	m := dsl.NewModule(mc.Self)
+func newAgController(ctx context.Context, mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging.Logger, agRounds *modring.Module) modules.PassiveModule {
+	m := dsl.NewModule(ctx, mc.Self)
 
 	state := state{}
 
@@ -231,7 +232,7 @@ func newAbbaGenerator(agMc *ModuleConfig, agParams *ModuleParams, agTunables *Mo
 			Hasher:       agMc.Hasher,
 		}
 
-		mod, err := abba.NewModule(mc, params, tunables, nodeID, logging.Decorate(logger, "Abba: ", "agRound", idx))
+		mod, err := abba.NewModule(context.TODO(), mc, params, tunables, nodeID, logging.Decorate(logger, "Abba: ", "agRound", idx))
 		if err != nil {
 			return nil, nil, err
 		}

@@ -1,6 +1,7 @@
 package trantor
 
 import (
+	"context"
 	"crypto"
 	"fmt"
 
@@ -62,10 +63,11 @@ func (sys *System) WithModule(moduleID t.ModuleID, module modules.Module) *Syste
 // Useful for debugging and stress-testing.
 // The params argument defines parameters of the perturbation, such as how many messages should be dropped
 // and how the remaining messages should be delayed.
-func (sys *System) PerturbMessages(params *eventmangler.ModuleParams) error {
+func (sys *System) PerturbMessages(ctx context.Context, params *eventmangler.ModuleParams) error {
 
 	// Create event mangler perturbing (dropping and delaying) events.
 	messageMangler, err := eventmangler.NewModule(
+		ctx,
 		&eventmangler.ModuleConfig{Self: "net", Dest: "truenet", Timer: "timer"},
 		params,
 	)
@@ -104,6 +106,8 @@ func (sys *System) Stop() {
 // The returned system's Stop method should be called when the system is no longer needed.
 // The returned system's Modules method can be used to obtain the Mir modules to be passed to mir.NewNode.
 func NewISS(
+	ctx context.Context,
+
 	// The ID of this node.
 	ownID t.NodeID,
 
@@ -160,6 +164,7 @@ func NewISS(
 
 	// Use a simple mempool for incoming requests.
 	mempool := simplemempool.NewModule(
+		ctx,
 		&simplemempool.ModuleConfig{
 			Self:   "mempool",
 			Hasher: "hasher",
@@ -169,6 +174,7 @@ func NewISS(
 
 	// Use fake batch database that only stores batches in memory and does not persist them to disk.
 	batchdb := fakebatchdb.NewModule(
+		ctx,
 		&fakebatchdb.ModuleConfig{
 			Self: "batchdb",
 		},
@@ -190,6 +196,7 @@ func NewISS(
 	// Instantiate the batch fetcher module that transforms availability certificates ordered by ISS
 	// into batches of transactions that can be applied to the replicated application.
 	batchFetcher := batchfetcher.NewModule(
+		ctx,
 		batchfetcher.DefaultModuleConfig(),
 		startingCheckpoint.Epoch(),
 		startingCheckpoint.ClientProgress(logger),
@@ -228,6 +235,8 @@ func NewISS(
 // The returned system's Stop method should be called when the system is no longer needed.
 // The returned system's Modules method can be used to obtain the Mir modules to be passed to mir.NewNode.
 func NewAlea(
+	ctx context.Context,
+
 	// The ID of this node.
 	ownID t.NodeID,
 
@@ -269,6 +278,7 @@ func NewAlea(
 	// also to configure other modules of the system.
 	aleaConfig := alea.DefaultConfig("batchfetcher")
 	aleaProtocolModules, err := alea.New(
+		ctx,
 		ownID,
 		aleaConfig,
 		params.Alea,
@@ -302,6 +312,7 @@ func NewAlea(
 
 	// Use a simple mempool for incoming requests.
 	aleaProtocolModules[aleaConfig.Mempool] = simplemempool.NewModule(
+		ctx,
 		&simplemempool.ModuleConfig{
 			Self:   aleaConfig.Mempool,
 			Hasher: aleaConfig.Hasher,
@@ -311,6 +322,7 @@ func NewAlea(
 
 	// Use fake batch database that only stores batches in memory and does not persist them to disk.
 	aleaProtocolModules[aleaConfig.BatchDB] = fakebatchdb.NewModule(
+		ctx,
 		&fakebatchdb.ModuleConfig{
 			Self: aleaConfig.BatchDB,
 		},
@@ -322,10 +334,11 @@ func NewAlea(
 	// into batches of transactions that can be applied to the replicated application.
 	appID := t.ModuleID("app")
 	aleaProtocolModules[aleaConfig.Consumer] = batchfetcher.NewModule(
+		ctx,
 		&batchfetcher.ModuleConfig{
 			Self:         aleaConfig.Consumer,
 			Availability: aleaConfig.AleaDirector,
-			Checkpoint:   "",
+			Checkpoint:   "TODO",
 			Destination:  appID,
 		},
 		t.EpochNr(0),

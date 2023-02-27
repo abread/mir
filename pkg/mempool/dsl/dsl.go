@@ -14,11 +14,12 @@ import (
 // RequestBatch is used by the availability layer to request a new batch of transactions from the mempool.
 func RequestBatch[C any](m dsl.Module, dest t.ModuleID, context *C) {
 	contextID := m.DslHandle().StoreContext(context)
+	traceCtx := m.DslHandle().TraceContextAsMap()
 
 	origin := &mppb.RequestBatchOrigin{
 		Module: m.ModuleID().Pb(),
 		Type: &mppb.RequestBatchOrigin_Dsl{
-			Dsl: dsl.Origin(contextID),
+			Dsl: dsl.Origin(contextID, traceCtx),
 		},
 	}
 
@@ -34,11 +35,12 @@ func NewBatch(m dsl.Module, dest t.ModuleID, txIDs []t.TxID, txs []*requestpb.Re
 // It is possible that some of these transactions are not present in the mempool.
 func RequestTransactions[C any](m dsl.Module, dest t.ModuleID, txIDs []t.TxID, context *C) {
 	contextID := m.DslHandle().StoreContext(context)
+	traceCtx := m.DslHandle().TraceContextAsMap()
 
 	origin := &mppb.RequestTransactionsOrigin{
 		Module: m.ModuleID().Pb(),
 		Type: &mppb.RequestTransactionsOrigin_Dsl{
-			Dsl: dsl.Origin(contextID),
+			Dsl: dsl.Origin(contextID, traceCtx),
 		},
 	}
 
@@ -54,11 +56,12 @@ func TransactionsResponse(m dsl.Module, dest t.ModuleID, present []bool, txs []*
 // It is possible that some of these transactions are not present in the mempool.
 func RequestTransactionIDs[C any](m dsl.Module, dest t.ModuleID, txs []*requestpb.Request, context *C) {
 	contextID := m.DslHandle().StoreContext(context)
+	traceCtx := m.DslHandle().TraceContextAsMap()
 
 	origin := &mppb.RequestTransactionIDsOrigin{
 		Module: m.ModuleID().Pb(),
 		Type: &mppb.RequestTransactionIDsOrigin_Dsl{
-			Dsl: dsl.Origin(contextID),
+			Dsl: dsl.Origin(contextID, traceCtx),
 		},
 	}
 
@@ -74,11 +77,12 @@ func TransactionIDsResponse(m dsl.Module, dest t.ModuleID, txIDs []t.TxID, origi
 // It is possible that some transactions in the batch are not present in the mempool.
 func RequestBatchID[C any](m dsl.Module, dest t.ModuleID, txIDs []t.TxID, context *C) {
 	contextID := m.DslHandle().StoreContext(context)
+	traceCtx := m.DslHandle().TraceContextAsMap()
 
 	origin := &mppb.RequestBatchIDOrigin{
 		Module: m.ModuleID().Pb(),
 		Type: &mppb.RequestBatchIDOrigin_Dsl{
-			Dsl: dsl.Origin(contextID),
+			Dsl: dsl.Origin(contextID, traceCtx),
 		},
 	}
 

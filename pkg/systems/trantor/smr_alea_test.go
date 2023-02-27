@@ -329,6 +329,7 @@ func newDeploymentAlea(conf *TestConfig) (*deploytest.Deployment, error) {
 		}
 
 		system, err := NewAlea(
+			context.TODO(),
 			nodeID,
 			transport,
 			nil,

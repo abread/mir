@@ -13,16 +13,18 @@ import (
 )
 
 // Origin creates a dslpb.Origin protobuf.
-func Origin(contextID ContextID) *dslpb.Origin {
+func Origin(contextID ContextID, traceContext map[string]string) *dslpb.Origin {
 	return &dslpb.Origin{
-		ContextID: contextID.Pb(),
+		ContextID:    contextID.Pb(),
+		TraceContext: traceContext,
 	}
 }
 
 // MirOrigin creates a dslpb.Origin protobuf.
-func MirOrigin(contextID ContextID) *dslpbtypes.Origin {
+func MirOrigin(contextID ContextID, traceContext map[string]string) *dslpbtypes.Origin {
 	return &dslpbtypes.Origin{
-		ContextID: contextID.Pb(),
+		ContextID:    contextID.Pb(),
+		TraceContext: traceContext,
 	}
 }
 
@@ -33,6 +35,10 @@ func MirOrigin(contextID ContextID) *dslpbtypes.Origin {
 // SendMessage emits a request event to send a message over the network.
 // The message should be processed on the receiving end using UponMessageReceived.
 func SendMessage(m Module, destModule t.ModuleID, msg *messagepb.Message, dest []t.NodeID) {
+	if len(msg.TraceContext) == 0 {
+		msg.TraceContext = m.DslHandle().TraceContextAsMap()
+	}
+
 	EmitEvent(m, events.SendMessage(destModule, msg, dest))
 }
 
@@ -50,7 +56,8 @@ func SignRequest[C any](m Module, destModule t.ModuleID, data [][]byte, context 
 		Module: m.ModuleID().Pb(),
 		Type: &eventpb.SignOrigin_Dsl{
 			Dsl: &dslpb.Origin{
-				ContextID: contextID.Pb(),
+				ContextID:    contextID.Pb(),
+				TraceContext: m.DslHandle().TraceContextAsMap(),
 			},
 		},
 	}
@@ -74,7 +81,8 @@ func VerifyNodeSigs[C any](
 		Module: m.ModuleID().Pb(),
 		Type: &eventpb.SigVerOrigin_Dsl{
 			Dsl: &dslpb.Origin{
-				ContextID: contextID.Pb(),
+				ContextID:    contextID.Pb(),
+				TraceContext: m.DslHandle().TraceContextAsMap(),
 			},
 		},
 	}
@@ -106,7 +114,8 @@ func HashRequest[C any](m Module, destModule t.ModuleID, data [][][]byte, contex
 		Module: m.ModuleID().Pb(),
 		Type: &eventpb.HashOrigin_Dsl{
 			Dsl: &dslpb.Origin{
-				ContextID: contextID.Pb(),
+				ContextID:    contextID.Pb(),
+				TraceContext: m.DslHandle().TraceContextAsMap(),
 			},
 		},
 	}
@@ -233,7 +242,14 @@ func UponOneHashResult[C any](m Module, handler func(hash []byte, context *C) er
 // UponMessageReceived invokes handler when the module receives a message over the network.
 func UponMessageReceived(m Module, handler func(from t.NodeID, msg *messagepb.Message) error) {
 	UponEvent[*eventpb.Event_MessageReceived](m, func(ev *eventpb.MessageReceived) error {
-		return handler(t.NodeID(ev.From), ev.Msg)
+		m.DslHandle().ImportTraceContextFromMap(ev.Msg.TraceContext)
+
+		res := handler(t.NodeID(ev.From), ev.Msg)
+
+		m.DslHandle().impl.goCtxStack = nil
+		m.DslHandle().impl.spanStack = nil
+
+		return res
 	})
 }
 

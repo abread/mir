@@ -1,6 +1,8 @@
 package director
 
 import (
+	"context"
+
 	"github.com/filecoin-project/mir/pkg/alea/director/internal/common"
 	"github.com/filecoin-project/mir/pkg/alea/director/internal/parts/availability"
 	"github.com/filecoin-project/mir/pkg/alea/director/internal/parts/general"
@@ -27,8 +29,8 @@ func DefaultModuleConfig(consumer t.ModuleID) *ModuleConfig {
 	}
 }
 
-func NewModule(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) dsl.Module {
-	m := dsl.NewModule(mc.Self)
+func NewModule(ctx context.Context, mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) dsl.Module {
+	m := dsl.NewModule(ctx, mc.Self)
 
 	general.Include(m, mc, params, tunables, nodeID, logger)
 	availability.Include(m, mc, params, tunables, nodeID, logger)

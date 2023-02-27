@@ -23,18 +23,27 @@ func UponMessageReceived[W types.Message_TypeWrapper[M], M any](m dsl.Module, ha
 
 func UponStartMessageReceived(m dsl.Module, handler func(from types1.NodeID, data []uint8) error) {
 	UponMessageReceived[*types.Message_StartMessage](m, func(from types1.NodeID, msg *types.StartMessage) error {
+		m.DslHandle().PushSpan("UponStartMessageReceived")
+		defer m.DslHandle().PopSpan()
+
 		return handler(from, msg.Data)
 	})
 }
 
 func UponEchoMessageReceived(m dsl.Module, handler func(from types1.NodeID, signature []uint8) error) {
 	UponMessageReceived[*types.Message_EchoMessage](m, func(from types1.NodeID, msg *types.EchoMessage) error {
+		m.DslHandle().PushSpan("UponEchoMessageReceived")
+		defer m.DslHandle().PopSpan()
+
 		return handler(from, msg.Signature)
 	})
 }
 
 func UponFinalMessageReceived(m dsl.Module, handler func(from types1.NodeID, data []uint8, signers []types1.NodeID, signatures [][]uint8) error) {
 	UponMessageReceived[*types.Message_FinalMessage](m, func(from types1.NodeID, msg *types.FinalMessage) error {
+		m.DslHandle().PushSpan("UponFinalMessageReceived")
+		defer m.DslHandle().PopSpan()
+
 		return handler(from, msg.Data, msg.Signers, msg.Signatures)
 	})
 }

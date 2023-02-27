@@ -15,11 +15,12 @@ import (
 // from the availability layer.
 func RequestCert[C any](m dsl.Module, dest t.ModuleID, context *C) {
 	contextID := m.DslHandle().StoreContext(context)
+	traceCtx := m.DslHandle().TraceContextAsMap()
 
 	origin := &apb.RequestCertOrigin{
 		Module: m.ModuleID().Pb(),
 		Type: &apb.RequestCertOrigin_Dsl{
-			Dsl: dsl.Origin(contextID),
+			Dsl: dsl.Origin(contextID, traceCtx),
 		},
 	}
 
@@ -34,11 +35,12 @@ func NewCert(m dsl.Module, dest t.ModuleID, cert *apb.Cert, origin *apb.RequestC
 // VerifyCert can be used to verify validity of an availability certificate.
 func VerifyCert[C any](m dsl.Module, dest t.ModuleID, cert *apb.Cert, context *C) {
 	contextID := m.DslHandle().StoreContext(context)
+	traceCtx := m.DslHandle().TraceContextAsMap()
 
 	origin := &apb.VerifyCertOrigin{
 		Module: m.ModuleID().Pb(),
 		Type: &apb.VerifyCertOrigin_Dsl{
-			Dsl: dsl.Origin(contextID),
+			Dsl: dsl.Origin(contextID, traceCtx),
 		},
 	}
 
@@ -55,11 +57,12 @@ func CertVerified(m dsl.Module, dest t.ModuleID, err error, origin *apb.VerifyCe
 // layer will pull these transactions from other nodes.
 func RequestTransactions[C any](m dsl.Module, dest t.ModuleID, cert *apb.Cert, context *C) {
 	contextID := m.DslHandle().StoreContext(context)
+	traceCtx := m.DslHandle().TraceContextAsMap()
 
 	origin := &apb.RequestTransactionsOrigin{
 		Module: m.ModuleID().Pb(),
 		Type: &apb.RequestTransactionsOrigin_Dsl{
-			Dsl: dsl.Origin(contextID),
+			Dsl: dsl.Origin(contextID, traceCtx),
 		},
 	}
 

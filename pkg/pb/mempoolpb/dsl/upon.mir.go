@@ -23,6 +23,14 @@ func UponEvent[W types.Event_TypeWrapper[Ev], Ev any](m dsl.Module, handler func
 
 func UponRequestBatch(m dsl.Module, handler func(origin *types.RequestBatchOrigin) error) {
 	UponEvent[*types.Event_RequestBatch](m, func(ev *types.RequestBatch) error {
+		originWrapper, ok := ev.Origin.Type.(*types.RequestBatchOrigin_Dsl)
+		if ok {
+			m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
+		}
+
+		m.DslHandle().PushSpan("RequestBatch")
+		defer m.DslHandle().PopSpan()
+
 		return handler(ev.Origin)
 	})
 }
@@ -40,12 +48,22 @@ func UponNewBatch[C any](m dsl.Module, handler func(txIds []types2.TxID, txs []*
 			return nil
 		}
 
+		m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
+
 		return handler(ev.TxIds, ev.Txs, context)
 	})
 }
 
 func UponRequestTransactions(m dsl.Module, handler func(txIds []types2.TxID, origin *types.RequestTransactionsOrigin) error) {
 	UponEvent[*types.Event_RequestTransactions](m, func(ev *types.RequestTransactions) error {
+		originWrapper, ok := ev.Origin.Type.(*types.RequestTransactionsOrigin_Dsl)
+		if ok {
+			m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
+		}
+
+		m.DslHandle().PushSpan("RequestTransactions")
+		defer m.DslHandle().PopSpan()
+
 		return handler(ev.TxIds, ev.Origin)
 	})
 }
@@ -63,12 +81,22 @@ func UponTransactionsResponse[C any](m dsl.Module, handler func(present []bool, 
 			return nil
 		}
 
+		m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
+
 		return handler(ev.Present, ev.Txs, context)
 	})
 }
 
 func UponRequestTransactionIDs(m dsl.Module, handler func(txs []*requestpb.Request, origin *types.RequestTransactionIDsOrigin) error) {
 	UponEvent[*types.Event_RequestTransactionIds](m, func(ev *types.RequestTransactionIDs) error {
+		originWrapper, ok := ev.Origin.Type.(*types.RequestTransactionIDsOrigin_Dsl)
+		if ok {
+			m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
+		}
+
+		m.DslHandle().PushSpan("RequestTransactionIDs")
+		defer m.DslHandle().PopSpan()
+
 		return handler(ev.Txs, ev.Origin)
 	})
 }
@@ -86,12 +114,22 @@ func UponTransactionIDsResponse[C any](m dsl.Module, handler func(txIds []types2
 			return nil
 		}
 
+		m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
+
 		return handler(ev.TxIds, context)
 	})
 }
 
 func UponRequestBatchID(m dsl.Module, handler func(txIds []types2.TxID, origin *types.RequestBatchIDOrigin) error) {
 	UponEvent[*types.Event_RequestBatchId](m, func(ev *types.RequestBatchID) error {
+		originWrapper, ok := ev.Origin.Type.(*types.RequestBatchIDOrigin_Dsl)
+		if ok {
+			m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
+		}
+
+		m.DslHandle().PushSpan("RequestBatchID")
+		defer m.DslHandle().PopSpan()
+
 		return handler(ev.TxIds, ev.Origin)
 	})
 }
@@ -108,6 +146,8 @@ func UponBatchIDResponse[C any](m dsl.Module, handler func(batchId types2.BatchI
 		if !ok {
 			return nil
 		}
+
+		m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
 
 		return handler(ev.BatchId, context)
 	})

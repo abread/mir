@@ -23,6 +23,14 @@ func UponEvent[W types.Event_TypeWrapper[Ev], Ev any](m dsl.Module, handler func
 
 func UponLookupBatch(m dsl.Module, handler func(batchId []uint8, origin *types.LookupBatchOrigin) error) {
 	UponEvent[*types.Event_Lookup](m, func(ev *types.LookupBatch) error {
+		originWrapper, ok := ev.Origin.Type.(*types.LookupBatchOrigin_Dsl)
+		if ok {
+			m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
+		}
+
+		m.DslHandle().PushSpan("LookupBatch")
+		defer m.DslHandle().PopSpan()
+
 		return handler(ev.BatchId, ev.Origin)
 	})
 }
@@ -40,12 +48,22 @@ func UponLookupBatchResponse[C any](m dsl.Module, handler func(found bool, txs [
 			return nil
 		}
 
+		m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
+
 		return handler(ev.Found, ev.Txs, ev.Metadata, context)
 	})
 }
 
 func UponStoreBatch(m dsl.Module, handler func(batchId types2.BatchID, txIds []types2.TxID, txs []*requestpb.Request, metadata []uint8, origin *types.StoreBatchOrigin) error) {
 	UponEvent[*types.Event_Store](m, func(ev *types.StoreBatch) error {
+		originWrapper, ok := ev.Origin.Type.(*types.StoreBatchOrigin_Dsl)
+		if ok {
+			m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
+		}
+
+		m.DslHandle().PushSpan("StoreBatch")
+		defer m.DslHandle().PopSpan()
+
 		return handler(ev.BatchId, ev.TxIds, ev.Txs, ev.Metadata, ev.Origin)
 	})
 }
@@ -62,6 +80,8 @@ func UponBatchStored[C any](m dsl.Module, handler func(context *C) error) {
 		if !ok {
 			return nil
 		}
+
+		m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
 
 		return handler(context)
 	})

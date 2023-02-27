@@ -395,6 +395,7 @@ func newDeployment(conf *TestConfig) (*deploytest.Deployment, error) {
 		}
 
 		system, err := NewISS(
+			context.TODO(),
 			nodeID,
 			transport,
 			checkpoint.Genesis(stateSnapshotpb),

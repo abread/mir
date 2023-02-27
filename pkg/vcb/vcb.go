@@ -1,6 +1,7 @@
 package vcb
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/filecoin-project/mir/pkg/abba/abbatypes"
@@ -94,8 +95,8 @@ const (
 	VcbLeaderPhaseDone
 )
 
-func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging.Logger) modules.PassiveModule {
-	m := dsl.NewModule(mc.Self)
+func NewModule(ctx context.Context, mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging.Logger) modules.PassiveModule {
+	m := dsl.NewModule(ctx, mc.Self)
 
 	state := &state{
 		payload: newVcbPayloadManager(m, mc, params),
@@ -143,9 +144,10 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 			if nodeID == params.Leader {
 				// bypass verification, it came from ourselves
 				contextID := m.DslHandle().StoreContext(nilStructPtr)
+				traceCtx := m.DslHandle().TraceContextAsMap()
 				origin := &threshcryptopbtypes.VerifyFullOrigin{
 					Module: mc.ThreshCrypto,
-					Type:   &threshcryptopbtypes.VerifyFullOrigin_Dsl{Dsl: dsl.MirOrigin(contextID)},
+					Type:   &threshcryptopbtypes.VerifyFullOrigin_Dsl{Dsl: dsl.MirOrigin(contextID, traceCtx)},
 				}
 				threshDsl.VerifyFullResult(m, mc.Self, true, "", origin)
 			} else {

@@ -1,6 +1,7 @@
 package abbaround
 
 import (
+	"context"
 	"fmt"
 
 	abbat "github.com/filecoin-project/mir/pkg/abba/abbatypes"
@@ -53,8 +54,8 @@ type state struct {
 }
 
 // nolint: gocognit
-func New(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging.Logger) modules.PassiveModule {
-	m := dsl.NewModule(mc.Self)
+func New(ctx context.Context, mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging.Logger) modules.PassiveModule {
+	m := dsl.NewModule(ctx, mc.Self)
 
 	state := state{
 		initRecvd:         abbat.NewBoolRecvTrackers(len(params.AllNodes)),

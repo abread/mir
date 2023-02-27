@@ -1,6 +1,7 @@
 package broadcast
 
 import (
+	"context"
 	"fmt"
 
 	"golang.org/x/exp/slices"
@@ -56,8 +57,8 @@ type ModuleTunables struct {
 	MaxConcurrentVcbPerQueue int
 }
 
-func NewModule(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
-	controller, err := newQueueController(mc, params, tunables, nodeID, logger)
+func NewModule(ctx context.Context, mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
+	controller, err := newQueueController(ctx, mc, params, tunables, nodeID, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -69,8 +70,8 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables,
 	return modules.RoutedModule(mc.Self, controller, queues), nil
 }
 
-func newQueueController(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
-	m := dsl.NewModule(mc.Self)
+func newQueueController(ctx context.Context, mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
+	m := dsl.NewModule(ctx, mc.Self)
 
 	ownQueueIdx := slices.Index(params.AllNodes, nodeID)
 	if ownQueueIdx == -1 {
@@ -123,7 +124,7 @@ func newBcQueueGenerator(queueMc *ModuleConfig, queueParams *ModuleParams, queue
 			QueueOwner: queueParams.AllNodes[int(idx)],
 		}
 
-		mod, err := bcqueue.New(mc, params, tunables, nodeID, logging.Decorate(logger, "BcQueue: ", "queueIdx", idx))
+		mod, err := bcqueue.New(context.TODO(), mc, params, tunables, nodeID, logging.Decorate(logger, "BcQueue: ", "queueIdx", idx))
 		if err != nil {
 			return nil, nil, err
 		}

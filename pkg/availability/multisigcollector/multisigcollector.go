@@ -1,6 +1,7 @@
 package multisigcollector
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/filecoin-project/mir/pkg/availability/multisigcollector/internal/common"
@@ -39,12 +40,12 @@ type ModuleParams = common.ModuleParams
 // Whenever an availability certificate is requested, it pulls a batch from the mempool module,
 // sends it to all replicas and collects params.F+1 signatures confirming that
 // other nodes have persistently stored the batch.
-func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID) (modules.PassiveModule, error) {
+func NewModule(ctx context.Context, mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID) (modules.PassiveModule, error) {
 	if len(params.AllNodes) < 2*params.F+1 {
 		return nil, fmt.Errorf("cannot tolerate %v / %v failures", params.F, len(params.AllNodes))
 	}
 
-	m := dsl.NewModule(mc.Self)
+	m := dsl.NewModule(ctx, mc.Self)
 
 	certcreation.IncludeCreatingCertificates(m, mc, params, nodeID)
 	certverification.IncludeVerificationOfCertificates(m, mc, params, nodeID)
@@ -75,6 +76,7 @@ func NewReconfigurableModule(mc *ModuleConfig, nodeID t.NodeID, logger logging.L
 
 				// Create a new instance of the multisig collector.
 				multisigCollector, err := NewModule(
+					context.TODO(),
 					&submc,
 					&ModuleParams{
 						// TODO: Use InstanceUIDs properly.

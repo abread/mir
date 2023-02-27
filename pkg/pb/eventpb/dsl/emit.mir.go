@@ -12,10 +12,11 @@ import (
 
 func SignRequest[C any](m dsl.Module, destModule types.ModuleID, data [][]uint8, context *C) {
 	contextID := m.DslHandle().StoreContext(context)
+	traceCtx := m.DslHandle().TraceContextAsMap()
 
 	origin := &types1.SignOrigin{
 		Module: m.ModuleID(),
-		Type:   &types1.SignOrigin_Dsl{Dsl: dsl.MirOrigin(contextID)},
+		Type:   &types1.SignOrigin_Dsl{Dsl: dsl.MirOrigin(contextID, traceCtx)},
 	}
 
 	dsl.EmitMirEvent(m, events.SignRequest(destModule, data, origin))
@@ -27,10 +28,11 @@ func SignResult(m dsl.Module, destModule types.ModuleID, signature []uint8, orig
 
 func VerifyNodeSigs[C any](m dsl.Module, destModule types.ModuleID, data []*types1.SigVerData, signatures [][]uint8, nodeIds []types.NodeID, context *C) {
 	contextID := m.DslHandle().StoreContext(context)
+	traceCtx := m.DslHandle().TraceContextAsMap()
 
 	origin := &types1.SigVerOrigin{
 		Module: m.ModuleID(),
-		Type:   &types1.SigVerOrigin_Dsl{Dsl: dsl.MirOrigin(contextID)},
+		Type:   &types1.SigVerOrigin_Dsl{Dsl: dsl.MirOrigin(contextID, traceCtx)},
 	}
 
 	dsl.EmitMirEvent(m, events.VerifyNodeSigs(destModule, data, signatures, origin, nodeIds))

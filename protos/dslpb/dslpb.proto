@@ -14,4 +14,5 @@ message Origin {
   option (mir.struct) = true;
 
   uint64 contextID = 1;
+  map<string, string> trace_context = 2 [(mir.omit_in_event_constructors) = true];
 }

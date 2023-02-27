@@ -14,11 +14,12 @@ import (
 // LookupBatch is used to pull a batch with its metadata from the local batch database.
 func LookupBatch[C any](m dsl.Module, dest t.ModuleID, batchID t.BatchID, context *C) {
 	contextID := m.DslHandle().StoreContext(context)
+	traceCtx := m.DslHandle().TraceContextAsMap()
 
 	origin := &batchdbpb.LookupBatchOrigin{
 		Module: m.ModuleID().Pb(),
 		Type: &batchdbpb.LookupBatchOrigin_Dsl{
-			Dsl: dsl.Origin(contextID),
+			Dsl: dsl.Origin(contextID, traceCtx),
 		},
 	}
 
@@ -33,11 +34,12 @@ func LookupBatchResponse(m dsl.Module, dest t.ModuleID, found bool, txs []*reque
 // StoreBatch is used to store a new batch in the local batch database.
 func StoreBatch[C any](m dsl.Module, dest t.ModuleID, batchID t.BatchID, txIDs []t.TxID, txs []*requestpb.Request, metadata []byte, context *C) {
 	contextID := m.DslHandle().StoreContext(context)
+	traceCtx := m.DslHandle().TraceContextAsMap()
 
 	origin := &batchdbpb.StoreBatchOrigin{
 		Module: m.ModuleID().Pb(),
 		Type: &batchdbpb.StoreBatchOrigin_Dsl{
-			Dsl: dsl.Origin(contextID),
+			Dsl: dsl.Origin(contextID, traceCtx),
 		},
 	}
 

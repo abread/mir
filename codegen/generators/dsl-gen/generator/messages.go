@@ -151,6 +151,12 @@ func generateDslFunctionsForHandlingNetMessagesRecursively(
 		jen.Add(uponMessageReceived).Types(hierarchyNode.OneofOption().MirWrapperType()).Params(
 			jen.Id("m"),
 			jen.Func().Params(jen.Id("from").Add(tNodeIDCode), jen.Id("msg").Add(hierarchyNode.Message().MirType())).Id("error").Block(
+				jen.Id("m").Dot("DslHandle").Call().Dot("PushSpan").Call(jen.Lit("Upon"+hierarchyNode.Name()+"Received")),
+				// TODO: add message fields to span attribute				// TODO: add message fields to span attributes?s?
+
+				jen.Defer().Add(jen.Id("m").Dot("DslHandle").Call().Dot("PopSpan").Call()),
+				jen.Line(), // empty line
+
 				jen.Return(jen.Id("handler").ParamsFunc(func(group *jen.Group) {
 					group.Id("from")
 					for _, param := range constructorHandlerParams.Slice() {

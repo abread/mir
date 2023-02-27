@@ -12,6 +12,7 @@ import (
 
 	"github.com/filecoin-project/mir/codegen/model/types"
 	"github.com/filecoin-project/mir/codegen/util/params"
+	"github.com/filecoin-project/mir/pkg/pb/mir"
 	"github.com/filecoin-project/mir/pkg/pb/net"
 )
 
@@ -80,7 +81,7 @@ func (p *Parser) parseNetMessageNodeRecursively(
 
 	thisNodeConstructorParameters := params.ConstructorParamList{}
 	for _, field := range fields {
-		if IsMessageTypeOneof(field) {
+		if IsMessageTypeOneof(field) || OmitInEventConstructor(field) {
 			continue
 		}
 
@@ -156,4 +157,14 @@ func IsMessageTypeOneof(field *types.Field) bool {
 	}
 
 	return proto.GetExtension(oneofDesc.Options().(*descriptorpb.OneofOptions), net.E_MessageType).(bool)
+}
+
+// OmitInEventConstructor returns true iff the field is marked with [(mir.omit_in_event_constructor) = true].
+func OmitInEventConstructor(field *types.Field) bool {
+	oneofDesc, ok := field.ProtoDesc.(protoreflect.FieldDescriptor)
+	if !ok {
+		return false
+	}
+
+	return proto.GetExtension(oneofDesc.Options().(*descriptorpb.FieldOptions), mir.E_OmitInEventConstructors).(bool)
 }

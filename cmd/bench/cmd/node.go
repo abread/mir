@@ -63,7 +63,7 @@ func init() {
 	nodeCmd.Flags().DurationVar(&statPeriod, "statPeriod", time.Second, "statistic record period")
 }
 
-func issSMRFactory(ownID t.NodeID, transport net.Transport, initialMembership map[t.NodeID]t.NodeAddress, smrParams trantor.Params, logger logging.Logger) (*trantor.System, error) {
+func issSMRFactory(ctx context.Context, ownID t.NodeID, transport net.Transport, initialMembership map[t.NodeID]t.NodeAddress, smrParams trantor.Params, logger logging.Logger) (*trantor.System, error) {
 	localCrypto := deploytest.NewLocalCryptoSystem("pseudo", membership.GetIDs(initialMembership), logger)
 
 	genesisCheckpoint, err := trantor.GenesisCheckpoint([]byte{}, smrParams)
@@ -72,6 +72,7 @@ func issSMRFactory(ownID t.NodeID, transport net.Transport, initialMembership ma
 	}
 
 	return trantor.NewISS(
+		ctx,
 		ownID,
 		transport,
 		genesisCheckpoint,
@@ -82,11 +83,12 @@ func issSMRFactory(ownID t.NodeID, transport net.Transport, initialMembership ma
 	)
 }
 
-func aleaSMRFactory(ownID t.NodeID, transport net.Transport, initialMembership map[t.NodeID]t.NodeAddress, smrParams trantor.Params, logger logging.Logger) (*trantor.System, error) {
+func aleaSMRFactory(ctx context.Context, ownID t.NodeID, transport net.Transport, initialMembership map[t.NodeID]t.NodeAddress, smrParams trantor.Params, logger logging.Logger) (*trantor.System, error) {
 	F := (len(initialMembership) - 1) / 3
 	localCrypto := deploytest.NewLocalThreshCryptoSystem("pseudo", membership.GetIDs(initialMembership), 2*F+1, logger)
 
 	return trantor.NewAlea(
+		ctx,
 		ownID,
 		transport,
 		nil,
@@ -97,7 +99,7 @@ func aleaSMRFactory(ownID t.NodeID, transport net.Transport, initialMembership m
 	)
 }
 
-type smrFactory func(ownID t.NodeID, transport net.Transport, initialMembership map[t.NodeID]t.NodeAddress, smrParams trantor.Params, logger logging.Logger) (*trantor.System, error)
+type smrFactory func(ctx context.Context, ownID t.NodeID, transport net.Transport, initialMembership map[t.NodeID]t.NodeAddress, smrParams trantor.Params, logger logging.Logger) (*trantor.System, error)
 
 var smrFactories = map[string]smrFactory{
 	"iss":  issSMRFactory,
@@ -158,7 +160,7 @@ func runNode(ctx context.Context) error {
 	// Initialize the libp2p transport subsystem.
 	transport := libp2p2.NewTransport(smrParams.Net, ownID, h, logger)
 
-	benchApp, err := smrFactories[protocol](ownID, transport, initialMembership, smrParams, logger)
+	benchApp, err := smrFactories[protocol](ctx, ownID, transport, initialMembership, smrParams, logger)
 	if err != nil {
 		return fmt.Errorf("could not create bench app: %w", err)
 	}

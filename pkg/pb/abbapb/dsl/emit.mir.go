@@ -11,10 +11,11 @@ import (
 
 func InputValue[C any](m dsl.Module, destModule types.ModuleID, input bool, context *C) {
 	contextID := m.DslHandle().StoreContext(context)
+	traceCtx := m.DslHandle().TraceContextAsMap()
 
 	origin := &types1.Origin{
 		Module: m.ModuleID(),
-		Type:   &types1.Origin_Dsl{Dsl: dsl.MirOrigin(contextID)},
+		Type:   &types1.Origin_Dsl{Dsl: dsl.MirOrigin(contextID, traceCtx)},
 	}
 
 	dsl.EmitMirEvent(m, events.InputValue(destModule, input, origin))
@@ -26,10 +27,11 @@ func Deliver(m dsl.Module, destModule types.ModuleID, result bool, origin *types
 
 func RoundInputValue[C any](m dsl.Module, destModule types.ModuleID, input bool, context *C) {
 	contextID := m.DslHandle().StoreContext(context)
+	traceCtx := m.DslHandle().TraceContextAsMap()
 
 	origin := &types1.RoundOrigin{
 		Module: m.ModuleID(),
-		Type:   &types1.RoundOrigin_Dsl{Dsl: dsl.MirOrigin(contextID)},
+		Type:   &types1.RoundOrigin_Dsl{Dsl: dsl.MirOrigin(contextID, traceCtx)},
 	}
 
 	dsl.EmitMirEvent(m, events.RoundInputValue(destModule, input, origin))

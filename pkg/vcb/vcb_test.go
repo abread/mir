@@ -160,6 +160,8 @@ func newDeployment(conf *TestConfig) (*deploytest.Deployment, error) {
 
 	leader := nodeIDs[rand.New(rand.NewSource(conf.RandomSeed)).Intn(len(nodeIDs))] // nolint: gosec
 
+	ctx := context.TODO()
+
 	for i, nodeID := range nodeIDs {
 		nodeLogger := logging.Decorate(logger, fmt.Sprintf("Node %d: ", i))
 
@@ -170,6 +172,7 @@ func newDeployment(conf *TestConfig) (*deploytest.Deployment, error) {
 
 		// Use a simple mempool for incoming requests.
 		mempool := simplemempool.NewModule(
+			ctx,
 			&simplemempool.ModuleConfig{
 				Self:   "mempool",
 				Hasher: "hasher",
@@ -180,7 +183,7 @@ func newDeployment(conf *TestConfig) (*deploytest.Deployment, error) {
 		)
 
 		vcbConfig := DefaultModuleConfig()
-		vcb := NewModule(vcbConfig, &ModuleParams{
+		vcb := NewModule(ctx, vcbConfig, &ModuleParams{
 			InstanceUID: []byte{0},
 			AllNodes:    nodeIDs,
 			Leader:      leader,
@@ -205,7 +208,7 @@ func newDeployment(conf *TestConfig) (*deploytest.Deployment, error) {
 		}
 
 		modulesWithDefaults := map[types.ModuleID]modules.Module{
-			"app":                  newCountingApp(nodeID == leader),
+			"app":                  newCountingApp(ctx, nodeID == leader),
 			vcbConfig.Self:         vcb,
 			vcbConfig.ThreshCrypto: threshCryptoSystem.Module(nodeID),
 			vcbConfig.Mempool:      mempool,
@@ -241,8 +244,8 @@ type countingApp struct {
 	firstSignature tctypes.FullSig
 }
 
-func newCountingApp(isLeader bool) *countingApp {
-	m := dsl.NewModule("app")
+func newCountingApp(ctx context.Context, isLeader bool) *countingApp {
+	m := dsl.NewModule(ctx, "app")
 
 	app := &countingApp{
 		module: m,

@@ -122,6 +122,7 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 						Type: &mempoolpb.RequestBatchOrigin_Dsl{
 							Dsl: dsl.Origin(
 								m.DslHandle().StoreContext(nilStructPtr),
+								m.DslHandle().TraceContextAsMap(),
 							),
 						},
 					})},

@@ -1,6 +1,7 @@
 package alea
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -105,7 +106,7 @@ func DefaultParams(membership map[t.NodeID]t.NodeAddress) *Params {
 //     see the documentation of the ModuleParams type for details.
 //   - startingChkp: the stable checkpoint defining the initial state of the protocol.
 //   - logger:       Logger the Alea implementation uses to output log messages.
-func New(ownID t.NodeID, config *Config, params *Params, startingChkp *checkpoint.StableCheckpoint, logger logging.Logger) (modules.Modules, error) {
+func New(ctx context.Context, ownID t.NodeID, config *Config, params *Params, startingChkp *checkpoint.StableCheckpoint, logger logging.Logger) (modules.Modules, error) {
 	if logger == nil {
 		logger = logging.ConsoleErrorLogger
 	}
@@ -123,6 +124,7 @@ func New(ownID t.NodeID, config *Config, params *Params, startingChkp *checkpoin
 	allNodes := params.AllNodes()
 
 	aleaDir := director.NewModule(
+		ctx,
 		&director.ModuleConfig{
 			Self:          config.AleaDirector,
 			Consumer:      config.Consumer,
@@ -150,6 +152,7 @@ func New(ownID t.NodeID, config *Config, params *Params, startingChkp *checkpoin
 	)
 
 	aleaBc, errAleaBc := broadcast.NewModule(
+		ctx,
 		&broadcast.ModuleConfig{
 			Self:         config.AleaBroadcast,
 			Consumer:     config.AleaDirector,
@@ -173,6 +176,7 @@ func New(ownID t.NodeID, config *Config, params *Params, startingChkp *checkpoin
 	}
 
 	aleaAg, errAleaAg := agreement.NewModule(
+		ctx,
 		&agreement.ModuleConfig{
 			Self:         config.AleaAgreement,
 			Consumer:     config.AleaDirector,

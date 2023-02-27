@@ -23,6 +23,9 @@ func UponMessageReceived[W types.Message_TypeWrapper[M], M any](m dsl.Module, ha
 
 func UponFinishAbbaMessageReceived(m dsl.Module, handler func(from types1.NodeID, round uint64, value bool) error) {
 	UponMessageReceived[*types.Message_FinishAbba](m, func(from types1.NodeID, msg *types.FinishAbbaMessage) error {
+		m.DslHandle().PushSpan("UponFinishAbbaMessageReceived")
+		defer m.DslHandle().PopSpan()
+
 		return handler(from, msg.Round, msg.Value)
 	})
 }

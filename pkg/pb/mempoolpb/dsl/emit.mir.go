@@ -12,10 +12,11 @@ import (
 
 func RequestBatch[C any](m dsl.Module, destModule types.ModuleID, context *C) {
 	contextID := m.DslHandle().StoreContext(context)
+	traceCtx := m.DslHandle().TraceContextAsMap()
 
 	origin := &types1.RequestBatchOrigin{
 		Module: m.ModuleID(),
-		Type:   &types1.RequestBatchOrigin_Dsl{Dsl: dsl.MirOrigin(contextID)},
+		Type:   &types1.RequestBatchOrigin_Dsl{Dsl: dsl.MirOrigin(contextID, traceCtx)},
 	}
 
 	dsl.EmitMirEvent(m, events.RequestBatch(destModule, origin))
@@ -27,10 +28,11 @@ func NewBatch(m dsl.Module, destModule types.ModuleID, txIds []types.TxID, txs [
 
 func RequestTransactions[C any](m dsl.Module, destModule types.ModuleID, txIds []types.TxID, context *C) {
 	contextID := m.DslHandle().StoreContext(context)
+	traceCtx := m.DslHandle().TraceContextAsMap()
 
 	origin := &types1.RequestTransactionsOrigin{
 		Module: m.ModuleID(),
-		Type:   &types1.RequestTransactionsOrigin_Dsl{Dsl: dsl.MirOrigin(contextID)},
+		Type:   &types1.RequestTransactionsOrigin_Dsl{Dsl: dsl.MirOrigin(contextID, traceCtx)},
 	}
 
 	dsl.EmitMirEvent(m, events.RequestTransactions(destModule, txIds, origin))
@@ -42,10 +44,11 @@ func TransactionsResponse(m dsl.Module, destModule types.ModuleID, present []boo
 
 func RequestTransactionIDs[C any](m dsl.Module, destModule types.ModuleID, txs []*requestpb.Request, context *C) {
 	contextID := m.DslHandle().StoreContext(context)
+	traceCtx := m.DslHandle().TraceContextAsMap()
 
 	origin := &types1.RequestTransactionIDsOrigin{
 		Module: m.ModuleID(),
-		Type:   &types1.RequestTransactionIDsOrigin_Dsl{Dsl: dsl.MirOrigin(contextID)},
+		Type:   &types1.RequestTransactionIDsOrigin_Dsl{Dsl: dsl.MirOrigin(contextID, traceCtx)},
 	}
 
 	dsl.EmitMirEvent(m, events.RequestTransactionIDs(destModule, txs, origin))
@@ -57,10 +60,11 @@ func TransactionIDsResponse(m dsl.Module, destModule types.ModuleID, txIds []typ
 
 func RequestBatchID[C any](m dsl.Module, destModule types.ModuleID, txIds []types.TxID, context *C) {
 	contextID := m.DslHandle().StoreContext(context)
+	traceCtx := m.DslHandle().TraceContextAsMap()
 
 	origin := &types1.RequestBatchIDOrigin{
 		Module: m.ModuleID(),
-		Type:   &types1.RequestBatchIDOrigin_Dsl{Dsl: dsl.MirOrigin(contextID)},
+		Type:   &types1.RequestBatchIDOrigin_Dsl{Dsl: dsl.MirOrigin(contextID, traceCtx)},
 	}
 
 	dsl.EmitMirEvent(m, events.RequestBatchID(destModule, txIds, origin))

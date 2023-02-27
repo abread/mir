@@ -26,12 +26,18 @@ func UponMessageReceived[W types.Message_TypeWrapper[M], M any](m dsl.Module, ha
 
 func UponFillGapMessageReceived(m dsl.Module, handler func(from types1.NodeID, slot *types3.Slot) error) {
 	UponMessageReceived[*types.Message_FillGapMessage](m, func(from types1.NodeID, msg *types.FillGapMessage) error {
+		m.DslHandle().PushSpan("UponFillGapMessageReceived")
+		defer m.DslHandle().PopSpan()
+
 		return handler(from, msg.Slot)
 	})
 }
 
 func UponFillerMessageReceived(m dsl.Module, handler func(from types1.NodeID, slot *types3.Slot, txs []*requestpb.Request, signature tctypes.FullSig) error) {
 	UponMessageReceived[*types.Message_FillerMessage](m, func(from types1.NodeID, msg *types.FillerMessage) error {
+		m.DslHandle().PushSpan("UponFillerMessageReceived")
+		defer m.DslHandle().PopSpan()
+
 		return handler(from, msg.Slot, msg.Txs, msg.Signature)
 	})
 }

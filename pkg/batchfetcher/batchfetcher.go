@@ -1,6 +1,8 @@
 package batchfetcher
 
 import (
+	"context"
+
 	availabilitydsl "github.com/filecoin-project/mir/pkg/availability/dsl"
 	bfevents "github.com/filecoin-project/mir/pkg/batchfetcher/events"
 	"github.com/filecoin-project/mir/pkg/checkpoint"
@@ -27,8 +29,8 @@ import (
 // and provides it to the checkpoint module when relaying a state snapshot request to the application.
 // Analogously, when relaying a RestoreState event, it restores its state (including the delivered transactions)
 // using the relayed information.
-func NewModule(mc *ModuleConfig, epochNr t.EpochNr, clientProgress *clientprogress.ClientProgress) modules.Module {
-	m := dsl.NewModule(mc.Self)
+func NewModule(ctx context.Context, mc *ModuleConfig, epochNr t.EpochNr, clientProgress *clientprogress.ClientProgress) modules.Module {
+	m := dsl.NewModule(ctx, mc.Self)
 
 	// Queue of output events. It is required for buffering events being relayed
 	// in case a DeliverCert event received earlier has not yet been transformed to a ProvideTransactions event.

@@ -13,10 +13,11 @@ import (
 
 func InputValue[C any](m dsl.Module, destModule types.ModuleID, txs []*requestpb.Request, context *C) {
 	contextID := m.DslHandle().StoreContext(context)
+	traceCtx := m.DslHandle().TraceContextAsMap()
 
 	origin := &types1.Origin{
 		Module: m.ModuleID(),
-		Type:   &types1.Origin_Dsl{Dsl: dsl.MirOrigin(contextID)},
+		Type:   &types1.Origin_Dsl{Dsl: dsl.MirOrigin(contextID, traceCtx)},
 	}
 
 	dsl.EmitMirEvent(m, events.InputValue(destModule, txs, origin))

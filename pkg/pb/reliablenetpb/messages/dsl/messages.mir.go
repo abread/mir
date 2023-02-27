@@ -24,6 +24,9 @@ func UponMessageReceived[W types.Message_TypeWrapper[M], M any](m dsl.Module, ha
 
 func UponAckMessageReceived(m dsl.Module, handler func(from types1.NodeID, msgDestModule types1.ModuleID, msgId rntypes.MsgID) error) {
 	UponMessageReceived[*types.Message_Ack](m, func(from types1.NodeID, msg *types.AckMessage) error {
+		m.DslHandle().PushSpan("UponAckMessageReceived")
+		defer m.DslHandle().PopSpan()
+
 		return handler(from, msg.MsgDestModule, msg.MsgId)
 	})
 }

@@ -23,6 +23,14 @@ func UponEvent[W types.Event_TypeWrapper[Ev], Ev any](m dsl.Module, handler func
 
 func UponSignShare(m dsl.Module, handler func(data [][]uint8, origin *types.SignShareOrigin) error) {
 	UponEvent[*types.Event_SignShare](m, func(ev *types.SignShare) error {
+		originWrapper, ok := ev.Origin.Type.(*types.SignShareOrigin_Dsl)
+		if ok {
+			m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
+		}
+
+		m.DslHandle().PushSpan("SignShare")
+		defer m.DslHandle().PopSpan()
+
 		return handler(ev.Data, ev.Origin)
 	})
 }
@@ -40,12 +48,22 @@ func UponSignShareResult[C any](m dsl.Module, handler func(signatureShare tctype
 			return nil
 		}
 
+		m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
+
 		return handler(ev.SignatureShare, context)
 	})
 }
 
 func UponVerifyShare(m dsl.Module, handler func(data [][]uint8, signatureShare tctypes.SigShare, nodeId types2.NodeID, origin *types.VerifyShareOrigin) error) {
 	UponEvent[*types.Event_VerifyShare](m, func(ev *types.VerifyShare) error {
+		originWrapper, ok := ev.Origin.Type.(*types.VerifyShareOrigin_Dsl)
+		if ok {
+			m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
+		}
+
+		m.DslHandle().PushSpan("VerifyShare")
+		defer m.DslHandle().PopSpan()
+
 		return handler(ev.Data, ev.SignatureShare, ev.NodeId, ev.Origin)
 	})
 }
@@ -63,12 +81,22 @@ func UponVerifyShareResult[C any](m dsl.Module, handler func(ok bool, error stri
 			return nil
 		}
 
+		m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
+
 		return handler(ev.Ok, ev.Error, context)
 	})
 }
 
 func UponVerifyFull(m dsl.Module, handler func(data [][]uint8, fullSignature tctypes.FullSig, origin *types.VerifyFullOrigin) error) {
 	UponEvent[*types.Event_VerifyFull](m, func(ev *types.VerifyFull) error {
+		originWrapper, ok := ev.Origin.Type.(*types.VerifyFullOrigin_Dsl)
+		if ok {
+			m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
+		}
+
+		m.DslHandle().PushSpan("VerifyFull")
+		defer m.DslHandle().PopSpan()
+
 		return handler(ev.Data, ev.FullSignature, ev.Origin)
 	})
 }
@@ -86,12 +114,22 @@ func UponVerifyFullResult[C any](m dsl.Module, handler func(ok bool, error strin
 			return nil
 		}
 
+		m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
+
 		return handler(ev.Ok, ev.Error, context)
 	})
 }
 
 func UponRecover(m dsl.Module, handler func(data [][]uint8, signatureShares []tctypes.SigShare, origin *types.RecoverOrigin) error) {
 	UponEvent[*types.Event_Recover](m, func(ev *types.Recover) error {
+		originWrapper, ok := ev.Origin.Type.(*types.RecoverOrigin_Dsl)
+		if ok {
+			m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
+		}
+
+		m.DslHandle().PushSpan("Recover")
+		defer m.DslHandle().PopSpan()
+
 		return handler(ev.Data, ev.SignatureShares, ev.Origin)
 	})
 }
@@ -108,6 +146,8 @@ func UponRecoverResult[C any](m dsl.Module, handler func(fullSignature tctypes.F
 		if !ok {
 			return nil
 		}
+
+		m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
 
 		return handler(ev.FullSignature, ev.Ok, ev.Error, context)
 	})

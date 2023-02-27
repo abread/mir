@@ -21,6 +21,14 @@ func UponEvent[W types.Event_TypeWrapper[Ev], Ev any](m dsl.Module, handler func
 
 func UponInputValue(m dsl.Module, handler func(input bool, origin *types.Origin) error) {
 	UponEvent[*types.Event_InputValue](m, func(ev *types.InputValue) error {
+		originWrapper, ok := ev.Origin.Type.(*types.Origin_Dsl)
+		if ok {
+			m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
+		}
+
+		m.DslHandle().PushSpan("InputValue")
+		defer m.DslHandle().PopSpan()
+
 		return handler(ev.Input, ev.Origin)
 	})
 }
@@ -37,6 +45,8 @@ func UponDeliver[C any](m dsl.Module, handler func(result bool, context *C) erro
 		if !ok {
 			return nil
 		}
+
+		m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
 
 		return handler(ev.Result, context)
 	})
@@ -55,6 +65,14 @@ func UponRoundEvent[W types.RoundEvent_TypeWrapper[Ev], Ev any](m dsl.Module, ha
 
 func UponRoundInputValue(m dsl.Module, handler func(input bool, origin *types.RoundOrigin) error) {
 	UponRoundEvent[*types.RoundEvent_InputValue](m, func(ev *types.RoundInputValue) error {
+		originWrapper, ok := ev.Origin.Type.(*types.RoundOrigin_Dsl)
+		if ok {
+			m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
+		}
+
+		m.DslHandle().PushSpan("RoundInputValue")
+		defer m.DslHandle().PopSpan()
+
 		return handler(ev.Input, ev.Origin)
 	})
 }
@@ -71,6 +89,8 @@ func UponRoundDeliver[C any](m dsl.Module, handler func(nextEstimate bool, conte
 		if !ok {
 			return nil
 		}
+
+		m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
 
 		return handler(ev.NextEstimate, context)
 	})

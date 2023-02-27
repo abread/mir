@@ -1,6 +1,7 @@
 package bcqueue
 
 import (
+	"context"
 	"fmt"
 
 	"golang.org/x/exp/slices"
@@ -31,7 +32,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/vcb"
 )
 
-func New(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
+func New(ctx context.Context, mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
 	if slices.Index(params.AllNodes, params.QueueOwner) != int(params.QueueIdx) {
 		return nil, fmt.Errorf("invalid queue index/owner combination: %v - %v", params.QueueIdx, params.QueueOwner)
 	}
@@ -41,13 +42,13 @@ func New(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeI
 		PastMsgHandler: newPastMsgHandler(mc, params),
 	}, logging.Decorate(logger, "Modring controller: "))
 
-	controller := newQueueController(mc, params, tunables, nodeID, logger, slots)
+	controller := newQueueController(ctx, mc, params, tunables, nodeID, logger, slots)
 
 	return modules.RoutedModule(mc.Self, controller, slots), nil
 }
 
-func newQueueController(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger, slots *modring.Module) modules.PassiveModule {
-	m := dsl.NewModule(mc.Self)
+func newQueueController(ctx context.Context, mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger, slots *modring.Module) modules.PassiveModule {
+	m := dsl.NewModule(ctx, mc.Self)
 
 	bcqueuedsl.UponInputValue(m, func(slot *commontypes.Slot, txs []*requestpb.Request) error {
 		if slot.QueueIdx != params.QueueIdx {
@@ -167,7 +168,7 @@ func newVcbGenerator(queueMc *ModuleConfig, queueParams *ModuleParams, nodeID t.
 		mc := *baseConfig
 		mc.Self = id
 
-		mod := vcb.NewModule(&mc, params, nodeID, logging.Decorate(logger, "Vcb: ", "slot", idx))
+		mod := vcb.NewModule(context.TODO(), &mc, params, nodeID, logging.Decorate(logger, "Vcb: ", "slot", idx))
 
 		initialEvs := &events.EventList{}
 		// events.Init is taken care of by modring
