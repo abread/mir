@@ -52,6 +52,7 @@ func main() {
 }
 
 func run() error {
+	ctx := context.TODO()
 	args := parseArgs(os.Args)
 
 	// Initialize logger that will be used throughout the code to print log messages.
@@ -86,6 +87,7 @@ func run() error {
 	transport.Connect(nodeAddrs)
 
 	mempool := simplemempool.NewModule(
+		ctx,
 		&simplemempool.ModuleConfig{
 			Self:   "mempool",
 			Hasher: "hasher",
@@ -95,11 +97,12 @@ func run() error {
 		},
 	)
 
-	batchdb := fakebatchdb.NewModule(&fakebatchdb.ModuleConfig{
+	batchdb := fakebatchdb.NewModule(ctx, &fakebatchdb.ModuleConfig{
 		Self: "batchdb",
 	})
 
 	availability, err := multisigcollector.NewModule(
+		ctx,
 		&multisigcollector.ModuleConfig{
 			Self:    "availability",
 			Mempool: "mempool",
@@ -125,8 +128,8 @@ func run() error {
 		"net":          transport,
 		"mempool":      mempool,
 		"batchdb":      batchdb,
-		"hasher":       mirCrypto.NewHasher(crypto.SHA256),
-		"crypto":       mirCrypto.New(&mirCrypto.DummyCrypto{DummySig: []byte{0}}),
+		"hasher":       mirCrypto.NewHasher(ctx, crypto.SHA256),
+		"crypto":       mirCrypto.New(ctx, &mirCrypto.DummyCrypto{DummySig: []byte{0}}),
 		"availability": availability,
 		"control":      control,
 	}

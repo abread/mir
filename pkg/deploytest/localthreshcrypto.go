@@ -1,6 +1,7 @@
 package deploytest
 
 import (
+	"context"
 	"fmt"
 
 	mirCrypto "github.com/filecoin-project/mir/pkg/crypto"
@@ -12,7 +13,7 @@ import (
 
 type LocalThreshCryptoSystem interface {
 	ThreshCrypto(id t.NodeID) threshcrypto.ThreshCrypto
-	Module(id t.NodeID) modules.Module
+	Module(ctx context.Context, id t.NodeID) modules.Module
 }
 
 type localPseudoThreshCryptoSystem struct {
@@ -34,6 +35,6 @@ func (cs *localPseudoThreshCryptoSystem) ThreshCrypto(id t.NodeID) threshcrypto.
 	return cryptoImpl
 }
 
-func (cs *localPseudoThreshCryptoSystem) Module(id t.NodeID) modules.Module {
-	return threshcrypto.New(cs.ThreshCrypto(id))
+func (cs *localPseudoThreshCryptoSystem) Module(ctx context.Context, id t.NodeID) modules.Module {
+	return threshcrypto.New(ctx, cs.ThreshCrypto(id))
 }

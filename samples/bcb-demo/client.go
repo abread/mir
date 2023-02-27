@@ -52,6 +52,7 @@ func main() {
 }
 
 func run() error {
+	ctx := context.TODO()
 	args := parseArgs(os.Args)
 
 	// Initialize logger that will be used throughout the code to print log messages.
@@ -86,6 +87,7 @@ func run() error {
 	transportModule.Connect(nodeAddrs)
 
 	bcbModule := bcb.NewModule(
+		ctx,
 		&bcb.ModuleConfig{
 			Self:     "bcb",
 			Consumer: "control",
@@ -105,7 +107,7 @@ func run() error {
 
 	m := map[t.ModuleID]modules.Module{
 		"net":     transportModule,
-		"crypto":  mirCrypto.New(&mirCrypto.DummyCrypto{DummySig: []byte{0}}),
+		"crypto":  mirCrypto.New(ctx, &mirCrypto.DummyCrypto{DummySig: []byte{0}}),
 		"bcb":     bcbModule,
 		"control": control,
 	}

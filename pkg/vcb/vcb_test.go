@@ -210,9 +210,9 @@ func newDeployment(conf *TestConfig) (*deploytest.Deployment, error) {
 		modulesWithDefaults := map[types.ModuleID]modules.Module{
 			"app":                  newCountingApp(ctx, nodeID == leader),
 			vcbConfig.Self:         vcb,
-			vcbConfig.ThreshCrypto: threshCryptoSystem.Module(nodeID),
+			vcbConfig.ThreshCrypto: threshCryptoSystem.Module(ctx, nodeID),
 			vcbConfig.Mempool:      mempool,
-			"hasher":               mirCrypto.NewHasher(crypto.SHA256),
+			"hasher":               mirCrypto.NewHasher(ctx, crypto.SHA256),
 			vcbConfig.ReliableNet:  rnet,
 			"net":                  transport,
 			"timer":                timer.New(),

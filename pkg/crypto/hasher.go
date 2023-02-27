@@ -1,8 +1,11 @@
 package crypto
 
 import (
+	"context"
 	"fmt"
 	"hash"
+
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/modules"
@@ -15,11 +18,13 @@ type HashImpl interface {
 }
 
 type Hasher struct {
+	ctx      context.Context
 	hashImpl HashImpl
 }
 
-func NewHasher(hashImpl HashImpl) *Hasher {
+func NewHasher(ctx context.Context, hashImpl HashImpl) *Hasher {
 	return &Hasher{
+		ctx:      ctx,
 		hashImpl: hashImpl,
 	}
 }
@@ -29,12 +34,19 @@ func (hasher *Hasher) ApplyEvents(eventsIn *events.EventList) (*events.EventList
 }
 
 func (hasher *Hasher) ApplyEvent(event *eventpb.Event) (*events.EventList, error) {
+	ctx := hasher.ctx
+
 	switch e := event.Type.(type) {
 	case *eventpb.Event_Init:
 		// no actions on init
 		return events.EmptyList(), nil
 	case *eventpb.Event_HashRequest:
 		// HashRequest is the only event understood by the hasher module.
+		if origin, ok := e.HashRequest.Origin.Type.(*eventpb.HashOrigin_Dsl); ok {
+			ctx = propagateCtxFromOrigin(ctx, origin.Dsl)
+		}
+		ctx, span := startSpan(ctx, "HashRequest", trace.WithSpanKind(trace.SpanKindConsumer))
+		defer span.End()
 
 		// Create a slice for the resulting digests containing one element for each data item to be hashed.
 		digests := make([][]byte, len(e.HashRequest.Data))
@@ -52,6 +64,9 @@ func (hasher *Hasher) ApplyEvent(event *eventpb.Event) (*events.EventList, error
 			// Save resulting digest in the result slice
 			digests[i] = h.Sum(nil)
 		}
+
+		_, spanRes := startSpan(ctx, "HashResult", trace.WithSpanKind(trace.SpanKindProducer))
+		defer spanRes.End()
 
 		// Return all computed digests in one common event.
 		return events.ListOf(

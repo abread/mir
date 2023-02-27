@@ -250,8 +250,8 @@ func newDeployment(conf *TestConfig) (*deploytest.Deployment, error) {
 		modulesWithDefaults := map[types.ModuleID]modules.Module{
 			"app":                   newCountingApp(ctx, inputValue),
 			abbaConfig.Self:         abba,
-			abbaConfig.ThreshCrypto: threshCryptoSystem.Module(nodeID),
-			abbaConfig.Hasher:       mirCrypto.NewHasher(crypto.SHA256),
+			abbaConfig.ThreshCrypto: threshCryptoSystem.Module(ctx, nodeID),
+			abbaConfig.Hasher:       mirCrypto.NewHasher(ctx, crypto.SHA256),
 			abbaConfig.ReliableNet:  rnet,
 			"net":                   transport,
 			"timer":                 timer.New(),
