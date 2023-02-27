@@ -78,7 +78,7 @@ func NewModule(ctx context.Context, mc *ModuleConfig, params *ModuleParams, tuna
 	}
 
 	// rounds use a submodule namespace to allow us to mark all round messages as received at once
-	rounds := modring.New(mc.Self.Then(modringSubName), tunables.MaxRoundLookahead, modring.ModuleParams{
+	rounds := modring.New(ctx, mc.Self.Then(modringSubName), tunables.MaxRoundLookahead, modring.ModuleParams{
 		Generator: newRoundGenerator(mc, params, nodeID, logger),
 	}, logging.Decorate(logger, "Modring controller: "))
 
@@ -180,9 +180,9 @@ func newController(ctx context.Context, mc *ModuleConfig, params *ModuleParams, 
 	return m
 }
 
-func newRoundGenerator(controllerMc *ModuleConfig, controllerParams *ModuleParams, nodeID t.NodeID, logger logging.Logger) func(id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
+func newRoundGenerator(controllerMc *ModuleConfig, controllerParams *ModuleParams, nodeID t.NodeID, logger logging.Logger) func(ctx context.Context, id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
 
-	return func(id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
+	return func(ctx context.Context, id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
 		mc := &abbaround.ModuleConfig{
 			Self:         id,
 			Consumer:     controllerMc.Self,
@@ -197,7 +197,7 @@ func newRoundGenerator(controllerMc *ModuleConfig, controllerParams *ModuleParam
 			RoundNumber: idx,
 		}
 
-		mod := abbaround.New(context.TODO(), mc, params, nodeID, logging.Decorate(logger, "Abba Round: ", "abbaRound", idx))
+		mod := abbaround.New(ctx, mc, params, nodeID, logging.Decorate(logger, "Abba Round: ", "abbaRound", idx))
 
 		initialEvs := &events.EventList{}
 		return mod, initialEvs, nil

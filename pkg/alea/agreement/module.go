@@ -75,6 +75,7 @@ func NewModule(ctx context.Context, mc *ModuleConfig, params *ModuleParams, tuna
 	}
 
 	agRounds := modring.New(
+		ctx,
 		mc.Self,
 		tunables.MaxRoundLookahead,
 		modring.ModuleParams{
@@ -215,7 +216,7 @@ func newPastMessageHandler(mc *ModuleConfig) func(pastMessages []*modringpbtypes
 	}
 }
 
-func newAbbaGenerator(agMc *ModuleConfig, agParams *ModuleParams, agTunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) func(id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
+func newAbbaGenerator(agMc *ModuleConfig, agParams *ModuleParams, agTunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) func(ctx context.Context, id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
 	params := &abba.ModuleParams{
 		InstanceUID: agParams.InstanceUID, // TODO: review
 		AllNodes:    agParams.AllNodes,
@@ -224,7 +225,7 @@ func newAbbaGenerator(agMc *ModuleConfig, agParams *ModuleParams, agTunables *Mo
 		MaxRoundLookahead: agTunables.MaxAbbaRoundLookahead,
 	}
 
-	return func(id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
+	return func(ctx context.Context, id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
 		mc := &abba.ModuleConfig{
 			Self:         id,
 			ReliableNet:  agMc.ReliableNet,
@@ -232,7 +233,7 @@ func newAbbaGenerator(agMc *ModuleConfig, agParams *ModuleParams, agTunables *Mo
 			Hasher:       agMc.Hasher,
 		}
 
-		mod, err := abba.NewModule(context.TODO(), mc, params, tunables, nodeID, logging.Decorate(logger, "Abba: ", "agRound", idx))
+		mod, err := abba.NewModule(ctx, mc, params, tunables, nodeID, logging.Decorate(logger, "Abba: ", "agRound", idx))
 		if err != nil {
 			return nil, nil, err
 		}

@@ -1,9 +1,13 @@
 package modring
 
 import (
+	"context"
 	"fmt"
 	"runtime/debug"
 	"strconv"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/logging"
@@ -15,28 +19,34 @@ import (
 )
 
 type Module struct {
+	ctx            context.Context
 	ownID          t.ModuleID
 	generator      ModuleGenerator
 	pastMsgHandler PastMessagesHandler
 
 	ringController RingController
 	ring           []modules.PassiveModule
+	ctxRing        []context.Context
 
 	logger logging.Logger
 }
 
-func New(ownID t.ModuleID, ringSize int, params ModuleParams, logger logging.Logger) *Module {
+var name = "github.com/filecoin-project/mir/pkg/modring"
+
+func New(ctx context.Context, ownID t.ModuleID, ringSize int, params ModuleParams, logger logging.Logger) *Module {
 	if logger == nil {
 		logger = logging.ConsoleErrorLogger
 	}
 
 	return &Module{
+		ctx:            ctx,
 		ownID:          ownID,
 		generator:      params.Generator,
 		pastMsgHandler: params.PastMsgHandler,
 
 		ringController: NewRingController(ringSize),
 		ring:           make([]modules.PassiveModule, ringSize),
+		ctxRing:        make([]context.Context, ringSize),
 
 		logger: logger,
 	}
@@ -193,7 +203,8 @@ func (m *Module) getSubByRingIdx(ringIdx int) (modules.PassiveModule, *eventpb.E
 		}
 
 		subFullID := m.ownID.Then(t.NewModuleIDFromInt(subID))
-		sub, initialEvs, err := (m.generator)(subFullID, subID)
+		subCtx, _ := otel.Tracer(name).Start(m.ctx, fmt.Sprintf("modring:%s", subFullID))
+		sub, initialEvs, err := (m.generator)(subCtx, subFullID, subID)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -203,6 +214,7 @@ func (m *Module) getSubByRingIdx(ringIdx int) (modules.PassiveModule, *eventpb.E
 		initEvent.Next = append(initEvent.Next, initialEvs.Slice()...)
 
 		m.ring[ringIdx] = sub
+		m.ctxRing[ringIdx] = subCtx
 		m.logger.Log(logging.LevelDebug, "module created", "id", subID)
 
 		return m.ring[ringIdx], initEvent, err
@@ -243,9 +255,15 @@ func (m *Module) MarkSubmodulePast(id uint64) error {
 		return fmt.Errorf("cannot mark submodule as past: %w", err)
 	}
 
-	// zero slot just in case (and to let the GC do its job)
 	ringIdx := int(id % uint64(len(m.ring)))
+
+	// mark end of submodule span
+	span := trace.SpanFromContext(m.ctxRing[ringIdx])
+	span.End()
+
+	// zero slot just in case (and to let the GC do its job)
 	m.ring[ringIdx] = nil
+	m.ctxRing[ringIdx] = nil
 
 	m.logger.Log(logging.LevelDebug, "module freed", "id", id, "newMinSlot", m.ringController.minSlot)
 	return nil

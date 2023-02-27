@@ -37,7 +37,7 @@ func New(ctx context.Context, mc *ModuleConfig, params *ModuleParams, tunables *
 		return nil, fmt.Errorf("invalid queue index/owner combination: %v - %v", params.QueueIdx, params.QueueOwner)
 	}
 
-	slots := modring.New(mc.Self, tunables.MaxConcurrentVcb, modring.ModuleParams{
+	slots := modring.New(ctx, mc.Self, tunables.MaxConcurrentVcb, modring.ModuleParams{
 		Generator:      newVcbGenerator(mc, params, nodeID, logger),
 		PastMsgHandler: newPastMsgHandler(mc, params),
 	}, logging.Decorate(logger, "Modring controller: "))
@@ -150,7 +150,7 @@ func newQueueController(ctx context.Context, mc *ModuleConfig, params *ModulePar
 	return m
 }
 
-func newVcbGenerator(queueMc *ModuleConfig, queueParams *ModuleParams, nodeID t.NodeID, logger logging.Logger) func(id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
+func newVcbGenerator(queueMc *ModuleConfig, queueParams *ModuleParams, nodeID t.NodeID, logger logging.Logger) func(ctx context.Context, id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
 	baseConfig := &vcb.ModuleConfig{
 		Self:         "INVALID",
 		ReliableNet:  queueMc.ReliableNet,
@@ -164,11 +164,11 @@ func newVcbGenerator(queueMc *ModuleConfig, queueParams *ModuleParams, nodeID t.
 		Leader:      queueParams.QueueOwner,
 	}
 
-	return func(id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
+	return func(ctx context.Context, id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
 		mc := *baseConfig
 		mc.Self = id
 
-		mod := vcb.NewModule(context.TODO(), &mc, params, nodeID, logging.Decorate(logger, "Vcb: ", "slot", idx))
+		mod := vcb.NewModule(ctx, &mc, params, nodeID, logging.Decorate(logger, "Vcb: ", "slot", idx))
 
 		initialEvs := &events.EventList{}
 		// events.Init is taken care of by modring

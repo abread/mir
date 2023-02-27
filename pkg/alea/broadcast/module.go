@@ -63,7 +63,7 @@ func NewModule(ctx context.Context, mc *ModuleConfig, params *ModuleParams, tuna
 		return nil, err
 	}
 
-	queues := modring.New(mc.Self, len(params.AllNodes), modring.ModuleParams{
+	queues := modring.New(ctx, mc.Self, len(params.AllNodes), modring.ModuleParams{
 		Generator: newBcQueueGenerator(mc, params, tunables, nodeID, logger),
 	}, logging.Decorate(logger, "Modring controller: "))
 
@@ -101,12 +101,12 @@ func newQueueController(ctx context.Context, mc *ModuleConfig, params *ModulePar
 	return m, nil
 }
 
-func newBcQueueGenerator(queueMc *ModuleConfig, queueParams *ModuleParams, queueTunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) func(id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
+func newBcQueueGenerator(queueMc *ModuleConfig, queueParams *ModuleParams, queueTunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) func(ctx context.Context, id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
 	tunables := &bcqueue.ModuleTunables{
 		MaxConcurrentVcb: queueTunables.MaxConcurrentVcbPerQueue,
 	}
 
-	return func(id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
+	return func(ctx context.Context, id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
 		mc := &bcqueue.ModuleConfig{
 			Self:         id,
 			Consumer:     queueMc.Self,
@@ -124,7 +124,7 @@ func newBcQueueGenerator(queueMc *ModuleConfig, queueParams *ModuleParams, queue
 			QueueOwner: queueParams.AllNodes[int(idx)],
 		}
 
-		mod, err := bcqueue.New(context.TODO(), mc, params, tunables, nodeID, logging.Decorate(logger, "BcQueue: ", "queueIdx", idx))
+		mod, err := bcqueue.New(ctx, mc, params, tunables, nodeID, logging.Decorate(logger, "BcQueue: ", "queueIdx", idx))
 		if err != nil {
 			return nil, nil, err
 		}
