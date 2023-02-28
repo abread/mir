@@ -3,6 +3,7 @@ package dsl
 import (
 	"errors"
 
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/filecoin-project/mir/pkg/events"
@@ -275,7 +276,9 @@ func UponOneHashResult[C any](m Module, handler func(hash []byte, context *C) er
 func UponMessageReceived(m Module, handler func(from t.NodeID, msg *messagepb.Message) error) {
 	UponEvent[*eventpb.Event_MessageReceived](m, func(ev *eventpb.MessageReceived) error {
 		m.DslHandle().ImportTraceContextFromMap(ev.Msg.TraceContext)
-		m.DslHandle().PushSpan("MessageReceived", trace.WithSpanKind(trace.SpanKindConsumer))
+		m.DslHandle().PushSpan("UponMessageReceived", trace.WithSpanKind(trace.SpanKindConsumer), trace.WithAttributes(
+			attribute.String("net.peer.name", ev.From),
+		))
 		defer m.DslHandle().PopSpan()
 
 		return handler(t.NodeID(ev.From), ev.Msg)

@@ -119,16 +119,20 @@ func runNode(ctx context.Context) error {
 
 	jaegerExporter, err := jaeger.New(jaeger.WithAgentEndpoint())
 	if err != nil {
-		return fmt.Errorf("error creating jaeger exporter: %w", err)
+		return fmt.Errorf("error creating otel exporter: %w", err)
 	}
 	defer func() {
-		if err := jaegerExporter.Shutdown(context.Background()); err != nil {
-			logger.Log(logging.LevelError, "error stopping exporter", "err", err)
-		}
+		_ = jaegerExporter.Shutdown(context.Background())
 	}()
-	otel.SetTracerProvider(trace.NewTracerProvider(
+
+	tp := trace.NewTracerProvider(
 		trace.WithBatcher(jaegerExporter),
-	))
+		trace.WithSampler(trace.AlwaysSample()),
+	)
+	defer func() {
+		_ = tp.Shutdown(context.Background())
+	}()
+	otel.SetTracerProvider(tp)
 
 	// Load system membership.
 	nodeAddrs, err := membership.FromFileName(membershipFile)

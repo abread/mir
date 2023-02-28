@@ -1,6 +1,8 @@
 package dsl
 
 import (
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/filecoin-project/mir/pkg/dsl"
 	mpevents "github.com/filecoin-project/mir/pkg/mempool/events"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
@@ -13,6 +15,9 @@ import (
 
 // RequestBatch is used by the availability layer to request a new batch of transactions from the mempool.
 func RequestBatch[C any](m dsl.Module, dest t.ModuleID, context *C) {
+	m.DslHandle().PushSpan("RequestBatch", trace.WithSpanKind(trace.SpanKindProducer))
+	defer m.DslHandle().PopSpan()
+
 	contextID := m.DslHandle().StoreContext(context)
 	traceCtx := m.DslHandle().TraceContextAsMap()
 
@@ -28,12 +33,18 @@ func RequestBatch[C any](m dsl.Module, dest t.ModuleID, context *C) {
 
 // NewBatch is a response to a RequestBatch event.
 func NewBatch(m dsl.Module, dest t.ModuleID, txIDs []t.TxID, txs []*requestpb.Request, origin *mppb.RequestBatchOrigin) {
+	m.DslHandle().PushSpan("NewBatch", trace.WithSpanKind(trace.SpanKindProducer))
+	defer m.DslHandle().PopSpan()
+
 	dsl.EmitEvent(m, mpevents.NewBatch(dest, txIDs, txs, origin))
 }
 
 // RequestTransactions allows the availability layer to request transactions from the mempool by their IDs.
 // It is possible that some of these transactions are not present in the mempool.
 func RequestTransactions[C any](m dsl.Module, dest t.ModuleID, txIDs []t.TxID, context *C) {
+	m.DslHandle().PushSpan("RequestTransactions", trace.WithSpanKind(trace.SpanKindProducer))
+	defer m.DslHandle().PopSpan()
+
 	contextID := m.DslHandle().StoreContext(context)
 	traceCtx := m.DslHandle().TraceContextAsMap()
 
@@ -49,12 +60,18 @@ func RequestTransactions[C any](m dsl.Module, dest t.ModuleID, txIDs []t.TxID, c
 
 // TransactionsResponse is a response to a RequestTransactions event.
 func TransactionsResponse(m dsl.Module, dest t.ModuleID, present []bool, txs []*requestpb.Request, origin *mppb.RequestTransactionsOrigin) {
+	m.DslHandle().PushSpan("TransactionsResponse", trace.WithSpanKind(trace.SpanKindProducer))
+	defer m.DslHandle().PopSpan()
+
 	dsl.EmitEvent(m, mpevents.TransactionsResponse(dest, present, txs, origin))
 }
 
 // RequestTransactionIDs allows other modules to request the mempool module to compute IDs for the given transactions.
 // It is possible that some of these transactions are not present in the mempool.
 func RequestTransactionIDs[C any](m dsl.Module, dest t.ModuleID, txs []*requestpb.Request, context *C) {
+	m.DslHandle().PushSpan("RequestTransactionIDs", trace.WithSpanKind(trace.SpanKindProducer))
+	defer m.DslHandle().PopSpan()
+
 	contextID := m.DslHandle().StoreContext(context)
 	traceCtx := m.DslHandle().TraceContextAsMap()
 
@@ -70,12 +87,18 @@ func RequestTransactionIDs[C any](m dsl.Module, dest t.ModuleID, txs []*requestp
 
 // TransactionIDsResponse is a response to a RequestTransactionIDs event.
 func TransactionIDsResponse(m dsl.Module, dest t.ModuleID, txIDs []t.TxID, origin *mppb.RequestTransactionIDsOrigin) {
+	m.DslHandle().PushSpan("RequestBatchID", trace.WithSpanKind(trace.SpanKindProducer))
+	defer m.DslHandle().PopSpan()
+
 	dsl.EmitEvent(m, mpevents.TransactionIDsResponse(dest, txIDs, origin))
 }
 
 // RequestBatchID allows other modules to request the mempool module to compute the ID of a batch.
 // It is possible that some transactions in the batch are not present in the mempool.
 func RequestBatchID[C any](m dsl.Module, dest t.ModuleID, txIDs []t.TxID, context *C) {
+	m.DslHandle().PushSpan("RequestBatchID", trace.WithSpanKind(trace.SpanKindProducer))
+	defer m.DslHandle().PopSpan()
+
 	contextID := m.DslHandle().StoreContext(context)
 	traceCtx := m.DslHandle().TraceContextAsMap()
 
@@ -110,6 +133,14 @@ func UponEvent[EvWrapper mppb.Event_TypeWrapper[Ev], Ev any](m dsl.Module, handl
 // UponRequestBatch registers a handler for the RequestBatch events.
 func UponRequestBatch(m dsl.Module, handler func(origin *mppb.RequestBatchOrigin) error) {
 	UponEvent[*mppb.Event_RequestBatch](m, func(ev *mppb.RequestBatch) error {
+		originWrapper, ok := ev.Origin.Type.(*mppb.RequestBatchOrigin_Dsl)
+		if ok {
+			m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
+		}
+
+		m.DslHandle().PushSpan("UponRequestBatch", trace.WithSpanKind(trace.SpanKindConsumer))
+		defer m.DslHandle().PopSpan()
+
 		return handler(ev.Origin)
 	})
 }
@@ -128,6 +159,10 @@ func UponNewBatch[C any](m dsl.Module, handler func(txIDs []t.TxID, txs []*reque
 			return nil
 		}
 
+		m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
+		m.DslHandle().PushSpan("UponNewBatch", trace.WithSpanKind(trace.SpanKindConsumer))
+		defer m.DslHandle().PopSpan()
+
 		return handler(t.TxIDSlice(ev.TxIds), ev.Txs, context)
 	})
 }
@@ -135,6 +170,14 @@ func UponNewBatch[C any](m dsl.Module, handler func(txIDs []t.TxID, txs []*reque
 // UponRequestTransactions registers a handler for the RequestTransactions events.
 func UponRequestTransactions(m dsl.Module, handler func(txIDs []t.TxID, origin *mppb.RequestTransactionsOrigin) error) {
 	UponEvent[*mppb.Event_RequestTransactions](m, func(ev *mppb.RequestTransactions) error {
+		originWrapper, ok := ev.Origin.Type.(*mppb.RequestTransactionsOrigin_Dsl)
+		if ok {
+			m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
+		}
+
+		m.DslHandle().PushSpan("UponRequestTransactions", trace.WithSpanKind(trace.SpanKindConsumer))
+		defer m.DslHandle().PopSpan()
+
 		return handler(t.TxIDSlice(ev.TxIds), ev.Origin)
 	})
 }
@@ -152,6 +195,10 @@ func UponTransactionsResponse[C any](m dsl.Module, handler func(present []bool, 
 		if !ok {
 			return nil
 		}
+
+		m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
+		m.DslHandle().PushSpan("UponTransactionsResponse", trace.WithSpanKind(trace.SpanKindConsumer))
+		defer m.DslHandle().PopSpan()
 
 		return handler(ev.Present, ev.Txs, context)
 	})
@@ -185,6 +232,14 @@ func UponTransactionIDsResponse[C any](m dsl.Module, handler func(txIDs []t.TxID
 // UponRequestBatchID registers a handler for the RequestBatchID events.
 func UponRequestBatchID(m dsl.Module, handler func(txIDs []t.TxID, origin *mppb.RequestBatchIDOrigin) error) {
 	UponEvent[*mppb.Event_RequestBatchId](m, func(ev *mppb.RequestBatchID) error {
+		originWrapper, ok := ev.Origin.Type.(*mppb.RequestBatchIDOrigin_Dsl)
+		if ok {
+			m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
+		}
+
+		m.DslHandle().PushSpan("UponRequestBatchID", trace.WithSpanKind(trace.SpanKindConsumer))
+		defer m.DslHandle().PopSpan()
+
 		return handler(t.TxIDSlice(ev.TxIds), ev.Origin)
 	})
 }
@@ -202,6 +257,10 @@ func UponBatchIDResponse[C any](m dsl.Module, handler func(batchID t.BatchID, co
 		if !ok {
 			return nil
 		}
+
+		m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
+		m.DslHandle().PushSpan("UponBatchIDResponse", trace.WithSpanKind(trace.SpanKindConsumer))
+		defer m.DslHandle().PopSpan()
 
 		return handler(t.BatchID(ev.BatchId), context)
 	})
