@@ -1,6 +1,8 @@
 package batchfetcher
 
 import (
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
 )
@@ -8,6 +10,7 @@ import (
 type outputItem struct {
 	event *eventpb.Event
 	f     func(e *eventpb.Event)
+	span  trace.Span
 }
 
 type outputQueue struct {
@@ -19,6 +22,9 @@ func (oq *outputQueue) Enqueue(item *outputItem) {
 }
 
 func (oq *outputQueue) Flush(m dsl.Module) {
+	m.DslHandle().PushSpan("flush outputQueue")
+	defer m.DslHandle().PopSpan()
+
 	for len(oq.items) > 0 && oq.items[0].event != nil {
 		// Convenience variable.
 		item := oq.items[0]
@@ -27,6 +33,9 @@ func (oq *outputQueue) Flush(m dsl.Module) {
 		if item.f != nil {
 			item.f(item.event)
 		}
+
+		item.span.AddEvent("delivering during flush")
+		item.span.End()
 
 		// Emit queued event.
 		dsl.EmitEvent(m, item.event)

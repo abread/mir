@@ -39,10 +39,15 @@ func NewModule(ctx context.Context, mc *ModuleConfig, epochNr t.EpochNr, clientP
 
 	// The NewEpoch handler updates the current epoch number and forwards the event to the output.
 	dsl.UponEvent[*eventpb.Event_NewEpoch](m, func(newEpoch *eventpb.NewEpoch) error {
+		_, span := m.DslHandle().PushSpan("NewEpoch")
+
 		epochNr = t.EpochNr(newEpoch.EpochNr)
 		output.Enqueue(&outputItem{
 			event: events.NewEpoch(mc.Destination, t.EpochNr(newEpoch.EpochNr)),
+			span:  span,
 		})
+
+		m.DslHandle().PopSpanNoEnd()
 		output.Flush(m)
 		return nil
 	})
@@ -51,16 +56,20 @@ func NewModule(ctx context.Context, mc *ModuleConfig, epochNr t.EpochNr, clientP
 	// from the availability layer.
 	// TODO: Make sure the certificate has been verified by the producer of this event.
 	dsl.UponEvent[*eventpb.Event_DeliverCert](m, func(cert *eventpb.DeliverCert) error {
+		_, span := m.DslHandle().PushSpan("DeliverCert")
+
 		// Create an empty output item and enqueue it immediately.
 		// Actual output will be delayed until the transactions have been received.
 		// This is necessary to preserve the order of incoming and outgoing events.
-		item := outputItem{event: nil}
+		item := outputItem{event: nil, span: span}
 		output.Enqueue(&item)
 
 		if cert.Cert.Type == nil {
 			// Skip fetching transactions for padding certificates.
 			// Directly deliver an empty batch instead.
 			item.event = bfevents.NewOrderedBatch(mc.Destination, []*requestpb.Request{})
+
+			m.DslHandle().PopSpanNoEnd()
 			output.Flush(m)
 		} else {
 			// If this is a proper certificate, request transactions from the availability layer.
@@ -78,6 +87,7 @@ func NewModule(ctx context.Context, mc *ModuleConfig, epochNr t.EpochNr, clientP
 	// The AppSnapshotRequest handler triggers a ClientProgress event (for the checkpointing protocol)
 	// and forwards the original snapshot request event to the output.
 	dsl.UponEvent[*eventpb.Event_AppSnapshotRequest](m, func(snapshotRequest *eventpb.AppSnapshotRequest) error {
+		_, span := m.DslHandle().PushSpan("AppSnapshotRequest")
 
 		// Save the number of the epoch when the AppSnapshotRequest has been received.
 		// This is necessary in case the epoch number changes
@@ -96,7 +106,11 @@ func NewModule(ctx context.Context, mc *ModuleConfig, epochNr t.EpochNr, clientP
 					clientProgress.Pb(),
 				))
 			},
+
+			span: span,
 		})
+
+		m.DslHandle().PopSpanNoEnd()
 		output.Flush(m)
 
 		return nil
@@ -162,9 +176,14 @@ func NewModule(ctx context.Context, mc *ModuleConfig, epochNr t.EpochNr, clientP
 
 	// All other events simply pass through the batch fetcher unchanged (except their destination module).
 	dsl.UponOtherEvent(m, func(ev *eventpb.Event) error {
+		_, span := m.DslHandle().PushSpan("ForeignEvent")
+
 		output.Enqueue(&outputItem{
 			event: events.Redirect(ev, mc.Destination),
+			span:  span,
 		})
+
+		m.DslHandle().PopSpanNoEnd()
 		output.Flush(m)
 		return nil
 	})

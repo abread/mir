@@ -156,10 +156,14 @@ func (h Handle) CurrentSpan() (context.Context, trace.Span) {
 	return h.impl.goCtxStack[len(h.impl.goCtxStack)-1], h.impl.spanStack[len(h.impl.spanStack)-1]
 }
 
-func (h Handle) PushSpan(name string, opts ...trace.SpanStartOption) (context.Context, trace.Span) {
+func (h Handle) StartSpanNoPush(name string, opts ...trace.SpanStartOption) (context.Context, trace.Span) {
 	currentGoCtx, _ := h.CurrentSpan()
+	return otel.Tracer(string(h.impl.moduleID)).Start(currentGoCtx, name, opts...)
+}
 
-	goCtx, span := otel.Tracer(string(h.impl.moduleID)).Start(currentGoCtx, name, opts...)
+func (h Handle) PushSpan(name string, opts ...trace.SpanStartOption) (context.Context, trace.Span) {
+	goCtx, span := h.StartSpanNoPush(name, opts...)
+
 	h.impl.goCtxStack = append(h.impl.goCtxStack, goCtx)
 	h.impl.spanStack = append(h.impl.spanStack, span)
 
@@ -167,13 +171,20 @@ func (h Handle) PushSpan(name string, opts ...trace.SpanStartOption) (context.Co
 }
 
 func (h Handle) PopSpan() {
-	_, span := h.CurrentSpan()
+	_, span := h.PopSpanNoEnd()
 	if span != nil {
 		span.End()
+	}
+}
 
+func (h Handle) PopSpanNoEnd() (context.Context, trace.Span) {
+	ctx, span := h.CurrentSpan()
+	if span != nil {
 		h.impl.goCtxStack = h.impl.goCtxStack[:len(h.impl.goCtxStack)-1]
 		h.impl.spanStack = h.impl.spanStack[:len(h.impl.spanStack)-1]
 	}
+
+	return ctx, span
 }
 
 func (h Handle) TraceContextAsMap() propagation.MapCarrier {
