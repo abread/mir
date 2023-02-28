@@ -3,6 +3,9 @@ package availability
 import (
 	"fmt"
 
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/filecoin-project/mir/pkg/alea/broadcast"
 	"github.com/filecoin-project/mir/pkg/alea/common"
 	director "github.com/filecoin-project/mir/pkg/alea/director/internal/common"
@@ -13,7 +16,6 @@ import (
 	"github.com/filecoin-project/mir/pkg/logging"
 	mempooldsl "github.com/filecoin-project/mir/pkg/mempool/dsl"
 	abcdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/dsl"
-	bcdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/dsl"
 	bcpbevents "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/events"
 	commontypes "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
 	aleadsl "github.com/filecoin-project/mir/pkg/pb/aleapb/dsl"
@@ -40,6 +42,7 @@ type RequestsState struct {
 	ReqOrigins  []*apb.RequestTransactionsOrigin
 	SentFillGap bool
 	Replies     map[t.NodeID]struct{}
+	span        trace.Span
 }
 
 // IncludeBatchFetching registers event handlers for processing availabilitypb.RequestTransactions events.
@@ -67,9 +70,15 @@ func IncludeBatchFetching(
 
 		reqState, present := state.RequestsState[*slot]
 		if !present {
+			_, span := m.DslHandle().PushSpan("availability::RequestTransactions", trace.WithAttributes(
+				attribute.Int64("queueIdx", int64(cert.Slot.QueueIdx)),
+				attribute.Int64("queueSlot", int64(cert.Slot.QueueSlot)),
+			))
+
 			// new request
 			reqState = &RequestsState{
 				ReqOrigins: make([]*apb.RequestTransactionsOrigin, 0, 1),
+				span:       span,
 			}
 			state.RequestsState[*slot] = reqState
 
@@ -80,12 +89,17 @@ func IncludeBatchFetching(
 		// add ourselves to the list of requestors in order to receive a reply
 		reqState.ReqOrigins = append(reqState.ReqOrigins, origin)
 
+		reqState.span.AddEvent("new requestor", trace.WithAttributes(attribute.String("originModule", origin.Module)))
+
 		return nil
 	})
 
 	// if broadcast delivers for a batch being requested, we can *now* resolve it locally
 	abcdsl.UponDeliver(m, func(slot *commontypes.Slot) error {
-		if _, present := state.RequestsState[*slot]; present {
+		if reqState, present := state.RequestsState[*slot]; present {
+			m.DslHandle().PushExistingSpan(reqState.span)
+			reqState.span.AddEvent("slot delivered in bc. retrying local lookup")
+
 			// TODO: avoid concurrent lookups of the same batch?
 			// if bc delivers right after the transaction starts, two lookups will be performed.
 
@@ -102,6 +116,7 @@ func IncludeBatchFetching(
 		if !ok {
 			return nil // stale request
 		}
+		m.DslHandle().PushExistingSpan(reqState.span)
 
 		if found {
 			for _, origin := range reqState.ReqOrigins {
@@ -114,6 +129,7 @@ func IncludeBatchFetching(
 			}
 
 			delete(state.RequestsState, *slot)
+			m.DslHandle().PopSpan()
 			return nil
 		}
 
@@ -121,6 +137,8 @@ func IncludeBatchFetching(
 			return fmt.Errorf("tried to send FILL-GAP twice")
 		}
 		reqState.SentFillGap = true
+
+		reqState.span.AddEvent("scheduling FILL-GAP")
 
 		// send FILL-GAP after a timeout (if request was not satisfied)
 		// this way bc has more chances of completing before even trying to send a fill-gap message
@@ -132,11 +150,13 @@ func IncludeBatchFetching(
 	})
 
 	// TODO: move this event to the right component
-	bcdsl.UponDoFillGap(m, func(slot *commontypes.Slot) error {
+	abcdsl.UponDoFillGap(m, func(slot *commontypes.Slot) error {
 		reqState, present := state.RequestsState[*slot]
 		if !present {
 			return nil // already handled
 		}
+		m.DslHandle().PushExistingSpan(reqState.span)
+		reqState.span.AddEvent("requesting missing slot with FILL-GAP")
 
 		reqState.Replies = make(map[t.NodeID]struct{}, len(params.AllNodes))
 
@@ -185,6 +205,7 @@ func IncludeBatchFetching(
 		if !present || reqState.Replies == nil {
 			return nil // no request needs this message to be satisfied
 		}
+		m.DslHandle().PushExistingSpan(reqState.span) // TODO implement rnet context propagation
 
 		if _, alreadyAnswered := reqState.Replies[from]; alreadyAnswered {
 			return nil // already processed a reply from this node
@@ -239,6 +260,7 @@ func IncludeBatchFetching(
 		for _, origin := range requestState.ReqOrigins {
 			adsl.ProvideTransactions(m, t.ModuleID(origin.Module), context.txs, origin)
 		}
+		requestState.span.End()
 		delete(state.RequestsState, *context.slot)
 
 		return nil
@@ -264,11 +286,6 @@ func FillGapMsgID(slot *commontypes.Slot) rntypes.MsgID {
 }
 
 // Context data structures
-
-type lookupBatchLocallyContext struct {
-	slot   *commontypes.Slot
-	origin *apb.RequestTransactionsOrigin
-}
 
 type lookupBatchOnRemoteRequestContext struct {
 	requester t.NodeID

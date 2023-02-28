@@ -170,6 +170,14 @@ func (h Handle) PushSpan(name string, opts ...trace.SpanStartOption) (context.Co
 	return goCtx, span
 }
 
+func (h Handle) PushExistingSpan(span trace.Span) {
+	currentCtx, _ := h.CurrentSpan()
+	ctx := trace.ContextWithSpan(currentCtx, span)
+
+	h.impl.goCtxStack = append(h.impl.goCtxStack, ctx)
+	h.impl.spanStack = append(h.impl.spanStack, span)
+}
+
 func (h Handle) PopSpan() {
 	_, span := h.PopSpanNoEnd()
 	if span != nil {
