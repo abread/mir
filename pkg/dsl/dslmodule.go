@@ -256,6 +256,10 @@ func (m *dslModuleImpl) ApplyEvents(evs *events.EventList) (*events.EventList, e
 				return nil, err
 			}
 		}
+
+		// clear span stacks
+		m.goCtxStack = nil
+		m.spanStack = nil
 	}
 
 	// Run condition handlers.
