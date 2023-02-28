@@ -272,7 +272,7 @@ func runIntegrationWithISSConfig(tb testing.TB, conf *TestConfig) (heapObjects i
 	defer cancel()
 
 	// Create new test deployment.
-	deployment, err := newDeployment(conf)
+	deployment, err := newDeployment(ctx, conf)
 	require.NoError(tb, err)
 
 	defer deployment.TestConfig.TransportLayer.Close()
@@ -348,7 +348,7 @@ func createDeploymentDir(tb testing.TB, conf *TestConfig) {
 	}
 }
 
-func newDeployment(conf *TestConfig) (*deploytest.Deployment, error) {
+func newDeployment(ctx context.Context, conf *TestConfig) (*deploytest.Deployment, error) {
 	nodeIDs := deploytest.NewNodeIDs(conf.NumReplicas)
 	logger := deploytest.NewLogger(conf.Logger)
 
@@ -395,7 +395,7 @@ func newDeployment(conf *TestConfig) (*deploytest.Deployment, error) {
 		}
 
 		system, err := NewISS(
-			context.TODO(),
+			ctx,
 			nodeID,
 			transport,
 			checkpoint.Genesis(stateSnapshotpb),

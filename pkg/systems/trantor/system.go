@@ -289,9 +289,6 @@ func NewAlea(
 		return nil, fmt.Errorf("error creating Alea protocol modules: %w", err)
 	}
 
-	reliablenetParams := *params.ReliableNet
-	reliablenetParams.AllNodes = params.Alea.AllNodes()
-
 	aleaProtocolModules[aleaConfig.Net] = transport
 	aleaProtocolModules[aleaConfig.ReliableNet], err = reliablenet.New(
 		ownID,
@@ -300,14 +297,14 @@ func NewAlea(
 			Net:   aleaConfig.Net,
 			Timer: aleaConfig.Timer,
 		},
-		&reliablenetParams,
+		params.ReliableNet,
 		logging.Decorate(logger, "ReliableNet: "),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("error creating reliablenet: %w", err)
 	}
 
-	aleaProtocolModules[aleaConfig.ThreshCrypto] = threshcrypto.New(ctx, threshCrypto)
+	aleaProtocolModules[aleaConfig.ThreshCrypto] = threshcrypto.New(ctx, params.ThreshCrypto, threshCrypto)
 	aleaProtocolModules[aleaConfig.Timer] = timer.New()
 
 	// Use a simple mempool for incoming requests.

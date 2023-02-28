@@ -1,6 +1,7 @@
 package modules
 
 import (
+	"context"
 	"fmt"
 	"runtime/debug"
 
@@ -104,6 +105,60 @@ func ApplyEventsConcurrently(
 		return nil, firstError
 	}
 	return eventsOut, nil
+}
+
+type EventProcessor interface {
+	ApplyEvent(ctx context.Context, ev *eventpb.Event) *events.EventList
+}
+
+type poolModule struct {
+	processor  EventProcessor
+	inputChan  chan *eventpb.Event
+	outputChan chan *events.EventList
+}
+
+func NewGoRoutinePoolModule(ctx context.Context, processor EventProcessor, bufSize int, workers int) ActiveModule {
+	inputChan := make(chan *eventpb.Event, bufSize)
+	outputChan := make(chan *events.EventList)
+	doneChan := ctx.Done()
+
+	for i := 0; i < workers; i++ {
+		go func() {
+		Loop:
+			for {
+				select {
+				case <-doneChan:
+					break Loop
+				case ev := <-inputChan:
+					outputChan <- processor.ApplyEvent(ctx, ev)
+				}
+			}
+
+			fmt.Println("bye threshcrypto")
+		}()
+	}
+
+	return &poolModule{
+		processor:  processor,
+		inputChan:  inputChan,
+		outputChan: outputChan,
+	}
+}
+
+func (m *poolModule) ImplementsModule() {}
+func (m *poolModule) EventsOut() <-chan *events.EventList {
+	return m.outputChan
+}
+func (m *poolModule) ApplyEvents(ctx context.Context, events *events.EventList) error {
+	it := events.Iterator()
+	for ev := it.Next(); ev != nil; ev = it.Next() {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case m.inputChan <- ev:
+		}
+	}
+	return nil
 }
 
 // applySafely is a wrapper around an event processing function that catches its panic and returns it as an error.

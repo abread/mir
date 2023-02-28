@@ -36,5 +36,5 @@ func (cs *localPseudoThreshCryptoSystem) ThreshCrypto(id t.NodeID) threshcrypto.
 }
 
 func (cs *localPseudoThreshCryptoSystem) Module(ctx context.Context, id t.NodeID) modules.Module {
-	return threshcrypto.New(ctx, cs.ThreshCrypto(id))
+	return threshcrypto.New(ctx, threshcrypto.DefaultModuleParams(), cs.ThreshCrypto(id))
 }

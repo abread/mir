@@ -5,6 +5,7 @@ package threshcrypto
 import (
 	"context"
 	"fmt"
+	"runtime"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
@@ -20,31 +21,36 @@ import (
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
-var name = "github.com/filecoin-project/mir/pkg/threshcrypto"
+type ModuleParams struct {
+	InputBufferSize int
+	NumWorkers      int
+}
 
-type MirModule struct {
-	ctx          context.Context
+func DefaultModuleParams() *ModuleParams {
+	return &ModuleParams{
+		InputBufferSize: 64,
+		NumWorkers:      runtime.NumCPU(),
+	}
+}
+
+func New(ctx context.Context, params *ModuleParams, threshCrypto ThreshCrypto) modules.ActiveModule {
+	return modules.NewGoRoutinePoolModule(ctx, &threshEventProcessor{threshCrypto}, params.InputBufferSize, params.NumWorkers)
+}
+
+type threshEventProcessor struct {
 	threshCrypto ThreshCrypto
 }
 
-func New(ctx context.Context, threshCrypto ThreshCrypto) *MirModule {
-	return &MirModule{ctx: ctx, threshCrypto: threshCrypto}
-}
-
-func (c *MirModule) ApplyEvents(eventsIn *events.EventList) (*events.EventList, error) {
-	return modules.ApplyEventsConcurrently(eventsIn, c.ApplyEvent)
-}
-
-func (c *MirModule) ApplyEvent(event *eventpb.Event) (*events.EventList, error) {
+func (c *threshEventProcessor) ApplyEvent(ctx context.Context, event *eventpb.Event) *events.EventList {
 	switch e := event.Type.(type) {
 	case *eventpb.Event_Init:
 		// no actions on init
-		return events.EmptyList(), nil
+		return events.EmptyList()
 	case *eventpb.Event_ThreshCrypto:
-		return c.applyTCEvent(e.ThreshCrypto)
+		return c.applyTCEvent(ctx, e.ThreshCrypto)
 	default:
 		// Complain about all other incoming event types.
-		return nil, fmt.Errorf("unexpected type of event in threshcrypto MirModule: %T", event.Type)
+		panic(fmt.Errorf("unexpected type of event in threshcrypto MirModule: %T", event.Type))
 	}
 }
 
@@ -59,9 +65,7 @@ func propagateCtxFromOrigin(ctx context.Context, origin *dslpb.Origin) context.C
 }
 
 // apply a thresholdcryptopb.Event
-func (c *MirModule) applyTCEvent(event *threshcryptopb.Event) (*events.EventList, error) {
-	ctx := c.ctx
-
+func (c *threshEventProcessor) applyTCEvent(ctx context.Context, event *threshcryptopb.Event) *events.EventList {
 	switch e := event.Type.(type) {
 	case *threshcryptopb.Event_SignShare:
 		// Compute signature share
@@ -73,7 +77,7 @@ func (c *MirModule) applyTCEvent(event *threshcryptopb.Event) (*events.EventList
 
 		sigShare, err := c.threshCrypto.SignShare(e.SignShare.Data)
 		if err != nil {
-			return nil, err
+			panic(fmt.Errorf("could not sign share: %w", err))
 		}
 
 		_, spanResp := startSpan(ctx, "SignShareResult", trace.WithSpanKind(trace.SpanKindProducer))
@@ -82,7 +86,7 @@ func (c *MirModule) applyTCEvent(event *threshcryptopb.Event) (*events.EventList
 		origin := threshcryptopbtypes.SignShareOriginFromPb(e.SignShare.Origin)
 		return events.ListOf(
 			tcEvents.SignShareResult(origin.Module, sigShare, origin).Pb(),
-		), nil
+		)
 
 	case *threshcryptopb.Event_VerifyShare:
 		// Verify signature share
@@ -106,7 +110,7 @@ func (c *MirModule) applyTCEvent(event *threshcryptopb.Event) (*events.EventList
 		origin := threshcryptopbtypes.VerifyShareOriginFromPb(e.VerifyShare.Origin)
 		return events.ListOf(
 			tcEvents.VerifyShareResult(origin.Module, ok, errStr, origin).Pb(),
-		), nil
+		)
 
 	case *threshcryptopb.Event_VerifyFull:
 		// Verify full signature
@@ -130,7 +134,7 @@ func (c *MirModule) applyTCEvent(event *threshcryptopb.Event) (*events.EventList
 		origin := threshcryptopbtypes.VerifyFullOriginFromPb(e.VerifyFull.Origin)
 		return events.ListOf(
 			tcEvents.VerifyFullResult(origin.Module, ok, errStr, origin).Pb(),
-		), nil
+		)
 
 	case *threshcryptopb.Event_Recover:
 		// Recover full signature from shares
@@ -154,12 +158,9 @@ func (c *MirModule) applyTCEvent(event *threshcryptopb.Event) (*events.EventList
 		origin := threshcryptopbtypes.RecoverOriginFromPb(e.Recover.Origin)
 		return events.ListOf(
 			tcEvents.RecoverResult(origin.Module, fullSig, ok, errStr, origin).Pb(),
-		), nil
+		)
 	default:
 		// Complain about all other incoming event types.
-		return nil, fmt.Errorf("unexpected type of threshcrypto event in threshcrypto MirModule: %T", event.Type)
+		panic(fmt.Errorf("unexpected type of threshcrypto event in threshcrypto MirModule: %T", event.Type))
 	}
 }
-
-// The ImplementsModule method only serves the purpose of indicating that this is a Module and must not be called.
-func (c *MirModule) ImplementsModule() {}

@@ -197,7 +197,7 @@ func runIntegrationWithAleaConfig(tb testing.TB, conf *TestConfig) (heapObjects 
 	defer cancel()
 
 	// Create new test deployment.
-	deployment, err := newDeploymentAlea(conf)
+	deployment, err := newDeploymentAlea(ctx, conf)
 	require.NoError(tb, err)
 
 	defer deployment.TestConfig.TransportLayer.Close()
@@ -265,7 +265,7 @@ func fileLogger(conf *TestConfig, name string) (logging.Logger, error) {
 	return logging.NewStreamLogger(logging.LevelDebug, logFile), nil
 }
 
-func newDeploymentAlea(conf *TestConfig) (*deploytest.Deployment, error) {
+func newDeploymentAlea(ctx context.Context, conf *TestConfig) (*deploytest.Deployment, error) {
 	nodeIDs := deploytest.NewNodeIDs(conf.NumReplicas)
 	testCommonLogger := deploytest.NewLogger(conf.Logger)
 
@@ -329,7 +329,7 @@ func newDeploymentAlea(conf *TestConfig) (*deploytest.Deployment, error) {
 		}
 
 		system, err := NewAlea(
-			context.TODO(),
+			ctx,
 			nodeID,
 			transport,
 			nil,
