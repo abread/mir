@@ -11,7 +11,6 @@ import (
 	rnetdsl "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/dsl"
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"
 	threshDsl "github.com/filecoin-project/mir/pkg/pb/threshcryptopb/dsl"
-	threshcryptopbtypes "github.com/filecoin-project/mir/pkg/pb/threshcryptopb/types"
 	vcbdsl "github.com/filecoin-project/mir/pkg/pb/vcbpb/dsl"
 	vcbmsgs "github.com/filecoin-project/mir/pkg/pb/vcbpb/msgs"
 	vcbtypes "github.com/filecoin-project/mir/pkg/pb/vcbpb/types"
@@ -134,26 +133,18 @@ func NewModule(ctx context.Context, mc *ModuleConfig, params *ModuleParams, node
 
 		state.payload.Input(txs)
 		state.sig = signature
-		state.phase = VcbPhasePendingVerification
+
+		if from == nodeID {
+			// optimization: local FINAL needs no verification
+			state.phase = VcbPhaseAwaitingOkDelivery
+		} else {
+			state.phase = VcbPhasePendingVerification
+		}
 		return nil
 	})
 	dsl.UponCondition(m, func() error {
 		if state.phase == VcbPhasePendingVerification && state.payload.SigData() != nil && state.origin != nil {
-			var nilStructPtr *struct{}
-
-			if nodeID == params.Leader {
-				// bypass verification, it came from ourselves
-				contextID := m.DslHandle().StoreContext(nilStructPtr)
-				traceCtx := m.DslHandle().TraceContextAsMap()
-				origin := &threshcryptopbtypes.VerifyFullOrigin{
-					Module: mc.ThreshCrypto,
-					Type:   &threshcryptopbtypes.VerifyFullOrigin_Dsl{Dsl: dsl.MirOrigin(contextID, traceCtx)},
-				}
-				threshDsl.VerifyFullResult(m, mc.Self, true, "", origin)
-			} else {
-				threshDsl.VerifyFull[struct{}](m, mc.ThreshCrypto, state.payload.SigData(), state.sig, nil)
-			}
-
+			threshDsl.VerifyFull[struct{}](m, mc.ThreshCrypto, state.payload.SigData(), state.sig, nil)
 			state.phase = VcbPhaseVerifying
 		}
 		return nil
@@ -248,7 +239,12 @@ func setupVcbLeader(m dsl.Module, mc *ModuleConfig, params *ModuleParams, nodeID
 		// ECHO message acts as acknowledgement for SEND message
 		rnetdsl.MarkRecvd(m, mc.ReliableNet, mc.Self, SendMsgID(), []t.NodeID{from})
 
-		threshDsl.VerifyShare(m, mc.ThreshCrypto, state.payload.SigData(), signatureShare, from, &signatureShare)
+		if from == nodeID {
+			// optimization: skip verification
+			leaderState.sigShares = append(leaderState.sigShares, signatureShare)
+		} else {
+			threshDsl.VerifyShare(m, mc.ThreshCrypto, state.payload.SigData(), signatureShare, from, &signatureShare)
+		}
 		return nil
 	})
 	threshDsl.UponVerifyShareResult(m, func(ok bool, error string, sigShare *tctypes.SigShare) error {
