@@ -210,6 +210,11 @@ func New(ctx context.Context, mc *ModuleConfig, params *ModuleParams, nodeID t.N
 			params.AllNodes,
 		)
 
+		// optimization: process own message right away, avoiding a needless double-verification
+		rnetdsl.MarkRecvd(m, mc.ReliableNet, mc.Self, CoinMsgID(), []t.NodeID{nodeID})
+		state.coinRecvd.Register(nodeID)
+		state.coinRecvdOkShares = append(state.coinRecvdOkShares, sigShare)
+
 		return nil
 	})
 
