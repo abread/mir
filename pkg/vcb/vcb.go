@@ -230,7 +230,6 @@ func setupVcbLeader(m dsl.Module, mc *ModuleConfig, params *ModuleParams, nodeID
 			return nil // we're doing something better
 		}
 
-		rnetdsl.Ack(m, mc.ReliableNet, mc.Self, EchoMsgID(), from)
 		if !leaderState.receivedEcho.Register(from) {
 			return nil // already received
 		}
