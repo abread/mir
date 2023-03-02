@@ -82,18 +82,19 @@ func NewModule(ctx context.Context, mc *ModuleConfig, params *ModuleParams, tuna
 		Generator: newRoundGenerator(mc, params, nodeID, logger),
 	}, logging.Decorate(logger, "Modring controller: "))
 
+	controller := newController(ctx, mc, params, tunables, nodeID, logger, rounds)
+
+	return modules.RoutedModule(ctx, mc.Self, controller, rounds), nil
+}
+
+func newController(ctx context.Context, mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger, rounds *modring.Module) modules.PassiveModule {
+	m := dsl.NewModule(ctx, mc.Self)
+
 	state := &state{
 		phase:       phaseAwaitingInput,
 		finishRecvd: make(abbat.RecvTracker, params.GetN()),
 		finishSent:  false,
 	}
-	controller := newController(ctx, mc, params, tunables, nodeID, logger, state, rounds)
-
-	return modules.RoutedModule(mc.Self, controller, wrapModuleStopAfterDelivered(rounds, state)), nil
-}
-
-func newController(ctx context.Context, mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger, state *state, rounds *modring.Module) modules.PassiveModule {
-	m := dsl.NewModule(ctx, mc.Self)
 
 	abbadsl.UponRoundFinishAll(m, func(decision bool) error {
 		if !state.finishSent && state.phase == phaseRunning {
@@ -135,6 +136,10 @@ func newController(ctx context.Context, mc *ModuleConfig, params *ModuleParams, 
 
 			abbadsl.Deliver(m, state.origin.Module, value, state.origin)
 			state.phase = phaseDelivered
+
+			if err := rounds.MarkAllPast(); err != nil {
+				return fmt.Errorf("could not stop abba rounds: %w", err)
+			}
 
 			// only care about finish messages from now on
 			// eventually instances that are out-of-date will receive them and be happy
@@ -201,27 +206,6 @@ func newRoundGenerator(controllerMc *ModuleConfig, controllerParams *ModuleParam
 
 		initialEvs := &events.EventList{}
 		return mod, initialEvs, nil
-	}
-}
-
-type stopsAfterDelivered struct {
-	inner modules.PassiveModule
-	state *state
-}
-
-func (m *stopsAfterDelivered) ImplementsModule() {}
-func (m *stopsAfterDelivered) ApplyEvents(evs *events.EventList) (*events.EventList, error) {
-	if m.state.phase == phaseDelivered {
-		return &events.EventList{}, nil
-	}
-
-	return m.inner.ApplyEvents(evs)
-}
-
-func wrapModuleStopAfterDelivered(module modules.PassiveModule, state *state) modules.PassiveModule {
-	return &stopsAfterDelivered{
-		inner: module,
-		state: state,
 	}
 }
 

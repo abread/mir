@@ -3,6 +3,7 @@ package modring
 import (
 	"context"
 	"fmt"
+	"math"
 	"runtime/debug"
 	"strconv"
 
@@ -175,7 +176,7 @@ func (m *Module) splitEventsByDest(eventsIn *events.EventList) ([]events.EventLi
 
 func subIDInRingIdx(rc *RingController, ringIdx int) uint64 {
 	minSlot, endSlot := rc.GetCurrentView()
-	ringSize := endSlot - minSlot
+	ringSize := endSlot - minSlot + 1
 	minIdx := int(minSlot % ringSize)
 
 	if ringIdx >= minIdx {
@@ -228,11 +229,13 @@ func (m *Module) AdvanceViewToAtLeastSubmodule(id uint64) error {
 		return nil // already advanced enough
 	}
 
+	// free all current slots
 	minSlot, endSlot := m.ringController.GetCurrentView()
-	for slot := minSlot; slot < endSlot; slot++ {
-		// free all current slots
-		if err := m.MarkSubmodulePast(id); err != nil {
-			return fmt.Errorf("cannot advance view: %w", err)
+	for slot := minSlot; slot <= endSlot; slot++ {
+		if m.ringController.IsCurrentSlot(slot) {
+			if err := m.MarkSubmodulePast(slot); err != nil {
+				return fmt.Errorf("cannot advance view: %w", err)
+			}
 		}
 	}
 
@@ -251,6 +254,10 @@ func (m *Module) MarkSubmodulePast(id uint64) error {
 		return nil
 	}
 
+	if m.ringController.IsFutureSlot(id) {
+		return m.ringController.MarkPast(id)
+	}
+
 	if err := m.ringController.MarkPast(id); err != nil {
 		return fmt.Errorf("cannot mark submodule as past: %w", err)
 	}
@@ -264,6 +271,8 @@ func (m *Module) MarkSubmodulePast(id uint64) error {
 	// zero slot just in case (and to let the GC do its job)
 	m.ring[ringIdx] = nil
 	m.ctxRing[ringIdx] = nil
+
+	m.ring[ringIdx] = nil
 
 	m.logger.Log(logging.LevelDebug, "module freed", "id", id, "newMinSlot", m.ringController.minSlot)
 	return nil
@@ -285,4 +294,15 @@ func multiApplySafely(
 	}()
 
 	return module.ApplyEvents(events)
+}
+
+func (m *Module) MarkAllPast() error {
+	if err := m.AdvanceViewToAtLeastSubmodule(math.MaxUint64); err != nil {
+		return err
+	}
+
+	if err := m.MarkSubmodulePast(math.MaxUint64); err != nil {
+		return err
+	}
+	return m.MarkSubmodulePast(math.MaxUint64)
 }

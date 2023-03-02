@@ -1,6 +1,9 @@
 package modring
 
-import "fmt"
+import (
+	"fmt"
+	"math"
+)
 
 type RingSlotStatus uint8
 
@@ -46,11 +49,16 @@ func (s *RingController) GetSlotStatus(slot uint64) RingSlotStatus {
 }
 
 func (s *RingController) IsSlotInView(slot uint64) bool {
-	return slot >= s.minSlot && slot < s.minSlot+uint64(len(s.slotStatus))
+	// Note: s.minSlot+len(slotStatus) can overflow
+
+	return slot >= s.minSlot && slot-s.minSlot < uint64(len(s.slotStatus))
 }
 
 func (s *RingController) GetCurrentView() (uint64, uint64) {
-	return s.minSlot, s.minSlot + uint64(len(s.slotStatus))
+	if s.minSlot > math.MaxUint64-uint64(len(s.slotStatus)) {
+		return s.minSlot, math.MaxUint64
+	}
+	return s.minSlot, s.minSlot + uint64(len(s.slotStatus)-1)
 }
 
 func (s *RingController) IsFutureSlot(slot uint64) bool {
@@ -100,11 +108,11 @@ func (s *RingController) AdvanceViewToSlot(slot uint64) error {
 	beginSlot, endSlot := s.GetCurrentView()
 	if slot < beginSlot {
 		return fmt.Errorf("cannot advance view: view already advanced past slot %d", slot)
-	} else if slot < endSlot {
+	} else if slot <= endSlot {
 		return nil // slot already in view
 	}
 
-	for slot := beginSlot; slot < endSlot; slot++ {
+	for slot := beginSlot; slot <= endSlot; slot++ {
 		if *s.uncheckedSlotStatusRingPtr(slot) == RingSlotCurrent {
 			return fmt.Errorf("cannot advance view: slot %d still in use", slot)
 		}
@@ -113,8 +121,13 @@ func (s *RingController) AdvanceViewToSlot(slot uint64) error {
 	s.minIdx = int(slot % uint64(len(s.slotStatus)))
 	s.minSlot = slot
 
-	// all slots start out as future
+	// make all slots as past
 	for i := 0; i < len(s.slotStatus); i++ {
+		s.slotStatus[i] = RingSlotPast
+	}
+
+	// but the ones from this point forward are future slots
+	for i := 0; i < len(s.slotStatus) && i < int(math.MaxUint64-s.minSlot)+1; i++ {
 		s.slotStatus[i] = RingSlotFuture
 	}
 	return nil
