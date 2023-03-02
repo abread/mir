@@ -118,7 +118,7 @@ func runTest(t *testing.T, conf *TestConfig) (result bool, heapObjects int64, he
 	defer cancel()
 
 	// Create new test deployment.
-	deployment, err := newDeployment(conf)
+	deployment, err := newDeployment(ctx, conf)
 	require.NoError(t, err)
 
 	defer deployment.TestConfig.TransportLayer.Close()
@@ -179,7 +179,7 @@ func runTest(t *testing.T, conf *TestConfig) (result bool, heapObjects int64, he
 	return app0.firstDelivered, heapObjects, heapAlloc
 }
 
-func newDeployment(conf *TestConfig) (*deploytest.Deployment, error) {
+func newDeployment(ctx context.Context, conf *TestConfig) (*deploytest.Deployment, error) {
 	nodeIDs := deploytest.NewNodeIDs(conf.N)
 	logger := deploytest.NewLogger(conf.Logger)
 
@@ -196,8 +196,6 @@ func newDeployment(conf *TestConfig) (*deploytest.Deployment, error) {
 	threshCryptoSystem := deploytest.NewLocalThreshCryptoSystem("pseudo", nodeIDs, conf.F+1, logger)
 
 	nodeModules := make(map[types.NodeID]modules.Modules)
-
-	ctx := context.TODO()
 
 	for i, nodeID := range nodeIDs {
 		nodeLogger := logging.Decorate(logger, fmt.Sprintf("Node %d: ", i))
