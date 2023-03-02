@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math"
 	"strconv"
-	"sync"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
@@ -26,7 +25,6 @@ type Module struct {
 
 	// signal worker to start processing a module
 	workerProcessModule []chan *subModule
-	runningWorkers      sync.WaitGroup
 
 	ringController RingController
 	ring           []*subModule
@@ -48,7 +46,7 @@ type subModule struct {
 
 var name = "github.com/filecoin-project/mir/pkg/modring"
 
-func New(ctx context.Context, ownID t.ModuleID, ringSize int, params *ModuleParams, logger logging.Logger) *Module {
+func New(ctx context.Context, ownID t.ModuleID, ringSize int, params *ModuleParams, logger logging.Logger, outChan chan *events.EventList) *Module {
 	if logger == nil {
 		logger = logging.ConsoleErrorLogger
 	}
@@ -63,7 +61,7 @@ func New(ctx context.Context, ownID t.ModuleID, ringSize int, params *ModulePara
 		ringController: NewRingController(ringSize),
 		ring:           make([]*subModule, ringSize),
 
-		outChan: make(chan *events.EventList),
+		outChan: outChan,
 
 		logger: logger,
 	}
@@ -72,32 +70,24 @@ func New(ctx context.Context, ownID t.ModuleID, ringSize int, params *ModulePara
 	for i := 0; i < ringSize; i++ {
 		m.workerProcessModule[i] = make(chan *subModule)
 
-		m.runningWorkers.Add(1)
-		go m.doWork(i, ctx.Done())
+		go m.doWork(i)
 	}
-
-	// close output channel when done
-	go func() {
-		m.runningWorkers.Wait()
-		close(m.outChan)
-	}()
 
 	return m
 }
 
-func (m *Module) doWork(i int, modringDoneC <-chan struct{}) {
-	defer m.runningWorkers.Done()
-
+func (m *Module) doWork(i int) {
+	doneC := m.ctx.Done()
 	for {
 		select {
-		case <-modringDoneC:
+		case <-doneC:
 			return
 		case mod := <-m.workerProcessModule[i]:
 			if activeMod, ok := mod.module.(modules.ActiveModule); ok {
-				m.doWorkActiveModule(mod.tracingCtx, activeMod, mod.inputChan, modringDoneC)
+				m.doWorkActiveModule(mod.tracingCtx, activeMod, mod.inputChan)
 			} else {
 				passiveMod := mod.module.(modules.PassiveModule)
-				m.doWorkPassiveModule(passiveMod, mod.inputChan, modringDoneC)
+				m.doWorkPassiveModule(passiveMod, mod.inputChan)
 			}
 
 			mod.span.End()
@@ -106,52 +96,30 @@ func (m *Module) doWork(i int, modringDoneC <-chan struct{}) {
 	}
 }
 
-func importEvents(ctx context.Context, wg *sync.WaitGroup, to chan *events.EventList, from <-chan *events.EventList) {
-	defer wg.Done()
-
+func (m *Module) doWorkActiveModule(ctx context.Context, sub modules.ActiveModule, input <-chan *events.EventList) {
+	doneC := m.ctx.Done()
 	for {
 		select {
-		case <-ctx.Done():
-			return
-		case evs, ok := <-from:
-			if !ok {
-				return
-			}
-			to <- evs
-		}
-	}
-}
-
-func (m *Module) doWorkActiveModule(ctx context.Context, sub modules.ActiveModule, input <-chan *events.EventList, modringDoneC <-chan struct{}) {
-	wg := sync.WaitGroup{}
-	defer wg.Done()
-
-	// spawn event importer
-	importerCtx, stopImporter := context.WithCancel(ctx)
-	defer stopImporter()
-	wg.Add(1)
-	go importEvents(importerCtx, &wg, m.outChan, sub.EventsOut())
-
-	for {
-		select {
-		case <-modringDoneC:
+		case <-doneC:
 			return
 		case evs, ok := <-input:
 			if !ok {
-				return // module is to be stopped
+				return
 			}
-			err := sub.ApplyEvents(ctx, evs)
-			if err != nil {
+
+			if err := sub.ApplyEvents(ctx, evs); err != nil {
 				panic(fmt.Errorf("error processing events from submodule: %w", err))
 			}
 		}
 	}
 }
 
-func (m *Module) doWorkPassiveModule(sub modules.PassiveModule, input <-chan *events.EventList, modringDoneC <-chan struct{}) {
+func (m *Module) doWorkPassiveModule(sub modules.PassiveModule, input <-chan *events.EventList) {
+	doneC := m.ctx.Done()
+
 	for {
 		select {
-		case <-modringDoneC:
+		case <-doneC:
 			return
 		case evs, ok := <-input:
 			if !ok {
@@ -277,7 +245,7 @@ func (m *Module) createModule(id uint64) (*subModule, *events.EventList, error) 
 	subFullID := m.ownID.Then(t.NewModuleIDFromInt(id))
 
 	subCtx, subSpan := otel.Tracer(name).Start(m.ctx, fmt.Sprintf("modring:%s", subFullID))
-	subMod, moreInitialEvs, err := (m.params.Generator)(subCtx, subFullID, id)
+	subMod, moreInitialEvs, err := (m.params.Generator)(subCtx, subFullID, id, m.outChan)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error creating submodule: %w", err)
 	}

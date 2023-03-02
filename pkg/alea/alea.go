@@ -9,6 +9,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/alea/broadcast"
 	"github.com/filecoin-project/mir/pkg/alea/director"
 	"github.com/filecoin-project/mir/pkg/checkpoint"
+	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/modules"
 	t "github.com/filecoin-project/mir/pkg/types"
@@ -170,6 +171,7 @@ func New(ctx context.Context, ownID t.NodeID, config *Config, params *Params, st
 		},
 		ownID,
 		logging.Decorate(logger, "AleaBroadcast: "),
+		make(chan *events.EventList),
 	)
 	if errAleaBc != nil {
 		return nil, fmt.Errorf("error creating alea broadcast: %w", errAleaBc)
@@ -195,6 +197,7 @@ func New(ctx context.Context, ownID t.NodeID, config *Config, params *Params, st
 		},
 		ownID,
 		logging.Decorate(logger, "AleaAgreement: "),
+		make(chan *events.EventList),
 	)
 	if errAleaAg != nil {
 		return nil, fmt.Errorf("error creating alea agreement: %w", errAleaAg)

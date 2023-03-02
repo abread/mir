@@ -72,7 +72,7 @@ type state struct {
 
 const modringSubName t.ModuleID = t.ModuleID("r")
 
-func NewModule(ctx context.Context, mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.ActiveModule, error) {
+func NewModule(ctx context.Context, mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger, outChan chan *events.EventList) (modules.ActiveModule, error) {
 	if tunables.MaxRoundLookahead <= 0 {
 		return nil, fmt.Errorf("MaxRoundLookahead must be at least 1")
 	}
@@ -81,11 +81,11 @@ func NewModule(ctx context.Context, mc *ModuleConfig, params *ModuleParams, tuna
 	rounds := modring.New(ctx, mc.Self.Then(modringSubName), tunables.MaxRoundLookahead, &modring.ModuleParams{
 		Generator:      newRoundGenerator(mc, params, nodeID, logger),
 		InputQueueSize: 8, // TODO: make configurable
-	}, logging.Decorate(logger, "Modring controller: "))
+	}, logging.Decorate(logger, "Modring controller: "), outChan)
 
 	controller := newController(ctx, mc, params, tunables, nodeID, logger, rounds)
 
-	return modules.RoutedModule(ctx, mc.Self, controller, rounds), nil
+	return modules.RoutedModule(ctx, mc.Self, controller, rounds, outChan), nil
 }
 
 func newController(ctx context.Context, mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger, rounds *modring.Module) modules.PassiveModule {
@@ -186,9 +186,9 @@ func newController(ctx context.Context, mc *ModuleConfig, params *ModuleParams, 
 	return m
 }
 
-func newRoundGenerator(controllerMc *ModuleConfig, controllerParams *ModuleParams, nodeID t.NodeID, logger logging.Logger) func(ctx context.Context, id t.ModuleID, idx uint64) (modules.Module, *events.EventList, error) {
+func newRoundGenerator(controllerMc *ModuleConfig, controllerParams *ModuleParams, nodeID t.NodeID, logger logging.Logger) func(ctx context.Context, id t.ModuleID, idx uint64, outChan chan *events.EventList) (modules.Module, *events.EventList, error) {
 
-	return func(ctx context.Context, id t.ModuleID, idx uint64) (modules.Module, *events.EventList, error) {
+	return func(ctx context.Context, id t.ModuleID, idx uint64, outChan chan *events.EventList) (modules.Module, *events.EventList, error) {
 		mc := &abbaround.ModuleConfig{
 			Self:         id,
 			Consumer:     controllerMc.Self,

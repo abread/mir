@@ -32,7 +32,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/vcb"
 )
 
-func New(ctx context.Context, mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.ActiveModule, error) {
+func New(ctx context.Context, mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger, outChan chan *events.EventList) (modules.ActiveModule, error) {
 	if slices.Index(params.AllNodes, params.QueueOwner) != int(params.QueueIdx) {
 		return nil, fmt.Errorf("invalid queue index/owner combination: %v - %v", params.QueueIdx, params.QueueOwner)
 	}
@@ -41,11 +41,11 @@ func New(ctx context.Context, mc *ModuleConfig, params *ModuleParams, tunables *
 		Generator:      newVcbGenerator(mc, params, nodeID, logger),
 		PastMsgHandler: newPastMsgHandler(mc, params),
 		InputQueueSize: 8, // TODO: make configurable
-	}, logging.Decorate(logger, "Modring controller: "))
+	}, logging.Decorate(logger, "Modring controller: "), outChan)
 
 	controller := newQueueController(ctx, mc, params, tunables, nodeID, logger, slots)
 
-	return modules.RoutedModule(ctx, mc.Self, controller, slots), nil
+	return modules.RoutedModule(ctx, mc.Self, controller, slots, outChan), nil
 }
 
 func newQueueController(ctx context.Context, mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger, slots *modring.Module) modules.PassiveModule {
@@ -151,7 +151,7 @@ func newQueueController(ctx context.Context, mc *ModuleConfig, params *ModulePar
 	return m
 }
 
-func newVcbGenerator(queueMc *ModuleConfig, queueParams *ModuleParams, nodeID t.NodeID, logger logging.Logger) func(ctx context.Context, id t.ModuleID, idx uint64) (modules.Module, *events.EventList, error) {
+func newVcbGenerator(queueMc *ModuleConfig, queueParams *ModuleParams, nodeID t.NodeID, logger logging.Logger) func(ctx context.Context, id t.ModuleID, idx uint64, outChan chan *events.EventList) (modules.Module, *events.EventList, error) {
 	baseConfig := &vcb.ModuleConfig{
 		Self:         "INVALID",
 		ReliableNet:  queueMc.ReliableNet,
@@ -165,7 +165,7 @@ func newVcbGenerator(queueMc *ModuleConfig, queueParams *ModuleParams, nodeID t.
 		Leader:      queueParams.QueueOwner,
 	}
 
-	return func(ctx context.Context, id t.ModuleID, idx uint64) (modules.Module, *events.EventList, error) {
+	return func(ctx context.Context, id t.ModuleID, idx uint64, outChan chan *events.EventList) (modules.Module, *events.EventList, error) {
 		mc := *baseConfig
 		mc.Self = id
 
