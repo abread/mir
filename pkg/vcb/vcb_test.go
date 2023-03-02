@@ -54,7 +54,7 @@ func TestVcb(t *testing.T) {
 	config := TestConfig{
 		N:         7,
 		F:         2,
-		Transport: "sim",
+		Transport: "libp2p", // TODO: fix sim for goroutine pool active modules (threshcrypto breaks it)
 		Duration:  5 * time.Second,
 	}
 

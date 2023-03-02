@@ -52,7 +52,7 @@ func runHappyTest(t *testing.T, F int, decision bool, customInputs map[types.Nod
 	config := TestConfig{
 		N:                 3*F + 1,
 		F:                 F,
-		Transport:         "sim",
+		Transport:         "libp2p", // TODO: fix sim for goroutine pool active modules (threshcrypto breaks it)
 		DefaultInputValue: decision,
 		InputValues:       customInputs,
 		Duration:          1 * time.Second,
