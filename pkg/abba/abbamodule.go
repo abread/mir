@@ -72,14 +72,15 @@ type state struct {
 
 const modringSubName t.ModuleID = t.ModuleID("r")
 
-func NewModule(ctx context.Context, mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
+func NewModule(ctx context.Context, mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.ActiveModule, error) {
 	if tunables.MaxRoundLookahead <= 0 {
 		return nil, fmt.Errorf("MaxRoundLookahead must be at least 1")
 	}
 
 	// rounds use a submodule namespace to allow us to mark all round messages as received at once
-	rounds := modring.New(ctx, mc.Self.Then(modringSubName), tunables.MaxRoundLookahead, modring.ModuleParams{
-		Generator: newRoundGenerator(mc, params, nodeID, logger),
+	rounds := modring.New(ctx, mc.Self.Then(modringSubName), tunables.MaxRoundLookahead, &modring.ModuleParams{
+		Generator:      newRoundGenerator(mc, params, nodeID, logger),
+		InputQueueSize: 8, // TODO: make configurable
 	}, logging.Decorate(logger, "Modring controller: "))
 
 	controller := newController(ctx, mc, params, tunables, nodeID, logger, rounds)
@@ -185,9 +186,9 @@ func newController(ctx context.Context, mc *ModuleConfig, params *ModuleParams, 
 	return m
 }
 
-func newRoundGenerator(controllerMc *ModuleConfig, controllerParams *ModuleParams, nodeID t.NodeID, logger logging.Logger) func(ctx context.Context, id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
+func newRoundGenerator(controllerMc *ModuleConfig, controllerParams *ModuleParams, nodeID t.NodeID, logger logging.Logger) func(ctx context.Context, id t.ModuleID, idx uint64) (modules.Module, *events.EventList, error) {
 
-	return func(ctx context.Context, id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
+	return func(ctx context.Context, id t.ModuleID, idx uint64) (modules.Module, *events.EventList, error) {
 		mc := &abbaround.ModuleConfig{
 			Self:         id,
 			Consumer:     controllerMc.Self,
