@@ -162,7 +162,7 @@ func (m *Module) splitEventsByDest(eventsIn *events.EventList) ([]events.EventLi
 		}
 
 		if !m.ringController.IsSlotInView(subID) {
-			m.logger.Log(logging.LevelTrace, "event received for out of view submodule", "submoduleID", subID)
+			m.logger.Log(logging.LevelDebug, "event received for out of view submodule", "submoduleID", subID)
 			continue
 		}
 

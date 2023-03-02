@@ -101,7 +101,7 @@ func New(ctx context.Context, mc *ModuleConfig, params *ModuleParams, nodeID t.N
 		for _, est := range []bool{false, true} {
 			// 5. upon receiving weak support for INIT(r, v), add v to values and broadcast INIT(r, v)
 			if !state.initWeakSupportReachedForValue.Get(est) && state.initRecvdEstimateCounts.Get(est) >= params.weakSupportThresh() {
-				logger.Log(logging.LevelTrace, "received weak support for INIT(est)", "est", est)
+				logger.Log(logging.LevelDebug, "received weak support for INIT(est)", "est", est)
 
 				state.values.Add(est)
 
@@ -119,7 +119,7 @@ func New(ctx context.Context, mc *ModuleConfig, params *ModuleParams, nodeID t.N
 
 			// 6. upon receiving strong support for INIT(r, v), broadcast AUX(r, v) if we have not already broadcast AUX(r, _)
 			if !state.auxSent && state.initRecvdEstimateCounts.Get(est) >= params.strongSupportThresh() {
-				logger.Log(logging.LevelTrace, "received strong support for INIT(est)", "est", est)
+				logger.Log(logging.LevelDebug, "received strong support for INIT(est)", "est", est)
 				rnetdsl.SendMessage(m, mc.ReliableNet,
 					AuxMsgID(),
 					abbapbmsgs.RoundAuxMessage(mc.Self, est),
@@ -141,7 +141,7 @@ func New(ctx context.Context, mc *ModuleConfig, params *ModuleParams, nodeID t.N
 		}
 		state.auxRecvdValueCounts.Increment(value)
 
-		logger.Log(logging.LevelTrace, "recvd AUX(v)", "v", value)
+		logger.Log(logging.LevelDebug, "recvd AUX(v)", "v", value)
 
 		return nil
 	})
@@ -153,7 +153,7 @@ func New(ctx context.Context, mc *ModuleConfig, params *ModuleParams, nodeID t.N
 		}
 
 		if state.isNiceAuxValueCount(params) {
-			logger.Log(logging.LevelTrace, "received enough support for AUX(v in values)", "values", state.values)
+			logger.Log(logging.LevelDebug, "received enough support for AUX(v in values)", "values", state.values)
 			rnetdsl.SendMessage(m, mc.ReliableNet,
 				ConfMsgID(),
 				abbapbmsgs.RoundConfMessage(mc.Self, state.values),
@@ -175,7 +175,7 @@ func New(ctx context.Context, mc *ModuleConfig, params *ModuleParams, nodeID t.N
 			return nil // duplicate message
 		}
 
-		logger.Log(logging.LevelTrace, "recvd CONF(C)", "C", values)
+		logger.Log(logging.LevelDebug, "recvd CONF(C)", "C", values)
 		state.confRecvdValueSetCounts.Increment(values)
 
 		return nil
@@ -188,7 +188,7 @@ func New(ctx context.Context, mc *ModuleConfig, params *ModuleParams, nodeID t.N
 		}
 
 		if state.isNiceConfValuesCount(params) {
-			logger.Log(logging.LevelTrace, "received enough support for CONF(C subset of values)", "values", state.values)
+			logger.Log(logging.LevelDebug, "received enough support for CONF(C subset of values)", "values", state.values)
 
 			// 9. sample coin
 			state.phase = phaseTossingCoin
@@ -231,7 +231,7 @@ func New(ctx context.Context, mc *ModuleConfig, params *ModuleParams, nodeID t.N
 			logger.Log(logging.LevelWarn, "duplicate COIN(_)", "from", from)
 			return nil // duplicate message
 		}
-		logger.Log(logging.LevelTrace, "recvd COIN(share)", "from", from)
+		logger.Log(logging.LevelDebug, "recvd COIN(share)", "from", from)
 
 		threshDsl.VerifyShare(m, mc.ThreshCrypto, coinData, coinShare, from, &coinShare)
 
