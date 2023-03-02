@@ -122,21 +122,33 @@ func NewGoRoutinePoolModule(ctx context.Context, processor EventProcessor, bufSi
 	outputChan := make(chan *events.EventList)
 	doneChan := ctx.Done()
 
+	wg := &sync.WaitGroup{}
+
 	for i := 0; i < workers; i++ {
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
 		Loop:
 			for {
 				select {
 				case <-doneChan:
 					break Loop
 				case ev := <-inputChan:
-					outputChan <- processor.ApplyEvent(ctx, ev)
+					select {
+					case outputChan <- processor.ApplyEvent(ctx, ev):
+						continue
+					case <-doneChan:
+						break Loop
+					}
 				}
 			}
-
-			fmt.Println("bye threshcrypto")
 		}()
 	}
+
+	go func() {
+		wg.Wait()
+		close(outputChan) // the simulation needs the output channel to be closed to complete (?)
+	}()
 
 	return &poolModule{
 		processor:  processor,
