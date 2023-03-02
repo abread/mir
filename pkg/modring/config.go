@@ -13,18 +13,16 @@ type ModuleConfig struct {
 	Self t.ModuleID
 }
 
-type ModuleGenerator func(ctx context.Context, id t.ModuleID, idx uint64, outChan chan *events.EventList) (modules.Module, *events.EventList, error)
+type ModuleGenerator func(ctx context.Context, id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error)
 type PastMessagesHandler func(pastMessages []*modringpbtypes.PastMessage) (*events.EventList, error)
 
 type ModuleParams struct {
 	Generator      ModuleGenerator
 	PastMsgHandler PastMessagesHandler
-	InputQueueSize int
 }
 
 func DefaultParams(generator ModuleGenerator) ModuleParams {
 	return ModuleParams{
-		Generator:      generator,
-		InputQueueSize: 8,
+		Generator: generator,
 	}
 }

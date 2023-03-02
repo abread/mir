@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"runtime/debug"
 	"strconv"
 
 	"go.opentelemetry.io/otel"
@@ -19,178 +20,122 @@ import (
 )
 
 type Module struct {
-	ctx    context.Context
-	ownID  t.ModuleID
-	params *ModuleParams
-
-	// signal worker to start processing a module
-	workerProcessModule []chan *subModule
+	ctx            context.Context
+	ownID          t.ModuleID
+	generator      ModuleGenerator
+	pastMsgHandler PastMessagesHandler
 
 	ringController RingController
-	ring           []*subModule
-
-	outChan chan *events.EventList
+	ring           []modules.PassiveModule
+	ctxRing        []context.Context
 
 	logger logging.Logger
 }
 
-type subModule struct {
-	module    modules.Module
-	inputChan chan *events.EventList
-
-	tracingCtx context.Context
-	span       trace.Span
-
-	exitedChan chan struct{}
-}
-
 var name = "github.com/filecoin-project/mir/pkg/modring"
 
-func New(ctx context.Context, ownID t.ModuleID, ringSize int, params *ModuleParams, logger logging.Logger, outChan chan *events.EventList) *Module {
+func New(ctx context.Context, ownID t.ModuleID, ringSize int, params ModuleParams, logger logging.Logger) *Module {
 	if logger == nil {
 		logger = logging.ConsoleErrorLogger
 	}
 
-	m := &Module{
-		ctx:    ctx,
-		ownID:  ownID,
-		params: params,
-
-		workerProcessModule: make([]chan *subModule, ringSize),
+	return &Module{
+		ctx:            ctx,
+		ownID:          ownID,
+		generator:      params.Generator,
+		pastMsgHandler: params.PastMsgHandler,
 
 		ringController: NewRingController(ringSize),
-		ring:           make([]*subModule, ringSize),
-
-		outChan: outChan,
+		ring:           make([]modules.PassiveModule, ringSize),
+		ctxRing:        make([]context.Context, ringSize),
 
 		logger: logger,
-	}
-
-	// start workers
-	for i := 0; i < ringSize; i++ {
-		m.workerProcessModule[i] = make(chan *subModule)
-
-		go m.doWork(i)
-	}
-
-	return m
-}
-
-func (m *Module) doWork(i int) {
-	doneC := m.ctx.Done()
-	for {
-		select {
-		case <-doneC:
-			return
-		case mod := <-m.workerProcessModule[i]:
-			if activeMod, ok := mod.module.(modules.ActiveModule); ok {
-				m.doWorkActiveModule(mod.tracingCtx, activeMod, mod.inputChan)
-			} else {
-				passiveMod := mod.module.(modules.PassiveModule)
-				m.doWorkPassiveModule(passiveMod, mod.inputChan)
-			}
-
-			mod.span.End()
-			close(mod.exitedChan)
-		}
-	}
-}
-
-func (m *Module) doWorkActiveModule(ctx context.Context, sub modules.ActiveModule, input <-chan *events.EventList) {
-	doneC := m.ctx.Done()
-	for {
-		select {
-		case <-doneC:
-			return
-		case evs, ok := <-input:
-			if !ok {
-				return
-			}
-
-			if err := sub.ApplyEvents(ctx, evs); err != nil {
-				panic(fmt.Errorf("error processing events from submodule: %w", err))
-			}
-		}
-	}
-}
-
-func (m *Module) doWorkPassiveModule(sub modules.PassiveModule, input <-chan *events.EventList) {
-	doneC := m.ctx.Done()
-
-	for {
-		select {
-		case <-doneC:
-			return
-		case evs, ok := <-input:
-			if !ok {
-				return // module is to be stopped
-			}
-
-			outEvs, err := sub.ApplyEvents(evs)
-			if err != nil {
-				panic(fmt.Errorf("error processing events from submodule: %w", err))
-			}
-			m.outChan <- outEvs
-		}
 	}
 }
 
 func (m *Module) ImplementsModule() {}
 
-func (m *Module) EventsOut() <-chan *events.EventList {
-	return m.outChan
-}
-
-func (m *Module) ApplyEvents(ctx context.Context, eventsIn *events.EventList) error {
+func (m *Module) ApplyEvents(eventsIn *events.EventList) (*events.EventList, error) {
 	// Note: this method is similar to ApplyEvents, but it only parallelizes execution across different
 	// modules, not all events.
 	subEventsIn, pastMsgs := m.splitEventsByDest(eventsIn)
 
-	for ringIdx := 0; ringIdx < len(m.ring); ringIdx++ {
-		if subEventsIn[ringIdx].Len() == 0 {
+	resultChan := make(chan *events.EventList)
+	errorChan := make(chan error)
+
+	// The event processing results will be aggregated here
+	eventsOut := &events.EventList{}
+	var firstError error
+
+	// Start one concurrent worker for each submodule
+	// Note that the processing starts concurrently for all eventlists, and only the writing of the results is synchronized.
+	nSubs := 0
+	for i := 0; i < len(subEventsIn); i++ {
+		if subEventsIn[i].Len() == 0 {
 			continue
 		}
 
-		subID := subIDInRingIdx(&m.ringController, ringIdx)
-		switch m.ringController.GetSlotStatus(subID) {
-		case RingSlotPast:
-			return fmt.Errorf("unreachable code: past message cannot be deemed deliverable to current ring")
-		case RingSlotFuture:
-			if !m.ringController.MarkCurrentIfFuture(subID) {
-				return fmt.Errorf("unreachable code: future slot changed state")
-			}
-
-			sub, initialEvs, err := m.createModule(subID)
-			if err != nil {
-				return err
-			}
-			m.ring[ringIdx] = sub
-
-			// allocate worker to submodule
-			m.workerProcessModule[ringIdx] <- sub
-
-			// send initial events
-			m.ring[ringIdx].inputChan <- initialEvs
-
-			m.logger.Log(logging.LevelDebug, "module created", "id", subID)
-			fallthrough
-		case RingSlotCurrent:
-			m.ring[ringIdx].inputChan <- &subEventsIn[ringIdx]
-		default:
-			return fmt.Errorf("unknown slot status")
-		}
-	}
-
-	if len(pastMsgs) > 0 && m.params.PastMsgHandler != nil {
-		evsOut, err := (m.params.PastMsgHandler)(pastMsgs)
+		mod, initEvent, err := m.getSubByRingIdx(i)
 		if err != nil {
-			return err
+			firstError = err
+			break
+		}
+		if mod == nil {
+			continue // module out of view
 		}
 
-		m.outChan <- evsOut
+		if initEvent != nil {
+			// created module, loop events in the system again
+
+			// TODO: INIT event may be processed *after* other events directed at this module
+			// possible solution: track which modules are pending initialization, and loop events back in
+			// until INIT is processed
+			initEvent.Next = append(initEvent.Next, subEventsIn[i].Slice()...)
+			eventsOut.PushBack(initEvent)
+
+			continue
+		}
+
+		go func(modring *Module, evsIn *events.EventList, j int) {
+			// Apply the input event
+			res, err := multiApplySafely(mod, evsIn)
+
+			if err == nil {
+				resultChan <- res
+			} else {
+				errorChan <- fmt.Errorf("failed to process submodule #%d events: %w", j, err)
+			}
+		}(m, &subEventsIn[i], i)
+		nSubs++
 	}
 
-	return nil
+	// For each submodule, read the processing result from the common channels and aggregate it with the rest.
+	for i := 0; i < nSubs; i++ {
+		select {
+		case evList := <-resultChan:
+			eventsOut.PushBackList(evList)
+		case err := <-errorChan:
+			if firstError == nil {
+				firstError = err
+			}
+		}
+	}
+
+	// Return the resulting events or an error.
+	if firstError != nil {
+		return nil, firstError
+	}
+
+	if len(pastMsgs) > 0 && m.pastMsgHandler != nil {
+		evsOut, err := (m.pastMsgHandler)(pastMsgs)
+		if err != nil {
+			return nil, err
+		}
+
+		eventsOut.PushBackList(evsOut)
+	}
+
+	return eventsOut, nil
 }
 
 func (m *Module) splitEventsByDest(eventsIn *events.EventList) ([]events.EventList, []*modringpbtypes.PastMessage) {
@@ -241,27 +186,42 @@ func subIDInRingIdx(rc *RingController, ringIdx int) uint64 {
 	return minSlot + uint64(int(ringSize)-minIdx) + uint64(ringIdx)
 }
 
-func (m *Module) createModule(id uint64) (*subModule, *events.EventList, error) {
-	subFullID := m.ownID.Then(t.NewModuleIDFromInt(id))
+func (m *Module) getSubByRingIdx(ringIdx int) (modules.PassiveModule, *eventpb.Event, error) {
+	subID := subIDInRingIdx(&m.ringController, ringIdx)
 
-	subCtx, subSpan := otel.Tracer(name).Start(m.ctx, fmt.Sprintf("modring:%s", subFullID))
-	subMod, moreInitialEvs, err := (m.params.Generator)(subCtx, subFullID, id, m.outChan)
-	if err != nil {
-		return nil, nil, fmt.Errorf("error creating submodule: %w", err)
+	switch m.ringController.GetSlotStatus(subID) {
+	case RingSlotPast:
+		return nil, nil, nil
+	case RingSlotCurrent:
+		if m.ring[ringIdx] == nil {
+			return nil, nil, fmt.Errorf("module %v disappeared", subID)
+		}
+
+		return m.ring[ringIdx], nil, nil
+	case RingSlotFuture:
+		if !m.ringController.MarkCurrentIfFuture(subID) {
+			return nil, nil, nil
+		}
+
+		subFullID := m.ownID.Then(t.NewModuleIDFromInt(subID))
+		subCtx, _ := otel.Tracer(name).Start(m.ctx, fmt.Sprintf("modring:%s", subFullID))
+		sub, initialEvs, err := (m.generator)(subCtx, subFullID, subID)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		// construct init event
+		initEvent := events.Init(subFullID)
+		initEvent.Next = append(initEvent.Next, initialEvs.Slice()...)
+
+		m.ring[ringIdx] = sub
+		m.ctxRing[ringIdx] = subCtx
+		m.logger.Log(logging.LevelDebug, "module created", "id", subID)
+
+		return m.ring[ringIdx], initEvent, err
+	default:
+		return nil, nil, fmt.Errorf("unknown slot status: %v", m.ringController.GetSlotStatus(subID))
 	}
-
-	sub := &subModule{
-		module:     subMod,
-		inputChan:  make(chan *events.EventList, m.params.InputQueueSize),
-		tracingCtx: subCtx,
-		span:       subSpan,
-		exitedChan: make(chan struct{}),
-	}
-
-	initialEvs := events.ListOf(events.Init(subFullID))
-	initialEvs.PushBackList(moreInitialEvs)
-
-	return sub, initialEvs, err
 }
 
 func (m *Module) AdvanceViewToAtLeastSubmodule(id uint64) error {
@@ -304,15 +264,36 @@ func (m *Module) MarkSubmodulePast(id uint64) error {
 
 	ringIdx := int(id % uint64(len(m.ring)))
 
-	close(m.ring[ringIdx].inputChan)
+	// mark end of submodule span
+	span := trace.SpanFromContext(m.ctxRing[ringIdx])
+	span.End()
 
-	// wait for worker to stop processing module
-	<-m.ring[ringIdx].exitedChan
+	// zero slot just in case (and to let the GC do its job)
+	m.ring[ringIdx] = nil
+	m.ctxRing[ringIdx] = nil
 
 	m.ring[ringIdx] = nil
 
 	m.logger.Log(logging.LevelDebug, "module freed", "id", id, "newMinSlot", m.ringController.minSlot)
 	return nil
+}
+
+// multiApplySafely is a wrapper around an event processing function that catches its panic and returns it as an error.
+func multiApplySafely(
+	module modules.PassiveModule,
+	events *events.EventList,
+) (result *events.EventList, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			if rErr, ok := r.(error); ok {
+				err = fmt.Errorf("event application panicked: %w\nStack trace:\n%s", rErr, string(debug.Stack()))
+			} else {
+				err = fmt.Errorf("event application panicked: %v\nStack trace:\n%s", r, string(debug.Stack()))
+			}
+		}
+	}()
+
+	return module.ApplyEvents(events)
 }
 
 func (m *Module) MarkAllPast() error {

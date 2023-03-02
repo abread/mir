@@ -72,20 +72,19 @@ type state struct {
 
 const modringSubName t.ModuleID = t.ModuleID("r")
 
-func NewModule(ctx context.Context, mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger, outChan chan *events.EventList) (modules.ActiveModule, error) {
+func NewModule(ctx context.Context, mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
 	if tunables.MaxRoundLookahead <= 0 {
 		return nil, fmt.Errorf("MaxRoundLookahead must be at least 1")
 	}
 
 	// rounds use a submodule namespace to allow us to mark all round messages as received at once
-	rounds := modring.New(ctx, mc.Self.Then(modringSubName), tunables.MaxRoundLookahead, &modring.ModuleParams{
-		Generator:      newRoundGenerator(mc, params, nodeID, logger),
-		InputQueueSize: 8, // TODO: make configurable
-	}, logging.Decorate(logger, "Modring controller: "), outChan)
+	rounds := modring.New(ctx, mc.Self.Then(modringSubName), tunables.MaxRoundLookahead, modring.ModuleParams{
+		Generator: newRoundGenerator(mc, params, nodeID, logger),
+	}, logging.Decorate(logger, "Modring controller: "))
 
 	controller := newController(ctx, mc, params, tunables, nodeID, logger, rounds)
 
-	return modules.RoutedModule(ctx, mc.Self, controller, rounds, outChan), nil
+	return modules.RoutedModule(mc.Self, controller, rounds), nil
 }
 
 func newController(ctx context.Context, mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger, rounds *modring.Module) modules.PassiveModule {
@@ -186,9 +185,9 @@ func newController(ctx context.Context, mc *ModuleConfig, params *ModuleParams, 
 	return m
 }
 
-func newRoundGenerator(controllerMc *ModuleConfig, controllerParams *ModuleParams, nodeID t.NodeID, logger logging.Logger) func(ctx context.Context, id t.ModuleID, idx uint64, outChan chan *events.EventList) (modules.Module, *events.EventList, error) {
+func newRoundGenerator(controllerMc *ModuleConfig, controllerParams *ModuleParams, nodeID t.NodeID, logger logging.Logger) func(ctx context.Context, id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
 
-	return func(ctx context.Context, id t.ModuleID, idx uint64, outChan chan *events.EventList) (modules.Module, *events.EventList, error) {
+	return func(ctx context.Context, id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
 		mc := &abbaround.ModuleConfig{
 			Self:         id,
 			Consumer:     controllerMc.Self,
