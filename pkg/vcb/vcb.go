@@ -121,9 +121,8 @@ func NewModule(ctx context.Context, mc *ModuleConfig, params *ModuleParams, node
 		}
 
 		rnetdsl.Ack(m, mc.ReliableNet, mc.Self, FinalMsgID(), from)
-
-		if state.phase >= VcbPhaseDelivered {
-			return nil // already returned
+		if state.phase >= VcbPhasePendingVerification {
+			return nil // already received final
 		}
 
 		logger.Log(logging.LevelTrace, "recvd FINAL", "txs", txs, "signature", signature)
