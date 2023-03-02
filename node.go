@@ -383,7 +383,7 @@ func (n *Node) startModules(ctx context.Context, wg *sync.WaitGroup) {
 					continueProcessing, err = n.processModuleEvents(processingCtx, m, workChan, n.eventsIn)
 				}
 				if err != nil {
-					n.workErrNotifier.Fail(fmt.Errorf("could not process PassiveModule (%v) events: %w", mID, err))
+					n.workErrNotifier.Fail(fmt.Errorf("could not process module (%v) events: %w", mID, err))
 					return
 				}
 			}
