@@ -23,7 +23,7 @@ type MirModule struct {
 }
 
 func New(ctx context.Context, crypto Crypto) *MirModule {
-	return &MirModule{crypto: crypto}
+	return &MirModule{ctx: ctx, crypto: crypto}
 }
 
 func startSpan(ctx context.Context, name string, opts ...trace.SpanStartOption) (context.Context, trace.Span) {
