@@ -55,7 +55,7 @@ func runHappyTest(t *testing.T, F int, decision bool, customInputs map[types.Nod
 		Transport:         "libp2p", // TODO: fix sim for goroutine pool active modules (threshcrypto breaks it)
 		DefaultInputValue: decision,
 		InputValues:       customInputs,
-		Duration:          1 * time.Second,
+		Duration:          5 * time.Second,
 	}
 
 	r, _, _ := runTest(t, &config)
@@ -232,6 +232,7 @@ func newDeployment(conf *TestConfig) (*deploytest.Deployment, error) {
 
 		// Use a small retransmission delay to increase likelihood of duplicate messages
 		rnetParams := reliablenet.DefaultModuleParams(nodeIDs)
+		rnetParams.RetransmissionLoopInterval = 10 * time.Millisecond
 
 		rnet, err := reliablenet.New(
 			nodeID,
