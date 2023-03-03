@@ -153,17 +153,23 @@ func (at *aleaTracer) interceptOne(event *eventpb.Event) error {
 	case *eventpb.Event_Abba:
 		switch e := ev.Abba.Type.(type) {
 		case *abbapb.Event_Round:
-			switch e.Round.Type.(type) {
+			switch e2 := e.Round.Type.(type) {
 			case *abbapb.RoundEvent_InputValue:
-				abbaRoundID, ok := at.parseAbbaRoundID(t.ModuleID(event.DestModule))
-				if !ok {
-					return fmt.Errorf("invalid abba round id")
+				abbaRoundID, err := at.parseAbbaRoundID(t.ModuleID(event.DestModule))
+				if err != nil {
+					return fmt.Errorf("invalid abba round id: %w", err)
 				}
 				at.startAbbaRoundSpan(abbaRoundID)
 			case *abbapb.RoundEvent_Deliver:
-				abbaRoundID, ok := at.parseAbbaRoundID(t.ModuleID(event.DestModule))
-				if !ok {
-					return fmt.Errorf("invalid abba round id")
+				agRoundStr := t.ModuleID(event.DestModule).StripParent("alea_ag")
+				agRound, err := strconv.ParseUint(string(agRoundStr), 10, 64)
+				if err != nil {
+					return fmt.Errorf("invalid ag round number: %w", err)
+				}
+
+				abbaRoundID := abbaRoundID{
+					agRound:   agRound,
+					abbaRound: e2.Deliver.RoundNumber,
 				}
 
 				at.endAbbaRoundSpan(abbaRoundID)
@@ -245,29 +251,29 @@ func (at *aleaTracer) registerModStart(event *eventpb.Event) {
 	}
 }
 
-func (at *aleaTracer) parseAbbaRoundID(id t.ModuleID) (abbaRoundID, bool) {
+func (at *aleaTracer) parseAbbaRoundID(id t.ModuleID) (abbaRoundID, error) {
 	if !id.IsSubOf("alea_ag") {
-		return abbaRoundID{}, false
+		return abbaRoundID{}, fmt.Errorf("not alea_ag/*")
 	}
-
 	id = id.Sub()
 
 	agRound, err := strconv.ParseUint(string(id.Top()), 10, 64)
 	if err != nil {
-		return abbaRoundID{}, false
+		return abbaRoundID{}, fmt.Errorf("expected <ag round no.>, got %s", id.Top())
+	}
+	id = id.Sub()
+
+	if id.Top() != "r" {
+		return abbaRoundID{}, fmt.Errorf("expected r, got %s", id.Top())
 	}
 
-	if id.Sub().Top() != "r" {
-		return abbaRoundID{}, false
-	}
-
-	id = id.Sub().Sub()
-	abbaRound, err := strconv.ParseUint(string(id), 10, 64)
+	id = id.Sub()
+	abbaRound, err := strconv.ParseUint(string(id.Top()), 10, 64)
 	if err != nil {
-		return abbaRoundID{}, false
+		return abbaRoundID{}, fmt.Errorf("expected <abba round number>, got %s", id.Top())
 	}
 
-	return abbaRoundID{agRound, abbaRound}, true
+	return abbaRoundID{agRound, abbaRound}, nil
 }
 
 func (at *aleaTracer) slotForAgRound(round uint64) commontypes.Slot {
