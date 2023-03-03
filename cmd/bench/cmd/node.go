@@ -20,7 +20,6 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
-	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
 	"go.opentelemetry.io/otel/sdk/trace"
 
 	"github.com/filecoin-project/mir"
@@ -49,7 +48,7 @@ var (
 	batchSize     int
 	statFileName  string
 	statPeriod    time.Duration
-	traceFileName string
+	enableOTLP    bool
 
 	nodeCmd = &cobra.Command{
 		Use:   "node",
@@ -67,7 +66,7 @@ func init() {
 	nodeCmd.Flags().IntVarP(&batchSize, "batchSize", "b", 1024, "maximum number of transactions in a batch (mempool module)")
 	nodeCmd.Flags().StringVarP(&statFileName, "statFile", "o", "", "output file for statistics")
 	nodeCmd.Flags().DurationVar(&statPeriod, "statPeriod", time.Second, "statistic record period")
-	nodeCmd.Flags().StringVar(&traceFileName, "traceFile", "", "output file for OpenTelemetry traces. enables OTLP exporter")
+	nodeCmd.Flags().BoolVar(&enableOTLP, "enableOTLP", false, "enable OTLP exporter")
 }
 
 func issSMRFactory(ctx context.Context, ownID t.NodeID, transport net.Transport, initialMembership map[t.NodeID]t.NodeAddress, smrParams trantor.Params, logger logging.Logger) (*trantor.System, error) {
@@ -121,7 +120,7 @@ func runNode(ctx context.Context) error {
 		logger = logging.ConsoleWarnLogger
 	}
 
-	if traceFileName != "" {
+	if enableOTLP {
 		otlpExporter, err := otlptrace.New(ctx, otlptracehttp.NewClient(otlptracehttp.WithInsecure()))
 		if err != nil {
 			return fmt.Errorf("error creating otlp exporter: %w", err)
@@ -130,27 +129,8 @@ func runNode(ctx context.Context) error {
 			_ = otlpExporter.Shutdown(context.Background())
 		}()
 
-		traceFile, err := os.Create(traceFileName)
-		if err != nil {
-			return fmt.Errorf("error creating trace output file: %w", err)
-		}
-		defer func() {
-			_ = traceFile.Close()
-		}()
-
-		fileExporter, err := stdouttrace.New(
-			stdouttrace.WithWriter(traceFile),
-		)
-		if err != nil {
-			return fmt.Errorf("error creating file trace exporter: %w", err)
-		}
-		defer func() {
-			_ = fileExporter.Shutdown(context.Background())
-		}()
-
 		tp := trace.NewTracerProvider(
 			trace.WithBatcher(otlpExporter),
-			trace.WithBatcher(fileExporter),
 			trace.WithSampler(trace.AlwaysSample()),
 		)
 		defer func() {
