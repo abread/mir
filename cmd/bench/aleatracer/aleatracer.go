@@ -9,6 +9,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/alea/aleatypes"
 	"github.com/filecoin-project/mir/pkg/eventlog"
 	"github.com/filecoin-project/mir/pkg/events"
+	"github.com/filecoin-project/mir/pkg/pb/abbapb"
 	"github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents"
 	"github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb"
 	commontypes "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
@@ -25,20 +26,29 @@ type aleaTracer struct {
 	ownQueueIdx aleatypes.QueueIdx
 	nodeCount   int
 
-	wipTxSpan        map[string]*span
-	wipBcSpan        map[commontypes.Slot]*span
-	wipBcModSpan     map[commontypes.Slot]*span
-	wipAgSpan        map[uint64]*span
-	wipBfSpan        map[commontypes.Slot]*span
-	wipBfStalledSpan map[commontypes.Slot]*span
+	wipTxSpan           map[string]*span
+	wipBcSpan           map[commontypes.Slot]*span
+	wipBcModSpan        map[commontypes.Slot]*span
+	wipAgSpan           map[uint64]*span
+	wipAgModSpan        map[uint64]*span
+	wipAbbaRoundSpan    map[abbaRoundID]*span
+	wipAbbaRoundModSpan map[abbaRoundID]*span
+	wipBfSpan           map[commontypes.Slot]*span
+	wipBfStalledSpan    map[commontypes.Slot]*span
 
 	bfWipSlotsCtxID map[uint64]commontypes.Slot
 	bfDeliverQueue  []commontypes.Slot
 
-	agQueueHeads  []aleatypes.QueueSlot
-	agWipForQueue map[aleatypes.QueueIdx]uint64
+	agQueueHeads            []aleatypes.QueueSlot
+	agWipForQueue           map[aleatypes.QueueIdx]uint64
+	agUndeliveredAbbaRounds map[uint64]map[uint64]struct{}
 
 	out io.Writer
+}
+
+type abbaRoundID struct {
+	agRound   uint64
+	abbaRound uint64
 }
 
 type span struct {
@@ -49,29 +59,35 @@ type span struct {
 	end   time.Duration
 }
 
+const N = 128
+
 func NewAleaTracer(ownQueueIdx aleatypes.QueueIdx, nodeCount int, out io.Writer) eventlog.Interceptor {
 	tracer := &aleaTracer{
 		refTime:     time.Now(),
 		ownQueueIdx: ownQueueIdx,
 		nodeCount:   nodeCount,
 
-		wipTxSpan:        make(map[string]*span, 1),
-		wipBcSpan:        make(map[commontypes.Slot]*span, nodeCount),
-		wipBcModSpan:     make(map[commontypes.Slot]*span, nodeCount),
-		wipAgSpan:        make(map[uint64]*span, nodeCount),
-		wipBfSpan:        make(map[commontypes.Slot]*span, nodeCount),
-		wipBfStalledSpan: make(map[commontypes.Slot]*span, nodeCount),
+		wipTxSpan:           make(map[string]*span, 1*N),
+		wipBcSpan:           make(map[commontypes.Slot]*span, nodeCount*N),
+		wipBcModSpan:        make(map[commontypes.Slot]*span, nodeCount*N),
+		wipAgSpan:           make(map[uint64]*span, nodeCount*N),
+		wipAgModSpan:        make(map[uint64]*span, nodeCount*N),
+		wipAbbaRoundSpan:    make(map[abbaRoundID]*span, nodeCount*N),
+		wipAbbaRoundModSpan: make(map[abbaRoundID]*span, nodeCount*N),
+		wipBfSpan:           make(map[commontypes.Slot]*span, nodeCount*N),
+		wipBfStalledSpan:    make(map[commontypes.Slot]*span, nodeCount*N),
 
 		bfWipSlotsCtxID: make(map[uint64]commontypes.Slot, nodeCount),
 		bfDeliverQueue:  nil,
 
-		agQueueHeads:  make([]aleatypes.QueueSlot, nodeCount),
-		agWipForQueue: make(map[aleatypes.QueueIdx]uint64, nodeCount),
+		agQueueHeads:            make([]aleatypes.QueueSlot, nodeCount),
+		agWipForQueue:           make(map[aleatypes.QueueIdx]uint64, nodeCount),
+		agUndeliveredAbbaRounds: make(map[uint64]map[uint64]struct{}, nodeCount*N),
 
 		out: out,
 	}
 
-	_, err := out.Write([]byte("class;id;start;end\n"))
+	_, err := out.Write([]byte("class,id,start,end\n"))
 	if err != nil {
 		panic(err)
 	}
@@ -90,6 +106,8 @@ func (at *aleaTracer) Intercept(evs *events.EventList) error {
 }
 
 func (at *aleaTracer) interceptOne(event *eventpb.Event) error {
+	at.registerModStart(event)
+
 	switch ev := event.Type.(type) {
 	case *eventpb.Event_Mempool:
 		switch e := ev.Mempool.Type.(type) {
@@ -103,7 +121,6 @@ func (at *aleaTracer) interceptOne(event *eventpb.Event) error {
 		case *bcpb.Event_StartBroadcast:
 			slot := commontypes.Slot{QueueIdx: at.ownQueueIdx, QueueSlot: aleatypes.QueueSlot(e.StartBroadcast.QueueSlot)}
 			at.startBcSpan(slot)
-			at.startBcModSpan(slot)
 		case *bcpb.Event_Deliver:
 			at.endBcSpan(*commontypes.SlotFromPb(e.Deliver.Slot))
 		case *bcpb.Event_FreeSlot:
@@ -118,6 +135,7 @@ func (at *aleaTracer) interceptOne(event *eventpb.Event) error {
 			at.startAgSpan(e.InputValue.Round)
 		case *agevents.Event_Deliver:
 			at.endAgSpan(e.Deliver.Round)
+			at.endAgModSpan(e.Deliver.Round)
 
 			slot := at.slotForAgRound(e.Deliver.Round)
 			delete(at.agWipForQueue, slot.QueueIdx)
@@ -131,7 +149,28 @@ func (at *aleaTracer) interceptOne(event *eventpb.Event) error {
 		case *vcbpb.Event_InputValue:
 			slot := parseSlotFromModuleID(event.DestModule)
 			at.startBcSpan(slot)
-			at.startBcModSpan(slot)
+		}
+	case *eventpb.Event_Abba:
+		switch e := ev.Abba.Type.(type) {
+		case *abbapb.Event_Round:
+			switch e.Round.Type.(type) {
+			case *abbapb.RoundEvent_InputValue:
+				abbaRoundID, ok := at.parseAbbaRoundID(t.ModuleID(event.DestModule))
+				if !ok {
+					return fmt.Errorf("invalid abba round id")
+				}
+				at.startAbbaRoundSpan(abbaRoundID)
+			case *abbapb.RoundEvent_Deliver:
+				abbaRoundID, ok := at.parseAbbaRoundID(t.ModuleID(event.DestModule))
+				if !ok {
+					return fmt.Errorf("invalid abba round id")
+				}
+
+				at.endAbbaRoundSpan(abbaRoundID)
+				at.endAbbaRoundModSpan(abbaRoundID)
+
+				delete(at.agUndeliveredAbbaRounds[abbaRoundID.agRound], abbaRoundID.abbaRound)
+			}
 		}
 	case *eventpb.Event_Availability:
 		switch e := ev.Availability.Type.(type) {
@@ -165,6 +204,70 @@ func (at *aleaTracer) interceptOne(event *eventpb.Event) error {
 	}
 
 	return nil
+}
+
+func (at *aleaTracer) registerModStart(event *eventpb.Event) {
+	id := t.ModuleID(event.DestModule)
+	if id.IsSubOf("alea_ag") {
+		id = id.Sub()
+
+		agRound, err := strconv.ParseUint(string(id.Top()), 10, 64)
+		if err != nil {
+			return
+		}
+
+		at.startAgModSpan(agRound)
+
+		if id.Sub().Top() == "r" {
+			id = id.Sub().Sub()
+			abbaRound, err := strconv.ParseUint(string(id), 10, 64)
+			if err != nil {
+				return
+			}
+
+			at.startAbbaRoundModSpan(abbaRoundID{agRound, abbaRound})
+		}
+	} else if id.IsSubOf("alea_bc") {
+		id = id.Sub()
+
+		queueIdx, err := strconv.ParseUint(string(id.Top()), 10, 64)
+		if err != nil {
+			return
+		}
+		queueSlot, err := strconv.ParseUint(string(id.Sub().Top()), 10, 64)
+		if err != nil {
+			return
+		}
+		at.startBcModSpan(commontypes.Slot{
+			QueueIdx:  aleatypes.QueueIdx(queueIdx),
+			QueueSlot: aleatypes.QueueSlot(queueSlot),
+		})
+	}
+}
+
+func (at *aleaTracer) parseAbbaRoundID(id t.ModuleID) (abbaRoundID, bool) {
+	if !id.IsSubOf("alea_ag") {
+		return abbaRoundID{}, false
+	}
+
+	id = id.Sub()
+
+	agRound, err := strconv.ParseUint(string(id.Top()), 10, 64)
+	if err != nil {
+		return abbaRoundID{}, false
+	}
+
+	if id.Sub().Top() != "r" {
+		return abbaRoundID{}, false
+	}
+
+	id = id.Sub().Sub()
+	abbaRound, err := strconv.ParseUint(string(id), 10, 64)
+	if err != nil {
+		return abbaRoundID{}, false
+	}
+
+	return abbaRoundID{agRound, abbaRound}, true
 }
 
 func (at *aleaTracer) slotForAgRound(round uint64) commontypes.Slot {
@@ -233,8 +336,8 @@ func (at *aleaTracer) _bcModSpan(slot commontypes.Slot) *span {
 	s, ok := at.wipBcModSpan[slot]
 	if !ok {
 		at.wipBcModSpan[slot] = &span{
-			class: "bc mod",
-			id:    fmt.Sprintf("%d/%d", slot.QueueIdx, slot.QueueSlot),
+			class: "mod",
+			id:    fmt.Sprintf("alea_bc/%d/%d", slot.QueueIdx, slot.QueueSlot),
 			start: time.Since(at.refTime),
 		}
 		s = at.wipBcModSpan[slot]
@@ -277,12 +380,91 @@ func (at *aleaTracer) endAgSpan(round uint64) {
 	}
 }
 
+func (at *aleaTracer) _agModSpan(round uint64) *span {
+	s, ok := at.wipAgModSpan[round]
+	if !ok {
+		at.wipAgModSpan[round] = &span{
+			class: "mod",
+			id:    fmt.Sprintf("alea_ag/%d", round),
+			start: time.Since(at.refTime),
+		}
+		at.agUndeliveredAbbaRounds[round] = make(map[uint64]struct{}, 8)
+		s = at.wipAgModSpan[round]
+	}
+	return s
+}
+func (at *aleaTracer) startAgModSpan(round uint64) {
+	at._agModSpan(round)
+}
+func (at *aleaTracer) endAgModSpan(round uint64) {
+	s := at._agModSpan(round)
+	if s.end == 0 {
+		s.end = time.Since(at.refTime)
+
+		for abbaRound := range at.agUndeliveredAbbaRounds[round] {
+			at.endAbbaRoundSpan(abbaRoundID{round, abbaRound})
+			at.endAbbaRoundModSpan(abbaRoundID{round, abbaRound})
+		}
+		delete(at.agUndeliveredAbbaRounds, round)
+
+		at.writeSpan(s)
+	}
+}
+
+func (at *aleaTracer) _abbaRoundSpan(id abbaRoundID) *span {
+	s, ok := at.wipAbbaRoundSpan[id]
+	if !ok {
+		at.wipAbbaRoundSpan[id] = &span{
+			class: "abbaRound",
+			id:    fmt.Sprintf("%d-%d", id.agRound, id.abbaRound),
+			start: time.Since(at.refTime),
+		}
+		s = at.wipAbbaRoundSpan[id]
+	}
+	return s
+}
+func (at *aleaTracer) startAbbaRoundSpan(id abbaRoundID) {
+	at._abbaRoundSpan(id)
+}
+func (at *aleaTracer) endAbbaRoundSpan(id abbaRoundID) {
+	s := at._abbaRoundSpan(id)
+	if s.end == 0 {
+		s.end = time.Since(at.refTime)
+		at.writeSpan(s)
+	}
+}
+
+func (at *aleaTracer) _abbaRoundModSpan(id abbaRoundID) *span {
+	s, ok := at.wipAbbaRoundModSpan[id]
+	if !ok {
+		at.wipAbbaRoundModSpan[id] = &span{
+			class: "mod",
+			id:    fmt.Sprintf("alea_ag/%d/%d", id.agRound, id.abbaRound),
+			start: time.Since(at.refTime),
+		}
+		at.agUndeliveredAbbaRounds[id.agRound][id.abbaRound] = struct{}{}
+		s = at.wipAbbaRoundModSpan[id]
+	}
+	return s
+}
+func (at *aleaTracer) startAbbaRoundModSpan(id abbaRoundID) {
+	at._abbaRoundModSpan(id)
+}
+func (at *aleaTracer) endAbbaRoundModSpan(id abbaRoundID) {
+	s := at._abbaRoundModSpan(id)
+	if s.end == 0 {
+		s.end = time.Since(at.refTime)
+		delete(at.agUndeliveredAbbaRounds[id.agRound], id.abbaRound)
+		at.writeSpan(s)
+	}
+}
+
 func (at *aleaTracer) _bfSpan(slot commontypes.Slot) *span {
 	s, ok := at.wipBfSpan[slot]
 	if !ok {
 		at.wipBfSpan[slot] = &span{
 			class: "bf",
-			id:    fmt.Sprintf("%d/%d", slot.QueueIdx, slot.QueueSlot),
+			id:    fmt.Sprintf("%d:%d", slot.QueueIdx, slot.QueueSlot),
 			start: time.Since(at.refTime),
 		}
 		s = at.wipBfSpan[slot]
@@ -305,7 +487,7 @@ func (at *aleaTracer) _bfStalledSpan(slot commontypes.Slot) *span {
 	if !ok {
 		at.wipBfStalledSpan[slot] = &span{
 			class: "deliveryStalled",
-			id:    fmt.Sprintf("%d/%d", slot.QueueIdx, slot.QueueSlot),
+			id:    fmt.Sprintf("%d:%d", slot.QueueIdx, slot.QueueSlot),
 			start: time.Since(at.refTime),
 		}
 		s = at.wipBfStalledSpan[slot]
@@ -324,7 +506,7 @@ func (at *aleaTracer) endDeliveryStalledSpan(slot commontypes.Slot) {
 }
 
 func (at *aleaTracer) writeSpan(s *span) {
-	_, err := at.out.Write([]byte(fmt.Sprintf("%s;%s;%d;%d\n", s.class, s.id, s.start, s.end)))
+	_, err := at.out.Write([]byte(fmt.Sprintf("%s,%s,%d,%d\n", s.class, s.id, s.start, s.end)))
 	if err != nil {
 		panic(fmt.Errorf("failed to write trace span: %w", err))
 	}
