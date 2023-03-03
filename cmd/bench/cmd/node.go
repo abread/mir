@@ -21,9 +21,12 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/sdk/trace"
+	"golang.org/x/exp/slices"
 
 	"github.com/filecoin-project/mir"
+	"github.com/filecoin-project/mir/cmd/bench/aleatracer"
 	"github.com/filecoin-project/mir/cmd/bench/stats"
+	"github.com/filecoin-project/mir/pkg/alea/aleatypes"
 	"github.com/filecoin-project/mir/pkg/deploytest"
 	"github.com/filecoin-project/mir/pkg/eventlog"
 	"github.com/filecoin-project/mir/pkg/logging"
@@ -49,6 +52,7 @@ var (
 	statFileName  string
 	statPeriod    time.Duration
 	enableOTLP    bool
+	traceFileName string
 
 	nodeCmd = &cobra.Command{
 		Use:   "node",
@@ -66,6 +70,7 @@ func init() {
 	nodeCmd.Flags().IntVarP(&batchSize, "batchSize", "b", 1024, "maximum number of transactions in a batch (mempool module)")
 	nodeCmd.Flags().StringVarP(&statFileName, "statFile", "o", "", "output file for statistics")
 	nodeCmd.Flags().DurationVar(&statPeriod, "statPeriod", time.Second, "statistic record period")
+	nodeCmd.Flags().StringVar(&traceFileName, "traceFile", "", "output file for *alea* traces")
 	nodeCmd.Flags().BoolVar(&enableOTLP, "enableOTLP", false, "enable OTLP exporter")
 }
 
@@ -210,10 +215,26 @@ func runNode(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("cannot create event recorder: %w", err)
 	}*/
+
+	var tracer eventlog.Interceptor = eventlog.NilInterceptor
+	if traceFileName != "" {
+		traceFile, err := os.Create(traceFileName)
+		if err != nil {
+			return fmt.Errorf("error creating trace output file: %w", err)
+		}
+		defer func() {
+			_ = traceFile.Close()
+		}()
+
+		ownQueueIdx := slices.Index(smrParams.Alea.AllNodes(), ownID)
+		tracer = aleatracer.NewAleaTracer(aleatypes.QueueIdx(ownQueueIdx), len(initialMembership), traceFile)
+	}
+
 	stat := stats.NewStats()
 	interceptor := eventlog.MultiInterceptor(
 		stats.NewStatInterceptor(stat, "app"),
 		//recorder,
+		tracer,
 	)
 
 	nodeConfig := mir.DefaultNodeConfig().WithLogger(logger)
