@@ -20,19 +20,21 @@ import (
 
 // ModuleConfig sets the module ids. All replicas are expected to use identical module configurations.
 type ModuleConfig struct {
-	Self         t.ModuleID // id of this module
-	ReliableNet  t.ModuleID
-	ThreshCrypto t.ModuleID
-	Hasher       t.ModuleID
+	Self           t.ModuleID // id of this module
+	InputRequestor t.ModuleID
+	ReliableNet    t.ModuleID
+	ThreshCrypto   t.ModuleID
+	Hasher         t.ModuleID
 }
 
 // DefaultModuleConfig returns a valid module config with default names for all modules.
-func DefaultModuleConfig(consumer t.ModuleID) *ModuleConfig {
+func DefaultModuleConfig(inputRequestor t.ModuleID) *ModuleConfig {
 	return &ModuleConfig{
-		Self:         "abba",
-		ReliableNet:  "reliablenet",
-		ThreshCrypto: "threshcrypto",
-		Hasher:       "hasher",
+		Self:           "abba",
+		InputRequestor: inputRequestor,
+		ReliableNet:    "reliablenet",
+		ThreshCrypto:   "threshcrypto",
+		Hasher:         "hasher",
 	}
 }
 
@@ -59,8 +61,9 @@ const (
 )
 
 type state struct {
-	phase        abbaPhase
-	currentRound uint64
+	phase          abbaPhase
+	requestedInput bool
+	currentRound   uint64
 
 	finishRecvd            abbat.RecvTracker
 	finishRecvdValueCounts abbat.BoolCounters
@@ -146,6 +149,14 @@ func newController(ctx context.Context, mc *ModuleConfig, params *ModuleParams, 
 			rnetdsl.MarkModuleMsgsRecvd(m, mc.ReliableNet, mc.Self.Then(modringSubName), params.AllNodes)
 		}
 
+		return nil
+	})
+
+	dsl.UponCondition(m, func() error {
+		if state.phase == phaseAwaitingInput && state.finishRecvd.Len() > 0 && !state.requestedInput {
+			state.requestedInput = true
+			abbadsl.RequestInput(m, mc.InputRequestor, mc.Self)
+		}
 		return nil
 	})
 

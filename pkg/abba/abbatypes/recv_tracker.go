@@ -12,3 +12,7 @@ func (r RecvTracker) Register(node t.NodeID) bool {
 	r[node] = struct{}{}
 	return true
 }
+
+func (r RecvTracker) Len() int {
+	return len(r)
+}

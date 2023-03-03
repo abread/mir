@@ -6,6 +6,7 @@ import (
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
 	types "github.com/filecoin-project/mir/pkg/pb/abbapb/types"
 	types1 "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
+	types2 "github.com/filecoin-project/mir/pkg/types"
 )
 
 // Module-specific dsl functions for processing events.
@@ -18,6 +19,12 @@ func UponEvent[W types.Event_TypeWrapper[Ev], Ev any](m dsl.Module, handler func
 		}
 
 		return handler(w.Unwrap())
+	})
+}
+
+func UponRequestInput(m dsl.Module, handler func(module types2.ModuleID) error) {
+	UponEvent[*types.Event_RequestInput](m, func(ev *types.RequestInput) error {
+		return handler(ev.Module)
 	})
 }
 

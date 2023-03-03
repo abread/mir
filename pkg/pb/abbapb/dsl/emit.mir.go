@@ -11,6 +11,10 @@ import (
 
 // Module-specific dsl functions for emitting events.
 
+func RequestInput(m dsl.Module, destModule types.ModuleID, module types.ModuleID) {
+	dsl.EmitMirEvent(m, events.RequestInput(destModule, module))
+}
+
 func InputValue[C any](m dsl.Module, destModule types.ModuleID, input bool, context *C) {
 	kind := trace.WithSpanKind(trace.SpanKindProducer)
 	m.DslHandle().PushSpan("InputValue", kind)

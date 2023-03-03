@@ -386,6 +386,8 @@ type Event_TypeWrapper[T any] interface {
 
 func Event_TypeFromPb(pb abbapb.Event_Type) Event_Type {
 	switch pb := pb.(type) {
+	case *abbapb.Event_RequestInput:
+		return &Event_RequestInput{RequestInput: RequestInputFromPb(pb.RequestInput)}
 	case *abbapb.Event_InputValue:
 		return &Event_InputValue{InputValue: InputValueFromPb(pb.InputValue)}
 	case *abbapb.Event_Deliver:
@@ -394,6 +396,24 @@ func Event_TypeFromPb(pb abbapb.Event_Type) Event_Type {
 		return &Event_Round{Round: RoundEventFromPb(pb.Round)}
 	}
 	return nil
+}
+
+type Event_RequestInput struct {
+	RequestInput *RequestInput
+}
+
+func (*Event_RequestInput) isEvent_Type() {}
+
+func (w *Event_RequestInput) Unwrap() *RequestInput {
+	return w.RequestInput
+}
+
+func (w *Event_RequestInput) Pb() abbapb.Event_Type {
+	return &abbapb.Event_RequestInput{RequestInput: (w.RequestInput).Pb()}
+}
+
+func (*Event_RequestInput) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Event_RequestInput]()}
 }
 
 type Event_InputValue struct {
@@ -464,6 +484,26 @@ func (m *Event) Pb() *abbapb.Event {
 
 func (*Event) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Event]()}
+}
+
+type RequestInput struct {
+	Module types.ModuleID
+}
+
+func RequestInputFromPb(pb *abbapb.RequestInput) *RequestInput {
+	return &RequestInput{
+		Module: (types.ModuleID)(pb.Module),
+	}
+}
+
+func (m *RequestInput) Pb() *abbapb.RequestInput {
+	return &abbapb.RequestInput{
+		Module: (string)(m.Module),
+	}
+}
+
+func (*RequestInput) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.RequestInput]()}
 }
 
 type InputValue struct {

@@ -1,18 +1,33 @@
 package abbapbevents
 
 import (
-	types1 "github.com/filecoin-project/mir/pkg/pb/abbapb/types"
-	types2 "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
+	types2 "github.com/filecoin-project/mir/pkg/pb/abbapb/types"
+	types1 "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 	types "github.com/filecoin-project/mir/pkg/types"
 )
 
-func InputValue(destModule types.ModuleID, input bool, origin *types1.Origin) *types2.Event {
-	return &types2.Event{
+func RequestInput(destModule types.ModuleID, module types.ModuleID) *types1.Event {
+	return &types1.Event{
 		DestModule: destModule,
-		Type: &types2.Event_Abba{
-			Abba: &types1.Event{
-				Type: &types1.Event_InputValue{
-					InputValue: &types1.InputValue{
+		Type: &types1.Event_Abba{
+			Abba: &types2.Event{
+				Type: &types2.Event_RequestInput{
+					RequestInput: &types2.RequestInput{
+						Module: module,
+					},
+				},
+			},
+		},
+	}
+}
+
+func InputValue(destModule types.ModuleID, input bool, origin *types2.Origin) *types1.Event {
+	return &types1.Event{
+		DestModule: destModule,
+		Type: &types1.Event_Abba{
+			Abba: &types2.Event{
+				Type: &types2.Event_InputValue{
+					InputValue: &types2.InputValue{
 						Input:  input,
 						Origin: origin,
 					},
@@ -22,13 +37,13 @@ func InputValue(destModule types.ModuleID, input bool, origin *types1.Origin) *t
 	}
 }
 
-func Deliver(destModule types.ModuleID, result bool, origin *types1.Origin) *types2.Event {
-	return &types2.Event{
+func Deliver(destModule types.ModuleID, result bool, origin *types2.Origin) *types1.Event {
+	return &types1.Event{
 		DestModule: destModule,
-		Type: &types2.Event_Abba{
-			Abba: &types1.Event{
-				Type: &types1.Event_Deliver{
-					Deliver: &types1.Deliver{
+		Type: &types1.Event_Abba{
+			Abba: &types2.Event{
+				Type: &types2.Event_Deliver{
+					Deliver: &types2.Deliver{
 						Result: result,
 						Origin: origin,
 					},
@@ -38,15 +53,15 @@ func Deliver(destModule types.ModuleID, result bool, origin *types1.Origin) *typ
 	}
 }
 
-func RoundInputValue(destModule types.ModuleID, input bool) *types2.Event {
-	return &types2.Event{
+func RoundInputValue(destModule types.ModuleID, input bool) *types1.Event {
+	return &types1.Event{
 		DestModule: destModule,
-		Type: &types2.Event_Abba{
-			Abba: &types1.Event{
-				Type: &types1.Event_Round{
-					Round: &types1.RoundEvent{
-						Type: &types1.RoundEvent_InputValue{
-							InputValue: &types1.RoundInputValue{
+		Type: &types1.Event_Abba{
+			Abba: &types2.Event{
+				Type: &types2.Event_Round{
+					Round: &types2.RoundEvent{
+						Type: &types2.RoundEvent_InputValue{
+							InputValue: &types2.RoundInputValue{
 								Input: input,
 							},
 						},
@@ -57,15 +72,15 @@ func RoundInputValue(destModule types.ModuleID, input bool) *types2.Event {
 	}
 }
 
-func RoundDeliver(destModule types.ModuleID, nextEstimate bool, roundNumber uint64) *types2.Event {
-	return &types2.Event{
+func RoundDeliver(destModule types.ModuleID, nextEstimate bool, roundNumber uint64) *types1.Event {
+	return &types1.Event{
 		DestModule: destModule,
-		Type: &types2.Event_Abba{
-			Abba: &types1.Event{
-				Type: &types1.Event_Round{
-					Round: &types1.RoundEvent{
-						Type: &types1.RoundEvent_Deliver{
-							Deliver: &types1.RoundDeliver{
+		Type: &types1.Event_Abba{
+			Abba: &types2.Event{
+				Type: &types2.Event_Round{
+					Round: &types2.RoundEvent{
+						Type: &types2.RoundEvent_Deliver{
+							Deliver: &types2.RoundDeliver{
 								NextEstimate: nextEstimate,
 								RoundNumber:  roundNumber,
 							},
@@ -77,15 +92,15 @@ func RoundDeliver(destModule types.ModuleID, nextEstimate bool, roundNumber uint
 	}
 }
 
-func RoundFinishAll(destModule types.ModuleID, decision bool) *types2.Event {
-	return &types2.Event{
+func RoundFinishAll(destModule types.ModuleID, decision bool) *types1.Event {
+	return &types1.Event{
 		DestModule: destModule,
-		Type: &types2.Event_Abba{
-			Abba: &types1.Event{
-				Type: &types1.Event_Round{
-					Round: &types1.RoundEvent{
-						Type: &types1.RoundEvent_Finish{
-							Finish: &types1.RoundFinishAll{
+		Type: &types1.Event_Abba{
+			Abba: &types2.Event{
+				Type: &types2.Event_Round{
+					Round: &types2.RoundEvent{
+						Type: &types2.RoundEvent_Finish{
+							Finish: &types2.RoundFinishAll{
 								Decision: decision,
 							},
 						},

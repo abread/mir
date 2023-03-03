@@ -23,10 +23,17 @@ message Event {
   oneof type {
     option (mir.event_type) = true;
 
-    InputValue input_value = 1;
-    Deliver    deliver     = 2;
-    RoundEvent round       = 3;
+    RequestInput request_input = 1;
+    InputValue   input_value   = 2;
+    Deliver      deliver       = 3;
+    RoundEvent   round         = 4;
   }
+}
+
+message RequestInput {
+  option (mir.event) = true;
+
+  string module = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.ModuleID"];
 }
 
 message InputValue {

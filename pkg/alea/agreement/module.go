@@ -3,6 +3,7 @@ package agreement
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/filecoin-project/mir/pkg/abba"
 	"github.com/filecoin-project/mir/pkg/dsl"
@@ -19,7 +20,6 @@ import (
 	agreementpbmsgdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/dsl"
 	agreementpbmsgs "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/msgs"
 	agreementpbtypes "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/types"
-	"github.com/filecoin-project/mir/pkg/pb/eventpb"
 	eventpbevents "github.com/filecoin-project/mir/pkg/pb/eventpb/events"
 	messagepbtypes "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
 	modringpbtypes "github.com/filecoin-project/mir/pkg/pb/modringpb/types"
@@ -116,11 +116,6 @@ func newAgController(ctx context.Context, mc *ModuleConfig, params *ModuleParams
 
 	state := state{}
 
-	dsl.UponOtherEvent(m, func(ev *eventpb.Event) error {
-		logger.Log(logging.LevelDebug, "unknown event", "ev", ev)
-		return nil
-	})
-
 	agreementpbdsl.UponInputValue(m, func(round uint64, input bool) error {
 		if round != state.currentRound {
 			return fmt.Errorf("round input provided out-of-order. expected round %v got %v", state.currentRound, round)
@@ -132,6 +127,23 @@ func newAgController(ctx context.Context, mc *ModuleConfig, params *ModuleParams
 			input,
 			mc.agRoundOrigin(round),
 		))
+		return nil
+	})
+
+	// propagate input request to director
+	// this ensures agreement can be delivered even when this node votes against it
+	abbapbdsl.UponRequestInput(m, func(module t.ModuleID) error {
+		module = module.StripParent(mc.Self)
+		round, err := strconv.ParseUint(string(module), 10, 64)
+		if err != nil {
+			return fmt.Errorf("invalid abba instance module ID: %s", module)
+		}
+
+		if round != state.currentRound {
+			return nil // stale
+		}
+
+		agreementpbdsl.RequestInput(m, mc.Consumer, round)
 		return nil
 	})
 
@@ -227,10 +239,11 @@ func newAbbaGenerator(agMc *ModuleConfig, agParams *ModuleParams, agTunables *Mo
 
 	return func(ctx context.Context, id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
 		mc := &abba.ModuleConfig{
-			Self:         id,
-			ReliableNet:  agMc.ReliableNet,
-			ThreshCrypto: agMc.ThreshCrypto,
-			Hasher:       agMc.Hasher,
+			Self:           id,
+			InputRequestor: agMc.Self,
+			ReliableNet:    agMc.ReliableNet,
+			ThreshCrypto:   agMc.ThreshCrypto,
+			Hasher:         agMc.Hasher,
 		}
 
 		mod, err := abba.NewModule(ctx, mc, params, tunables, nodeID, logging.Decorate(logger, "Abba: ", "agRound", idx))
