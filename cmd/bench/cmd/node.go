@@ -227,7 +227,9 @@ func runNode(ctx context.Context) error {
 		}()
 
 		ownQueueIdx := slices.Index(smrParams.Alea.AllNodes(), ownID)
-		tracer = aleatracer.NewAleaTracer(aleatypes.QueueIdx(ownQueueIdx), len(initialMembership), traceFile)
+		aleaTracer := aleatracer.NewAleaTracer(ctx, aleatypes.QueueIdx(ownQueueIdx), len(initialMembership), traceFile)
+		defer aleaTracer.Stop()
+		tracer = aleaTracer
 	}
 
 	stat := stats.NewStats()
