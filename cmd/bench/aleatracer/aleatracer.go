@@ -102,7 +102,7 @@ func NewAleaTracer(ctx context.Context, ownQueueIdx aleatypes.QueueIdx, nodeCoun
 		out:    out,
 	}
 
-	_, err := out.Write([]byte("class,id,start,end\n"))
+	_, err := out.Write([]byte(fmt.Sprintf("class,id,start,end\nmark,,%d,%d\n", tracer.refTime.UnixNano(), tracer.refTime.UnixNano())))
 	if err != nil {
 		panic(err)
 	}
