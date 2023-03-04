@@ -27,15 +27,16 @@ type AleaTracer struct {
 	ownQueueIdx aleatypes.QueueIdx
 	nodeCount   int
 
-	wipTxSpan           map[string]*span
-	wipBcSpan           map[commontypes.Slot]*span
-	wipBcModSpan        map[commontypes.Slot]*span
-	wipAgSpan           map[uint64]*span
-	wipAgModSpan        map[uint64]*span
-	wipAbbaRoundSpan    map[abbaRoundID]*span
-	wipAbbaRoundModSpan map[abbaRoundID]*span
-	wipBfSpan           map[commontypes.Slot]*span
-	wipBfStalledSpan    map[commontypes.Slot]*span
+	wipTxSpan                  map[string]*span
+	wipTxWaitingLocalBatchSpan map[string]*span
+	wipBcSpan                  map[commontypes.Slot]*span
+	wipBcModSpan               map[commontypes.Slot]*span
+	wipAgSpan                  map[uint64]*span
+	wipAgModSpan               map[uint64]*span
+	wipAbbaRoundSpan           map[abbaRoundID]*span
+	wipAbbaRoundModSpan        map[abbaRoundID]*span
+	wipBfSpan                  map[commontypes.Slot]*span
+	wipBfStalledSpan           map[commontypes.Slot]*span
 
 	bfWipSlotsCtxID map[uint64]commontypes.Slot
 	bfDeliverQueue  []commontypes.Slot
@@ -73,15 +74,16 @@ func NewAleaTracer(ctx context.Context, ownQueueIdx aleatypes.QueueIdx, nodeCoun
 		ownQueueIdx: ownQueueIdx,
 		nodeCount:   nodeCount,
 
-		wipTxSpan:           make(map[string]*span, 1*N),
-		wipBcSpan:           make(map[commontypes.Slot]*span, nodeCount*N),
-		wipBcModSpan:        make(map[commontypes.Slot]*span, nodeCount*N),
-		wipAgSpan:           make(map[uint64]*span, nodeCount*N),
-		wipAgModSpan:        make(map[uint64]*span, nodeCount*N),
-		wipAbbaRoundSpan:    make(map[abbaRoundID]*span, nodeCount*N),
-		wipAbbaRoundModSpan: make(map[abbaRoundID]*span, nodeCount*N),
-		wipBfSpan:           make(map[commontypes.Slot]*span, nodeCount*N),
-		wipBfStalledSpan:    make(map[commontypes.Slot]*span, nodeCount*N),
+		wipTxSpan:                  make(map[string]*span, 1*N),
+		wipTxWaitingLocalBatchSpan: make(map[string]*span, 1*N),
+		wipBcSpan:                  make(map[commontypes.Slot]*span, nodeCount*N),
+		wipBcModSpan:               make(map[commontypes.Slot]*span, nodeCount*N),
+		wipAgSpan:                  make(map[uint64]*span, nodeCount*N),
+		wipAgModSpan:               make(map[uint64]*span, nodeCount*N),
+		wipAbbaRoundSpan:           make(map[abbaRoundID]*span, nodeCount*N),
+		wipAbbaRoundModSpan:        make(map[abbaRoundID]*span, nodeCount*N),
+		wipBfSpan:                  make(map[commontypes.Slot]*span, nodeCount*N),
+		wipBfStalledSpan:           make(map[commontypes.Slot]*span, nodeCount*N),
 
 		bfWipSlotsCtxID: make(map[uint64]commontypes.Slot, nodeCount),
 		bfDeliverQueue:  nil,
@@ -139,11 +141,16 @@ func (at *AleaTracer) interceptOne(event *eventpb.Event) error {
 	}
 
 	switch ev := event.Type.(type) {
+	case *eventpb.Event_NewRequests:
+		for _, tx := range ev.NewRequests.Requests {
+			at.startTxSpan(tx.ClientId, tx.ReqNo)
+			at.startTxWaitingLocalBatchSpan(tx.ClientId, tx.ReqNo)
+		}
 	case *eventpb.Event_Mempool:
 		switch e := ev.Mempool.Type.(type) {
 		case *mempoolpb.Event_NewBatch:
 			for _, tx := range e.NewBatch.Txs {
-				at.startTxSpan(tx.ClientId, tx.ReqNo)
+				at.endTxWaitingLocalBatchSpan(tx.ClientId, tx.ReqNo)
 			}
 		}
 	case *eventpb.Event_AleaBroadcast:
@@ -339,6 +346,31 @@ func (at *AleaTracer) startTxSpan(clientID string, reqNo uint64) {
 }
 func (at *AleaTracer) endTxSpan(clientID string, reqNo uint64) {
 	s := at._txSpan(clientID, reqNo)
+	if s.end == 0 {
+		s.end = time.Since(at.refTime)
+		at.writeSpan(s)
+	}
+}
+
+func (at *AleaTracer) _txWaitingLocalBatchSpan(clientID string, reqNo uint64) *span {
+	id := fmt.Sprintf("%s:%d", clientID, reqNo)
+
+	s, ok := at.wipTxSpan[id]
+	if !ok {
+		at.wipTxSpan[id] = &span{
+			class: "txWaitingLocalBatch",
+			id:    id,
+			start: time.Since(at.refTime),
+		}
+		s = at.wipTxSpan[id]
+	}
+	return s
+}
+func (at *AleaTracer) startTxWaitingLocalBatchSpan(clientID string, reqNo uint64) {
+	at._txWaitingLocalBatchSpan(clientID, reqNo)
+}
+func (at *AleaTracer) endTxWaitingLocalBatchSpan(clientID string, reqNo uint64) {
+	s := at._txWaitingLocalBatchSpan(clientID, reqNo)
 	if s.end == 0 {
 		s.end = time.Since(at.refTime)
 		at.writeSpan(s)
