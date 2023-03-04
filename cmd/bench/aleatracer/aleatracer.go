@@ -106,7 +106,9 @@ func (at *aleaTracer) Intercept(evs *events.EventList) error {
 }
 
 func (at *aleaTracer) interceptOne(event *eventpb.Event) error {
-	at.registerModStart(event)
+	if _, ok := event.Type.(*eventpb.Event_MessageReceived); !ok {
+		at.registerModStart(event)
+	}
 
 	switch ev := event.Type.(type) {
 	case *eventpb.Event_Mempool:
