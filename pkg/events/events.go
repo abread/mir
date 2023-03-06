@@ -36,6 +36,7 @@ func Strip(event *eventpb.Event) (*eventpb.Event, *EventList) {
 	newEvent := eventpb.Event{
 		Type:       event.Type,
 		DestModule: event.DestModule,
+		LocalTs:    event.LocalTs,
 		Next:       nil,
 	}
 

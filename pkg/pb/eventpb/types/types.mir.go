@@ -34,6 +34,7 @@ type Event struct {
 	Type       Event_Type
 	Next       []*Event
 	DestModule types.ModuleID
+	LocalTs    int64
 }
 
 type Event_Type interface {
@@ -980,6 +981,7 @@ func EventFromPb(pb *eventpb.Event) *Event {
 			return EventFromPb(t)
 		}),
 		DestModule: (types.ModuleID)(pb.DestModule),
+		LocalTs:    pb.LocalTs,
 	}
 }
 
@@ -990,6 +992,7 @@ func (m *Event) Pb() *eventpb.Event {
 			return (t).Pb()
 		}),
 		DestModule: (string)(m.DestModule),
+		LocalTs:    m.LocalTs,
 	}
 }
 

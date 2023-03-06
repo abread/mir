@@ -103,6 +103,8 @@ message Event {
   repeated Event next = 100 [(mir.omit_in_event_constructors) = true];
 
   string dest_module = 200 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.ModuleID"];
+
+  int64 local_ts = 303 [(mir.omit_in_event_constructors) = true];
 }
 
 message Init {}

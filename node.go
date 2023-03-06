@@ -19,6 +19,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/modules"
 	t "github.com/filecoin-project/mir/pkg/types"
+	"github.com/filecoin-project/mir/pkg/util/localclock"
 	"github.com/filecoin-project/mir/pkg/wal"
 )
 
@@ -164,6 +165,9 @@ func (n *Node) Debug(ctx context.Context, eventsOut chan *events.EventList) erro
 
 // InjectEvents inserts a list of Events in the Node.
 func (n *Node) InjectEvents(ctx context.Context, events *events.EventList) error {
+	for _, ev := range events.Slice() {
+		localclock.AttachTs(ev)
+	}
 
 	// Enqueue event in a work channel to be handled by the processing thread.
 	select {
@@ -441,6 +445,10 @@ func (n *Node) importEvents(
 				continue
 			}
 
+			for _, ev := range newEvents.Slice() {
+				localclock.AttachTs(ev)
+			}
+
 			// If input events have been read, try to write them to the Node's central input channel.
 			select {
 			case eventSink <- newEvents:
@@ -495,7 +503,7 @@ func (n *Node) waitForInputEnabled() {
 func createInitEvents(m modules.Modules) *events.EventList {
 	initEvents := events.EmptyList()
 	for moduleID := range m {
-		initEvents.PushBack(events.Init(moduleID))
+		initEvents.PushBack(localclock.AttachTs(events.Init(moduleID)))
 	}
 	return initEvents
 }

@@ -20,10 +20,10 @@ import (
 	"github.com/filecoin-project/mir/pkg/pb/mempoolpb"
 	"github.com/filecoin-project/mir/pkg/pb/vcbpb"
 	t "github.com/filecoin-project/mir/pkg/types"
+	"github.com/filecoin-project/mir/pkg/util/localclock"
 )
 
 type AleaTracer struct {
-	refTime     time.Time
 	ownQueueIdx aleatypes.QueueIdx
 	nodeCount   int
 
@@ -45,7 +45,7 @@ type AleaTracer struct {
 	agWipForQueue           map[aleatypes.QueueIdx]uint64
 	agUndeliveredAbbaRounds map[uint64]map[uint64]struct{}
 
-	inChan chan workItem
+	inChan chan *events.EventList
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
 	out    io.Writer
@@ -66,16 +66,10 @@ type span struct {
 
 const N = 128
 
-type workItem struct {
-	ts  time.Duration
-	evs *events.EventList
-}
-
 func NewAleaTracer(ctx context.Context, ownQueueIdx aleatypes.QueueIdx, nodeCount int, out io.Writer) *AleaTracer {
 	tracerCtx, cancel := context.WithCancel(ctx)
 
 	tracer := &AleaTracer{
-		refTime:     time.Now(),
 		ownQueueIdx: ownQueueIdx,
 		nodeCount:   nodeCount,
 
@@ -97,12 +91,13 @@ func NewAleaTracer(ctx context.Context, ownQueueIdx aleatypes.QueueIdx, nodeCoun
 		agWipForQueue:           make(map[aleatypes.QueueIdx]uint64, nodeCount),
 		agUndeliveredAbbaRounds: make(map[uint64]map[uint64]struct{}, nodeCount*N),
 
-		inChan: make(chan workItem, nodeCount*16),
+		inChan: make(chan *events.EventList, nodeCount*16),
 		cancel: cancel,
 		out:    out,
 	}
 
-	_, err := out.Write([]byte(fmt.Sprintf("class,id,start,end\nmark,,%d,%d\n", tracer.refTime.UnixNano(), tracer.refTime.UnixNano())))
+	ref := localclock.RefTime().UnixNano()
+	_, err := out.Write([]byte(fmt.Sprintf("class,id,start,end\nmark,,%d,%d\n", ref, ref)))
 	if err != nil {
 		panic(err)
 	}
@@ -116,10 +111,10 @@ func NewAleaTracer(ctx context.Context, ownQueueIdx aleatypes.QueueIdx, nodeCoun
 			select {
 			case <-doneC:
 				return
-			case wi := <-tracer.inChan:
-				it := wi.evs.Iterator()
+			case evs := <-tracer.inChan:
+				it := evs.Iterator()
 				for ev := it.Next(); ev != nil; ev = it.Next() {
-					if err := tracer.interceptOne(ev, wi.ts); err != nil {
+					if err := tracer.interceptOne(ev); err != nil {
 						panic(err)
 					}
 				}
@@ -136,14 +131,13 @@ func (at *AleaTracer) Stop() {
 }
 
 func (at *AleaTracer) Intercept(evs *events.EventList) error {
-	at.inChan <- workItem{
-		ts:  time.Since(at.refTime),
-		evs: evs,
-	}
+	at.inChan <- evs
 	return nil
 }
 
-func (at *AleaTracer) interceptOne(event *eventpb.Event, ts time.Duration) error {
+func (at *AleaTracer) interceptOne(event *eventpb.Event) error {
+	ts := time.Duration(event.LocalTs)
+
 	if _, ok := event.Type.(*eventpb.Event_MessageReceived); !ok {
 		at.registerModStart(ts, event)
 	}
