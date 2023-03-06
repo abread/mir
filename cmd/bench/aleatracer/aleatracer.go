@@ -357,14 +357,14 @@ func (at *AleaTracer) endTxSpan(ts time.Duration, clientID string, reqNo uint64)
 func (at *AleaTracer) _txWaitingLocalBatchSpan(ts time.Duration, clientID string, reqNo uint64) *span {
 	id := fmt.Sprintf("%s:%d", clientID, reqNo)
 
-	s, ok := at.wipTxSpan[id]
+	s, ok := at.wipTxWaitingLocalBatchSpan[id]
 	if !ok {
 		at.wipTxWaitingLocalBatchSpan[id] = &span{
 			class: "txWaitingLocalBatch",
 			id:    id,
 			start: ts,
 		}
-		s = at.wipTxSpan[id]
+		s = at.wipTxWaitingLocalBatchSpan[id]
 	}
 	return s
 }
