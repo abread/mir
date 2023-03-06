@@ -287,6 +287,12 @@ func (at *AleaTracer) registerModStart(ts time.Duration, event *eventpb.Event) {
 			QueueIdx:  aleatypes.QueueIdx(queueIdx),
 			QueueSlot: aleatypes.QueueSlot(queueSlot),
 		})
+
+		// coincides with the start, more or less
+		at.startBcSpan(ts, commontypes.Slot{
+			QueueIdx:  aleatypes.QueueIdx(queueIdx),
+			QueueSlot: aleatypes.QueueSlot(queueSlot),
+		})
 	}
 }
 
