@@ -359,7 +359,7 @@ func (at *AleaTracer) _txWaitingLocalBatchSpan(ts time.Duration, clientID string
 
 	s, ok := at.wipTxSpan[id]
 	if !ok {
-		at.wipTxSpan[id] = &span{
+		at.wipTxWaitingLocalBatchSpan[id] = &span{
 			class: "txWaitingLocalBatch",
 			id:    id,
 			start: ts,
