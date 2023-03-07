@@ -22,6 +22,10 @@ type Stats struct {
 	timestampedRequests int
 	recvdRequests       int
 	deliveredRequests   int
+
+	mempoolNewBatches uint64
+	agRoundDelivers   uint64
+	bcDelivers        uint64
 }
 
 type reqKey struct {
@@ -60,6 +64,27 @@ func (s *Stats) Delivered(req *requestpb.Request) {
 	s.lock.Unlock()
 }
 
+func (s *Stats) MempoolNewBatch() {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	s.mempoolNewBatches++
+}
+
+func (s *Stats) DeliveredAgRound() {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	s.agRoundDelivers++
+}
+
+func (s *Stats) DeliveredBcSlot() {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	s.bcDelivers++
+}
+
 func (s *Stats) WriteCSVHeader(w *csv.Writer) {
 	record := []string{
 		"ts",
@@ -76,6 +101,9 @@ func (s *Stats) WriteCSVHeader(w *csv.Writer) {
 		"memFrees",
 		"memPauseTotalNs",
 		"memNumGC",
+		"mempoolNewBatches",
+		"agRoundDelivers",
+		"bcDelivers",
 	}
 	_ = w.Write(record)
 }
@@ -91,6 +119,9 @@ func (s *Stats) WriteCSVRecordAndReset(w *csv.Writer, d time.Duration) {
 	deliveredReqs := s.deliveredRequests
 	recvdReqs := s.recvdRequests
 	avgLatency := s.avgLatency
+	newBatchCount := s.mempoolNewBatches
+	agRoundDelivers := s.agRoundDelivers
+	bcDelivers := s.bcDelivers
 
 	s.avgLatency = 0
 	s.timestampedRequests = 0
@@ -116,6 +147,9 @@ func (s *Stats) WriteCSVRecordAndReset(w *csv.Writer, d time.Duration) {
 		strconv.FormatUint(memStats.Frees, 10),
 		strconv.FormatUint(memStats.PauseTotalNs, 10),
 		strconv.FormatUint(uint64(memStats.NumGC), 10),
+		strconv.FormatUint(newBatchCount, 10),
+		strconv.FormatUint(agRoundDelivers, 10),
+		strconv.FormatUint(bcDelivers, 10),
 	}
 	_ = w.Write(record)
 }

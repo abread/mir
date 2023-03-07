@@ -6,8 +6,11 @@ package stats
 
 import (
 	"github.com/filecoin-project/mir/pkg/events"
+	"github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents"
+	"github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb"
 	bfpb "github.com/filecoin-project/mir/pkg/pb/batchfetcherpb"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
+	"github.com/filecoin-project/mir/pkg/pb/mempoolpb"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -44,6 +47,18 @@ func (i *StatInterceptor) Intercept(evts *events.EventList) error {
 				for _, req := range e.NewOrderedBatch.Txs {
 					i.Stats.Delivered(req)
 				}
+			}
+		case *eventpb.Event_Mempool:
+			if _, ok := e.Mempool.Type.(*mempoolpb.Event_NewBatch); ok {
+				i.Stats.MempoolNewBatch()
+			}
+		case *eventpb.Event_AleaAgreement:
+			if _, ok := e.AleaAgreement.Type.(*agevents.Event_Deliver); ok {
+				i.Stats.DeliveredAgRound()
+			}
+		case *eventpb.Event_AleaBroadcast:
+			if _, ok := e.AleaBroadcast.Type.(*bcpb.Event_Deliver); ok {
+				i.Stats.DeliveredBcSlot()
 			}
 		}
 	}
