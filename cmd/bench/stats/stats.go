@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents"
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"
 )
 
@@ -23,9 +24,10 @@ type Stats struct {
 	recvdRequests       int
 	deliveredRequests   int
 
-	mempoolNewBatches uint64
-	agRoundDelivers   uint64
-	bcDelivers        uint64
+	mempoolNewBatches    uint64
+	agRoundDelivers      uint64
+	agRoundFalseDelivers uint64
+	bcDelivers           uint64
 }
 
 type reqKey struct {
@@ -71,11 +73,15 @@ func (s *Stats) MempoolNewBatch() {
 	s.mempoolNewBatches++
 }
 
-func (s *Stats) DeliveredAgRound() {
+func (s *Stats) DeliveredAgRound(ev *agevents.Deliver) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
 	s.agRoundDelivers++
+
+	if !ev.Decision {
+		s.agRoundFalseDelivers++
+	}
 }
 
 func (s *Stats) DeliveredBcSlot() {
@@ -103,6 +109,7 @@ func (s *Stats) WriteCSVHeader(w *csv.Writer) {
 		"memNumGC",
 		"mempoolNewBatches",
 		"agRoundDelivers",
+		"agRoundFalseDelivers",
 		"bcDelivers",
 	}
 	_ = w.Write(record)
@@ -121,6 +128,7 @@ func (s *Stats) WriteCSVRecordAndReset(w *csv.Writer, d time.Duration) {
 	avgLatency := s.avgLatency
 	newBatchCount := s.mempoolNewBatches
 	agRoundDelivers := s.agRoundDelivers
+	agRoundFalseDelivers := s.agRoundFalseDelivers
 	bcDelivers := s.bcDelivers
 
 	s.avgLatency = 0
@@ -149,6 +157,7 @@ func (s *Stats) WriteCSVRecordAndReset(w *csv.Writer, d time.Duration) {
 		strconv.FormatUint(uint64(memStats.NumGC), 10),
 		strconv.FormatUint(newBatchCount, 10),
 		strconv.FormatUint(agRoundDelivers, 10),
+		strconv.FormatUint(agRoundFalseDelivers, 10),
 		strconv.FormatUint(bcDelivers, 10),
 	}
 	_ = w.Write(record)

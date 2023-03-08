@@ -53,8 +53,8 @@ func (i *StatInterceptor) Intercept(evts *events.EventList) error {
 				i.Stats.MempoolNewBatch()
 			}
 		case *eventpb.Event_AleaAgreement:
-			if _, ok := e.AleaAgreement.Type.(*agevents.Event_Deliver); ok {
-				i.Stats.DeliveredAgRound()
+			if e2, ok := e.AleaAgreement.Type.(*agevents.Event_Deliver); ok {
+				i.Stats.DeliveredAgRound(e2.Deliver)
 			}
 		case *eventpb.Event_AleaBroadcast:
 			if _, ok := e.AleaBroadcast.Type.(*bcpb.Event_Deliver); ok {
