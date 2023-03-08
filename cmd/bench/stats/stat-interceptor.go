@@ -60,6 +60,8 @@ func (i *StatInterceptor) Intercept(evts *events.EventList) error {
 			if _, ok := e.AleaBroadcast.Type.(*bcpb.Event_Deliver); ok {
 				i.Stats.DeliveredBcSlot()
 			}
+		case *eventpb.Event_ThreshCrypto:
+			i.Stats.ThreshCryptoEvent(e.ThreshCrypto)
 		}
 	}
 

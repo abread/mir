@@ -14,6 +14,7 @@ import (
 
 	"github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents"
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"
+	"github.com/filecoin-project/mir/pkg/pb/threshcryptopb"
 )
 
 type Stats struct {
@@ -28,6 +29,7 @@ type Stats struct {
 	agRoundDelivers      uint64
 	agRoundFalseDelivers uint64
 	bcDelivers           uint64
+	threshQueueSize      int
 }
 
 type reqKey struct {
@@ -91,6 +93,29 @@ func (s *Stats) DeliveredBcSlot() {
 	s.bcDelivers++
 }
 
+func (s *Stats) ThreshCryptoEvent(ev *threshcryptopb.Event) {
+	var delta int
+
+	switch ev.Type.(type) {
+	case *threshcryptopb.Event_SignShare:
+	case *threshcryptopb.Event_VerifyShare:
+	case *threshcryptopb.Event_VerifyFull:
+	case *threshcryptopb.Event_Recover:
+		delta = 1
+	case *threshcryptopb.Event_SignShareResult:
+	case *threshcryptopb.Event_VerifyShareResult:
+	case *threshcryptopb.Event_VerifyFullResult:
+	case *threshcryptopb.Event_RecoverResult:
+		delta = -1
+	default:
+		panic("unknown threshcrypto event")
+	}
+
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	s.threshQueueSize += delta
+}
+
 func (s *Stats) WriteCSVHeader(w *csv.Writer) {
 	record := []string{
 		"ts",
@@ -111,6 +136,7 @@ func (s *Stats) WriteCSVHeader(w *csv.Writer) {
 		"agRoundDelivers",
 		"agRoundFalseDelivers",
 		"bcDelivers",
+		"threshQueueSize",
 	}
 	_ = w.Write(record)
 }
@@ -130,6 +156,7 @@ func (s *Stats) WriteCSVRecordAndReset(w *csv.Writer, d time.Duration) {
 	agRoundDelivers := s.agRoundDelivers
 	agRoundFalseDelivers := s.agRoundFalseDelivers
 	bcDelivers := s.bcDelivers
+	threshQueueSize := s.threshQueueSize
 
 	s.avgLatency = 0
 	s.timestampedRequests = 0
@@ -159,6 +186,7 @@ func (s *Stats) WriteCSVRecordAndReset(w *csv.Writer, d time.Duration) {
 		strconv.FormatUint(agRoundDelivers, 10),
 		strconv.FormatUint(agRoundFalseDelivers, 10),
 		strconv.FormatUint(bcDelivers, 10),
+		strconv.FormatInt(int64(threshQueueSize), 10),
 	}
 	_ = w.Write(record)
 }
