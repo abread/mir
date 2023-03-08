@@ -163,6 +163,10 @@ func (s *Stats) WriteCSVRecordAndReset(w *csv.Writer, d time.Duration) {
 	s.recvdRequests = 0
 	s.deliveredRequests = 0
 
+	s.agRoundDelivers = 0
+	s.agRoundFalseDelivers = 0
+	s.bcDelivers = 0
+
 	s.lock.Unlock()
 
 	loadTps := float64(recvdReqs) / (float64(d) / float64(time.Second))
