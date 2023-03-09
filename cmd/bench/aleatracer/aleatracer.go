@@ -18,6 +18,8 @@ import (
 	"github.com/filecoin-project/mir/pkg/pb/batchfetcherpb"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
 	"github.com/filecoin-project/mir/pkg/pb/mempoolpb"
+	"github.com/filecoin-project/mir/pkg/pb/messagepb"
+	"github.com/filecoin-project/mir/pkg/pb/requestpb"
 	"github.com/filecoin-project/mir/pkg/pb/vcbpb"
 	t "github.com/filecoin-project/mir/pkg/types"
 	"github.com/filecoin-project/mir/pkg/util/localclock"
@@ -29,6 +31,11 @@ type AleaTracer struct {
 
 	wipTxSpan                  map[string]*span
 	wipTxWaitingLocalBatchSpan map[string]*span
+	wipTxWaitingBcSpan         map[string]*span
+	wipTxBcSpan                map[string]*span
+	wipTxWaitingAgSpan         map[string]*span
+	wipTxAgSpan                map[string]*span
+	wipTxWaitingDeliverySpan   map[string]*span
 	wipBcSpan                  map[commontypes.Slot]*span
 	wipBcModSpan               map[commontypes.Slot]*span
 	wipAgSpan                  map[uint64]*span
@@ -44,6 +51,8 @@ type AleaTracer struct {
 	agQueueHeads            []aleatypes.QueueSlot
 	agWipForQueue           map[aleatypes.QueueIdx]uint64
 	agUndeliveredAbbaRounds map[uint64]map[uint64]struct{}
+
+	bcSlotTxs map[commontypes.Slot][]*requestpb.Request
 
 	inChan chan *events.EventList
 	cancel context.CancelFunc
@@ -75,6 +84,11 @@ func NewAleaTracer(ctx context.Context, ownQueueIdx aleatypes.QueueIdx, nodeCoun
 
 		wipTxSpan:                  make(map[string]*span, 1*N),
 		wipTxWaitingLocalBatchSpan: make(map[string]*span, 1*N),
+		wipTxWaitingBcSpan:         make(map[string]*span, 1*N),
+		wipTxBcSpan:                make(map[string]*span, 1*N),
+		wipTxWaitingAgSpan:         make(map[string]*span, 1*N),
+		wipTxAgSpan:                make(map[string]*span, 1*N),
+		wipTxWaitingDeliverySpan:   make(map[string]*span, 1*N),
 		wipBcSpan:                  make(map[commontypes.Slot]*span, nodeCount*N),
 		wipBcModSpan:               make(map[commontypes.Slot]*span, nodeCount*N),
 		wipAgSpan:                  make(map[uint64]*span, nodeCount*N),
@@ -90,6 +104,8 @@ func NewAleaTracer(ctx context.Context, ownQueueIdx aleatypes.QueueIdx, nodeCoun
 		agQueueHeads:            make([]aleatypes.QueueSlot, nodeCount),
 		agWipForQueue:           make(map[aleatypes.QueueIdx]uint64, nodeCount),
 		agUndeliveredAbbaRounds: make(map[uint64]map[uint64]struct{}, nodeCount*N),
+
+		bcSlotTxs: make(map[commontypes.Slot][]*requestpb.Request, nodeCount*3),
 
 		inChan: make(chan *events.EventList, nodeCount*16),
 		cancel: cancel,
@@ -153,6 +169,29 @@ func (at *AleaTracer) interceptOne(event *eventpb.Event) error {
 		case *mempoolpb.Event_NewBatch:
 			for _, tx := range e.NewBatch.Txs {
 				at.endTxWaitingLocalBatchSpan(ts, tx.ClientId, tx.ReqNo)
+				at.startTxWaitingBcSpan(ts, tx.ClientId, tx.ReqNo)
+			}
+		}
+	case *eventpb.Event_MessageReceived:
+		switch msg := ev.MessageReceived.Msg.Type.(type) {
+		case *messagepb.Message_Vcb:
+			switch m := msg.Vcb.Type.(type) {
+			case *vcbpb.Message_SendMessage:
+				slot := parseSlotFromModuleID(event.DestModule)
+				at.bcSlotTxs[slot] = m.SendMessage.Txs
+
+				for _, tx := range m.SendMessage.Txs {
+					at.endTxWaitingBcSpan(ts, tx.ClientId, tx.ReqNo)
+					at.startTxBcSpan(ts, tx.ClientId, tx.ReqNo)
+				}
+			case *vcbpb.Message_FinalMessage:
+				slot := parseSlotFromModuleID(event.DestModule)
+				at.bcSlotTxs[slot] = m.FinalMessage.Txs
+
+				for _, tx := range m.FinalMessage.Txs {
+					at.endTxWaitingBcSpan(ts, tx.ClientId, tx.ReqNo)
+					at.startTxBcSpan(ts, tx.ClientId, tx.ReqNo)
+				}
 			}
 		}
 	case *eventpb.Event_AleaBroadcast:
@@ -160,8 +199,20 @@ func (at *AleaTracer) interceptOne(event *eventpb.Event) error {
 		case *bcpb.Event_StartBroadcast:
 			slot := commontypes.Slot{QueueIdx: at.ownQueueIdx, QueueSlot: aleatypes.QueueSlot(e.StartBroadcast.QueueSlot)}
 			at.startBcSpan(ts, slot)
+			at.bcSlotTxs[slot] = e.StartBroadcast.Txs
+			for _, tx := range e.StartBroadcast.Txs {
+				at.endTxWaitingBcSpan(ts, tx.ClientId, tx.ReqNo)
+				at.startTxBcSpan(ts, tx.ClientId, tx.ReqNo)
+			}
 		case *bcpb.Event_Deliver:
-			at.endBcSpan(ts, *commontypes.SlotFromPb(e.Deliver.Slot))
+			slot := *commontypes.SlotFromPb(e.Deliver.Slot)
+			at.endBcSpan(ts, slot)
+
+			txs := at.bcSlotTxs[slot]
+			for _, tx := range txs {
+				at.endTxBcSpan(ts, tx.ClientId, tx.ReqNo)
+				at.startTxWaitingAgSpan(ts, tx.ClientId, tx.ReqNo)
+			}
 		case *bcpb.Event_FreeSlot:
 			at.endBcModSpan(ts, *commontypes.SlotFromPb(e.FreeSlot.Slot))
 		}
@@ -172,6 +223,12 @@ func (at *AleaTracer) interceptOne(event *eventpb.Event) error {
 			at.agWipForQueue[slot.QueueIdx] = e.InputValue.Round
 
 			at.startAgSpan(ts, e.InputValue.Round)
+			if txs, ok := at.bcSlotTxs[slot]; ok {
+				for _, tx := range txs {
+					at.endTxWaitingAgSpan(ts, tx.ClientId, tx.ReqNo)
+					at.startTxAgSpan(ts, tx.ClientId, tx.ReqNo)
+				}
+			}
 		case *agevents.Event_Deliver:
 			at.endAgSpan(ts, e.Deliver.Round)
 			at.endAgModSpan(ts, e.Deliver.Round)
@@ -181,6 +238,13 @@ func (at *AleaTracer) interceptOne(event *eventpb.Event) error {
 			if e.Deliver.Decision {
 				at.agQueueHeads[slot.QueueIdx]++
 				at.bfDeliverQueue = append(at.bfDeliverQueue, slot)
+
+				if txs, ok := at.bcSlotTxs[slot]; ok {
+					for _, tx := range txs {
+						at.endTxAgSpan(ts, tx.ClientId, tx.ReqNo)
+						at.startTxWaitingDeliverySpan(ts, tx.ClientId, tx.ReqNo)
+					}
+				}
 			}
 		}
 	case *eventpb.Event_Vcb:
@@ -232,6 +296,7 @@ func (at *AleaTracer) interceptOne(event *eventpb.Event) error {
 			delete(at.bfWipSlotsCtxID, ctxID)
 
 			at.endBfSpan(ts, slot)
+			delete(at.bcSlotTxs, slot)
 			at.startDeliveryStalledSpan(ts, slot)
 		}
 	case *eventpb.Event_BatchFetcher:
@@ -243,6 +308,7 @@ func (at *AleaTracer) interceptOne(event *eventpb.Event) error {
 			at.endDeliveryStalledSpan(ts, slot)
 
 			for _, tx := range e.NewOrderedBatch.Txs {
+				at.endTxWaitingDeliverySpan(ts, tx.ClientId, tx.ReqNo)
 				at.endTxSpan(ts, tx.ClientId, tx.ReqNo)
 			}
 		}
@@ -379,6 +445,131 @@ func (at *AleaTracer) startTxWaitingLocalBatchSpan(ts time.Duration, clientID st
 }
 func (at *AleaTracer) endTxWaitingLocalBatchSpan(ts time.Duration, clientID string, reqNo uint64) {
 	s := at._txWaitingLocalBatchSpan(ts, clientID, reqNo)
+	if s.end == 0 {
+		s.end = ts
+		at.writeSpan(s)
+	}
+}
+
+func (at *AleaTracer) _txWaitingBcSpan(ts time.Duration, clientID string, reqNo uint64) *span {
+	id := fmt.Sprintf("%s:%d", clientID, reqNo)
+
+	s, ok := at.wipTxWaitingBcSpan[id]
+	if !ok {
+		at.wipTxWaitingBcSpan[id] = &span{
+			class: "txWaitingBc",
+			id:    id,
+			start: ts,
+		}
+		s = at.wipTxWaitingBcSpan[id]
+	}
+	return s
+}
+func (at *AleaTracer) startTxWaitingBcSpan(ts time.Duration, clientID string, reqNo uint64) {
+	at._txWaitingBcSpan(ts, clientID, reqNo)
+}
+func (at *AleaTracer) endTxWaitingBcSpan(ts time.Duration, clientID string, reqNo uint64) {
+	s := at._txWaitingBcSpan(ts, clientID, reqNo)
+	if s.end == 0 {
+		s.end = ts
+		at.writeSpan(s)
+	}
+}
+
+func (at *AleaTracer) _txBcSpan(ts time.Duration, clientID string, reqNo uint64) *span {
+	id := fmt.Sprintf("%s:%d", clientID, reqNo)
+
+	s, ok := at.wipTxBcSpan[id]
+	if !ok {
+		at.wipTxBcSpan[id] = &span{
+			class: "txBc",
+			id:    id,
+			start: ts,
+		}
+		s = at.wipTxBcSpan[id]
+	}
+	return s
+}
+func (at *AleaTracer) startTxBcSpan(ts time.Duration, clientID string, reqNo uint64) {
+	at._txBcSpan(ts, clientID, reqNo)
+}
+func (at *AleaTracer) endTxBcSpan(ts time.Duration, clientID string, reqNo uint64) {
+	s := at._txBcSpan(ts, clientID, reqNo)
+	if s.end == 0 {
+		s.end = ts
+		at.writeSpan(s)
+	}
+}
+
+func (at *AleaTracer) _txWaitingAgSpan(ts time.Duration, clientID string, reqNo uint64) *span {
+	id := fmt.Sprintf("%s:%d", clientID, reqNo)
+
+	s, ok := at.wipTxWaitingAgSpan[id]
+	if !ok {
+		at.wipTxWaitingAgSpan[id] = &span{
+			class: "txWaitingAg",
+			id:    id,
+			start: ts,
+		}
+		s = at.wipTxWaitingAgSpan[id]
+	}
+	return s
+}
+func (at *AleaTracer) startTxWaitingAgSpan(ts time.Duration, clientID string, reqNo uint64) {
+	at._txWaitingAgSpan(ts, clientID, reqNo)
+}
+func (at *AleaTracer) endTxWaitingAgSpan(ts time.Duration, clientID string, reqNo uint64) {
+	s := at._txWaitingAgSpan(ts, clientID, reqNo)
+	if s.end == 0 {
+		s.end = ts
+		at.writeSpan(s)
+	}
+}
+
+func (at *AleaTracer) _txAgSpan(ts time.Duration, clientID string, reqNo uint64) *span {
+	id := fmt.Sprintf("%s:%d", clientID, reqNo)
+
+	s, ok := at.wipTxAgSpan[id]
+	if !ok {
+		at.wipTxAgSpan[id] = &span{
+			class: "txAg",
+			id:    id,
+			start: ts,
+		}
+		s = at.wipTxAgSpan[id]
+	}
+	return s
+}
+func (at *AleaTracer) startTxAgSpan(ts time.Duration, clientID string, reqNo uint64) {
+	at._txAgSpan(ts, clientID, reqNo)
+}
+func (at *AleaTracer) endTxAgSpan(ts time.Duration, clientID string, reqNo uint64) {
+	s := at._txAgSpan(ts, clientID, reqNo)
+	if s.end == 0 {
+		s.end = ts
+		at.writeSpan(s)
+	}
+}
+
+func (at *AleaTracer) _txWaitingDeliverySpan(ts time.Duration, clientID string, reqNo uint64) *span {
+	id := fmt.Sprintf("%s:%d", clientID, reqNo)
+
+	s, ok := at.wipTxWaitingDeliverySpan[id]
+	if !ok {
+		at.wipTxWaitingDeliverySpan[id] = &span{
+			class: "txBf",
+			id:    id,
+			start: ts,
+		}
+		s = at.wipTxWaitingDeliverySpan[id]
+	}
+	return s
+}
+func (at *AleaTracer) startTxWaitingDeliverySpan(ts time.Duration, clientID string, reqNo uint64) {
+	at._txWaitingDeliverySpan(ts, clientID, reqNo)
+}
+func (at *AleaTracer) endTxWaitingDeliverySpan(ts time.Duration, clientID string, reqNo uint64) {
+	s := at._txWaitingDeliverySpan(ts, clientID, reqNo)
 	if s.end == 0 {
 		s.end = ts
 		at.writeSpan(s)
@@ -592,7 +783,7 @@ func parseSlotFromModuleID(moduleIDStr string) commontypes.Slot {
 	modID := t.ModuleID(moduleIDStr)
 	modID = modID.StripParent("alea_bc")
 	queueIdxStr := string(modID.Top())
-	queueSlotStr := string(modID.Sub())
+	queueSlotStr := string(modID.Sub().Top())
 
 	queueIdx, err := strconv.ParseUint(queueIdxStr, 10, 32)
 	if err != nil {
