@@ -29,7 +29,7 @@ type ModuleParams struct {
 func DefaultModuleParams() *ModuleParams {
 	return &ModuleParams{
 		InputBufferSize: 64,
-		NumWorkers:      runtime.NumCPU(),
+		NumWorkers:      runtime.NumCPU() - 1,
 	}
 }
 
