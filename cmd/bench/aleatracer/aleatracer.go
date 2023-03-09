@@ -183,6 +183,7 @@ func (at *AleaTracer) interceptOne(event *eventpb.Event) error {
 				for _, tx := range m.SendMessage.Txs {
 					at.endTxWaitingBcSpan(ts, tx.ClientId, tx.ReqNo)
 					at.startTxBcSpan(ts, tx.ClientId, tx.ReqNo)
+					at.startTxSpan(ts, tx.ClientId, tx.ReqNo)
 				}
 			case *vcbpb.Message_FinalMessage:
 				slot := parseSlotFromModuleID(event.DestModule)
@@ -191,6 +192,7 @@ func (at *AleaTracer) interceptOne(event *eventpb.Event) error {
 				for _, tx := range m.FinalMessage.Txs {
 					at.endTxWaitingBcSpan(ts, tx.ClientId, tx.ReqNo)
 					at.startTxBcSpan(ts, tx.ClientId, tx.ReqNo)
+					at.startTxSpan(ts, tx.ClientId, tx.ReqNo)
 				}
 			}
 		}
@@ -402,7 +404,7 @@ func (at *AleaTracer) slotForAgRound(round uint64) commontypes.Slot {
 }
 
 func (at *AleaTracer) _txSpan(ts time.Duration, clientID string, reqNo uint64) *span {
-	id := fmt.Sprintf("%s:%d", clientID, reqNo)
+	id := fmt.Sprintf("%s-%d", clientID, reqNo)
 
 	s, ok := at.wipTxSpan[id]
 	if !ok {
@@ -427,7 +429,7 @@ func (at *AleaTracer) endTxSpan(ts time.Duration, clientID string, reqNo uint64)
 }
 
 func (at *AleaTracer) _txWaitingLocalBatchSpan(ts time.Duration, clientID string, reqNo uint64) *span {
-	id := fmt.Sprintf("%s:%d", clientID, reqNo)
+	id := fmt.Sprintf("%s-%d", clientID, reqNo)
 
 	s, ok := at.wipTxWaitingLocalBatchSpan[id]
 	if !ok {
@@ -452,7 +454,7 @@ func (at *AleaTracer) endTxWaitingLocalBatchSpan(ts time.Duration, clientID stri
 }
 
 func (at *AleaTracer) _txWaitingBcSpan(ts time.Duration, clientID string, reqNo uint64) *span {
-	id := fmt.Sprintf("%s:%d", clientID, reqNo)
+	id := fmt.Sprintf("%s-%d", clientID, reqNo)
 
 	s, ok := at.wipTxWaitingBcSpan[id]
 	if !ok {
@@ -477,7 +479,7 @@ func (at *AleaTracer) endTxWaitingBcSpan(ts time.Duration, clientID string, reqN
 }
 
 func (at *AleaTracer) _txBcSpan(ts time.Duration, clientID string, reqNo uint64) *span {
-	id := fmt.Sprintf("%s:%d", clientID, reqNo)
+	id := fmt.Sprintf("%s-%d", clientID, reqNo)
 
 	s, ok := at.wipTxBcSpan[id]
 	if !ok {
@@ -502,7 +504,7 @@ func (at *AleaTracer) endTxBcSpan(ts time.Duration, clientID string, reqNo uint6
 }
 
 func (at *AleaTracer) _txWaitingAgSpan(ts time.Duration, clientID string, reqNo uint64) *span {
-	id := fmt.Sprintf("%s:%d", clientID, reqNo)
+	id := fmt.Sprintf("%s-%d", clientID, reqNo)
 
 	s, ok := at.wipTxWaitingAgSpan[id]
 	if !ok {
@@ -527,7 +529,7 @@ func (at *AleaTracer) endTxWaitingAgSpan(ts time.Duration, clientID string, reqN
 }
 
 func (at *AleaTracer) _txAgSpan(ts time.Duration, clientID string, reqNo uint64) *span {
-	id := fmt.Sprintf("%s:%d", clientID, reqNo)
+	id := fmt.Sprintf("%s-%d", clientID, reqNo)
 
 	s, ok := at.wipTxAgSpan[id]
 	if !ok {
@@ -552,7 +554,7 @@ func (at *AleaTracer) endTxAgSpan(ts time.Duration, clientID string, reqNo uint6
 }
 
 func (at *AleaTracer) _txWaitingDeliverySpan(ts time.Duration, clientID string, reqNo uint64) *span {
-	id := fmt.Sprintf("%s:%d", clientID, reqNo)
+	id := fmt.Sprintf("%s-%d", clientID, reqNo)
 
 	s, ok := at.wipTxWaitingDeliverySpan[id]
 	if !ok {
