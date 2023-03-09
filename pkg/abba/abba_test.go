@@ -250,7 +250,7 @@ func newDeployment(ctx context.Context, conf *TestConfig) (*deploytest.Deploymen
 			"app":                   newCountingApp(ctx, inputValue),
 			abbaConfig.Self:         abba,
 			abbaConfig.ThreshCrypto: threshCryptoSystem.Module(ctx, nodeID),
-			abbaConfig.Hasher:       mirCrypto.NewHasher(ctx, crypto.SHA256),
+			abbaConfig.Hasher:       mirCrypto.NewHasher(ctx, mirCrypto.DefaultHasherModuleParams(), crypto.SHA256),
 			abbaConfig.ReliableNet:  rnet,
 			"net":                   transport,
 			"timer":                 timer.New(),

@@ -214,7 +214,7 @@ func NewISS(
 		"batchdb":                    batchdb,
 		"mempool":                    mempool,
 		"app":                        NewAppModule(app, transport, issModuleConfig.Self),
-		"hasher":                     mircrypto.NewHasher(ctx, hashImpl),
+		"hasher":                     mircrypto.NewHasher(ctx, mircrypto.DefaultHasherModuleParams(), hashImpl),
 		"crypto":                     mircrypto.New(ctx, cryptoImpl),
 		"null":                       modules.NullPassive{},
 	}, issModuleConfig)
@@ -325,7 +325,7 @@ func NewAlea(
 		},
 	)
 
-	aleaProtocolModules[aleaConfig.Hasher] = mircrypto.NewHasher(ctx, hashImpl)
+	aleaProtocolModules[aleaConfig.Hasher] = mircrypto.NewHasher(ctx, mircrypto.DefaultHasherModuleParams(), hashImpl)
 
 	// Instantiate the batch fetcher module that transforms availability certificates ordered by Alea
 	// into batches of transactions that can be applied to the replicated application.

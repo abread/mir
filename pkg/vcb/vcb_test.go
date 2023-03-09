@@ -210,7 +210,7 @@ func newDeployment(ctx context.Context, conf *TestConfig) (*deploytest.Deploymen
 			vcbConfig.Self:         vcb,
 			vcbConfig.ThreshCrypto: threshCryptoSystem.Module(ctx, nodeID),
 			vcbConfig.Mempool:      mempool,
-			"hasher":               mirCrypto.NewHasher(ctx, crypto.SHA256),
+			"hasher":               mirCrypto.NewHasher(ctx, mirCrypto.DefaultHasherModuleParams(), crypto.SHA256),
 			vcbConfig.ReliableNet:  rnet,
 			"net":                  transport,
 			"timer":                timer.New(),

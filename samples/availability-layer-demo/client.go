@@ -128,7 +128,7 @@ func run() error {
 		"net":          transport,
 		"mempool":      mempool,
 		"batchdb":      batchdb,
-		"hasher":       mirCrypto.NewHasher(ctx, crypto.SHA256),
+		"hasher":       mirCrypto.NewHasher(ctx, mirCrypto.DefaultHasherModuleParams(), crypto.SHA256),
 		"crypto":       mirCrypto.New(ctx, &mirCrypto.DummyCrypto{DummySig: []byte{0}}),
 		"availability": availability,
 		"control":      control,

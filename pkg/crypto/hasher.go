@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"hash"
+	"runtime"
 
 	"go.opentelemetry.io/otel/trace"
 
@@ -17,29 +18,32 @@ type HashImpl interface {
 	New() hash.Hash
 }
 
-type Hasher struct {
+type HasherModuleParams struct {
+	InputBufferSize int
+	NumWorkers      int
+}
+
+func DefaultHasherModuleParams() *HasherModuleParams {
+	return &HasherModuleParams{
+		InputBufferSize: 64,
+		NumWorkers:      runtime.NumCPU() - 1,
+	}
+}
+
+func NewHasher(ctx context.Context, params *HasherModuleParams, hashImpl HashImpl) modules.ActiveModule {
+	return modules.NewGoRoutinePoolModule(ctx, &hasherEventProc{ctx, hashImpl}, params.InputBufferSize, params.NumWorkers)
+}
+
+type hasherEventProc struct {
 	ctx      context.Context
 	hashImpl HashImpl
 }
 
-func NewHasher(ctx context.Context, hashImpl HashImpl) *Hasher {
-	return &Hasher{
-		ctx:      ctx,
-		hashImpl: hashImpl,
-	}
-}
-
-func (hasher *Hasher) ApplyEvents(eventsIn *events.EventList) (*events.EventList, error) {
-	return modules.ApplyEventsConcurrently(eventsIn, hasher.ApplyEvent)
-}
-
-func (hasher *Hasher) ApplyEvent(event *eventpb.Event) (*events.EventList, error) {
-	ctx := hasher.ctx
-
+func (hasher *hasherEventProc) ApplyEvent(ctx context.Context, event *eventpb.Event) *events.EventList {
 	switch e := event.Type.(type) {
 	case *eventpb.Event_Init:
 		// no actions on init
-		return events.EmptyList(), nil
+		return events.EmptyList()
 	case *eventpb.Event_HashRequest:
 		// HashRequest is the only event understood by the hasher module.
 		if origin, ok := e.HashRequest.Origin.Type.(*eventpb.HashOrigin_Dsl); ok {
@@ -71,12 +75,9 @@ func (hasher *Hasher) ApplyEvent(event *eventpb.Event) (*events.EventList, error
 		// Return all computed digests in one common event.
 		return events.ListOf(
 			events.HashResult(t.ModuleID(e.HashRequest.Origin.Module), digests, e.HashRequest.Origin),
-		), nil
+		)
 	default:
 		// Complain about all other incoming event types.
-		return nil, fmt.Errorf("unexpected type of Hash event: %T", event.Type)
+		panic(fmt.Errorf("unexpected type of Hash event: %T", event.Type))
 	}
 }
-
-// The ImplementsModule method only serves the purpose of indicating that this is a Module and must not be called.
-func (hasher *Hasher) ImplementsModule() {}
