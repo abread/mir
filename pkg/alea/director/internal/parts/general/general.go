@@ -214,19 +214,20 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 		return nil
 	})
 
-	// upon another node starting the agreement round, input a value to it
+	// upon other nodes finishing the agreement round, input a value to it to deliver here
 	aagdsl.UponRequestInput(m, func(round uint64) error {
 		if state.stalledRoundSpan == nil || state.agRound != round {
 			return nil // out-of-order message
 		}
 
 		// we're here, so vcb hasn't completed for this slot yet: we must vote against delivery :(
-		logger.Log(logging.LevelDebug, "resumption of stalled agreement round forced by another node", "agreementRound", state.agRound, "input", false)
+		logger.Log(logging.LevelDebug, "resumption of stalled agreement round forced by another node", "agreementRound", state.agRound)
 		state.stalledRoundSpan.AddEvent("forced agreement resumption")
 
 		state.stalledRoundSpan.End()
 		state.stalledRoundSpan = nil
 
+		// sine agreement will deliver anyway, we can just provide false
 		aagdsl.InputValue(m, mc.AleaAgreement, round, false)
 
 		return nil

@@ -118,44 +118,48 @@ func newController(ctx context.Context, mc *ModuleConfig, params *ModuleParams, 
 
 		state.finishRecvdValueCounts.Increment(value)
 
-		if state.phase != phaseRunning {
-			return nil
-		}
-
-		// 1. upon receiving weak support for FINISH(v), broadcast FINISH(v)
-		if !state.finishSent && state.finishRecvdValueCounts.Get(value) >= params.weakSupportThresh() {
-			logger.Log(logging.LevelDebug, "received weak support for FINISH(v)", "v", value)
-			rnetdsl.SendMessage(m, mc.ReliableNet,
-				FinishMsgID(),
-				abbapbmsgs.FinishMessage(mc.Self, value),
-				params.AllNodes,
-			)
-			state.finishSent = true
-		}
-
-		// 2. upon receiving strong support for FINISH(v), output v and terminate
-		if state.origin != nil && state.finishRecvdValueCounts.Get(value) >= params.strongSupportThresh() {
-			logger.Log(logging.LevelDebug, "received strong support for FINISH(v)", "v", value)
-
-			abbadsl.Deliver(m, state.origin.Module, value, state.origin)
-			state.phase = phaseDelivered
-
-			if err := rounds.MarkAllPast(); err != nil {
-				return fmt.Errorf("could not stop abba rounds: %w", err)
-			}
-
-			// only care about finish messages from now on
-			// eventually instances that are out-of-date will receive them and be happy
-			rnetdsl.MarkModuleMsgsRecvd(m, mc.ReliableNet, mc.Self.Then(modringSubName), params.AllNodes)
-		}
-
 		return nil
 	})
 
 	dsl.UponCondition(m, func() error {
-		if state.phase == phaseAwaitingInput && state.finishRecvd.Len() > 0 && !state.requestedInput {
-			state.requestedInput = true
-			abbadsl.RequestInput(m, mc.InputRequestor, mc.Self)
+		if state.phase != phaseRunning {
+			return nil
+		}
+
+		for _, value := range []bool{false, true} {
+			// 1. upon receiving weak support for FINISH(v), broadcast FINISH(v)
+			if !state.finishSent && state.finishRecvdValueCounts.Get(value) >= params.weakSupportThresh() {
+				logger.Log(logging.LevelDebug, "received weak support for FINISH(v)", "v", value)
+				rnetdsl.SendMessage(m, mc.ReliableNet,
+					FinishMsgID(),
+					abbapbmsgs.FinishMessage(mc.Self, value),
+					params.AllNodes,
+				)
+				state.finishSent = true
+			}
+
+			// 2. upon receiving strong support for FINISH(v), output v and terminate
+			if state.finishRecvdValueCounts.Get(value) >= params.strongSupportThresh() {
+				if state.origin == nil {
+					abbadsl.RequestInput(m, mc.InputRequestor, mc.Self)
+
+					// can't deliver yet
+					return nil
+				}
+
+				logger.Log(logging.LevelDebug, "received strong support for FINISH(v)", "v", value)
+
+				abbadsl.Deliver(m, state.origin.Module, value, state.origin)
+				state.phase = phaseDelivered
+
+				if err := rounds.MarkAllPast(); err != nil {
+					return fmt.Errorf("could not stop abba rounds: %w", err)
+				}
+
+				// only care about finish messages from now on
+				// eventually instances that are out-of-date will receive them and be happy
+				rnetdsl.MarkModuleMsgsRecvd(m, mc.ReliableNet, mc.Self.Then(modringSubName), params.AllNodes)
+			}
 		}
 		return nil
 	})
