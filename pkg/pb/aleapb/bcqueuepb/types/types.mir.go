@@ -215,23 +215,3 @@ func (m *PastVcbFinal) Pb() *bcqueuepb.PastVcbFinal {
 func (*PastVcbFinal) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*bcqueuepb.PastVcbFinal]()}
 }
-
-type VcbOrigin struct {
-	QueueSlot aleatypes.QueueSlot
-}
-
-func VcbOriginFromPb(pb *bcqueuepb.VcbOrigin) *VcbOrigin {
-	return &VcbOrigin{
-		QueueSlot: (aleatypes.QueueSlot)(pb.QueueSlot),
-	}
-}
-
-func (m *VcbOrigin) Pb() *bcqueuepb.VcbOrigin {
-	return &bcqueuepb.VcbOrigin{
-		QueueSlot: (uint64)(m.QueueSlot),
-	}
-}
-
-func (*VcbOrigin) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*bcqueuepb.VcbOrigin]()}
-}

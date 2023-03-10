@@ -3,9 +3,6 @@ package vcbpbtypes
 import (
 	mirreflect "github.com/filecoin-project/mir/codegen/mirreflect"
 	types1 "github.com/filecoin-project/mir/codegen/model/types"
-	types4 "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/types"
-	types2 "github.com/filecoin-project/mir/pkg/pb/contextstorepb/types"
-	types3 "github.com/filecoin-project/mir/pkg/pb/dslpb/types"
 	requestpb "github.com/filecoin-project/mir/pkg/pb/requestpb"
 	vcbpb "github.com/filecoin-project/mir/pkg/pb/vcbpb"
 	tctypes "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
@@ -91,21 +88,18 @@ func (*Event) MirReflect() mirreflect.Type {
 }
 
 type InputValue struct {
-	Txs    []*requestpb.Request
-	Origin *Origin
+	Txs []*requestpb.Request
 }
 
 func InputValueFromPb(pb *vcbpb.InputValue) *InputValue {
 	return &InputValue{
-		Txs:    pb.Txs,
-		Origin: OriginFromPb(pb.Origin),
+		Txs: pb.Txs,
 	}
 }
 
 func (m *InputValue) Pb() *vcbpb.InputValue {
 	return &vcbpb.InputValue{
-		Txs:    m.Txs,
-		Origin: (m.Origin).Pb(),
+		Txs: m.Txs,
 	}
 }
 
@@ -117,7 +111,7 @@ type Deliver struct {
 	Txs       []*requestpb.Request
 	TxIds     []types.TxID
 	Signature tctypes.FullSig
-	Origin    *Origin
+	SrcModule types.ModuleID
 }
 
 func DeliverFromPb(pb *vcbpb.Deliver) *Deliver {
@@ -127,7 +121,7 @@ func DeliverFromPb(pb *vcbpb.Deliver) *Deliver {
 			return (types.TxID)(t)
 		}),
 		Signature: (tctypes.FullSig)(pb.Signature),
-		Origin:    OriginFromPb(pb.Origin),
+		SrcModule: (types.ModuleID)(pb.SrcModule),
 	}
 }
 
@@ -138,7 +132,7 @@ func (m *Deliver) Pb() *vcbpb.Deliver {
 			return ([]uint8)(t)
 		}),
 		Signature: ([]uint8)(m.Signature),
-		Origin:    (m.Origin).Pb(),
+		SrcModule: (string)(m.SrcModule),
 	}
 }
 
@@ -304,104 +298,4 @@ func (m *FinalMessage) Pb() *vcbpb.FinalMessage {
 
 func (*FinalMessage) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*vcbpb.FinalMessage]()}
-}
-
-type Origin struct {
-	Module types.ModuleID
-	Type   Origin_Type
-}
-
-type Origin_Type interface {
-	mirreflect.GeneratedType
-	isOrigin_Type()
-	Pb() vcbpb.Origin_Type
-}
-
-type Origin_TypeWrapper[T any] interface {
-	Origin_Type
-	Unwrap() *T
-}
-
-func Origin_TypeFromPb(pb vcbpb.Origin_Type) Origin_Type {
-	switch pb := pb.(type) {
-	case *vcbpb.Origin_ContextStore:
-		return &Origin_ContextStore{ContextStore: types2.OriginFromPb(pb.ContextStore)}
-	case *vcbpb.Origin_Dsl:
-		return &Origin_Dsl{Dsl: types3.OriginFromPb(pb.Dsl)}
-	case *vcbpb.Origin_AleaBcqueue:
-		return &Origin_AleaBcqueue{AleaBcqueue: types4.VcbOriginFromPb(pb.AleaBcqueue)}
-	}
-	return nil
-}
-
-type Origin_ContextStore struct {
-	ContextStore *types2.Origin
-}
-
-func (*Origin_ContextStore) isOrigin_Type() {}
-
-func (w *Origin_ContextStore) Unwrap() *types2.Origin {
-	return w.ContextStore
-}
-
-func (w *Origin_ContextStore) Pb() vcbpb.Origin_Type {
-	return &vcbpb.Origin_ContextStore{ContextStore: (w.ContextStore).Pb()}
-}
-
-func (*Origin_ContextStore) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*vcbpb.Origin_ContextStore]()}
-}
-
-type Origin_Dsl struct {
-	Dsl *types3.Origin
-}
-
-func (*Origin_Dsl) isOrigin_Type() {}
-
-func (w *Origin_Dsl) Unwrap() *types3.Origin {
-	return w.Dsl
-}
-
-func (w *Origin_Dsl) Pb() vcbpb.Origin_Type {
-	return &vcbpb.Origin_Dsl{Dsl: (w.Dsl).Pb()}
-}
-
-func (*Origin_Dsl) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*vcbpb.Origin_Dsl]()}
-}
-
-type Origin_AleaBcqueue struct {
-	AleaBcqueue *types4.VcbOrigin
-}
-
-func (*Origin_AleaBcqueue) isOrigin_Type() {}
-
-func (w *Origin_AleaBcqueue) Unwrap() *types4.VcbOrigin {
-	return w.AleaBcqueue
-}
-
-func (w *Origin_AleaBcqueue) Pb() vcbpb.Origin_Type {
-	return &vcbpb.Origin_AleaBcqueue{AleaBcqueue: (w.AleaBcqueue).Pb()}
-}
-
-func (*Origin_AleaBcqueue) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*vcbpb.Origin_AleaBcqueue]()}
-}
-
-func OriginFromPb(pb *vcbpb.Origin) *Origin {
-	return &Origin{
-		Module: (types.ModuleID)(pb.Module),
-		Type:   Origin_TypeFromPb(pb.Type),
-	}
-}
-
-func (m *Origin) Pb() *vcbpb.Origin {
-	return &vcbpb.Origin{
-		Module: (string)(m.Module),
-		Type:   (m.Type).Pb(),
-	}
-}
-
-func (*Origin) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*vcbpb.Origin]()}
 }

@@ -115,6 +115,7 @@ func runTest(t *testing.T, conf *TestConfig) (heapObjects int64, heapAlloc int64
 		// Check if all requests were delivered exactly once in all replicas.
 		app := replica.Modules["app"].(*countingApp)
 		assert.Equal(t, 1, app.deliveredCount)
+		assert.Equal(t, types.ModuleID("vcb"), app.firstSrcModule)
 		// TODO: check request data
 		assert.ElementsMatch(t, app0.firstTxIDs, app.firstTxIDs)
 		assert.ElementsMatch(t, app0.firstSignature, app.firstSignature)
@@ -180,7 +181,7 @@ func newDeployment(ctx context.Context, conf *TestConfig) (*deploytest.Deploymen
 			},
 		)
 
-		vcbConfig := DefaultModuleConfig()
+		vcbConfig := DefaultModuleConfig("app")
 		vcb := NewModule(ctx, vcbConfig, &ModuleParams{
 			InstanceUID: []byte{0},
 			AllNodes:    nodeIDs,
@@ -206,7 +207,7 @@ func newDeployment(ctx context.Context, conf *TestConfig) (*deploytest.Deploymen
 		}
 
 		modulesWithDefaults := map[types.ModuleID]modules.Module{
-			"app":                  newCountingApp(ctx, nodeID == leader),
+			vcbConfig.Consumer:     newCountingApp(ctx, nodeID == leader),
 			vcbConfig.Self:         vcb,
 			vcbConfig.ThreshCrypto: threshCryptoSystem.Module(ctx, nodeID),
 			vcbConfig.Mempool:      mempool,
@@ -237,6 +238,7 @@ type countingApp struct {
 	module dsl.Module
 
 	deliveredCount int
+	firstSrcModule types.ModuleID
 	firstData      []*requestpb.Request
 	firstTxIDs     []types.TxID
 	firstSignature tctypes.FullSig
@@ -271,18 +273,14 @@ func newCountingApp(ctx context.Context, isLeader bool) *countingApp {
 		})
 
 		mpdsl.UponTransactionIDsResponse(m, func(txIDs []types.TxID, _ctx *struct{}) error {
-			vcbdsl.InputValue[struct{}](m, "vcb", txs, nil)
-			return nil
-		})
-	} else {
-		dsl.UponInit(m, func() error {
-			vcbdsl.InputValue[struct{}](m, "vcb", nil, nil)
+			vcbdsl.InputValue(m, "vcb", txs)
 			return nil
 		})
 	}
 
-	vcbdsl.UponDeliver(m, func(data []*requestpb.Request, txIDs []types.TxID, signature tctypes.FullSig, _ctx *struct{}) error {
+	vcbdsl.UponDeliver(m, func(data []*requestpb.Request, txIDs []types.TxID, signature tctypes.FullSig, srcModule types.ModuleID) error {
 		if app.deliveredCount == 0 {
+			app.firstSrcModule = srcModule
 			app.firstData = data
 			app.firstTxIDs = txIDs
 			app.firstSignature = signature

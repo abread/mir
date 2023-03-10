@@ -13,28 +13,27 @@ import (
 	"github.com/filecoin-project/mir/pkg/modules"
 	abbadsl "github.com/filecoin-project/mir/pkg/pb/abbapb/dsl"
 	abbapbmsgs "github.com/filecoin-project/mir/pkg/pb/abbapb/msgs"
-	abbapbtypes "github.com/filecoin-project/mir/pkg/pb/abbapb/types"
 	rnetdsl "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/dsl"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
 // ModuleConfig sets the module ids. All replicas are expected to use identical module configurations.
 type ModuleConfig struct {
-	Self           t.ModuleID // id of this module
-	InputRequestor t.ModuleID
-	ReliableNet    t.ModuleID
-	ThreshCrypto   t.ModuleID
-	Hasher         t.ModuleID
+	Self         t.ModuleID // id of this module
+	Consumer     t.ModuleID
+	ReliableNet  t.ModuleID
+	ThreshCrypto t.ModuleID
+	Hasher       t.ModuleID
 }
 
 // DefaultModuleConfig returns a valid module config with default names for all modules.
-func DefaultModuleConfig(inputRequestor t.ModuleID) *ModuleConfig {
+func DefaultModuleConfig(consumer t.ModuleID) *ModuleConfig {
 	return &ModuleConfig{
-		Self:           "abba",
-		InputRequestor: inputRequestor,
-		ReliableNet:    "reliablenet",
-		ThreshCrypto:   "threshcrypto",
-		Hasher:         "hasher",
+		Self:         "abba",
+		Consumer:     consumer,
+		ReliableNet:  "reliablenet",
+		ThreshCrypto: "threshcrypto",
+		Hasher:       "hasher",
 	}
 }
 
@@ -61,16 +60,13 @@ const (
 )
 
 type state struct {
-	phase          abbaPhase
-	requestedInput bool
-	currentRound   uint64
+	phase        abbaPhase
+	currentRound uint64
 
 	finishRecvd            abbat.RecvTracker
 	finishRecvdValueCounts abbat.BoolCounters
 
 	finishSent bool
-
-	origin *abbapbtypes.Origin
 }
 
 const modringSubName t.ModuleID = t.ModuleID("r")
@@ -140,16 +136,9 @@ func newController(ctx context.Context, mc *ModuleConfig, params *ModuleParams, 
 
 			// 2. upon receiving strong support for FINISH(v), output v and terminate
 			if state.finishRecvdValueCounts.Get(value) >= params.strongSupportThresh() {
-				if state.origin == nil {
-					abbadsl.RequestInput(m, mc.InputRequestor, mc.Self)
-
-					// can't deliver yet
-					return nil
-				}
-
 				logger.Log(logging.LevelDebug, "received strong support for FINISH(v)", "v", value)
 
-				abbadsl.Deliver(m, state.origin.Module, value, state.origin)
+				abbadsl.Deliver(m, mc.Consumer, value, mc.Self)
 				state.phase = phaseDelivered
 
 				if err := rounds.MarkAllPast(); err != nil {
@@ -164,17 +153,13 @@ func newController(ctx context.Context, mc *ModuleConfig, params *ModuleParams, 
 		return nil
 	})
 
-	abbadsl.UponInputValue(m, func(input bool, origin *abbapbtypes.Origin) error {
+	abbadsl.UponInputValue(m, func(input bool) error {
 		if state.phase != phaseAwaitingInput {
 			return fmt.Errorf("input value provided twice to abba")
 		}
 
-		state.origin = origin
-
 		abbadsl.RoundInputValue(m, mc.RoundID(0), input)
-
 		state.phase = phaseRunning
-
 		return nil
 	})
 

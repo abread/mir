@@ -177,6 +177,11 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 	// upon agreement round completion, prepare next round
 	aagdsl.UponDeliver(m, func(round uint64, decision bool) error {
 		state.agRound++
+		if state.stalledRoundSpan != nil {
+			state.stalledRoundSpan.AddEvent("agreement delivered without local input")
+			state.stalledRoundSpan.End()
+		}
+
 		_, state.stalledRoundSpan = m.DslHandle().PushSpan("stalling agreement round", trace.WithAttributes(attribute.Int64("agRound", int64(state.agRound))))
 		return nil
 	})
@@ -213,26 +218,6 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 
 		return nil
 	})
-
-	// upon other nodes finishing the agreement round, input a value to it to deliver here
-	aagdsl.UponRequestInput(m, func(round uint64) error {
-		if state.stalledRoundSpan == nil || state.agRound != round {
-			return nil // out-of-order message
-		}
-
-		// we're here, so vcb hasn't completed for this slot yet: we must vote against delivery :(
-		logger.Log(logging.LevelDebug, "resumption of stalled agreement round forced by another node", "agreementRound", state.agRound)
-		state.stalledRoundSpan.AddEvent("forced agreement resumption")
-
-		state.stalledRoundSpan.End()
-		state.stalledRoundSpan = nil
-
-		// sine agreement will deliver anyway, we can just provide false
-		aagdsl.InputValue(m, mc.AleaAgreement, round, false)
-
-		return nil
-	})
-
 }
 
 func newState(params *common.ModuleParams, tunables *common.ModuleTunables, nodeID t.NodeID) *state {

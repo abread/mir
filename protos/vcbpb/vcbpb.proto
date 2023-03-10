@@ -5,9 +5,6 @@ package vcbpb;
 option go_package = "github.com/filecoin-project/mir/pkg/pb/vcbpb";
 
 import "requestpb/requestpb.proto";
-import "contextstorepb/contextstorepb.proto";
-import "dslpb/dslpb.proto";
-import "aleapb/bcqueuepb/bcqueuepb.proto";
 
 import "mir/codegen_extensions.proto";
 import "net/codegen_extensions.proto";
@@ -22,6 +19,7 @@ message Event {
 
   oneof type {
     option (mir.event_type) = true;
+
     InputValue input_value = 1;
     Deliver    deliver     = 2;
   }
@@ -32,8 +30,6 @@ message InputValue {
 
   // empty txs represents a request to listen for VCB (and deliver what was broadcast to us)
   repeated requestpb.Request txs = 1;
-
-  Origin origin = 2 [(mir.origin_request) = true];
 }
 
 message Deliver {
@@ -43,7 +39,7 @@ message Deliver {
   repeated bytes             tx_ids          = 2 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.TxID"];
   bytes                      signature       = 3 [(mir.type) = "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes.FullSig"];
 
-  Origin origin = 4 [(mir.origin_response) = true];
+  string src_module = 4 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.ModuleID"];
 }
 
 // ============================================================
@@ -79,20 +75,4 @@ message FinalMessage {
 
   repeated requestpb.Request txs       = 1;
   bytes                      signature = 2 [(mir.type) = "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes.FullSig"];
-}
-
-// ============================================================
-// Data structures
-// ============================================================
-
-message Origin {
-  option (mir.struct) = true;
-
-  string module = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.ModuleID"];
-  oneof Type {
-    contextstorepb.Origin context_store = 2;
-    dslpb.Origin          dsl           = 3;
-
-    aleapb.bcqueuepb.VcbOrigin alea_bcqueue = 4;
-  }
 }

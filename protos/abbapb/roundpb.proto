@@ -28,14 +28,14 @@ message RoundEvent {
 message RoundInputValue {
   option (mir.event) = true;
 
-  bool        input  = 1;
+  bool input = 1;
 }
 
 message RoundDeliver {
   option (mir.event) = true;
 
-  bool        next_estimate = 1;
-  uint64      round_number  = 2;
+  bool   next_estimate = 1;
+  uint64 round_number  = 2;
 }
 
 message RoundFinishAll {

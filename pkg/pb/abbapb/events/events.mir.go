@@ -6,30 +6,14 @@ import (
 	types "github.com/filecoin-project/mir/pkg/types"
 )
 
-func RequestInput(destModule types.ModuleID, module types.ModuleID) *types1.Event {
-	return &types1.Event{
-		DestModule: destModule,
-		Type: &types1.Event_Abba{
-			Abba: &types2.Event{
-				Type: &types2.Event_RequestInput{
-					RequestInput: &types2.RequestInput{
-						Module: module,
-					},
-				},
-			},
-		},
-	}
-}
-
-func InputValue(destModule types.ModuleID, input bool, origin *types2.Origin) *types1.Event {
+func InputValue(destModule types.ModuleID, input bool) *types1.Event {
 	return &types1.Event{
 		DestModule: destModule,
 		Type: &types1.Event_Abba{
 			Abba: &types2.Event{
 				Type: &types2.Event_InputValue{
 					InputValue: &types2.InputValue{
-						Input:  input,
-						Origin: origin,
+						Input: input,
 					},
 				},
 			},
@@ -37,15 +21,15 @@ func InputValue(destModule types.ModuleID, input bool, origin *types2.Origin) *t
 	}
 }
 
-func Deliver(destModule types.ModuleID, result bool, origin *types2.Origin) *types1.Event {
+func Deliver(destModule types.ModuleID, result bool, srcModule types.ModuleID) *types1.Event {
 	return &types1.Event{
 		DestModule: destModule,
 		Type: &types1.Event_Abba{
 			Abba: &types2.Event{
 				Type: &types2.Event_Deliver{
 					Deliver: &types2.Deliver{
-						Result: result,
-						Origin: origin,
+						Result:    result,
+						SrcModule: srcModule,
 					},
 				},
 			},

@@ -1,22 +1,21 @@
 package vcbpbevents
 
 import (
-	types2 "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
+	types1 "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 	requestpb "github.com/filecoin-project/mir/pkg/pb/requestpb"
-	types1 "github.com/filecoin-project/mir/pkg/pb/vcbpb/types"
+	types2 "github.com/filecoin-project/mir/pkg/pb/vcbpb/types"
 	tctypes "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 	types "github.com/filecoin-project/mir/pkg/types"
 )
 
-func InputValue(destModule types.ModuleID, txs []*requestpb.Request, origin *types1.Origin) *types2.Event {
-	return &types2.Event{
+func InputValue(destModule types.ModuleID, txs []*requestpb.Request) *types1.Event {
+	return &types1.Event{
 		DestModule: destModule,
-		Type: &types2.Event_Vcb{
-			Vcb: &types1.Event{
-				Type: &types1.Event_InputValue{
-					InputValue: &types1.InputValue{
-						Txs:    txs,
-						Origin: origin,
+		Type: &types1.Event_Vcb{
+			Vcb: &types2.Event{
+				Type: &types2.Event_InputValue{
+					InputValue: &types2.InputValue{
+						Txs: txs,
 					},
 				},
 			},
@@ -24,17 +23,17 @@ func InputValue(destModule types.ModuleID, txs []*requestpb.Request, origin *typ
 	}
 }
 
-func Deliver(destModule types.ModuleID, txs []*requestpb.Request, txIds []types.TxID, signature tctypes.FullSig, origin *types1.Origin) *types2.Event {
-	return &types2.Event{
+func Deliver(destModule types.ModuleID, txs []*requestpb.Request, txIds []types.TxID, signature tctypes.FullSig, srcModule types.ModuleID) *types1.Event {
+	return &types1.Event{
 		DestModule: destModule,
-		Type: &types2.Event_Vcb{
-			Vcb: &types1.Event{
-				Type: &types1.Event_Deliver{
-					Deliver: &types1.Deliver{
+		Type: &types1.Event_Vcb{
+			Vcb: &types2.Event{
+				Type: &types2.Event_Deliver{
+					Deliver: &types2.Deliver{
 						Txs:       txs,
 						TxIds:     txIds,
 						Signature: signature,
-						Origin:    origin,
+						SrcModule: srcModule,
 					},
 				},
 			},

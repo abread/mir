@@ -19,7 +19,6 @@ import (
 	agreementpbevents "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents/events"
 	agreementpbmsgdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/dsl"
 	agreementpbmsgs "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/msgs"
-	agreementpbtypes "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/types"
 	eventpbevents "github.com/filecoin-project/mir/pkg/pb/eventpb/events"
 	messagepbtypes "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
 	modringpbtypes "github.com/filecoin-project/mir/pkg/pb/modringpb/types"
@@ -94,17 +93,6 @@ func (mc *ModuleConfig) agRoundModuleID(id uint64) t.ModuleID {
 	return mc.Self.Then(t.NewModuleIDFromInt(id))
 }
 
-func (mc *ModuleConfig) agRoundOrigin(roundID uint64) *abbapbtypes.Origin {
-	return &abbapbtypes.Origin{
-		Module: mc.Self,
-		Type: &abbapbtypes.Origin_AleaAg{
-			AleaAg: &agreementpbtypes.AbbaOrigin{
-				AgRound: roundID,
-			},
-		},
-	}
-}
-
 type state struct {
 	roundDecisionHistory AgRoundHistory
 
@@ -125,30 +113,17 @@ func newAgController(ctx context.Context, mc *ModuleConfig, params *ModuleParams
 		dsl.EmitMirEvent(m, abbapbevents.InputValue(
 			mc.agRoundModuleID(round),
 			input,
-			mc.agRoundOrigin(round),
 		))
 		return nil
 	})
 
-	// propagate input request to director
-	// this ensures agreement can be delivered even when this node votes against it
-	abbapbdsl.UponRequestInput(m, func(module t.ModuleID) error {
-		module = module.StripParent(mc.Self)
-		round, err := strconv.ParseUint(string(module), 10, 64)
-		if err != nil {
-			return fmt.Errorf("invalid abba instance module ID: %s", module)
-		}
-
-		if round != state.currentRound {
-			return nil // stale
-		}
-
-		agreementpbdsl.RequestInput(m, mc.Consumer, round)
-		return nil
-	})
-
 	abbapbdsl.UponEvent[*abbapbtypes.Event_Deliver](m, func(ev *abbapbtypes.Deliver) error {
-		round := ev.Origin.Type.(*abbapbtypes.Origin_AleaAg).AleaAg.AgRound
+		roundStr := ev.SrcModule.StripParent(mc.Self).Top()
+		round, err := strconv.ParseUint(string(roundStr), 10, 64)
+		if err != nil {
+			return fmt.Errorf("deliver event for invalid round: %w", err)
+		}
+
 		decision := ev.Result
 
 		if round != state.currentRound {
@@ -239,11 +214,11 @@ func newAbbaGenerator(agMc *ModuleConfig, agParams *ModuleParams, agTunables *Mo
 
 	return func(ctx context.Context, id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
 		mc := &abba.ModuleConfig{
-			Self:           id,
-			InputRequestor: agMc.Self,
-			ReliableNet:    agMc.ReliableNet,
-			ThreshCrypto:   agMc.ThreshCrypto,
-			Hasher:         agMc.Hasher,
+			Self:         id,
+			Consumer:     agMc.Self,
+			ReliableNet:  agMc.ReliableNet,
+			ThreshCrypto: agMc.ThreshCrypto,
+			Hasher:       agMc.Hasher,
 		}
 
 		mod, err := abba.NewModule(ctx, mc, params, tunables, nodeID, logging.Decorate(logger, "Abba: ", "agRound", idx))

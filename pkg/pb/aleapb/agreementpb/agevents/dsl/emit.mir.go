@@ -9,10 +9,6 @@ import (
 
 // Module-specific dsl functions for emitting events.
 
-func RequestInput(m dsl.Module, destModule types.ModuleID, round uint64) {
-	dsl.EmitMirEvent(m, events.RequestInput(destModule, round))
-}
-
 func InputValue(m dsl.Module, destModule types.ModuleID, round uint64, input bool) {
 	dsl.EmitMirEvent(m, events.InputValue(destModule, round, input))
 }

@@ -26,8 +26,6 @@ type Event_TypeWrapper[T any] interface {
 
 func Event_TypeFromPb(pb agevents.Event_Type) Event_Type {
 	switch pb := pb.(type) {
-	case *agevents.Event_RequestInput:
-		return &Event_RequestInput{RequestInput: RequestInputFromPb(pb.RequestInput)}
 	case *agevents.Event_InputValue:
 		return &Event_InputValue{InputValue: InputValueFromPb(pb.InputValue)}
 	case *agevents.Event_Deliver:
@@ -36,24 +34,6 @@ func Event_TypeFromPb(pb agevents.Event_Type) Event_Type {
 		return &Event_StaleMsgsRevcd{StaleMsgsRevcd: StaleMsgsRecvdFromPb(pb.StaleMsgsRevcd)}
 	}
 	return nil
-}
-
-type Event_RequestInput struct {
-	RequestInput *RequestInput
-}
-
-func (*Event_RequestInput) isEvent_Type() {}
-
-func (w *Event_RequestInput) Unwrap() *RequestInput {
-	return w.RequestInput
-}
-
-func (w *Event_RequestInput) Pb() agevents.Event_Type {
-	return &agevents.Event_RequestInput{RequestInput: (w.RequestInput).Pb()}
-}
-
-func (*Event_RequestInput) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*agevents.Event_RequestInput]()}
 }
 
 type Event_InputValue struct {
@@ -124,26 +104,6 @@ func (m *Event) Pb() *agevents.Event {
 
 func (*Event) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*agevents.Event]()}
-}
-
-type RequestInput struct {
-	Round uint64
-}
-
-func RequestInputFromPb(pb *agevents.RequestInput) *RequestInput {
-	return &RequestInput{
-		Round: pb.Round,
-	}
-}
-
-func (m *RequestInput) Pb() *agevents.RequestInput {
-	return &agevents.RequestInput{
-		Round: m.Round,
-	}
-}
-
-func (*RequestInput) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*agevents.RequestInput]()}
 }
 
 type InputValue struct {

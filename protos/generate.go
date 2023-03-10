@@ -44,7 +44,6 @@ package protos
 //go:generate protoc-events aleapb/bcqueuepb/bcqueuepb.proto
 //go:generate protoc-events aleapb/bcpb/bcpb.proto
 //go:generate protoc-events aleapb/agreementpb/agevents/agevents.proto
-//go:generate protoc-events aleapb/agreementpb/types.proto
 //go:generate protoc-events aleapb/agreementpb/messages.proto
 //go:generate protoc-events vcbpb/vcbpb.proto
 //go:generate protoc-events abbapb/abbapb.proto

@@ -6,26 +6,6 @@ import (
 	reflectutil "github.com/filecoin-project/mir/pkg/util/reflectutil"
 )
 
-type AbbaOrigin struct {
-	AgRound uint64
-}
-
-func AbbaOriginFromPb(pb *agreementpb.AbbaOrigin) *AbbaOrigin {
-	return &AbbaOrigin{
-		AgRound: pb.AgRound,
-	}
-}
-
-func (m *AbbaOrigin) Pb() *agreementpb.AbbaOrigin {
-	return &agreementpb.AbbaOrigin{
-		AgRound: m.AgRound,
-	}
-}
-
-func (*AbbaOrigin) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*agreementpb.AbbaOrigin]()}
-}
-
 type Message struct {
 	Type Message_Type
 }

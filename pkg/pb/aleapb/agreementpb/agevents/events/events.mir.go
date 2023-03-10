@@ -7,21 +7,6 @@ import (
 	types "github.com/filecoin-project/mir/pkg/types"
 )
 
-func RequestInput(destModule types.ModuleID, round uint64) *types1.Event {
-	return &types1.Event{
-		DestModule: destModule,
-		Type: &types1.Event_AleaAgreement{
-			AleaAgreement: &types2.Event{
-				Type: &types2.Event_RequestInput{
-					RequestInput: &types2.RequestInput{
-						Round: round,
-					},
-				},
-			},
-		},
-	}
-}
-
 func InputValue(destModule types.ModuleID, round uint64, input bool) *types1.Event {
 	return &types1.Event{
 		DestModule: destModule,

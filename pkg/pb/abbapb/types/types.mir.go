@@ -4,9 +4,6 @@ import (
 	mirreflect "github.com/filecoin-project/mir/codegen/mirreflect"
 	abbatypes "github.com/filecoin-project/mir/pkg/abba/abbatypes"
 	abbapb "github.com/filecoin-project/mir/pkg/pb/abbapb"
-	types3 "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/types"
-	types1 "github.com/filecoin-project/mir/pkg/pb/contextstorepb/types"
-	types2 "github.com/filecoin-project/mir/pkg/pb/dslpb/types"
 	tctypes "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 	types "github.com/filecoin-project/mir/pkg/types"
 	reflectutil "github.com/filecoin-project/mir/pkg/util/reflectutil"
@@ -386,8 +383,6 @@ type Event_TypeWrapper[T any] interface {
 
 func Event_TypeFromPb(pb abbapb.Event_Type) Event_Type {
 	switch pb := pb.(type) {
-	case *abbapb.Event_RequestInput:
-		return &Event_RequestInput{RequestInput: RequestInputFromPb(pb.RequestInput)}
 	case *abbapb.Event_InputValue:
 		return &Event_InputValue{InputValue: InputValueFromPb(pb.InputValue)}
 	case *abbapb.Event_Deliver:
@@ -396,24 +391,6 @@ func Event_TypeFromPb(pb abbapb.Event_Type) Event_Type {
 		return &Event_Round{Round: RoundEventFromPb(pb.Round)}
 	}
 	return nil
-}
-
-type Event_RequestInput struct {
-	RequestInput *RequestInput
-}
-
-func (*Event_RequestInput) isEvent_Type() {}
-
-func (w *Event_RequestInput) Unwrap() *RequestInput {
-	return w.RequestInput
-}
-
-func (w *Event_RequestInput) Pb() abbapb.Event_Type {
-	return &abbapb.Event_RequestInput{RequestInput: (w.RequestInput).Pb()}
-}
-
-func (*Event_RequestInput) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Event_RequestInput]()}
 }
 
 type Event_InputValue struct {
@@ -486,42 +463,19 @@ func (*Event) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Event]()}
 }
 
-type RequestInput struct {
-	Module types.ModuleID
-}
-
-func RequestInputFromPb(pb *abbapb.RequestInput) *RequestInput {
-	return &RequestInput{
-		Module: (types.ModuleID)(pb.Module),
-	}
-}
-
-func (m *RequestInput) Pb() *abbapb.RequestInput {
-	return &abbapb.RequestInput{
-		Module: (string)(m.Module),
-	}
-}
-
-func (*RequestInput) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.RequestInput]()}
-}
-
 type InputValue struct {
-	Input  bool
-	Origin *Origin
+	Input bool
 }
 
 func InputValueFromPb(pb *abbapb.InputValue) *InputValue {
 	return &InputValue{
-		Input:  pb.Input,
-		Origin: OriginFromPb(pb.Origin),
+		Input: pb.Input,
 	}
 }
 
 func (m *InputValue) Pb() *abbapb.InputValue {
 	return &abbapb.InputValue{
-		Input:  m.Input,
-		Origin: (m.Origin).Pb(),
+		Input: m.Input,
 	}
 }
 
@@ -530,21 +484,21 @@ func (*InputValue) MirReflect() mirreflect.Type {
 }
 
 type Deliver struct {
-	Result bool
-	Origin *Origin
+	Result    bool
+	SrcModule types.ModuleID
 }
 
 func DeliverFromPb(pb *abbapb.Deliver) *Deliver {
 	return &Deliver{
-		Result: pb.Result,
-		Origin: OriginFromPb(pb.Origin),
+		Result:    pb.Result,
+		SrcModule: (types.ModuleID)(pb.SrcModule),
 	}
 }
 
 func (m *Deliver) Pb() *abbapb.Deliver {
 	return &abbapb.Deliver{
-		Result: m.Result,
-		Origin: (m.Origin).Pb(),
+		Result:    m.Result,
+		SrcModule: (string)(m.SrcModule),
 	}
 }
 
@@ -647,104 +601,4 @@ func (m *FinishMessage) Pb() *abbapb.FinishMessage {
 
 func (*FinishMessage) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.FinishMessage]()}
-}
-
-type Origin struct {
-	Module types.ModuleID
-	Type   Origin_Type
-}
-
-type Origin_Type interface {
-	mirreflect.GeneratedType
-	isOrigin_Type()
-	Pb() abbapb.Origin_Type
-}
-
-type Origin_TypeWrapper[T any] interface {
-	Origin_Type
-	Unwrap() *T
-}
-
-func Origin_TypeFromPb(pb abbapb.Origin_Type) Origin_Type {
-	switch pb := pb.(type) {
-	case *abbapb.Origin_ContextStore:
-		return &Origin_ContextStore{ContextStore: types1.OriginFromPb(pb.ContextStore)}
-	case *abbapb.Origin_Dsl:
-		return &Origin_Dsl{Dsl: types2.OriginFromPb(pb.Dsl)}
-	case *abbapb.Origin_AleaAg:
-		return &Origin_AleaAg{AleaAg: types3.AbbaOriginFromPb(pb.AleaAg)}
-	}
-	return nil
-}
-
-type Origin_ContextStore struct {
-	ContextStore *types1.Origin
-}
-
-func (*Origin_ContextStore) isOrigin_Type() {}
-
-func (w *Origin_ContextStore) Unwrap() *types1.Origin {
-	return w.ContextStore
-}
-
-func (w *Origin_ContextStore) Pb() abbapb.Origin_Type {
-	return &abbapb.Origin_ContextStore{ContextStore: (w.ContextStore).Pb()}
-}
-
-func (*Origin_ContextStore) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Origin_ContextStore]()}
-}
-
-type Origin_Dsl struct {
-	Dsl *types2.Origin
-}
-
-func (*Origin_Dsl) isOrigin_Type() {}
-
-func (w *Origin_Dsl) Unwrap() *types2.Origin {
-	return w.Dsl
-}
-
-func (w *Origin_Dsl) Pb() abbapb.Origin_Type {
-	return &abbapb.Origin_Dsl{Dsl: (w.Dsl).Pb()}
-}
-
-func (*Origin_Dsl) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Origin_Dsl]()}
-}
-
-type Origin_AleaAg struct {
-	AleaAg *types3.AbbaOrigin
-}
-
-func (*Origin_AleaAg) isOrigin_Type() {}
-
-func (w *Origin_AleaAg) Unwrap() *types3.AbbaOrigin {
-	return w.AleaAg
-}
-
-func (w *Origin_AleaAg) Pb() abbapb.Origin_Type {
-	return &abbapb.Origin_AleaAg{AleaAg: (w.AleaAg).Pb()}
-}
-
-func (*Origin_AleaAg) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Origin_AleaAg]()}
-}
-
-func OriginFromPb(pb *abbapb.Origin) *Origin {
-	return &Origin{
-		Module: (types.ModuleID)(pb.Module),
-		Type:   Origin_TypeFromPb(pb.Type),
-	}
-}
-
-func (m *Origin) Pb() *abbapb.Origin {
-	return &abbapb.Origin{
-		Module: (string)(m.Module),
-		Type:   (m.Type).Pb(),
-	}
-}
-
-func (*Origin) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Origin]()}
 }

@@ -20,17 +20,10 @@ message Event {
   oneof type {
     option (mir.event_type) = true;
 
-    RequestInput   request_input    = 1;
-    InputValue     input_value      = 2;
-    Deliver        deliver          = 3;
-    StaleMsgsRecvd stale_msgs_revcd = 4;
+    InputValue     input_value      = 1;
+    Deliver        deliver          = 2;
+    StaleMsgsRecvd stale_msgs_revcd = 3;
   }
-}
-
-message RequestInput {
-  option (mir.event) = true;
-
-  uint64 round = 1;
 }
 
 message InputValue {

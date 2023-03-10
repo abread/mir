@@ -1,8 +1,6 @@
 package abbapbdsl
 
 import (
-	trace "go.opentelemetry.io/otel/trace"
-
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
 	types "github.com/filecoin-project/mir/pkg/pb/abbapb/types"
 	types1 "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
@@ -22,47 +20,15 @@ func UponEvent[W types.Event_TypeWrapper[Ev], Ev any](m dsl.Module, handler func
 	})
 }
 
-func UponRequestInput(m dsl.Module, handler func(module types2.ModuleID) error) {
-	UponEvent[*types.Event_RequestInput](m, func(ev *types.RequestInput) error {
-		return handler(ev.Module)
-	})
-}
-
-func UponInputValue(m dsl.Module, handler func(input bool, origin *types.Origin) error) {
+func UponInputValue(m dsl.Module, handler func(input bool) error) {
 	UponEvent[*types.Event_InputValue](m, func(ev *types.InputValue) error {
-		originWrapper, ok := ev.Origin.Type.(*types.Origin_Dsl)
-		if ok {
-			m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
-		}
-
-		kind := trace.WithSpanKind(trace.SpanKindConsumer)
-		m.DslHandle().PushSpan("InputValue", kind)
-		defer m.DslHandle().PopSpan()
-
-		return handler(ev.Input, ev.Origin)
+		return handler(ev.Input)
 	})
 }
 
-func UponDeliver[C any](m dsl.Module, handler func(result bool, context *C) error) {
+func UponDeliver(m dsl.Module, handler func(result bool, srcModule types2.ModuleID) error) {
 	UponEvent[*types.Event_Deliver](m, func(ev *types.Deliver) error {
-		originWrapper, ok := ev.Origin.Type.(*types.Origin_Dsl)
-		if !ok {
-			return nil
-		}
-
-		contextRaw := m.DslHandle().RecoverAndCleanupContext(dsl.ContextID(originWrapper.Dsl.ContextID))
-		context, ok := contextRaw.(*C)
-		if !ok {
-			return nil
-		}
-
-		m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
-
-		kind := trace.WithSpanKind(trace.SpanKindConsumer)
-		m.DslHandle().PushSpan("Deliver", kind)
-		defer m.DslHandle().PopSpan()
-
-		return handler(ev.Result, context)
+		return handler(ev.Result, ev.SrcModule)
 	})
 }
 

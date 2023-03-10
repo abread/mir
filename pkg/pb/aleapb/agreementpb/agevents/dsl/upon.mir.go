@@ -20,12 +20,6 @@ func UponEvent[W types.Event_TypeWrapper[Ev], Ev any](m dsl.Module, handler func
 	})
 }
 
-func UponRequestInput(m dsl.Module, handler func(round uint64) error) {
-	UponEvent[*types.Event_RequestInput](m, func(ev *types.RequestInput) error {
-		return handler(ev.Round)
-	})
-}
-
 func UponInputValue(m dsl.Module, handler func(round uint64, input bool) error) {
 	UponEvent[*types.Event_InputValue](m, func(ev *types.InputValue) error {
 		return handler(ev.Round, ev.Input)

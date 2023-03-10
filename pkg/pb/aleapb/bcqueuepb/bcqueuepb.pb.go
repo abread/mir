@@ -347,56 +347,6 @@ func (x *PastVcbFinal) GetSignature() []byte {
 	return nil
 }
 
-// ============================================================
-// Data structures
-// ============================================================
-type VcbOrigin struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	QueueSlot uint64 `protobuf:"varint,1,opt,name=queue_slot,json=queueSlot,proto3" json:"queue_slot,omitempty"`
-}
-
-func (x *VcbOrigin) Reset() {
-	*x = VcbOrigin{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_aleapb_bcqueuepb_bcqueuepb_proto_msgTypes[5]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *VcbOrigin) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*VcbOrigin) ProtoMessage() {}
-
-func (x *VcbOrigin) ProtoReflect() protoreflect.Message {
-	mi := &file_aleapb_bcqueuepb_bcqueuepb_proto_msgTypes[5]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use VcbOrigin.ProtoReflect.Descriptor instead.
-func (*VcbOrigin) Descriptor() ([]byte, []int) {
-	return file_aleapb_bcqueuepb_bcqueuepb_proto_rawDescGZIP(), []int{5}
-}
-
-func (x *VcbOrigin) GetQueueSlot() uint64 {
-	if x != nil {
-		return x.QueueSlot
-	}
-	return 0
-}
-
 var File_aleapb_bcqueuepb_bcqueuepb_proto protoreflect.FileDescriptor
 
 var file_aleapb_bcqueuepb_bcqueuepb_proto_rawDesc = []byte{
@@ -459,18 +409,11 @@ var file_aleapb_bcqueuepb_bcqueuepb_proto_rawDesc = []byte{
 	0x69, 0x72, 0x2f, 0x70, 0x6b, 0x67, 0x2f, 0x74, 0x68, 0x72, 0x65, 0x73, 0x68, 0x63, 0x72, 0x79,
 	0x70, 0x74, 0x6f, 0x2f, 0x74, 0x63, 0x74, 0x79, 0x70, 0x65, 0x73, 0x2e, 0x46, 0x75, 0x6c, 0x6c,
 	0x53, 0x69, 0x67, 0x52, 0x09, 0x73, 0x69, 0x67, 0x6e, 0x61, 0x74, 0x75, 0x72, 0x65, 0x3a, 0x04,
-	0x98, 0xa6, 0x1d, 0x01, 0x22, 0x72, 0x0a, 0x09, 0x56, 0x63, 0x62, 0x4f, 0x72, 0x69, 0x67, 0x69,
-	0x6e, 0x12, 0x5f, 0x0a, 0x0a, 0x71, 0x75, 0x65, 0x75, 0x65, 0x5f, 0x73, 0x6c, 0x6f, 0x74, 0x18,
-	0x01, 0x20, 0x01, 0x28, 0x04, 0x42, 0x40, 0x82, 0xa6, 0x1d, 0x3c, 0x67, 0x69, 0x74, 0x68, 0x75,
-	0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x66, 0x69, 0x6c, 0x65, 0x63, 0x6f, 0x69, 0x6e, 0x2d, 0x70,
-	0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, 0x2f, 0x6d, 0x69, 0x72, 0x2f, 0x70, 0x6b, 0x67, 0x2f, 0x61,
-	0x6c, 0x65, 0x61, 0x2f, 0x61, 0x6c, 0x65, 0x61, 0x74, 0x79, 0x70, 0x65, 0x73, 0x2e, 0x51, 0x75,
-	0x65, 0x75, 0x65, 0x53, 0x6c, 0x6f, 0x74, 0x52, 0x09, 0x71, 0x75, 0x65, 0x75, 0x65, 0x53, 0x6c,
-	0x6f, 0x74, 0x3a, 0x04, 0x80, 0xa6, 0x1d, 0x01, 0x42, 0x39, 0x5a, 0x37, 0x67, 0x69, 0x74, 0x68,
-	0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x66, 0x69, 0x6c, 0x65, 0x63, 0x6f, 0x69, 0x6e, 0x2d,
-	0x70, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, 0x2f, 0x6d, 0x69, 0x72, 0x2f, 0x70, 0x6b, 0x67, 0x2f,
-	0x70, 0x62, 0x2f, 0x61, 0x6c, 0x65, 0x61, 0x70, 0x62, 0x2f, 0x62, 0x63, 0x71, 0x75, 0x65, 0x75,
-	0x65, 0x70, 0x62, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x98, 0xa6, 0x1d, 0x01, 0x42, 0x39, 0x5a, 0x37, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63,
+	0x6f, 0x6d, 0x2f, 0x66, 0x69, 0x6c, 0x65, 0x63, 0x6f, 0x69, 0x6e, 0x2d, 0x70, 0x72, 0x6f, 0x6a,
+	0x65, 0x63, 0x74, 0x2f, 0x6d, 0x69, 0x72, 0x2f, 0x70, 0x6b, 0x67, 0x2f, 0x70, 0x62, 0x2f, 0x61,
+	0x6c, 0x65, 0x61, 0x70, 0x62, 0x2f, 0x62, 0x63, 0x71, 0x75, 0x65, 0x75, 0x65, 0x70, 0x62, 0x62,
+	0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -485,26 +428,25 @@ func file_aleapb_bcqueuepb_bcqueuepb_proto_rawDescGZIP() []byte {
 	return file_aleapb_bcqueuepb_bcqueuepb_proto_rawDescData
 }
 
-var file_aleapb_bcqueuepb_bcqueuepb_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_aleapb_bcqueuepb_bcqueuepb_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_aleapb_bcqueuepb_bcqueuepb_proto_goTypes = []interface{}{
 	(*Event)(nil),             // 0: aleapb.bcqueuepb.Event
 	(*InputValue)(nil),        // 1: aleapb.bcqueuepb.InputValue
 	(*Deliver)(nil),           // 2: aleapb.bcqueuepb.Deliver
 	(*FreeSlot)(nil),          // 3: aleapb.bcqueuepb.FreeSlot
 	(*PastVcbFinal)(nil),      // 4: aleapb.bcqueuepb.PastVcbFinal
-	(*VcbOrigin)(nil),         // 5: aleapb.bcqueuepb.VcbOrigin
-	(*common.Slot)(nil),       // 6: aleapb.common.Slot
-	(*requestpb.Request)(nil), // 7: requestpb.Request
+	(*common.Slot)(nil),       // 5: aleapb.common.Slot
+	(*requestpb.Request)(nil), // 6: requestpb.Request
 }
 var file_aleapb_bcqueuepb_bcqueuepb_proto_depIdxs = []int32{
 	1, // 0: aleapb.bcqueuepb.Event.input_value:type_name -> aleapb.bcqueuepb.InputValue
 	2, // 1: aleapb.bcqueuepb.Event.deliver:type_name -> aleapb.bcqueuepb.Deliver
 	3, // 2: aleapb.bcqueuepb.Event.free_slot:type_name -> aleapb.bcqueuepb.FreeSlot
 	4, // 3: aleapb.bcqueuepb.Event.past_vcb_final:type_name -> aleapb.bcqueuepb.PastVcbFinal
-	6, // 4: aleapb.bcqueuepb.InputValue.slot:type_name -> aleapb.common.Slot
-	7, // 5: aleapb.bcqueuepb.InputValue.txs:type_name -> requestpb.Request
-	6, // 6: aleapb.bcqueuepb.Deliver.slot:type_name -> aleapb.common.Slot
-	7, // 7: aleapb.bcqueuepb.PastVcbFinal.txs:type_name -> requestpb.Request
+	5, // 4: aleapb.bcqueuepb.InputValue.slot:type_name -> aleapb.common.Slot
+	6, // 5: aleapb.bcqueuepb.InputValue.txs:type_name -> requestpb.Request
+	5, // 6: aleapb.bcqueuepb.Deliver.slot:type_name -> aleapb.common.Slot
+	6, // 7: aleapb.bcqueuepb.PastVcbFinal.txs:type_name -> requestpb.Request
 	8, // [8:8] is the sub-list for method output_type
 	8, // [8:8] is the sub-list for method input_type
 	8, // [8:8] is the sub-list for extension type_name
@@ -578,18 +520,6 @@ func file_aleapb_bcqueuepb_bcqueuepb_proto_init() {
 				return nil
 			}
 		}
-		file_aleapb_bcqueuepb_bcqueuepb_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*VcbOrigin); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
 	}
 	file_aleapb_bcqueuepb_bcqueuepb_proto_msgTypes[0].OneofWrappers = []interface{}{
 		(*Event_InputValue)(nil),
@@ -603,7 +533,7 @@ func file_aleapb_bcqueuepb_bcqueuepb_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_aleapb_bcqueuepb_bcqueuepb_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   6,
+			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

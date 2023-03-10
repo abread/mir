@@ -18,11 +18,3 @@ func (*Message) ReflectTypeOptions() []reflect.Type {
 		reflect.TypeOf((*Message_FinalMessage)(nil)),
 	}
 }
-
-func (*Origin) ReflectTypeOptions() []reflect.Type {
-	return []reflect.Type{
-		reflect.TypeOf((*Origin_ContextStore)(nil)),
-		reflect.TypeOf((*Origin_Dsl)(nil)),
-		reflect.TypeOf((*Origin_AleaBcqueue)(nil)),
-	}
-}

@@ -1,34 +1,19 @@
 package vcbpbdsl
 
 import (
-	trace "go.opentelemetry.io/otel/trace"
-
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
 	requestpb "github.com/filecoin-project/mir/pkg/pb/requestpb"
 	events "github.com/filecoin-project/mir/pkg/pb/vcbpb/events"
-	types1 "github.com/filecoin-project/mir/pkg/pb/vcbpb/types"
 	tctypes "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 	types "github.com/filecoin-project/mir/pkg/types"
 )
 
 // Module-specific dsl functions for emitting events.
 
-func InputValue[C any](m dsl.Module, destModule types.ModuleID, txs []*requestpb.Request, context *C) {
-	kind := trace.WithSpanKind(trace.SpanKindProducer)
-	m.DslHandle().PushSpan("InputValue", kind)
-	defer m.DslHandle().PopSpan()
-
-	contextID := m.DslHandle().StoreContext(context)
-	traceCtx := m.DslHandle().TraceContextAsMap()
-
-	origin := &types1.Origin{
-		Module: m.ModuleID(),
-		Type:   &types1.Origin_Dsl{Dsl: dsl.MirOrigin(contextID, traceCtx)},
-	}
-
-	dsl.EmitMirEvent(m, events.InputValue(destModule, txs, origin))
+func InputValue(m dsl.Module, destModule types.ModuleID, txs []*requestpb.Request) {
+	dsl.EmitMirEvent(m, events.InputValue(destModule, txs))
 }
 
-func Deliver(m dsl.Module, destModule types.ModuleID, txs []*requestpb.Request, txIds []types.TxID, signature tctypes.FullSig, origin *types1.Origin) {
-	dsl.EmitMirEvent(m, events.Deliver(destModule, txs, txIds, signature, origin))
+func Deliver(m dsl.Module, destModule types.ModuleID, txs []*requestpb.Request, txIds []types.TxID, signature tctypes.FullSig, srcModule types.ModuleID) {
+	dsl.EmitMirEvent(m, events.Deliver(destModule, txs, txIds, signature, srcModule))
 }

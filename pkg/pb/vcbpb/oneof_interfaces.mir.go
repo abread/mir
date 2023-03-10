@@ -1,11 +1,5 @@
 package vcbpb
 
-import (
-	bcqueuepb "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb"
-	contextstorepb "github.com/filecoin-project/mir/pkg/pb/contextstorepb"
-	dslpb "github.com/filecoin-project/mir/pkg/pb/dslpb"
-)
-
 type Event_Type = isEvent_Type
 
 type Event_TypeWrapper[T any] interface {
@@ -38,23 +32,4 @@ func (w *Message_EchoMessage) Unwrap() *EchoMessage {
 
 func (w *Message_FinalMessage) Unwrap() *FinalMessage {
 	return w.FinalMessage
-}
-
-type Origin_Type = isOrigin_Type
-
-type Origin_TypeWrapper[T any] interface {
-	Origin_Type
-	Unwrap() *T
-}
-
-func (w *Origin_ContextStore) Unwrap() *contextstorepb.Origin {
-	return w.ContextStore
-}
-
-func (w *Origin_Dsl) Unwrap() *dslpb.Origin {
-	return w.Dsl
-}
-
-func (w *Origin_AleaBcqueue) Unwrap() *bcqueuepb.VcbOrigin {
-	return w.AleaBcqueue
 }

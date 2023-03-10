@@ -3,6 +3,7 @@ package bcqueue
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"golang.org/x/exp/slices"
 
@@ -16,7 +17,6 @@ import (
 	"github.com/filecoin-project/mir/pkg/modules"
 	bcqueuedsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/dsl"
 	bcqueuepbevents "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/events"
-	bcqueuepbtypes "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/types"
 	commontypes "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
 	mempooldsl "github.com/filecoin-project/mir/pkg/pb/mempoolpb/dsl"
 	messagepbtypes "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
@@ -63,14 +63,6 @@ func newQueueController(ctx context.Context, mc *ModuleConfig, params *ModulePar
 		dsl.EmitMirEvent(m, vcbpbevents.InputValue(
 			mc.Self.Then(t.NewModuleIDFromInt(slot.QueueSlot)),
 			txs,
-			&vcbpbtypes.Origin{
-				Module: mc.Self,
-				Type: &vcbpbtypes.Origin_AleaBcqueue{
-					AleaBcqueue: &bcqueuepbtypes.VcbOrigin{
-						QueueSlot: slot.QueueSlot,
-					},
-				},
-			},
 		))
 		return nil
 	})
@@ -78,13 +70,15 @@ func newQueueController(ctx context.Context, mc *ModuleConfig, params *ModulePar
 	// we can't use .UponDeliver because that assumes a DSL origin
 	// upon vcb deliver, store batch and deliver to broadcast component
 	vcbpbdsl.UponEvent[*vcbpbtypes.Event_Deliver](m, func(ev *vcbpbtypes.Deliver) error {
-		origin, ok := ev.Origin.Type.(*vcbpbtypes.Origin_AleaBcqueue)
-		if !ok {
-			return fmt.Errorf("invalid origin for vcb instance")
+		queueSlotStr := ev.SrcModule.StripParent(mc.Self).Top()
+		queueSlot, err := strconv.ParseUint(string(queueSlotStr), 10, 64)
+		if err != nil {
+			return fmt.Errorf("deliver event for invalid round: %w", err)
 		}
+
 		slot := &commontypes.Slot{
 			QueueIdx:  params.QueueIdx,
-			QueueSlot: origin.AleaBcqueue.QueueSlot,
+			QueueSlot: aleatypes.QueueSlot(queueSlot),
 		}
 
 		batchdbdsl.StoreBatch(m, mc.BatchDB, aleaCommon.FormatAleaBatchID(slot), ev.TxIds, ev.Txs, ev.Signature, slot)
@@ -153,6 +147,7 @@ func newQueueController(ctx context.Context, mc *ModuleConfig, params *ModulePar
 func newVcbGenerator(queueMc *ModuleConfig, queueParams *ModuleParams, nodeID t.NodeID, logger logging.Logger) func(ctx context.Context, id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
 	baseConfig := &vcb.ModuleConfig{
 		Self:         "INVALID",
+		Consumer:     queueMc.Self,
 		ReliableNet:  queueMc.ReliableNet,
 		ThreshCrypto: queueMc.ThreshCrypto,
 		Mempool:      queueMc.Mempool,
@@ -170,20 +165,7 @@ func newVcbGenerator(queueMc *ModuleConfig, queueParams *ModuleParams, nodeID t.
 
 		mod := vcb.NewModule(ctx, &mc, params, nodeID, logging.Decorate(logger, "Vcb: ", "slot", idx))
 
-		initialEvs := &events.EventList{}
-		// events.Init is taken care of by modring
-		if nodeID != params.Leader {
-			initialEvs.PushBack(vcbpbevents.InputValue(mc.Self, nil, &vcbpbtypes.Origin{
-				Module: queueMc.Self,
-				Type: &vcbpbtypes.Origin_AleaBcqueue{
-					AleaBcqueue: &bcqueuepbtypes.VcbOrigin{
-						QueueSlot: aleatypes.QueueSlot(idx),
-					},
-				},
-			}).Pb())
-		}
-
-		return mod, initialEvs, nil
+		return mod, &events.EventList{}, nil
 	}
 }
 

@@ -56,12 +56,3 @@ message PastVcbFinal {
   repeated requestpb.Request txs             = 2;
   bytes                      signature       = 3 [(mir.type) = "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes.FullSig"];
 }
-
-// ============================================================
-// Data structures
-// ============================================================
-message VcbOrigin {
-  option (mir.struct) = true;
-
-  uint64 queue_slot = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/alea/aleatypes.QueueSlot"];
-}

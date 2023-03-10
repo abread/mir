@@ -13,7 +13,6 @@ import (
 	threshDsl "github.com/filecoin-project/mir/pkg/pb/threshcryptopb/dsl"
 	vcbdsl "github.com/filecoin-project/mir/pkg/pb/vcbpb/dsl"
 	vcbmsgs "github.com/filecoin-project/mir/pkg/pb/vcbpb/msgs"
-	vcbtypes "github.com/filecoin-project/mir/pkg/pb/vcbpb/types"
 	"github.com/filecoin-project/mir/pkg/reliablenet/rntypes"
 	"github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 	t "github.com/filecoin-project/mir/pkg/types"
@@ -22,15 +21,17 @@ import (
 // ModuleConfig sets the module ids. All replicas are expected to use identical module configurations.
 type ModuleConfig struct {
 	Self         t.ModuleID // id of this module
+	Consumer     t.ModuleID
 	ReliableNet  t.ModuleID
 	ThreshCrypto t.ModuleID
 	Mempool      t.ModuleID
 }
 
 // DefaultModuleConfig returns a valid module config with default names for all modules.
-func DefaultModuleConfig() *ModuleConfig {
+func DefaultModuleConfig(consumer t.ModuleID) *ModuleConfig {
 	return &ModuleConfig{
 		Self:         "vcb",
+		Consumer:     consumer,
 		ReliableNet:  "reliablenet",
 		ThreshCrypto: "threshcrypto",
 		Mempool:      "mempool",
@@ -60,7 +61,6 @@ type state struct {
 
 	payload *vcbPayloadManager
 	sig     []byte
-	origin  *vcbtypes.Origin
 }
 
 type vcbPhase uint8
@@ -105,15 +105,11 @@ func NewModule(ctx context.Context, mc *ModuleConfig, params *ModuleParams, node
 
 	if nodeID == params.Leader {
 		setupVcbLeader(m, mc, params, nodeID, logger, state)
+	} else {
+		vcbdsl.UponInputValue(m, func(txs []*requestpb.Request) error {
+			return fmt.Errorf("vcb input provided for non-leader")
+		})
 	}
-
-	vcbdsl.UponInputValue(m, func(txs []*requestpb.Request, origin *vcbtypes.Origin) error {
-		if state.origin != nil {
-			return fmt.Errorf("duplicate input value in vcb")
-		}
-		state.origin = origin
-		return nil
-	})
 
 	vcbdsl.UponFinalMessageReceived(m, func(from t.NodeID, txs []*requestpb.Request, signature tctypes.FullSig) error {
 		if from != params.Leader {
@@ -142,7 +138,7 @@ func NewModule(ctx context.Context, mc *ModuleConfig, params *ModuleParams, node
 		return nil
 	})
 	dsl.UponCondition(m, func() error {
-		if state.phase == VcbPhasePendingVerification && state.payload.SigData() != nil && state.origin != nil {
+		if state.phase == VcbPhasePendingVerification && state.payload.SigData() != nil {
 			threshDsl.VerifyFull[struct{}](m, mc.ThreshCrypto, state.payload.SigData(), state.sig, nil)
 			state.phase = VcbPhaseVerifying
 		}
@@ -157,21 +153,17 @@ func NewModule(ctx context.Context, mc *ModuleConfig, params *ModuleParams, node
 		return nil
 	})
 	dsl.UponCondition(m, func() error {
-		if state.origin == nil {
-			return nil
-		}
-
 		switch state.phase {
 		case VcbPhaseAwaitingNilDelivery:
 			logger.Log(logging.LevelWarn, "delivering failure")
-			vcbdsl.Deliver(m, state.origin.Module, nil, nil, nil, state.origin)
+			vcbdsl.Deliver(m, mc.Consumer, nil, nil, nil, mc.Self)
 		case VcbPhaseAwaitingOkDelivery:
 			logger.Log(logging.LevelDebug, "delivering batch", "txs", state.payload.Txs(), "sig", state.sig)
-			vcbdsl.Deliver(m, state.origin.Module,
+			vcbdsl.Deliver(m, mc.Consumer,
 				state.payload.Txs(),
 				state.payload.TxIDs(),
 				state.sig,
-				state.origin,
+				mc.Self,
 			)
 		default:
 			return nil
@@ -283,7 +275,7 @@ func setupVcbLeader(m dsl.Module, mc *ModuleConfig, params *ModuleParams, nodeID
 		return nil
 	})
 
-	vcbdsl.UponInputValue(m, func(txs []*requestpb.Request, origin *vcbtypes.Origin) error {
+	vcbdsl.UponInputValue(m, func(txs []*requestpb.Request) error {
 		if nodeID == params.Leader {
 			logger.Log(logging.LevelDebug, "inputting value", "txs", txs)
 			state.payload.Input(txs)

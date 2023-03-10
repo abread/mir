@@ -157,6 +157,7 @@ func runTest(t *testing.T, conf *TestConfig) (result bool, heapObjects int64, he
 		// Check if all requests were delivered exactly once in all replicas.
 		app := replica.Modules["app"].(*countingApp)
 		assert.Equal(t, 1, app.deliveredCount)
+		assert.Equal(t, types.ModuleID("abba"), app.firstSrcModule)
 		assert.Equal(t, app0.firstDelivered, app.firstDelivered)
 
 		// Check if all messages were ACKed
@@ -277,6 +278,7 @@ type countingApp struct {
 	module dsl.Module
 
 	deliveredCount int
+	firstSrcModule types.ModuleID
 	firstDelivered bool
 }
 
@@ -288,13 +290,14 @@ func newCountingApp(ctx context.Context, inputValue bool) *countingApp {
 	}
 
 	dsl.UponInit(m, func() error {
-		abbadsl.InputValue[struct{}](m, "abba", inputValue, nil)
+		abbadsl.InputValue(m, "abba", inputValue)
 
 		return nil
 	})
 
-	abbadsl.UponDeliver(m, func(result bool, _ctx *struct{}) error {
+	abbadsl.UponDeliver(m, func(result bool, srcModule types.ModuleID) error {
 		if app.deliveredCount == 0 {
+			app.firstSrcModule = srcModule
 			app.firstDelivered = result
 		}
 

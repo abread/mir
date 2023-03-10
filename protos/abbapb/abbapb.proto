@@ -5,9 +5,6 @@ package abbapb;
 option go_package = "github.com/filecoin-project/mir/pkg/pb/abbapb";
 
 import "abbapb/roundpb.proto";
-import "dslpb/dslpb.proto";
-import "contextstorepb/contextstorepb.proto";
-import "aleapb/agreementpb/types.proto";
 
 import "mir/codegen_extensions.proto";
 import "net/codegen_extensions.proto";
@@ -23,31 +20,23 @@ message Event {
   oneof type {
     option (mir.event_type) = true;
 
-    RequestInput request_input = 1;
-    InputValue   input_value   = 2;
-    Deliver      deliver       = 3;
-    RoundEvent   round         = 4;
+    InputValue input_value = 1;
+    Deliver    deliver   = 2;
+    RoundEvent round     = 3;
   }
-}
-
-message RequestInput {
-  option (mir.event) = true;
-
-  string module = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.ModuleID"];
 }
 
 message InputValue {
   option (mir.event) = true;
 
-  bool   input  = 1;
-  Origin origin = 2 [(mir.origin_request) = true];
+  bool input = 1;
 }
 
 message Deliver {
   option (mir.event) = true;
 
-  bool   result = 1;
-  Origin origin = 2 [(mir.origin_response) = true];
+  bool   result     = 1;
+  string src_module = 2 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.ModuleID"];
 }
 
 // ============================================================
@@ -69,20 +58,4 @@ message FinishMessage {
   option (net.message) = true;
 
   bool value = 1;
-}
-
-// ============================================================
-// Data structures
-// ============================================================
-
-message Origin {
-  option (mir.struct) = true;
-
-  string module = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.ModuleID"];
-  oneof Type {
-    contextstorepb.Origin context_store = 2;
-    dslpb.Origin          dsl           = 3;
-
-    aleapb.agreementpb.AbbaOrigin alea_ag = 4;
-  }
 }

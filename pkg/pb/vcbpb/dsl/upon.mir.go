@@ -1,8 +1,6 @@
 package vcbpbdsl
 
 import (
-	trace "go.opentelemetry.io/otel/trace"
-
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
 	types1 "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 	requestpb "github.com/filecoin-project/mir/pkg/pb/requestpb"
@@ -24,40 +22,14 @@ func UponEvent[W types.Event_TypeWrapper[Ev], Ev any](m dsl.Module, handler func
 	})
 }
 
-func UponInputValue(m dsl.Module, handler func(txs []*requestpb.Request, origin *types.Origin) error) {
+func UponInputValue(m dsl.Module, handler func(txs []*requestpb.Request) error) {
 	UponEvent[*types.Event_InputValue](m, func(ev *types.InputValue) error {
-		originWrapper, ok := ev.Origin.Type.(*types.Origin_Dsl)
-		if ok {
-			m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
-		}
-
-		kind := trace.WithSpanKind(trace.SpanKindConsumer)
-		m.DslHandle().PushSpan("InputValue", kind)
-		defer m.DslHandle().PopSpan()
-
-		return handler(ev.Txs, ev.Origin)
+		return handler(ev.Txs)
 	})
 }
 
-func UponDeliver[C any](m dsl.Module, handler func(txs []*requestpb.Request, txIds []types2.TxID, signature tctypes.FullSig, context *C) error) {
+func UponDeliver(m dsl.Module, handler func(txs []*requestpb.Request, txIds []types2.TxID, signature tctypes.FullSig, srcModule types2.ModuleID) error) {
 	UponEvent[*types.Event_Deliver](m, func(ev *types.Deliver) error {
-		originWrapper, ok := ev.Origin.Type.(*types.Origin_Dsl)
-		if !ok {
-			return nil
-		}
-
-		contextRaw := m.DslHandle().RecoverAndCleanupContext(dsl.ContextID(originWrapper.Dsl.ContextID))
-		context, ok := contextRaw.(*C)
-		if !ok {
-			return nil
-		}
-
-		m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
-
-		kind := trace.WithSpanKind(trace.SpanKindConsumer)
-		m.DslHandle().PushSpan("Deliver", kind)
-		defer m.DslHandle().PopSpan()
-
-		return handler(ev.Txs, ev.TxIds, ev.Signature, context)
+		return handler(ev.Txs, ev.TxIds, ev.Signature, ev.SrcModule)
 	})
 }

@@ -7,10 +7,6 @@ type Event_TypeWrapper[T any] interface {
 	Unwrap() *T
 }
 
-func (w *Event_RequestInput) Unwrap() *RequestInput {
-	return w.RequestInput
-}
-
 func (w *Event_InputValue) Unwrap() *InputValue {
 	return w.InputValue
 }
