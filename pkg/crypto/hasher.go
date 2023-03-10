@@ -26,7 +26,7 @@ type HasherModuleParams struct {
 func DefaultHasherModuleParams() *HasherModuleParams {
 	return &HasherModuleParams{
 		InputBufferSize: 64,
-		NumWorkers:      runtime.NumCPU() - 1,
+		NumWorkers:      runtime.NumCPU(),
 	}
 }
 
