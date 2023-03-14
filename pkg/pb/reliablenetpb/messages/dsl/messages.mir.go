@@ -1,6 +1,9 @@
 package messagesdsl
 
 import (
+	attribute "go.opentelemetry.io/otel/attribute"
+	trace "go.opentelemetry.io/otel/trace"
+
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
 	dsl1 "github.com/filecoin-project/mir/pkg/pb/messagepb/dsl"
 	types2 "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
@@ -24,7 +27,10 @@ func UponMessageReceived[W types.Message_TypeWrapper[M], M any](m dsl.Module, ha
 
 func UponAckMessageReceived(m dsl.Module, handler func(from types1.NodeID, msgDestModule types1.ModuleID, msgId rntypes.MsgID) error) {
 	UponMessageReceived[*types.Message_Ack](m, func(from types1.NodeID, msg *types.AckMessage) error {
-		m.DslHandle().PushSpan("UponAckMessageReceived")
+		spanFromAttr := attribute.String("from", string(from))
+		spanMsgAttr := attribute.String("message", msg.Pb().String())
+		spanAttrs := trace.WithAttributes(spanFromAttr, spanMsgAttr)
+		m.DslHandle().PushSpan("UponAckMessageReceived", spanAttrs)
 		defer m.DslHandle().PopSpan()
 
 		return handler(from, msg.MsgDestModule, msg.MsgId)

@@ -151,8 +151,14 @@ func generateDslFunctionsForHandlingNetMessagesRecursively(
 		jen.Add(uponMessageReceived).Types(hierarchyNode.OneofOption().MirWrapperType()).Params(
 			jen.Id("m"),
 			jen.Func().Params(jen.Id("from").Add(tNodeIDCode), jen.Id("msg").Add(hierarchyNode.Message().MirType())).Id("error").Block(
-				// TODO: add message fields to span attributes?
-				jen.Id("m").Dot("DslHandle").Call().Dot("PushSpan").Call(jen.Lit("Upon"+hierarchyNode.Name()+"Received")),
+				jen.Id("spanFromAttr").Op(":=").Add(attributeString).Call(jen.Lit("from"), jen.String().Call(jen.Id("from"))),
+				jen.Id("spanMsgAttr").Op(":=").Add(attributeString).Call(jen.Lit("message"), jen.Id("msg").Dot("Pb").Call().Dot("String").Call()),
+				jen.Id("spanAttrs").Op(":=").Add(traceWithAttributes).Call(jen.Id("spanFromAttr"), jen.Id("spanMsgAttr")),
+
+				jen.Id("m").Dot("DslHandle").Call().Dot("PushSpan").Call(
+					jen.Lit("Upon"+hierarchyNode.Name()+"Received"),
+					jen.Id("spanAttrs"),
+				),
 				jen.Defer().Add(jen.Id("m").Dot("DslHandle").Call().Dot("PopSpan").Call()),
 				jen.Line(), // empty line
 

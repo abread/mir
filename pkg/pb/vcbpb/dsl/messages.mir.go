@@ -1,6 +1,9 @@
 package vcbpbdsl
 
 import (
+	attribute "go.opentelemetry.io/otel/attribute"
+	trace "go.opentelemetry.io/otel/trace"
+
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
 	dsl1 "github.com/filecoin-project/mir/pkg/pb/messagepb/dsl"
 	types2 "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
@@ -25,7 +28,10 @@ func UponMessageReceived[W types.Message_TypeWrapper[M], M any](m dsl.Module, ha
 
 func UponSendMessageReceived(m dsl.Module, handler func(from types1.NodeID, txs []*requestpb.Request) error) {
 	UponMessageReceived[*types.Message_SendMessage](m, func(from types1.NodeID, msg *types.SendMessage) error {
-		m.DslHandle().PushSpan("UponSendMessageReceived")
+		spanFromAttr := attribute.String("from", string(from))
+		spanMsgAttr := attribute.String("message", msg.Pb().String())
+		spanAttrs := trace.WithAttributes(spanFromAttr, spanMsgAttr)
+		m.DslHandle().PushSpan("UponSendMessageReceived", spanAttrs)
 		defer m.DslHandle().PopSpan()
 
 		return handler(from, msg.Txs)
@@ -34,7 +40,10 @@ func UponSendMessageReceived(m dsl.Module, handler func(from types1.NodeID, txs 
 
 func UponEchoMessageReceived(m dsl.Module, handler func(from types1.NodeID, signatureShare tctypes.SigShare) error) {
 	UponMessageReceived[*types.Message_EchoMessage](m, func(from types1.NodeID, msg *types.EchoMessage) error {
-		m.DslHandle().PushSpan("UponEchoMessageReceived")
+		spanFromAttr := attribute.String("from", string(from))
+		spanMsgAttr := attribute.String("message", msg.Pb().String())
+		spanAttrs := trace.WithAttributes(spanFromAttr, spanMsgAttr)
+		m.DslHandle().PushSpan("UponEchoMessageReceived", spanAttrs)
 		defer m.DslHandle().PopSpan()
 
 		return handler(from, msg.SignatureShare)
@@ -43,7 +52,10 @@ func UponEchoMessageReceived(m dsl.Module, handler func(from types1.NodeID, sign
 
 func UponFinalMessageReceived(m dsl.Module, handler func(from types1.NodeID, txs []*requestpb.Request, signature tctypes.FullSig) error) {
 	UponMessageReceived[*types.Message_FinalMessage](m, func(from types1.NodeID, msg *types.FinalMessage) error {
-		m.DslHandle().PushSpan("UponFinalMessageReceived")
+		spanFromAttr := attribute.String("from", string(from))
+		spanMsgAttr := attribute.String("message", msg.Pb().String())
+		spanAttrs := trace.WithAttributes(spanFromAttr, spanMsgAttr)
+		m.DslHandle().PushSpan("UponFinalMessageReceived", spanAttrs)
 		defer m.DslHandle().PopSpan()
 
 		return handler(from, msg.Txs, msg.Signature)

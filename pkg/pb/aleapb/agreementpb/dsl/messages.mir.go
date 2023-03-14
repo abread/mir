@@ -1,6 +1,9 @@
 package agreementpbdsl
 
 import (
+	attribute "go.opentelemetry.io/otel/attribute"
+	trace "go.opentelemetry.io/otel/trace"
+
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
 	types "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/types"
 	dsl1 "github.com/filecoin-project/mir/pkg/pb/messagepb/dsl"
@@ -23,7 +26,10 @@ func UponMessageReceived[W types.Message_TypeWrapper[M], M any](m dsl.Module, ha
 
 func UponFinishAbbaMessageReceived(m dsl.Module, handler func(from types1.NodeID, round uint64, value bool) error) {
 	UponMessageReceived[*types.Message_FinishAbba](m, func(from types1.NodeID, msg *types.FinishAbbaMessage) error {
-		m.DslHandle().PushSpan("UponFinishAbbaMessageReceived")
+		spanFromAttr := attribute.String("from", string(from))
+		spanMsgAttr := attribute.String("message", msg.Pb().String())
+		spanAttrs := trace.WithAttributes(spanFromAttr, spanMsgAttr)
+		m.DslHandle().PushSpan("UponFinishAbbaMessageReceived", spanAttrs)
 		defer m.DslHandle().PopSpan()
 
 		return handler(from, msg.Round, msg.Value)
