@@ -269,6 +269,9 @@ func (tr *Transport) readAndProcessMessages(s network.Stream, nodeID t.NodeID, p
 				"remotePeer", peerID, "err", err)
 			return
 		}
+		if msg == nil {
+			continue // heartbeat message
+		}
 
 		// Sanity check. TODO: Remove the `sender` completely and infer it from the PeerID.
 		if sender != nodeID {
@@ -295,6 +298,10 @@ func readAndDecode(s network.Stream) (*messagepb.Message, t.NodeID, error) {
 	err := tm.UnmarshalCBOR(s)
 	if err != nil {
 		return nil, "", err
+	}
+
+	if len(tm.Payload) == 0 {
+		return nil, t.NodeID(tm.Sender), nil
 	}
 
 	var msg messagepb.Message
