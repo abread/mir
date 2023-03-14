@@ -204,7 +204,7 @@ func (m *Module) getSubByRingIdx(ringIdx int) (modules.PassiveModule, *eventpb.E
 		}
 
 		subFullID := m.ownID.Then(t.NewModuleIDFromInt(subID))
-		subCtx, _ := otel.Tracer(name).Start(m.ctx, fmt.Sprintf("modring:%s", subFullID))
+		subCtx, subSpan := otel.Tracer(name).Start(m.ctx, fmt.Sprintf("modring:%s", subFullID))
 		sub, initialEvs, err := (m.generator)(subCtx, subFullID, subID)
 		if err != nil {
 			return nil, nil, err
@@ -213,6 +213,8 @@ func (m *Module) getSubByRingIdx(ringIdx int) (modules.PassiveModule, *eventpb.E
 		// construct init event
 		initEvent := events.Init(subFullID)
 		initEvent.Next = append(initEvent.Next, initialEvs.Slice()...)
+
+		subSpan.AddEvent("module init done")
 
 		m.ring[ringIdx] = sub
 		m.ctxRing[ringIdx] = subCtx
