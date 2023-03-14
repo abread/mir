@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"runtime/debug"
 	"sync"
+	"sync/atomic"
 
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
@@ -116,27 +117,42 @@ type poolModule struct {
 	processor  EventProcessor
 	inputChan  chan *eventpb.Event
 	outputChan chan *events.EventList
+
+	wg sync.WaitGroup
+
+	// ensures events are serialized
+	// ApplyEvents will spawn a goroutine with some seqno. This goroutine will wait for nextInputSeqNo
+	// to be its seqno, then push all its input to inputChan, and aftewards increment nextInputSeqNo
+	// and signal other routines to try to make progress.
+	// Sequence numbers are assigned from lastFutureInputSeqNo.
+	nextInputReady       *sync.Cond // protects nextInputSeqNo
+	nextInputSeqNo       uint64
+	lastFutureInputSeqNo uint64 // must be manipulated with atomics
 }
 
-func NewGoRoutinePoolModule(ctx context.Context, processor EventProcessor, bufSize int, workers int) ActiveModule {
-	inputChan := make(chan *eventpb.Event, bufSize)
-	outputChan := make(chan *events.EventList)
+func NewGoRoutinePoolModule(ctx context.Context, processor EventProcessor, workers int) ActiveModule {
+	mod := &poolModule{
+		processor:  processor,
+		inputChan:  make(chan *eventpb.Event),
+		outputChan: make(chan *events.EventList, workers),
+
+		nextInputReady: sync.NewCond(&sync.Mutex{}),
+		nextInputSeqNo: 1, // 0 will never be used
+	}
 	doneChan := ctx.Done()
 
-	wg := &sync.WaitGroup{}
-
 	for i := 0; i < workers; i++ {
-		wg.Add(1)
+		mod.wg.Add(1)
 		go func() {
-			defer wg.Done()
+			defer mod.wg.Done()
 		Loop:
 			for {
 				select {
 				case <-doneChan:
 					break Loop
-				case ev := <-inputChan:
+				case ev := <-mod.inputChan:
 					select {
-					case outputChan <- processor.ApplyEvent(ctx, ev):
+					case mod.outputChan <- processor.ApplyEvent(ctx, ev):
 						continue
 					case <-doneChan:
 						break Loop
@@ -147,15 +163,11 @@ func NewGoRoutinePoolModule(ctx context.Context, processor EventProcessor, bufSi
 	}
 
 	go func() {
-		wg.Wait()
-		close(outputChan) // the simulation needs the output channel to be closed to complete (?)
+		mod.wg.Wait()
+		close(mod.outputChan) // the simulation needs the output channel to be closed to complete (?)
 	}()
 
-	return &poolModule{
-		processor:  processor,
-		inputChan:  inputChan,
-		outputChan: outputChan,
-	}
+	return mod
 }
 
 func (m *poolModule) ImplementsModule() {}
@@ -163,14 +175,42 @@ func (m *poolModule) EventsOut() <-chan *events.EventList {
 	return m.outputChan
 }
 func (m *poolModule) ApplyEvents(ctx context.Context, events *events.EventList) error {
-	it := events.Iterator()
-	for ev := it.Next(); ev != nil; ev = it.Next() {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case m.inputChan <- ev:
-		}
+	seqno := atomic.AddUint64(&m.lastFutureInputSeqNo, 1)
+
+	m.wg.Add(1)
+	isNotDone := true
+	select {
+	case _, isNotDone = <-ctx.Done():
+	default:
 	}
+	if !isNotDone {
+		m.wg.Done()
+		return ctx.Err()
+	}
+
+	go func() {
+		defer m.wg.Done()
+
+		m.nextInputReady.L.Lock()
+		defer m.nextInputReady.L.Unlock()
+
+		for m.nextInputSeqNo != seqno {
+			m.nextInputReady.Wait()
+		}
+
+		it := events.Iterator()
+	InputLoop:
+		for ev := it.Next(); ev != nil; ev = it.Next() {
+			select {
+			case <-ctx.Done():
+				break InputLoop
+			case m.inputChan <- ev:
+			}
+		}
+
+		m.nextInputSeqNo++
+		m.nextInputReady.Broadcast()
+	}()
 	return nil
 }
 

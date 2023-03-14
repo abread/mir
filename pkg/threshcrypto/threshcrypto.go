@@ -22,19 +22,17 @@ import (
 )
 
 type ModuleParams struct {
-	InputBufferSize int
-	NumWorkers      int
+	NumWorkers int
 }
 
 func DefaultModuleParams() *ModuleParams {
 	return &ModuleParams{
-		InputBufferSize: 64,
-		NumWorkers:      runtime.NumCPU(),
+		NumWorkers: runtime.NumCPU(),
 	}
 }
 
 func New(ctx context.Context, params *ModuleParams, threshCrypto ThreshCrypto) modules.ActiveModule {
-	return modules.NewGoRoutinePoolModule(ctx, &threshEventProcessor{threshCrypto}, params.InputBufferSize, params.NumWorkers)
+	return modules.NewGoRoutinePoolModule(ctx, &threshEventProcessor{threshCrypto}, params.NumWorkers)
 }
 
 type threshEventProcessor struct {

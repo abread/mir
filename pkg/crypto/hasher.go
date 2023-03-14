@@ -19,19 +19,17 @@ type HashImpl interface {
 }
 
 type HasherModuleParams struct {
-	InputBufferSize int
-	NumWorkers      int
+	NumWorkers int
 }
 
 func DefaultHasherModuleParams() *HasherModuleParams {
 	return &HasherModuleParams{
-		InputBufferSize: 64,
-		NumWorkers:      runtime.NumCPU(),
+		NumWorkers: runtime.NumCPU(),
 	}
 }
 
 func NewHasher(ctx context.Context, params *HasherModuleParams, hashImpl HashImpl) modules.ActiveModule {
-	return modules.NewGoRoutinePoolModule(ctx, &hasherEventProc{ctx, hashImpl}, params.InputBufferSize, params.NumWorkers)
+	return modules.NewGoRoutinePoolModule(ctx, &hasherEventProc{ctx, hashImpl}, params.NumWorkers)
 }
 
 type hasherEventProc struct {
