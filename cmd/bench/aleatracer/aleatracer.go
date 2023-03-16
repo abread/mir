@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/filecoin-project/mir/pkg/alea/aleatypes"
+	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/pb/abbapb"
 	"github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents"
@@ -20,6 +21,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/pb/mempoolpb"
 	"github.com/filecoin-project/mir/pkg/pb/messagepb"
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"
+	"github.com/filecoin-project/mir/pkg/pb/threshcryptopb"
 	"github.com/filecoin-project/mir/pkg/pb/vcbpb"
 	t "github.com/filecoin-project/mir/pkg/types"
 	"github.com/filecoin-project/mir/pkg/util/localclock"
@@ -44,6 +46,7 @@ type AleaTracer struct {
 	wipAbbaRoundModSpan        map[abbaRoundID]*span
 	wipBfSpan                  map[commontypes.Slot]*span
 	wipBfStalledSpan           map[commontypes.Slot]*span
+	wipThreshCryptoSpan        map[string]*span
 
 	bfWipSlotsCtxID map[uint64]commontypes.Slot
 	bfDeliverQueue  []commontypes.Slot
@@ -97,6 +100,7 @@ func NewAleaTracer(ctx context.Context, ownQueueIdx aleatypes.QueueIdx, nodeCoun
 		wipAbbaRoundModSpan:        make(map[abbaRoundID]*span, nodeCount*N),
 		wipBfSpan:                  make(map[commontypes.Slot]*span, nodeCount*N),
 		wipBfStalledSpan:           make(map[commontypes.Slot]*span, nodeCount*N),
+		wipThreshCryptoSpan:        make(map[string]*span, nodeCount*N),
 
 		bfWipSlotsCtxID: make(map[uint64]commontypes.Slot, nodeCount),
 		bfDeliverQueue:  nil,
@@ -313,6 +317,65 @@ func (at *AleaTracer) interceptOne(event *eventpb.Event) error {
 				at.endTxWaitingDeliverySpan(ts, tx.ClientId, tx.ReqNo)
 				at.endTxSpan(ts, tx.ClientId, tx.ReqNo)
 			}
+		}
+	case *eventpb.Event_ThreshCrypto:
+		switch e := ev.ThreshCrypto.Type.(type) {
+		case *threshcryptopb.Event_SignShare:
+			originW, ok := e.SignShare.Origin.Type.(*threshcryptopb.SignShareOrigin_Dsl)
+			if !ok {
+				return nil
+			}
+
+			at.startThreshCryptoSpan(ts, "tc:signShare", t.ModuleID(e.SignShare.Origin.Module), dsl.ContextID(originW.Dsl.ContextID))
+		case *threshcryptopb.Event_SignShareResult:
+			originW, ok := e.SignShareResult.Origin.Type.(*threshcryptopb.SignShareOrigin_Dsl)
+			if !ok {
+				return nil
+			}
+
+			at.endThreshCryptoSpan(ts, "tc:signShare", t.ModuleID(e.SignShareResult.Origin.Module), dsl.ContextID(originW.Dsl.ContextID))
+		case *threshcryptopb.Event_VerifyShare:
+			originW, ok := e.VerifyShare.Origin.Type.(*threshcryptopb.VerifyShareOrigin_Dsl)
+			if !ok {
+				return nil
+			}
+
+			at.startThreshCryptoSpan(ts, "tc:verifyShare", t.ModuleID(e.VerifyShare.Origin.Module), dsl.ContextID(originW.Dsl.ContextID))
+		case *threshcryptopb.Event_VerifyShareResult:
+			originW, ok := e.VerifyShareResult.Origin.Type.(*threshcryptopb.VerifyShareOrigin_Dsl)
+			if !ok {
+				return nil
+			}
+
+			at.endThreshCryptoSpan(ts, "tc:verifyShare", t.ModuleID(e.VerifyShareResult.Origin.Module), dsl.ContextID(originW.Dsl.ContextID))
+		case *threshcryptopb.Event_VerifyFull:
+			originW, ok := e.VerifyFull.Origin.Type.(*threshcryptopb.VerifyFullOrigin_Dsl)
+			if !ok {
+				return nil
+			}
+
+			at.startThreshCryptoSpan(ts, "tc:verifyFull", t.ModuleID(e.VerifyFull.Origin.Module), dsl.ContextID(originW.Dsl.ContextID))
+		case *threshcryptopb.Event_VerifyFullResult:
+			originW, ok := e.VerifyFullResult.Origin.Type.(*threshcryptopb.VerifyFullOrigin_Dsl)
+			if !ok {
+				return nil
+			}
+
+			at.endThreshCryptoSpan(ts, "tc:verifyFull", t.ModuleID(e.VerifyFullResult.Origin.Module), dsl.ContextID(originW.Dsl.ContextID))
+		case *threshcryptopb.Event_Recover:
+			originW, ok := e.Recover.Origin.Type.(*threshcryptopb.RecoverOrigin_Dsl)
+			if !ok {
+				return nil
+			}
+
+			at.startThreshCryptoSpan(ts, "tc:recover", t.ModuleID(e.Recover.Origin.Module), dsl.ContextID(originW.Dsl.ContextID))
+		case *threshcryptopb.Event_RecoverResult:
+			originW, ok := e.RecoverResult.Origin.Type.(*threshcryptopb.RecoverOrigin_Dsl)
+			if !ok {
+				return nil
+			}
+
+			at.endThreshCryptoSpan(ts, "tc:recover", t.ModuleID(e.RecoverResult.Origin.Module), dsl.ContextID(originW.Dsl.ContextID))
 		}
 	}
 
@@ -768,6 +831,31 @@ func (at *AleaTracer) startDeliveryStalledSpan(ts time.Duration, slot commontype
 }
 func (at *AleaTracer) endDeliveryStalledSpan(ts time.Duration, slot commontypes.Slot) {
 	s := at._bfStalledSpan(ts, slot)
+	if s.end == 0 {
+		s.end = ts
+		at.writeSpan(s)
+	}
+}
+
+func (at *AleaTracer) _threshCryptoSpan(ts time.Duration, class string, destModule t.ModuleID, ctxID dsl.ContextID) *span {
+	id := fmt.Sprintf("%s(%v)", destModule, ctxID)
+	uid := fmt.Sprintf("%s %s", class, id)
+	s, ok := at.wipThreshCryptoSpan[uid]
+	if !ok {
+		at.wipThreshCryptoSpan[uid] = &span{
+			class: class,
+			id:    id,
+			start: ts,
+		}
+		s = at.wipThreshCryptoSpan[uid]
+	}
+	return s
+}
+func (at *AleaTracer) startThreshCryptoSpan(ts time.Duration, class string, destModule t.ModuleID, ctxID dsl.ContextID) {
+	at._threshCryptoSpan(ts, class, destModule, ctxID)
+}
+func (at *AleaTracer) endThreshCryptoSpan(ts time.Duration, class string, destModule t.ModuleID, ctxID dsl.ContextID) {
+	s := at._threshCryptoSpan(ts, class, destModule, ctxID)
 	if s.end == 0 {
 		s.end = ts
 		at.writeSpan(s)
