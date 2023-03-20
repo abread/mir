@@ -43,7 +43,7 @@ func DefaultModuleConfig() *ModuleConfig {
 
 func DefaultModuleParams(allNodes []t.NodeID) *ModuleParams {
 	return &ModuleParams{
-		RetransmissionLoopInterval: 1000 * time.Millisecond,
+		RetransmissionLoopInterval: 5000 * time.Millisecond,
 		MaxRetransmissionBurst:     512,
 		AllNodes:                   allNodes,
 	}
