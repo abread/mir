@@ -13,6 +13,7 @@ import (
 	"github.com/drand/kyber/pairing"
 	"github.com/drand/kyber/share"
 	"github.com/drand/kyber/sign"
+	"github.com/drand/kyber/sign/bls"
 	"github.com/drand/kyber/sign/tbls"
 	"golang.org/x/exp/slices"
 
@@ -23,32 +24,35 @@ import (
 // It is capable of creating signature shares with its (single) private key share,
 // and validating/recovering signatures involving all group members.
 type TBLSInst struct {
-	t         int
-	members   []t.NodeID
-	scheme    sign.ThresholdScheme
-	sigGroup  kyber.Group
-	privShare *share.PriShare
-	public    *share.PubPoly
+	t       int
+	members []t.NodeID
+
+	regularScheme sign.Scheme
+	threshScheme  sign.ThresholdScheme
+	sigGroup      kyber.Group
+	privShare     *share.PriShare
+	public        *share.PubPoly
+	pubShares     []kyber.Point
 }
 
 // Constructs a TBLS scheme using the BLS12-381 pairing, with signatures being points on curve G1,
 // and keys points on curve G2.
-func tbls12381Scheme() (pairing.Suite, sign.ThresholdScheme, kyber.Group, kyber.Group) {
+func tbls12381Scheme() (pairing.Suite, sign.Scheme, sign.ThresholdScheme, kyber.Group, kyber.Group) {
 	suite := bls12381.NewBLS12381Suite()
-	scheme := tbls.NewThresholdSchemeOnG1(suite)
+	regularScheme := bls.NewSchemeOnG1(suite)
+	threshScheme := tbls.NewThresholdSchemeOnG1(suite)
 	sigGroup := suite.G1()
 	keyGroup := suite.G2()
 
-	return suite, scheme, sigGroup, keyGroup
+	return suite, regularScheme, threshScheme, sigGroup, keyGroup
 }
 
 // TBLS12381Keygen constructs a set TBLSInst for a given set of member nodes and threshold T
-// with nByz byzantine nodes, using the BLS12-381 pairing, with signatures being points on curve G1,
-// and keys points on curve G2.
+// using the BLS12-381 pairing, with signatures being points on curve G1, and keys points on curve G2.
 func TBLS12381Keygen(T int, members []t.NodeID, randSource cipher.Stream) []*TBLSInst {
 	N := len(members)
 
-	pairing, scheme, sigGroup, keyGroup := tbls12381Scheme()
+	pairing, regularScheme, threshScheme, sigGroup, keyGroup := tbls12381Scheme()
 
 	if randSource == nil {
 		randSource = pairing.RandomStream()
@@ -59,15 +63,22 @@ func TBLS12381Keygen(T int, members []t.NodeID, randSource cipher.Stream) []*TBL
 	public := privFull.Commit(keyGroup.Point().Base())
 
 	privShares := privFull.Shares(N)
+	pubShares := make([]kyber.Point, N)
+	for i := range pubShares {
+		pubShares[i] = public.Eval(i).V
+	}
+
 	instances := make([]*TBLSInst, N)
 	for i := 0; i < N; i++ {
 		instances[i] = &TBLSInst{
-			sigGroup:  sigGroup,
-			scheme:    scheme,
-			privShare: privShares[i],
-			public:    public,
-			t:         T,
-			members:   members,
+			sigGroup:      sigGroup,
+			regularScheme: regularScheme,
+			threshScheme:  threshScheme,
+			privShare:     privShares[i],
+			pubShares:     pubShares,
+			public:        public,
+			t:             T,
+			members:       members,
 		}
 	}
 
@@ -158,8 +169,9 @@ func (inst *TBLSInst) UnmarshalFrom(r io.Reader) (int, error) {
 	inst.privShare = &share.PriShare{}
 	inst.public = &share.PubPoly{}
 
-	_, scheme, sigGroup, keyGroup := tbls12381Scheme()
-	inst.scheme = scheme
+	_, regularScheme, threshScheme, sigGroup, keyGroup := tbls12381Scheme()
+	inst.regularScheme = regularScheme
+	inst.threshScheme = threshScheme
 	inst.sigGroup = sigGroup
 
 	unmarshalInt := func(v *int) error {
@@ -248,17 +260,24 @@ func (inst *TBLSInst) UnmarshalFrom(r io.Reader) (int, error) {
 		return read, err
 	}
 
+	inst.pubShares = make([]kyber.Point, len(inst.members))
+	for i := range inst.pubShares {
+		inst.pubShares[i] = inst.public.Eval(i).V
+	}
+
 	return read, nil
 }
 
 // SignShare constructs a signature share for the message.
 func (inst *TBLSInst) SignShare(msg [][]byte) ([]byte, error) {
-	return inst.scheme.Sign(inst.privShare, digest(msg))
+	return inst.threshScheme.Sign(inst.privShare, digest(msg))
 }
 
 // VerifyShare verifies that a signature share is for a given message from a given node.
-func (inst *TBLSInst) VerifyShare(msg [][]byte, sigShare []byte, nodeID t.NodeID) error {
-	idx, err := tbls.SigShare(sigShare).Index()
+func (inst *TBLSInst) VerifyShare(msg [][]byte, rawSigShare []byte, nodeID t.NodeID) error {
+	sigShare := tbls.SigShare(rawSigShare)
+
+	idx, err := sigShare.Index()
 	if err != nil {
 		return err
 	}
@@ -267,12 +286,12 @@ func (inst *TBLSInst) VerifyShare(msg [][]byte, sigShare []byte, nodeID t.NodeID
 		return fmt.Errorf("signature share belongs to another node")
 	}
 
-	return inst.scheme.VerifyPartial(inst.public, digest(msg), sigShare)
+	return inst.regularScheme.Verify(inst.pubShares[idx], digest(msg), sigShare.Value())
 }
 
 // VerifyFull verifies that a (full) signature is valid for a given message.
 func (inst *TBLSInst) VerifyFull(msg [][]byte, sigFull []byte) error {
-	return inst.scheme.VerifyRecovered(inst.public.Commit(), digest(msg), sigFull)
+	return inst.threshScheme.VerifyRecovered(inst.public.Commit(), digest(msg), sigFull)
 }
 
 // Recover recovers a full signature from a set of (previously validated) shares, that are known to be from
