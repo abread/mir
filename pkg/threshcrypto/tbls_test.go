@@ -1,21 +1,158 @@
 package threshcrypto
 
 import (
+	"fmt"
 	"io"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/rand"
+	"golang.org/x/exp/slices"
 
 	"github.com/filecoin-project/mir/pkg/types"
 )
 
+type TestKeygen func(T, N int) []ThreshCrypto
+
+func BenchmarkTBLSSignShare(b *testing.B) {
+	benchmarkSignShare(b, keygenTBLS)
+}
+
+func BenchmarkHerumiTBLSSignShare(b *testing.B) {
+	benchmarkSignShare(b, keygenHerumiTBLS)
+}
+
+func benchmarkSignShare(b *testing.B, keygen TestKeygen) {
+	F := 5
+	keys := keygen(2*F+1, 3*F+1)
+	data := [][]byte{{1, 2, 3, 4, 5}, {4, 2}}
+
+	expectedShare, err := keys[0].SignShare(data)
+	require.NoError(b, err)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		share, err := keys[0].SignShare(data)
+		assert.Nil(b, err)
+		assert.Equal(b, expectedShare, share)
+	}
+}
+
+func BenchmarkTBLSVerifyShare(b *testing.B) {
+	benchmarkVerifyShare(b, keygenTBLS)
+}
+
+func BenchmarkHerumiTBLSVerifyShare(b *testing.B) {
+	benchmarkVerifyShare(b, keygenHerumiTBLS)
+}
+
+func benchmarkVerifyShare(b *testing.B, keygen TestKeygen) {
+	F := 5
+	keys := keygen(2*F+1, 3*F+1)
+	data := [][]byte{{1, 2, 3, 4, 5}, {4, 2}}
+
+	share, err := keys[0].SignShare(data)
+	require.NoError(b, err)
+
+	badShare := slices.Clone(share)
+	badShare[len(badShare)-1] ^= 1
+
+	nodeID := types.NewNodeIDFromInt(0)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if i%2 == 0 {
+			err := keys[0].VerifyShare(data, share, nodeID)
+			assert.Nil(b, err)
+		} else {
+			err := keys[0].VerifyShare(data, badShare, nodeID)
+			assert.NotNil(b, err)
+		}
+	}
+}
+
+func BenchmarkTBLSRecover(b *testing.B) {
+	benchmarkRecover(b, keygenTBLS)
+}
+
+func BenchmarkHerumiTBLSRecover(b *testing.B) {
+	benchmarkRecover(b, keygenHerumiTBLS)
+}
+
+func benchmarkRecover(b *testing.B, keygen TestKeygen) {
+	F := 5
+	keys := keygen(2*F+1, 3*F+1)
+	data := [][]byte{{1, 2, 3, 4, 5}, {4, 2}}
+
+	shares := make([][]byte, 2*F+1)
+	for i := 0; i < 2*F+1; i++ {
+		var err error
+		shares[i], err = keys[i].SignShare(data)
+		require.Nil(b, err)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		sig, err := keys[0].Recover(data, shares)
+		assert.Nil(b, err)
+		assert.NotNil(b, sig)
+	}
+}
+
+func BenchmarkTBLSVerifyFull(b *testing.B) {
+	benchmarkVerifyFull(b, keygenTBLS)
+}
+
+func BenchmarkHerumiTBLSVerifyFull(b *testing.B) {
+	benchmarkVerifyFull(b, keygenHerumiTBLS)
+}
+
+func benchmarkVerifyFull(b *testing.B, keygen TestKeygen) {
+	F := 5
+	keys := keygen(2*F+1, 3*F+1)
+	data := [][]byte{{1, 2, 3, 4, 5}, {4, 2}}
+
+	shares := make([][]byte, 2*F+1)
+	for i := 0; i < 2*F+1; i++ {
+		var err error
+		shares[i], err = keys[i].SignShare(data)
+		require.Nil(b, err)
+	}
+
+	sig, err := keys[0].Recover(data, shares)
+	require.Nil(b, err)
+	require.NotNil(b, sig)
+
+	badSig := slices.Clone(sig)
+	badSig[len(badSig)-1] ^= 1
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if i%2 == 0 {
+			err := keys[0].VerifyFull(data, sig)
+			assert.Nil(b, err)
+		} else {
+			err := keys[0].VerifyFull(data, badSig)
+			assert.NotNil(b, err)
+		}
+	}
+}
+
 func TestTBLSHappySmoke(t *testing.T) {
+	testTCHappySmoke(t, keygenTBLS)
+}
+
+func TestHerumiTBLSHappySmoke(t *testing.T) {
+	testTCHappySmoke(t, keygenHerumiTBLS)
+}
+
+func testTCHappySmoke(t *testing.T, keygen TestKeygen) {
 	// confirm basic functionality is there (happy path)
 	N := 5
 	T := 3
 
-	keys := keygen(T-1, T, N)
+	keys := keygen(T, N)
 
 	data := [][]byte{{1, 2, 3, 4, 5}, {4, 2}}
 
@@ -47,15 +184,23 @@ func TestTBLSHappySmoke(t *testing.T) {
 }
 
 func TestTBLSSadSmoke(t *testing.T) {
+	testTCSadSmoke(t, keygenTBLS)
+}
+
+func TestHerumiTBLSSadSmoke(t *testing.T) {
+	testTCSadSmoke(t, keygenHerumiTBLS)
+}
+
+func testTCSadSmoke(t *testing.T, keygen TestKeygen) {
 	// confirm some basic problems are detected correctly
 	N := 5
 	T := 3
 
-	keys := keygen(T-1, T, N)
+	keys := keygen(T, N)
 
 	data := [][]byte{{1, 2, 3, 4, 5}, {4, 2}}
 
-	shares := make([][]byte, 4)
+	shares := make([][]byte, N)
 	for i := range shares {
 		sh, err := keys[i].SignShare(data)
 		require.NoError(t, err)
@@ -78,14 +223,20 @@ func TestTBLSSadSmoke(t *testing.T) {
 	for _, k := range keys {
 		assert.Error(t, k.VerifyShare(data, shares[1], "1"))
 	}
+
+	// mangled share recovers bad sig
+	fullSig, err := keys[0].Recover(data, shares[:3])
+	if err == nil {
+		err = keys[0].VerifyFull(data, fullSig)
+		assert.Error(t, err)
+	}
 }
 
 func TestTBLSMarshalling(t *testing.T) {
 	N := 3
 	T := N
-	nByz := (N+1)/2 - 1
 
-	keys := keygen(nByz, T, N)
+	keys := keygenTBLSRaw(T, N)
 
 	keys2 := marshalUnmarshalKeys(t, keys)
 
@@ -115,7 +266,7 @@ func TestTBLSMarshalling(t *testing.T) {
 	}
 }
 
-func keygen(nByz, T, N int) []*TBLSInst {
+func keygenTBLSRaw(T, N int) []*TBLSInst {
 	members := make([]types.NodeID, N)
 	for i := range members {
 		members[i] = types.NewNodeIDFromInt(i)
@@ -123,6 +274,41 @@ func keygen(nByz, T, N int) []*TBLSInst {
 
 	rand := pseudorandomStream(DefaultPseudoSeed)
 	return TBLS12381Keygen(T, members, rand)
+}
+
+func keygenTBLS(T, N int) []ThreshCrypto {
+	return castInsts(keygenTBLSRaw(T, N))
+}
+
+func keygenHerumiTBLS(T, N int) []ThreshCrypto {
+	members := make([]types.NodeID, N)
+	for i := range members {
+		members[i] = types.NewNodeIDFromInt(i)
+	}
+
+	randSource := rand.New(rand.NewSource(uint64(DefaultPseudoSeed)))
+
+	initialRead := make([]byte, 32)
+	n, err := randSource.Read(initialRead)
+	if n != 32 && err != nil {
+		panic("bad random source")
+	}
+
+	insts, err := HerumiTBLSKeygen(T, members, randSource)
+	if err != nil {
+		panic(fmt.Errorf("error generating keys: %w", err))
+	}
+
+	return castInsts(insts)
+}
+
+func castInsts[T ThreshCrypto](insts []T) []ThreshCrypto {
+	castInsts := make([]ThreshCrypto, len(insts))
+	for i, inst := range insts {
+		castInsts[i] = inst
+	}
+
+	return castInsts
 }
 
 func marshalUnmarshalKeys(t *testing.T, src []*TBLSInst) []*TBLSInst {

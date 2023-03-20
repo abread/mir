@@ -29,6 +29,7 @@ require (
 	github.com/drand/kyber v1.1.15
 	github.com/drand/kyber-bls12381 v0.2.3
 	github.com/fxamacker/cbor/v2 v2.4.0
+	github.com/herumi/bls-eth-go-binary v1.29.1
 	github.com/ipfs/go-cid v0.2.0
 	github.com/libp2p/go-yamux/v3 v3.1.2
 	github.com/mattn/go-sqlite3 v1.14.16
@@ -39,7 +40,6 @@ require (
 	go.opentelemetry.io/otel v1.14.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.14.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.14.0
-	go.opentelemetry.io/otel/exporters/stdout/stdouttrace v1.14.0
 	go.opentelemetry.io/otel/sdk v1.14.0
 	go.opentelemetry.io/otel/trace v1.14.0
 	go.uber.org/goleak v1.2.1

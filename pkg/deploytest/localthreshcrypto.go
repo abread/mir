@@ -28,7 +28,7 @@ func NewLocalThreshCryptoSystem(cryptoType string, nodeIDs []t.NodeID, threshold
 }
 
 func (cs *localPseudoThreshCryptoSystem) ThreshCrypto(id t.NodeID) threshcrypto.ThreshCrypto {
-	cryptoImpl, err := threshcrypto.TBLSPseudo(cs.nodeIDs, cs.threshold, id, mirCrypto.DefaultPseudoSeed)
+	cryptoImpl, err := threshcrypto.HerumiTBLSPseudo(cs.nodeIDs, cs.threshold, id, mirCrypto.DefaultPseudoSeed)
 	if err != nil {
 		panic(fmt.Sprintf("error creating crypto module: %v", err))
 	}

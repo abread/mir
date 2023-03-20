@@ -6,6 +6,7 @@ import (
 	prand "math/rand"
 
 	"github.com/drand/kyber/util/random"
+	"golang.org/x/exp/rand"
 	"golang.org/x/exp/slices"
 
 	t "github.com/filecoin-project/mir/pkg/types"
@@ -39,6 +40,29 @@ func TBLSPseudo(nodes []t.NodeID, threshold int, ownID t.NodeID, seed int64) (Th
 	}
 
 	tcInstances := TBLS12381Keygen(threshold, nodes, randomness)
+
+	return tcInstances[idx], nil
+}
+
+// HerumiTBLSPseudo returns a ThreshCryptoImpl module to be used by a Node, generating new keys in a pseudo-random manner.
+// It is initialized and populated deterministically, based on a given configuration and a random seed.
+// NodePseudo is not secure.
+// Intended for testing purposes and assuming a static membership known to all nodes,
+// NodePseudo can be invoked by each Node independently (specifying the same seed, e.g. DefaultPseudoSeed)
+// and generates the same set of keys for the whole system at each node, obviating the exchange of public keys.
+func HerumiTBLSPseudo(nodes []t.NodeID, threshold int, ownID t.NodeID, seed int64) (ThreshCrypto, error) {
+	// Create a new pseudorandom source from the given seed.
+	randSource := rand.New(rand.NewSource(uint64(seed))) //nolint:gosec
+
+	idx := slices.Index(nodes, ownID)
+	if idx == -1 {
+		return nil, fmt.Errorf("own node ID not in node list")
+	}
+
+	tcInstances, err := HerumiTBLSKeygen(threshold, nodes, randSource)
+	if err != nil {
+		return nil, err
+	}
 
 	return tcInstances[idx], nil
 }
