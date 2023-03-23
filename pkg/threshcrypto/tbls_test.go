@@ -24,18 +24,15 @@ func BenchmarkHerumiTBLSSignShare(b *testing.B) {
 }
 
 func benchmarkSignShare(b *testing.B, keygen TestKeygen) {
-	F := 5
-	keys := keygen(2*F+1, 3*F+1)
+	F := 33
+	N := 3*F+1
+	keys := keygen(2*F+1, N)
 	data := [][]byte{{1, 2, 3, 4, 5}, {4, 2}}
-
-	expectedShare, err := keys[0].SignShare(data)
-	require.NoError(b, err)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		share, err := keys[0].SignShare(data)
+		_, err := keys[i % N].SignShare(data)
 		assert.Nil(b, err)
-		assert.Equal(b, expectedShare, share)
 	}
 }
 
@@ -48,25 +45,34 @@ func BenchmarkHerumiTBLSVerifyShare(b *testing.B) {
 }
 
 func benchmarkVerifyShare(b *testing.B, keygen TestKeygen) {
-	F := 5
-	keys := keygen(2*F+1, 3*F+1)
+	F := 33
+	N := 3*F+1
+	keys := keygen(2*F+1, N)
 	data := [][]byte{{1, 2, 3, 4, 5}, {4, 2}}
 
-	share, err := keys[0].SignShare(data)
-	require.NoError(b, err)
+	shares := make([][]byte, N)
+	for i := range shares {
+		share, err := keys[i].SignShare(data)
+		require.NoError(b, err)
+		shares[i] = share
+	}
 
-	badShare := slices.Clone(share)
-	badShare[len(badShare)-1] ^= 1
+	badShares := make([][]byte, N)
+	for i := range badShares {
+		badShare := slices.Clone(shares[i])
+		badShare[len(badShare)-1] ^= 1
 
-	nodeID := types.NewNodeIDFromInt(0)
+		badShares[i] = badShare
+	}
+
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		if i%2 == 0 {
-			err := keys[0].VerifyShare(data, share, nodeID)
+			err := keys[N-(i%N)-1].VerifyShare(data, shares[i%N], types.NewNodeIDFromInt(i%N))
 			assert.Nil(b, err)
 		} else {
-			err := keys[0].VerifyShare(data, badShare, nodeID)
+			err := keys[N-(i%N)-1].VerifyShare(data, badShares[i%N], types.NewNodeIDFromInt(i%N))
 			assert.NotNil(b, err)
 		}
 	}
@@ -81,20 +87,22 @@ func BenchmarkHerumiTBLSRecover(b *testing.B) {
 }
 
 func benchmarkRecover(b *testing.B, keygen TestKeygen) {
-	F := 5
-	keys := keygen(2*F+1, 3*F+1)
+	F := 33
+	N := 3*F+1
+	keys := keygen(2*F+1, N)
 	data := [][]byte{{1, 2, 3, 4, 5}, {4, 2}}
 
-	shares := make([][]byte, 2*F+1)
-	for i := 0; i < 2*F+1; i++ {
+	shares := make([][]byte, N)
+	for i := range shares {
 		var err error
 		shares[i], err = keys[i].SignShare(data)
 		require.Nil(b, err)
 	}
+	shares = append(shares, shares...)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		sig, err := keys[0].Recover(data, shares)
+		sig, err := keys[i%N].Recover(data, shares[i%N:(2*F+1)+i%N])
 		assert.Nil(b, err)
 		assert.NotNil(b, sig)
 	}
@@ -109,12 +117,13 @@ func BenchmarkHerumiTBLSVerifyFull(b *testing.B) {
 }
 
 func benchmarkVerifyFull(b *testing.B, keygen TestKeygen) {
-	F := 5
-	keys := keygen(2*F+1, 3*F+1)
+	F := 33
+	N := 3*F+1
+	keys := keygen(2*F+1, N)
 	data := [][]byte{{1, 2, 3, 4, 5}, {4, 2}}
 
 	shares := make([][]byte, 2*F+1)
-	for i := 0; i < 2*F+1; i++ {
+	for i := range shares {
 		var err error
 		shares[i], err = keys[i].SignShare(data)
 		require.Nil(b, err)
@@ -130,10 +139,10 @@ func benchmarkVerifyFull(b *testing.B, keygen TestKeygen) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		if i%2 == 0 {
-			err := keys[0].VerifyFull(data, sig)
+			err := keys[i%N].VerifyFull(data, sig)
 			assert.Nil(b, err)
 		} else {
-			err := keys[0].VerifyFull(data, badSig)
+			err := keys[i%N].VerifyFull(data, badSig)
 			assert.NotNil(b, err)
 		}
 	}
