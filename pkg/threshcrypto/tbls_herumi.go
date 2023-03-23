@@ -109,7 +109,7 @@ func HerumiTBLSKeygen(T int, members []t.NodeID, randSource io.Reader) ([]*Herum
 
 // SignShare constructs a signature share for the message.
 func (inst *HerumiTBLSInst) SignShare(msg [][]byte) ([]byte, error) {
-	sig := inst.skShare.SignByte(digest(msg))
+	sig := inst.skShare.SignByte(flatten(msg))
 	return serializeHerumiSigShare(sig, uint64(inst.ownIdx)), nil
 }
 
@@ -129,7 +129,7 @@ func (inst *HerumiTBLSInst) VerifyShare(msg [][]byte, sigShare []byte, nodeID t.
 		return fmt.Errorf("sig owner mismatch")
 	}
 
-	if sig.VerifyByte(inst.pkShares[presumedID], digest(msg)) {
+	if sig.VerifyByte(inst.pkShares[presumedID], flatten(msg)) {
 		return nil
 	}
 
@@ -143,7 +143,7 @@ func (inst *HerumiTBLSInst) VerifyFull(msg [][]byte, sigFull []byte) error {
 		return fmt.Errorf("error deserializing sig: %w", err)
 	}
 
-	if sig.VerifyByte(inst.pk, digest(msg)) {
+	if sig.VerifyByte(inst.pk, flatten(msg)) {
 		return nil
 	}
 
@@ -217,4 +217,18 @@ func herumiID(idNum uint64) (bls.ID, error) {
 	}
 
 	return id, nil
+}
+
+func flatten(data [][]byte) []byte {
+	sz := 0
+	for _, part := range data {
+		sz += len(part)
+	}
+
+	flat := make([]byte, 0, sz)
+	for _, part := range data {
+		flat = append(flat, part...)
+	}
+
+	return flat
 }
