@@ -185,7 +185,7 @@ func (m *poolModule) ApplyEvents(ctx context.Context, events *events.EventList) 
 	}
 	if !isNotDone {
 		m.wg.Done()
-		return ctx.Err()
+		return nil
 	}
 
 	go func() {
