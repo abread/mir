@@ -38,7 +38,7 @@ func DefaultParams(initialMembership map[t.NodeID]t.NodeAddress) Params {
 func (p *Params) AdjustSpeed(maxProposeDelay time.Duration) *Params {
 	p.Iss.AdjustSpeed(maxProposeDelay)
 
-	p.Alea.BatchCutFailRetryDelay = t.TimeDuration(maxProposeDelay / 2)
+	p.Alea.BatchCutFailRetryDelay = t.TimeDuration(maxProposeDelay)
 
 	return p
 }
