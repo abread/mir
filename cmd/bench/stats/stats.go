@@ -19,7 +19,7 @@ import (
 
 type Stats struct {
 	lock                sync.Mutex
-	reqTimestamps       map[reqKey]time.Time
+	reqTimestamps       map[reqKey]int64
 	avgLatency          float64
 	timestampedRequests int
 	recvdRequests       int
@@ -39,28 +39,28 @@ type reqKey struct {
 
 func NewStats() *Stats {
 	stats := &Stats{
-		reqTimestamps: make(map[reqKey]time.Time),
+		reqTimestamps: make(map[reqKey]int64),
 	}
 
 	return stats
 }
 
-func (s *Stats) NewRequest(req *requestpb.Request) {
+func (s *Stats) NewRequest(req *requestpb.Request, ts int64) {
 	s.lock.Lock()
 	k := reqKey{req.ClientId, req.ReqNo}
-	s.reqTimestamps[k] = time.Now()
+	s.reqTimestamps[k] = ts
 	s.recvdRequests++
 	s.lock.Unlock()
 }
 
-func (s *Stats) Delivered(req *requestpb.Request) {
+func (s *Stats) Delivered(req *requestpb.Request, deliverTs int64) { // nolint:stylecheck
 	s.lock.Lock()
 	s.deliveredRequests++
 	k := reqKey{req.ClientId, req.ReqNo}
-	if t, ok := s.reqTimestamps[k]; ok {
+	if startTs, ok := s.reqTimestamps[k]; ok { // nolint:stylecheck
 		delete(s.reqTimestamps, k)
 		s.timestampedRequests++
-		d := time.Since(t)
+		d := deliverTs - startTs
 
 		// $CA_{n+1} = CA_n + {x_{n+1} - CA_n \over n + 1}$
 		s.avgLatency += (float64(d) - s.avgLatency) / float64(s.timestampedRequests)

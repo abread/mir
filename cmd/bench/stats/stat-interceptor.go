@@ -33,7 +33,7 @@ func (i *StatInterceptor) Intercept(evts *events.EventList) error {
 		switch e := evt.Type.(type) {
 		case *eventpb.Event_NewRequests:
 			for _, req := range e.NewRequests.Requests {
-				i.Stats.NewRequest(req)
+				i.Stats.NewRequest(req, evt.LocalTs)
 			}
 		case *eventpb.Event_BatchFetcher:
 
@@ -45,7 +45,7 @@ func (i *StatInterceptor) Intercept(evts *events.EventList) error {
 			switch e := e.BatchFetcher.Type.(type) {
 			case *bfpb.Event_NewOrderedBatch:
 				for _, req := range e.NewOrderedBatch.Txs {
-					i.Stats.Delivered(req)
+					i.Stats.Delivered(req, evt.LocalTs)
 				}
 			}
 		case *eventpb.Event_Mempool:
