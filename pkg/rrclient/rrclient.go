@@ -111,7 +111,7 @@ func (rrc *RoundRobinClient) SubmitRequest(data []byte) error {
 
 	nID := rrc.clientIDs[rrc.nextClientIdx]
 	client := rrc.clients[nID]
-	rrc.nextClientIdx++
+	rrc.nextClientIdx = (rrc.nextClientIdx + 1) % len(rrc.clients)
 
 	if err := client.Send(reqMsg); err != nil {
 		return fmt.Errorf("failed sending request to node (%v): %w", nID, err)
