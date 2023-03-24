@@ -3,8 +3,8 @@ package vcb
 import (
 	"context"
 	"fmt"
+	"runtime"
 
-	"github.com/filecoin-project/mir/pkg/abba/abbatypes"
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/modules"
@@ -15,6 +15,7 @@ import (
 	vcbmsgs "github.com/filecoin-project/mir/pkg/pb/vcbpb/msgs"
 	"github.com/filecoin-project/mir/pkg/reliablenet/rntypes"
 	"github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
+	"github.com/filecoin-project/mir/pkg/threshcrypto/tsagg"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -80,9 +81,7 @@ const (
 type leaderState struct {
 	phase vcbLeaderPhase
 
-	receivedEcho           abbatypes.RecvTracker // TODO: move to common package
-	sigShares              []tctypes.SigShare
-	lastCombineAttemptSize int
+	sigAgg *tsagg.ThreshSigAggregator
 }
 
 type vcbLeaderPhase uint8
@@ -90,7 +89,6 @@ type vcbLeaderPhase uint8
 const (
 	VcbLeaderPhaseAwaitingInput vcbLeaderPhase = iota
 	VcbLeaderPhaseAwaitingEchoes
-	VcbLeaderPhaseCombining
 	VcbLeaderPhaseDone
 )
 
@@ -210,10 +208,15 @@ func NewModule(ctx context.Context, mc *ModuleConfig, params *ModuleParams, node
 
 func setupVcbLeader(m dsl.Module, mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging.Logger, state *state) {
 	leaderState := &leaderState{
-		receivedEcho: make(abbatypes.RecvTracker, len(params.AllNodes)),
-		sigShares:    make([]tctypes.SigShare, 0, len(params.AllNodes)),
-
 		phase: VcbLeaderPhaseAwaitingInput,
+
+		sigAgg: tsagg.New(m, &tsagg.Params{
+			TCModuleID:              mc.ThreshCrypto,
+			Threshold:               2*params.GetF() + 1,
+			MaxVerifyShareBatchSize: runtime.NumCPU(),
+			SigData:                 state.payload.SigData,
+			InitialNodeCount:        len(params.AllNodes),
+		}),
 	}
 
 	vcbdsl.UponEchoMessageReceived(m, func(from t.NodeID, signatureShare tctypes.SigShare) error {
@@ -221,56 +224,30 @@ func setupVcbLeader(m dsl.Module, mc *ModuleConfig, params *ModuleParams, nodeID
 			return nil // we're doing something better
 		}
 
-		if !leaderState.receivedEcho.Register(from) {
-			return nil // already received
-		}
-		logger.Log(logging.LevelDebug, "recvd ECHO", "sigShare", signatureShare, "from", from)
+		if leaderState.sigAgg.Add(signatureShare, from) {
+			logger.Log(logging.LevelDebug, "recvd ECHO", "sigShare", signatureShare, "from", from)
 
-		// ECHO message acts as acknowledgement for SEND message
-		rnetdsl.MarkRecvd(m, mc.ReliableNet, mc.Self, SendMsgID(), []t.NodeID{from})
+			// ECHO message acts as acknowledgement for SEND message
+			rnetdsl.MarkRecvd(m, mc.ReliableNet, mc.Self, SendMsgID(), []t.NodeID{from})
+		}
 
-		if from == nodeID {
-			// optimization: skip verification
-			leaderState.sigShares = append(leaderState.sigShares, signatureShare)
-		} else {
-			threshDsl.VerifyShare(m, mc.ThreshCrypto, state.payload.SigData(), signatureShare, from, &signatureShare)
-		}
-		return nil
-	})
-	threshDsl.UponVerifyShareResult(m, func(ok bool, error string, sigShare *tctypes.SigShare) error {
-		// TODO: report byz nodes?
-		if ok {
-			leaderState.sigShares = append(leaderState.sigShares, *sigShare)
-		}
 		return nil
 	})
 
 	dsl.UponCondition(m, func() error {
-		if leaderState.phase == VcbLeaderPhaseAwaitingEchoes && len(leaderState.sigShares) >= 2*params.GetF()+1 && len(leaderState.sigShares) > leaderState.lastCombineAttemptSize {
-			logger.Log(logging.LevelDebug, "trying to combine full signature")
-
-			threshDsl.Recover[struct{}](m, mc.ThreshCrypto, state.payload.SigData(), leaderState.sigShares, nil)
-			leaderState.phase = VcbLeaderPhaseCombining
-			leaderState.lastCombineAttemptSize = len(leaderState.sigShares)
-		}
-		return nil
-	})
-	threshDsl.UponRecoverResult(m, func(fullSignature tctypes.FullSig, ok bool, error string, _ctx *struct{}) error {
-		if ok {
+		if leaderState.phase == VcbLeaderPhaseAwaitingEchoes && leaderState.sigAgg.FullSig() != nil {
 			logger.Log(logging.LevelDebug, "recovered full sig. sending FINAL")
+
 			rnetdsl.SendMessage(m, mc.ReliableNet, FinalMsgID(), vcbmsgs.FinalMessage(
 				mc.Self,
 				state.payload.Txs(),
-				fullSignature,
+				leaderState.sigAgg.FullSig(),
 			), params.AllNodes)
 
 			// all SEND messages were made redundant, we can forget about them
 			rnetdsl.MarkRecvd(m, mc.ReliableNet, mc.Self, SendMsgID(), params.AllNodes)
 
 			leaderState.phase = VcbLeaderPhaseDone
-		} else {
-			logger.Log(logging.LevelWarn, "full signature combination failed, retrying after receiving more ECHOes")
-			leaderState.phase = VcbLeaderPhaseAwaitingEchoes
 		}
 		return nil
 	})
@@ -294,7 +271,6 @@ func setupVcbLeader(m dsl.Module, mc *ModuleConfig, params *ModuleParams, nodeID
 		}
 		return nil
 	})
-
 }
 
 const (

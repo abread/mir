@@ -3,6 +3,7 @@ package abbaround
 import (
 	"context"
 	"fmt"
+	"runtime"
 
 	abbat "github.com/filecoin-project/mir/pkg/abba/abbatypes"
 	"github.com/filecoin-project/mir/pkg/dsl"
@@ -14,6 +15,7 @@ import (
 	rnetdsl "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/dsl"
 	threshDsl "github.com/filecoin-project/mir/pkg/pb/threshcryptopb/dsl"
 	"github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
+	"github.com/filecoin-project/mir/pkg/threshcrypto/tsagg"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -41,29 +43,32 @@ type state struct {
 	confRecvd               abbat.RecvTracker
 	confRecvdValueSetCounts abbat.ValueSetCounters
 
-	coinRecvd         abbat.RecvTracker
-	coinRecvdOkShares []tctypes.SigShare
+	coinSig     *tsagg.ThreshSigAggregator
+	hashingCoin bool
 
 	initWeakSupportReachedForValue abbat.BoolFlags
 	auxSent                        bool
-	coinRecoverInProgress          bool
-	coinRecoverMinShareCount       int
 }
 
 // nolint: gocognit
 func New(ctx context.Context, mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging.Logger) modules.PassiveModule {
 	m := dsl.NewModule(ctx, mc.Self)
 
-	state := state{
-		initRecvd:         abbat.NewBoolRecvTrackers(len(params.AllNodes)),
-		auxRecvd:          make(abbat.RecvTracker, len(params.AllNodes)),
-		confRecvd:         make(abbat.RecvTracker, len(params.AllNodes)),
-		coinRecvd:         make(abbat.RecvTracker, len(params.AllNodes)),
-		coinRecvdOkShares: make([]tctypes.SigShare, 0, len(params.AllNodes)),
-
-		coinRecoverMinShareCount: params.strongSupportThresh(),
-	}
 	coinData := genCoinData(mc, params)
+	state := state{
+		initRecvd: abbat.NewBoolRecvTrackers(len(params.AllNodes)),
+		auxRecvd:  make(abbat.RecvTracker, len(params.AllNodes)),
+		confRecvd: make(abbat.RecvTracker, len(params.AllNodes)),
+		coinSig: tsagg.New(m, &tsagg.Params{
+			TCModuleID:              mc.ThreshCrypto,
+			Threshold:               params.strongSupportThresh(),
+			MaxVerifyShareBatchSize: runtime.NumCPU(),
+			SigData: func() [][]byte {
+				return coinData
+			},
+			InitialNodeCount: len(params.AllNodes),
+		}),
+	}
 
 	abbadsl.UponRoundInputValue(m, func(input bool) error {
 		// 10. est^r+1_i = v OR 3. set est^r_i = v_in
@@ -222,28 +227,8 @@ func New(ctx context.Context, mc *ModuleConfig, params *ModuleParams, nodeID t.N
 			return nil // already terminated
 		}
 
-		if !state.coinRecvd.Register(from) {
-			logger.Log(logging.LevelWarn, "duplicate COIN(_)", "from", from)
-			return nil // duplicate message
-		}
+		state.coinSig.Add(coinShare, from)
 		logger.Log(logging.LevelDebug, "recvd COIN(share)", "from", from)
-
-		if from == nodeID {
-			// optimization: process own message right away, avoiding a needless double-verification
-			state.coinRecvdOkShares = append(state.coinRecvdOkShares, coinShare)
-		} else {
-			threshDsl.VerifyShare(m, mc.ThreshCrypto, coinData, coinShare, from, &coinShare)
-		}
-
-		return nil
-	})
-
-	// working in advance for 9. sample coin
-	threshDsl.UponVerifyShareResult(m, func(ok bool, err string, coinShare *tctypes.SigShare) error {
-		if ok && state.phase != phaseDone {
-			state.coinRecvdOkShares = append(state.coinRecvdOkShares, *coinShare)
-		}
-
 		return nil
 	})
 
@@ -253,29 +238,9 @@ func New(ctx context.Context, mc *ModuleConfig, params *ModuleParams, nodeID t.N
 			return nil
 		}
 
-		if len(state.coinRecvdOkShares) >= state.coinRecoverMinShareCount && !state.coinRecoverInProgress {
-			threshDsl.Recover[struct{}](m, mc.ThreshCrypto, coinData, state.coinRecvdOkShares, nil)
-
-			state.coinRecoverInProgress = true
-			state.coinRecoverMinShareCount = len(state.coinRecvdOkShares) + 1
-		}
-
-		return nil
-	})
-
-	// still in 9. sample coin
-	threshDsl.UponRecoverResult(m, func(fullSig tctypes.FullSig, ok bool, err string, _ctx *struct{}) error {
-		if state.phase != phaseTossingCoin {
-			return fmt.Errorf("impossible state reached: coin being tossed but round is already over")
-		}
-
-		if ok {
-			// we have a signature, all we need to do is hash it and
-			dsl.HashOneMessage(m, mc.Hasher, [][]byte{fullSig}, _ctx)
-		} else {
-			logger.Log(logging.LevelWarn, "could not recover coin ...YET")
-			// will attempt to recover when more signature shares arrive
-			state.coinRecoverInProgress = false
+		if state.coinSig.FullSig() != nil && !state.hashingCoin {
+			dsl.HashOneMessage[struct{}](m, mc.Hasher, [][]byte{state.coinSig.FullSig()}, nil)
+			state.hashingCoin = true
 		}
 
 		return nil
