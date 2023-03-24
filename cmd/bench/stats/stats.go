@@ -7,6 +7,7 @@ package stats
 import (
 	"encoding/csv"
 	"fmt"
+	"math"
 	"runtime"
 	"strconv"
 	"sync"
@@ -157,6 +158,10 @@ func (s *Stats) WriteCSVRecordAndReset(w *csv.Writer, d time.Duration) {
 	agRoundFalseDelivers := s.agRoundFalseDelivers
 	bcDelivers := s.bcDelivers
 	threshQueueSize := s.threshQueueSize
+
+	if s.timestampedRequests == 0 {
+		avgLatency = math.NaN()
+	}
 
 	s.avgLatency = 0
 	s.timestampedRequests = 0
