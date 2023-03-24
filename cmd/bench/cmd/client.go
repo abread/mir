@@ -20,14 +20,16 @@ import (
 	"github.com/filecoin-project/mir/pkg/dummyclient"
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/membership"
+	"github.com/filecoin-project/mir/pkg/rrclient"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
 var (
-	reqSize  int
-	rate     float64
-	burst    int
-	duration time.Duration
+	reqSize    int
+	rate       float64
+	burst      int
+	duration   time.Duration
+	clientType string
 
 	clientCmd = &cobra.Command{
 		Use:   "client",
@@ -45,6 +47,24 @@ func init() {
 	clientCmd.Flags().Float64VarP(&rate, "rate", "r", 1000, "average number of requests per second")
 	clientCmd.Flags().IntVarP(&burst, "burst", "b", 1, "maximum number of requests in a burst")
 	clientCmd.Flags().DurationVarP(&duration, "duration", "T", 10*time.Second, "benchmarking duration")
+	clientCmd.Flags().StringVarP(&clientType, "type", "t", "dummy", "client type (one of: dummy, rr)")
+}
+
+type mirClient interface {
+	Connect(ctx context.Context, membership map[t.NodeID]string)
+	SubmitRequest(data []byte) error
+	Disconnect()
+}
+
+type mirClientFactory func(clientID t.ClientID, hasher crypto.Hash, logger logging.Logger) mirClient
+
+var clientFactories = map[string]mirClientFactory{
+	"dummy": func(clientID t.ClientID, hasher crypto.Hash, logger logging.Logger) mirClient {
+		return dummyclient.NewDummyClient(clientID, hasher, logger)
+	},
+	"rr": func(clientID t.ClientID, hasher crypto.Hash, logger logging.Logger) mirClient {
+		return rrclient.NewRoundRobinClient(clientID, hasher, logger)
+	},
 }
 
 func runClient(ctx context.Context) error {
@@ -83,7 +103,7 @@ func runClient(ctx context.Context) error {
 
 	ctx, stop := context.WithCancel(ctx)
 
-	client := dummyclient.NewDummyClient(
+	client := clientFactories[clientType](
 		t.ClientID(id),
 		crypto.SHA256,
 		logger,
