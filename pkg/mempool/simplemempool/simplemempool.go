@@ -30,6 +30,7 @@ func DefaultModuleConfig() *ModuleConfig {
 
 func DefaultModuleParams() *ModuleParams {
 	return &ModuleParams{
+		MinTransactionsInBatch: 0,
 		MaxTransactionsInBatch: 10,
 	}
 }

@@ -273,6 +273,11 @@ func NewAlea(
 		panic("checkpointing not supported yet")
 	}
 
+	if params.Mempool.MinTransactionsInBatch == 0 {
+		// Alea does not broadcast empty batches
+		params.Mempool.MinTransactionsInBatch = 1
+	}
+
 	// Instantiate the Alea ordering protocol with default configuration.
 	// We use the Alea's default module configuration (the expected IDs of modules it interacts with)
 	// also to configure other modules of the system.

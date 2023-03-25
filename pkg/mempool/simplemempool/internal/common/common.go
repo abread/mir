@@ -14,6 +14,7 @@ type ModuleConfig struct {
 // ModuleParams sets the values for the parameters of an instance of the protocol.
 // All replicas are expected to use identical module parameters.
 type ModuleParams struct {
+	MinTransactionsInBatch int
 	MaxTransactionsInBatch int
 }
 

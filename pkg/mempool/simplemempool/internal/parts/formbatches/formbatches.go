@@ -12,6 +12,8 @@ import (
 type State struct {
 	*common.State
 	NewTxIDs []t.TxID
+
+	pendingBatchRequests []*mppb.RequestBatchOrigin
 }
 
 // IncludeBatchCreation registers event handlers for processing NewRequests and RequestBatch events.
@@ -24,6 +26,8 @@ func IncludeBatchCreation(
 	state := &State{
 		State:    commonState,
 		NewTxIDs: nil,
+
+		pendingBatchRequests: nil,
 	}
 
 	dsl.UponNewRequests(m, func(txs []*requestpb.Request) error {
@@ -40,29 +44,39 @@ func IncludeBatchCreation(
 	})
 
 	mpdsl.UponRequestBatch(m, func(origin *mppb.RequestBatchOrigin) error {
-		var txIDs []t.TxID
-		var txs []*requestpb.Request
-		batchSize := 0
+		state.pendingBatchRequests = append(state.pendingBatchRequests, origin)
+		return nil
+	})
 
-		txCount := 0
-		for _, txID := range state.NewTxIDs {
-			tx := state.TxByID[txID]
+	dsl.UponCondition(m, func() error {
+		for len(state.pendingBatchRequests) > 0 && len(state.NewTxIDs) >= params.MinTransactionsInBatch {
+			var txIDs []t.TxID
+			var txs []*requestpb.Request
+			batchSize := 0
 
-			// TODO: add other limitations (if any) here.
-			if txCount == params.MaxTransactionsInBatch {
-				break
+			txCount := 0
+			for _, txID := range state.NewTxIDs {
+				tx := state.TxByID[txID]
+
+				// TODO: add other limitations (if any) here.
+				if txCount == params.MaxTransactionsInBatch {
+					break
+				}
+
+				txIDs = append(txIDs, txID)
+				txs = append(txs, tx)
+				batchSize += len(tx.Data)
+				txCount++
 			}
 
-			txIDs = append(txIDs, txID)
-			txs = append(txs, tx)
-			batchSize += len(tx.Data)
-			txCount++
+			state.NewTxIDs = state.NewTxIDs[txCount:]
+
+			origin := state.pendingBatchRequests[0]
+			state.pendingBatchRequests = state.pendingBatchRequests[1:]
+
+			mpdsl.NewBatch(m, t.ModuleID(origin.Module), txIDs, txs, origin)
 		}
 
-		state.NewTxIDs = state.NewTxIDs[txCount:]
-
-		// Note that a batch may be empty.
-		mpdsl.NewBatch(m, t.ModuleID(origin.Module), txIDs, txs, origin)
 		return nil
 	})
 }
