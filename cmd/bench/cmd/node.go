@@ -9,6 +9,7 @@ import (
 	"encoding/csv"
 	"errors"
 	"fmt"
+	"math"
 	gonet "net"
 	"os"
 	"strconv"
@@ -166,7 +167,9 @@ func runNode(ctx context.Context) error {
 	// Set Trantor parameters.
 	smrParams := trantor.DefaultParams(initialMembership)
 	smrParams.Mempool.MaxTransactionsInBatch = batchSize
-	smrParams.AdjustSpeed(100 * time.Millisecond)
+
+	// derived to match mean alea latency with 1tx/s load (directed at the next leader replica)
+	smrParams.AdjustSpeed(time.Duration(13483+7826*math.Log(float64(len(initialMembership)))) * time.Nanosecond)
 
 	// Assemble listening address.
 	// In this benchmark code, we always listen on tha address 0.0.0.0.
