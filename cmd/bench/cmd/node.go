@@ -169,7 +169,7 @@ func runNode(ctx context.Context) error {
 	smrParams.Mempool.MaxTransactionsInBatch = batchSize
 
 	// derived to match mean alea latency with 1tx/s load (directed at the next leader replica)
-	smrParams.AdjustSpeed(time.Duration(13483+7826*math.Log(float64(len(initialMembership)))) * time.Nanosecond)
+	smrParams.AdjustSpeed(time.Duration(13483+7826*math.Log(float64(len(initialMembership)))) * time.Microsecond)
 
 	// Assemble listening address.
 	// In this benchmark code, we always listen on tha address 0.0.0.0.
