@@ -44,19 +44,20 @@ type Params struct {
 	// Must be at least 1
 	MaxConcurrentVcbPerQueue int
 
-	// Number of batches that the broadcast component tries to have broadcast at all times in own queue
+	// Maximum number of unagreed batches that the broadcast component can have in this node's queue
 	// Must be at least 1
-	TargetOwnUnagreedBatchCount uint64
-
-	// Time to wait before retrying batch creation
-	// Must be non-negative
-	BatchCutFailRetryDelay t.TimeDuration
+	MaxOwnUnagreedBatchCount uint64
 
 	// TODO
 	MaxAbbaRoundLookahead int
 
 	// TODO
 	MaxAgRoundLookahead int
+
+	// Pad broadcast duration estimate
+	// Must be non-negative
+	// TODO: 1/2*RTT + time to verify ?
+	BcEstimateMargin time.Duration
 
 	// Time to wait before resorting to FILL-GAP messages
 	FillGapDelay t.TimeDuration
@@ -87,14 +88,14 @@ func DefaultConfig(consumer t.ModuleID) *Config {
 // for which DefaultParams can serve as a starting point.
 func DefaultParams(membership map[t.NodeID]t.NodeAddress) *Params {
 	return &Params{
-		InstanceUID:                 []byte{42},
-		Membership:                  membership,
-		MaxConcurrentVcbPerQueue:    8,
-		TargetOwnUnagreedBatchCount: 2,
-		BatchCutFailRetryDelay:      t.TimeDuration(100 * time.Millisecond),
-		MaxAbbaRoundLookahead:       4,
-		MaxAgRoundLookahead:         4,
-		FillGapDelay:                t.TimeDuration(1 * time.Second),
+		InstanceUID:              []byte{42},
+		Membership:               membership,
+		MaxConcurrentVcbPerQueue: 8,
+		MaxOwnUnagreedBatchCount: 1,
+		MaxAbbaRoundLookahead:    4,
+		MaxAgRoundLookahead:      4,
+		BcEstimateMargin:         5 * time.Millisecond,
+		FillGapDelay:             t.TimeDuration(1 * time.Second),
 	}
 }
 
@@ -142,10 +143,10 @@ func New(ctx context.Context, ownID t.NodeID, config *Config, params *Params, st
 			AllNodes:    allNodes,
 		},
 		&director.ModuleTunables{
-			MaxConcurrentVcbPerQueue:    params.MaxConcurrentVcbPerQueue,
-			TargetOwnUnagreedBatchCount: params.TargetOwnUnagreedBatchCount,
-			BatchCutFailRetryDelay:      params.BatchCutFailRetryDelay,
-			FillGapDelay:                params.FillGapDelay,
+			MaxConcurrentVcbPerQueue: params.MaxConcurrentVcbPerQueue,
+			MaxOwnUnagreedBatchCount: params.MaxOwnUnagreedBatchCount,
+			BcEstimateMargin:         params.BcEstimateMargin,
+			FillGapDelay:             params.FillGapDelay,
 		},
 		ownID,
 		logging.Decorate(logger, "AleaDirector: "),
@@ -219,7 +220,7 @@ func (p *Params) Check() error {
 		return fmt.Errorf("this implementation requires MaxConcurrentVcbPerQueue >= 1")
 	}
 
-	if p.TargetOwnUnagreedBatchCount < 1 {
+	if p.MaxOwnUnagreedBatchCount < 1 {
 		return fmt.Errorf("alea requires TargetOwnUnagreedBatchCount >= 1")
 	}
 

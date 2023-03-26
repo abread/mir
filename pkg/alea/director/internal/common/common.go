@@ -1,6 +1,8 @@
 package common
 
 import (
+	"time"
+
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -31,12 +33,12 @@ type ModuleTunables struct {
 	// Must be at least 1
 	MaxConcurrentVcbPerQueue int
 
-	// Number of batches that the broadcast component tries to have broadcast at all times in own queue
+	// Maximum number of unagreed batches that the broadcast component can have in this node's queue
 	// Must be at least 1
-	TargetOwnUnagreedBatchCount uint64
+	MaxOwnUnagreedBatchCount uint64
 
-	// Time to wait before retrying batch creation
-	BatchCutFailRetryDelay t.TimeDuration
+	// Pad broadcast duration estimate
+	BcEstimateMargin time.Duration
 
 	// Time to wait before resorting to FILL-GAP messages
 	FillGapDelay t.TimeDuration
