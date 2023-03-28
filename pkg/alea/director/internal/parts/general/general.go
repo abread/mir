@@ -132,7 +132,7 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 
 		// TODO: consider progress in current round too (will mean adjustments below)
 		timeToOwnQueueAgRound := state.avgAgTime * time.Duration(waitRoundCount)
-		maxTimeBeforeBatch := state.avgBcTime + time.Duration(tunables.BcEstimateMargin)
+		maxTimeBeforeBatch := state.avgBcTime + tunables.BcEstimateMargin
 
 		if state.agCanDeliver() && timeToOwnQueueAgRound > maxTimeBeforeBatch {
 			// we have a lot of time before we reach our agreement round. let the batch fill up
@@ -168,7 +168,11 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 			// new batch was delivered, stall next one until ready
 			_, state.stalledBatchCut = m.DslHandle().PushSpan("stalling batch cut", trace.WithAttributes(attribute.Int64("slot", int64(state.bcOwnQueueHead))))
 
-			state.avgBcTime = (state.avgBcTime + time.Since(ref) - state.bcStartTime) / 2
+			firstEst := state.avgBcTime == 0
+			state.avgBcTime = state.avgBcTime + time.Since(ref) - state.bcStartTime
+			if !firstEst {
+				state.avgBcTime /= 2
+			}
 		}
 		return nil
 	})
@@ -191,7 +195,11 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 			state.stalledRoundSpan.End()
 		}
 
-		state.avgAgTime = (state.avgAgTime + time.Since(ref) - state.agStartTime) / 2
+		firstEst := state.avgAgTime == 0
+		state.avgAgTime = state.avgAgTime + time.Since(ref) - state.agStartTime
+		if !firstEst {
+			state.avgAgTime /= 2
+		}
 
 		_, state.stalledRoundSpan = m.DslHandle().PushSpan("stalling agreement round", trace.WithAttributes(attribute.Int64("agRound", int64(state.agRound))))
 		return nil
