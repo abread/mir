@@ -94,7 +94,7 @@ func DefaultParams(membership map[t.NodeID]t.NodeAddress) *Params {
 		MaxOwnUnagreedBatchCount: 1,
 		MaxAbbaRoundLookahead:    4,
 		MaxAgRoundLookahead:      4,
-		BcEstimateMargin:         5 * time.Millisecond,
+		BcEstimateMargin:         10 * time.Millisecond,
 		FillGapDelay:             t.TimeDuration(1 * time.Second),
 	}
 }
