@@ -30,8 +30,8 @@ func DefaultModuleConfig(self t.ModuleID, consumer t.ModuleID) *ModuleConfig {
 // ModuleParams sets the values for the parameters of an instance of the protocol.
 // All replicas are expected to use identical module parameters.
 type ModuleParams struct {
-	InstanceUID []byte
-	AllNodes    []t.NodeID // the list of participating nodes, which must be the same as the set of nodes in the threshcrypto module
+	BcInstanceUID []byte
+	AllNodes      []t.NodeID // the list of participating nodes, which must be the same as the set of nodes in the threshcrypto module
 
 	QueueIdx   aleatypes.QueueIdx
 	QueueOwner t.NodeID

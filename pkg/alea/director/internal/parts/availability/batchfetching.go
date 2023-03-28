@@ -6,7 +6,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/filecoin-project/mir/pkg/alea/broadcast"
+	"github.com/filecoin-project/mir/pkg/alea/broadcast/bcutil"
 	"github.com/filecoin-project/mir/pkg/alea/common"
 	director "github.com/filecoin-project/mir/pkg/alea/director/internal/common"
 	batchdbdsl "github.com/filecoin-project/mir/pkg/availability/batchdb/dsl"
@@ -274,7 +274,8 @@ func IncludeBatchFetching(
 
 func certSigData(params *director.ModuleParams, slot *commontypes.Slot, txIDs []t.TxID) [][]byte {
 	aleaUID := params.InstanceUID[:len(params.InstanceUID)-1]
-	return vcb.SigData(broadcast.VCBInstanceUID(aleaUID, slot.QueueIdx, slot.QueueSlot), txIDs)
+	aleaBcInstanceUID := append(aleaUID, 'b')
+	return vcb.SigData(bcutil.VCBInstanceUID(aleaBcInstanceUID, slot.QueueIdx, slot.QueueSlot), txIDs)
 }
 
 const (

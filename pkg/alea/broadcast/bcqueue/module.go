@@ -8,6 +8,7 @@ import (
 	"golang.org/x/exp/slices"
 
 	"github.com/filecoin-project/mir/pkg/alea/aleatypes"
+	"github.com/filecoin-project/mir/pkg/alea/broadcast/bcutil"
 	aleaCommon "github.com/filecoin-project/mir/pkg/alea/common"
 	batchdbdsl "github.com/filecoin-project/mir/pkg/availability/batchdb/dsl"
 	"github.com/filecoin-project/mir/pkg/dsl"
@@ -102,7 +103,7 @@ func newQueueController(ctx context.Context, mc *ModuleConfig, params *ModulePar
 	})
 	mempooldsl.UponTransactionIDsResponse(m, func(txIDs []t.TxID, context *processPastVcbCtx) error {
 		context.txIDs = txIDs
-		threshcryptopbdsl.VerifyFull(m, mc.ThreshCrypto, vcb.SigData(params.InstanceUID, txIDs), context.signature, context)
+		threshcryptopbdsl.VerifyFull(m, mc.ThreshCrypto, vcb.SigData(params.BcInstanceUID, txIDs), context.signature, context)
 		return nil
 	})
 	threshcryptopbdsl.UponVerifyFullResult(m, func(ok bool, error string, context *processPastVcbCtx) error {
@@ -153,8 +154,8 @@ func newVcbGenerator(queueMc *ModuleConfig, queueParams *ModuleParams, nodeID t.
 		Mempool:      queueMc.Mempool,
 	}
 
-	params := &vcb.ModuleParams{
-		InstanceUID: queueParams.InstanceUID, // TODO: review
+	baseParams := &vcb.ModuleParams{
+		InstanceUID: nil,
 		AllNodes:    queueParams.AllNodes,
 		Leader:      queueParams.QueueOwner,
 	}
@@ -163,7 +164,10 @@ func newVcbGenerator(queueMc *ModuleConfig, queueParams *ModuleParams, nodeID t.
 		mc := *baseConfig
 		mc.Self = id
 
-		mod := vcb.NewModule(ctx, &mc, params, nodeID, logging.Decorate(logger, "Vcb: ", "slot", idx))
+		params := *baseParams
+		params.InstanceUID = bcutil.VCBInstanceUID(queueParams.BcInstanceUID, queueParams.QueueIdx, aleatypes.QueueSlot(idx))
+
+		mod := vcb.NewModule(ctx, &mc, &params, nodeID, logging.Decorate(logger, "Vcb: ", "slot", idx))
 
 		return mod, &events.EventList{}, nil
 	}

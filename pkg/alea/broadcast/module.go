@@ -172,29 +172,29 @@ func newQueueController(ctx context.Context, mc *ModuleConfig, params *ModulePar
 	return m, nil
 }
 
-func createQueues(ctx context.Context, queueMc *ModuleConfig, queueParams *ModuleParams, queueTunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) ([]modules.PassiveModule, error) {
+func createQueues(ctx context.Context, bcMc *ModuleConfig, bcParams *ModuleParams, queueTunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) ([]modules.PassiveModule, error) {
 	tunables := &bcqueue.ModuleTunables{
 		MaxConcurrentVcb: queueTunables.MaxConcurrentVcbPerQueue,
 	}
 
-	queues := make([]modules.PassiveModule, len(queueParams.AllNodes))
+	queues := make([]modules.PassiveModule, len(bcParams.AllNodes))
 
-	for idx := 0; idx < len(queueParams.AllNodes); idx++ {
+	for idx := 0; idx < len(bcParams.AllNodes); idx++ {
 		mc := &bcqueue.ModuleConfig{
-			Self:         queueMc.Self.Then(t.NewModuleIDFromInt(idx)),
-			Consumer:     queueMc.Self,
-			BatchDB:      queueMc.BatchDB,
-			Mempool:      queueMc.Mempool,
-			ReliableNet:  queueMc.ReliableNet,
-			ThreshCrypto: queueMc.ThreshCrypto,
+			Self:         bcMc.Self.Then(t.NewModuleIDFromInt(idx)),
+			Consumer:     bcMc.Self,
+			BatchDB:      bcMc.BatchDB,
+			Mempool:      bcMc.Mempool,
+			ReliableNet:  bcMc.ReliableNet,
+			ThreshCrypto: bcMc.ThreshCrypto,
 		}
 
 		params := &bcqueue.ModuleParams{
-			InstanceUID: queueParams.InstanceUID, // TODO: review
-			AllNodes:    queueParams.AllNodes,
+			BcInstanceUID: bcParams.InstanceUID, // TODO: review
+			AllNodes:      bcParams.AllNodes,
 
 			QueueIdx:   aleatypes.QueueIdx(idx),
-			QueueOwner: queueParams.AllNodes[idx],
+			QueueOwner: bcParams.AllNodes[idx],
 		}
 
 		mod, err := bcqueue.New(ctx, mc, params, tunables, nodeID, logging.Decorate(logger, "BcQueue: ", "queueIdx", idx))
