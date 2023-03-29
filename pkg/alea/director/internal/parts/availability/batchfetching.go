@@ -222,20 +222,20 @@ func IncludeBatchFetching(
 		return nil
 	})
 
-	// When transaction ids are computed, check if the signature is correct
+	// Compute signature data
 	mempooldsl.UponTransactionIDsResponse(m, func(txIDs []t.TxID, context *handleFillerContext) error {
-		_, ok := state.RequestsState[*context.slot]
-		if !ok {
-			// The request has already been completed.
-			return nil
-		}
-
 		context.txIDs = txIDs
-		sigData := certSigData(params, context.slot, txIDs)
+		dsl.HashOneMessage(m, mc.Hasher, t.TxIDSlicePb(txIDs), context)
+		return nil
+	})
+	dsl.UponOneHashResult(m, func(txIDsHash []byte, context *handleFillerContext) error {
+		sigData := certSigData(params, context.slot, txIDsHash)
 		threshDsl.VerifyFull(m, mc.ThreshCrypto, sigData, context.signature, context)
+
 		return nil
 	})
 
+	// Check if signature is correct
 	threshDsl.UponVerifyFullResult(m, func(ok bool, err string, context *handleFillerContext) error {
 		if !ok {
 			// TODO: do this the smart way to avoid needless traffic and send requests to other nodes here
@@ -272,10 +272,10 @@ func IncludeBatchFetching(
 	})
 }
 
-func certSigData(params *director.ModuleParams, slot *commontypes.Slot, txIDs []t.TxID) [][]byte {
+func certSigData(params *director.ModuleParams, slot *commontypes.Slot, txIDsHash []byte) [][]byte {
 	aleaUID := params.InstanceUID[:len(params.InstanceUID)-1]
 	aleaBcInstanceUID := append(aleaUID, 'b')
-	return vcb.SigData(bcutil.VCBInstanceUID(aleaBcInstanceUID, slot.QueueIdx, slot.QueueSlot), txIDs)
+	return vcb.SigData(bcutil.VCBInstanceUID(aleaBcInstanceUID, slot.QueueIdx, slot.QueueSlot), txIDsHash)
 }
 
 const (

@@ -103,7 +103,11 @@ func newQueueController(ctx context.Context, mc *ModuleConfig, params *ModulePar
 	})
 	mempooldsl.UponTransactionIDsResponse(m, func(txIDs []t.TxID, context *processPastVcbCtx) error {
 		context.txIDs = txIDs
-		threshcryptopbdsl.VerifyFull(m, mc.ThreshCrypto, vcb.SigData(params.BcInstanceUID, txIDs), context.signature, context)
+		dsl.HashOneMessage(m, mc.Hasher, t.TxIDSlicePb(txIDs), context)
+		return nil
+	})
+	dsl.UponOneHashResult(m, func(txIDsHash []byte, context *processPastVcbCtx) error {
+		threshcryptopbdsl.VerifyFull(m, mc.ThreshCrypto, vcb.SigData(params.BcInstanceUID, txIDsHash), context.signature, context)
 		return nil
 	})
 	threshcryptopbdsl.UponVerifyFullResult(m, func(ok bool, error string, context *processPastVcbCtx) error {
@@ -150,6 +154,7 @@ func newVcbGenerator(queueMc *ModuleConfig, queueParams *ModuleParams, nodeID t.
 		Self:         "INVALID",
 		Consumer:     queueMc.Self,
 		ReliableNet:  queueMc.ReliableNet,
+		Hasher:       queueMc.Hasher,
 		ThreshCrypto: queueMc.ThreshCrypto,
 		Mempool:      queueMc.Mempool,
 	}

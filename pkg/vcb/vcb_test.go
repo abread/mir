@@ -168,20 +168,20 @@ func newDeployment(ctx context.Context, conf *TestConfig) (*deploytest.Deploymen
 		if err != nil {
 			return nil, fmt.Errorf("error initializing Mir transport: %w", err)
 		}
+		vcbConfig := DefaultModuleConfig("app")
 
 		// Use a simple mempool for incoming requests.
 		mempool := simplemempool.NewModule(
 			ctx,
 			&simplemempool.ModuleConfig{
 				Self:   "mempool",
-				Hasher: "hasher",
+				Hasher: vcbConfig.Hasher,
 			},
 			&simplemempool.ModuleParams{
 				MaxTransactionsInBatch: 10,
 			},
 		)
 
-		vcbConfig := DefaultModuleConfig("app")
 		vcb := NewModule(ctx, vcbConfig, &ModuleParams{
 			InstanceUID: []byte{0},
 			AllNodes:    nodeIDs,
@@ -211,7 +211,7 @@ func newDeployment(ctx context.Context, conf *TestConfig) (*deploytest.Deploymen
 			vcbConfig.Self:         vcb,
 			vcbConfig.ThreshCrypto: threshCryptoSystem.Module(ctx, nodeID),
 			vcbConfig.Mempool:      mempool,
-			"hasher":               mirCrypto.NewHasher(ctx, mirCrypto.DefaultHasherModuleParams(), crypto.SHA256),
+			vcbConfig.Hasher:       mirCrypto.NewHasher(ctx, mirCrypto.DefaultHasherModuleParams(), crypto.SHA256),
 			vcbConfig.ReliableNet:  rnet,
 			"net":                  transport,
 			"timer":                timer.New(),

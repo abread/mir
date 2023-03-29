@@ -24,6 +24,7 @@ type ModuleConfig struct {
 	Self         t.ModuleID // id of this module
 	Consumer     t.ModuleID
 	ReliableNet  t.ModuleID
+	Hasher       t.ModuleID
 	ThreshCrypto t.ModuleID
 	Mempool      t.ModuleID
 }
@@ -34,6 +35,7 @@ func DefaultModuleConfig(consumer t.ModuleID) *ModuleConfig {
 		Self:         "vcb",
 		Consumer:     consumer,
 		ReliableNet:  "reliablenet",
+		Hasher:       "hasher",
 		ThreshCrypto: "threshcrypto",
 		Mempool:      "mempool",
 	}

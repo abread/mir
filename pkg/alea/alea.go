@@ -135,6 +135,7 @@ func New(ctx context.Context, ownID t.NodeID, config *Config, params *Params, st
 			Mempool:       config.Mempool,
 			Net:           config.Net,
 			ReliableNet:   config.ReliableNet,
+			Hasher:        config.Hasher,
 			ThreshCrypto:  config.ThreshCrypto,
 			Timer:         config.Timer,
 		},
@@ -160,6 +161,7 @@ func New(ctx context.Context, ownID t.NodeID, config *Config, params *Params, st
 			BatchDB:      config.BatchDB,
 			Mempool:      config.Mempool,
 			ReliableNet:  config.ReliableNet,
+			Hasher:       config.Hasher,
 			ThreshCrypto: config.ThreshCrypto,
 		},
 		&broadcast.ModuleParams{

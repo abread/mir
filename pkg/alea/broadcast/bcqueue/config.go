@@ -12,6 +12,7 @@ type ModuleConfig struct {
 	BatchDB      t.ModuleID
 	Mempool      t.ModuleID
 	ReliableNet  t.ModuleID
+	Hasher       t.ModuleID
 	ThreshCrypto t.ModuleID
 }
 
@@ -23,6 +24,7 @@ func DefaultModuleConfig(self t.ModuleID, consumer t.ModuleID) *ModuleConfig {
 		BatchDB:      "batchdb",
 		Mempool:      "mempool",
 		ReliableNet:  "reliablenet",
+		Hasher:       "hasher",
 		ThreshCrypto: "threshcrypto",
 	}
 }

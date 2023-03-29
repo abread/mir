@@ -1,10 +1,11 @@
 package vcb
 
 import (
+	"crypto"
+
 	"github.com/filecoin-project/mir/pkg/dsl"
 	mpdsl "github.com/filecoin-project/mir/pkg/mempool/dsl"
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"
-	"github.com/filecoin-project/mir/pkg/serializing"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -13,9 +14,10 @@ type vcbPayloadManager struct {
 	mc     *ModuleConfig
 	params *ModuleParams
 
-	txs     []*requestpb.Request
-	txIDs   []t.TxID
-	sigData [][]byte
+	txs       []*requestpb.Request
+	txIDs     []t.TxID
+	txIDsHash []byte
+	sigData   [][]byte
 }
 
 func newVcbPayloadManager(m dsl.Module, mc *ModuleConfig, params *ModuleParams) *vcbPayloadManager {
@@ -26,7 +28,14 @@ func newVcbPayloadManager(m dsl.Module, mc *ModuleConfig, params *ModuleParams) 
 	}
 
 	mpdsl.UponTransactionIDsResponse(m, func(txIDs []t.TxID, context *vcbPayloadMgrInputTxs) error {
-		return mgr.uponTxIDs(txIDs)
+		mgr.txIDs = txIDs
+		dsl.HashOneMessage(m, mc.Hasher, t.TxIDSlicePb(txIDs), context)
+		return nil
+	})
+	dsl.UponOneHashResult(m, func(txIDsHash []byte, context *vcbPayloadMgrInputTxs) error {
+		mgr.txIDsHash = txIDsHash
+		mgr.sigData = SigData(mgr.params.InstanceUID, txIDsHash)
+		return nil
 	})
 
 	return mgr
@@ -42,11 +51,6 @@ func (mgr *vcbPayloadManager) Input(txs []*requestpb.Request) {
 	mgr.txs = txs
 	mpdsl.RequestTransactionIDs(mgr.m, mgr.mc.Mempool, txs, &vcbPayloadMgrInputTxs{})
 }
-func (mgr *vcbPayloadManager) uponTxIDs(txIDs []t.TxID) error {
-	mgr.txIDs = txIDs
-	mgr.sigData = SigData(mgr.params.InstanceUID, txIDs)
-	return nil
-}
 
 func (mgr *vcbPayloadManager) Txs() []*requestpb.Request {
 	return mgr.txs
@@ -60,17 +64,8 @@ func (mgr *vcbPayloadManager) SigData() [][]byte {
 	return mgr.sigData
 }
 
-func SigData(instanceUID []byte, txIDs []t.TxID) [][]byte {
-	res := make([][]byte, 0, len(txIDs)+3)
+var hashAlgo = crypto.SHA256
 
-	res = append(res, []byte("github.com/filecoin-project/mir/pkg/vcb"))
-	res = append(res, instanceUID)
-	res = append(res, serializing.Uint64ToBytes(uint64(len(txIDs))))
-
-	// TODO: use batch ID from mempool to minimize memory usage
-	for _, txID := range txIDs {
-		res = append(res, txID.Pb())
-	}
-
-	return res
+func SigData(instanceUID []byte, txIDsHash []byte) [][]byte {
+	return [][]byte{instanceUID, txIDsHash}
 }

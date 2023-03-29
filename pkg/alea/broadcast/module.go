@@ -27,6 +27,7 @@ type ModuleConfig struct {
 	BatchDB      t.ModuleID
 	Mempool      t.ModuleID
 	ReliableNet  t.ModuleID
+	Hasher       t.ModuleID
 	ThreshCrypto t.ModuleID
 }
 
@@ -38,6 +39,7 @@ func DefaultModuleConfig(consumer t.ModuleID) *ModuleConfig {
 		BatchDB:      "batchdb",
 		Mempool:      "mempool",
 		ReliableNet:  "reliablenet",
+		Hasher:       "hasher",
 		ThreshCrypto: "threshcrypto",
 	}
 }
@@ -186,6 +188,7 @@ func createQueues(ctx context.Context, bcMc *ModuleConfig, bcParams *ModuleParam
 			BatchDB:      bcMc.BatchDB,
 			Mempool:      bcMc.Mempool,
 			ReliableNet:  bcMc.ReliableNet,
+			Hasher:       bcMc.Hasher,
 			ThreshCrypto: bcMc.ThreshCrypto,
 		}
 
