@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/filecoin-project/mir/pkg/dsl"
+	"github.com/filecoin-project/mir/pkg/logging"
 	threshcryptopbdsl "github.com/filecoin-project/mir/pkg/pb/threshcryptopb/dsl"
 	"github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 	t "github.com/filecoin-project/mir/pkg/types"
@@ -33,8 +34,11 @@ func (agg *ThreshSigAggregator) Add(share tctypes.SigShare, from t.NodeID) bool 
 	if _, alreadyProcessed := agg.recvdShare[from]; alreadyProcessed {
 		return false
 	}
-
 	agg.recvdShare[from] = struct{}{}
+
+	if agg.fullSig != nil {
+		return true
+	}
 
 	if agg.inSlowPath() {
 		if from == agg.params.OwnNodeID {
@@ -56,11 +60,11 @@ func (agg *ThreshSigAggregator) Add(share tctypes.SigShare, from t.NodeID) bool 
 }
 
 func (agg *ThreshSigAggregator) inFastPath() bool {
-	return agg.okShares == nil
+	return agg.okShares == nil && agg.fullSig == nil
 }
 
 func (agg *ThreshSigAggregator) inSlowPath() bool {
-	return agg.okShares != nil
+	return agg.okShares != nil && agg.fullSig == nil
 }
 
 type Params struct {
@@ -74,7 +78,7 @@ type Params struct {
 	InitialNodeCount int
 }
 
-func New(m dsl.Module, params *Params) *ThreshSigAggregator {
+func New(m dsl.Module, params *Params, logger logging.Logger) *ThreshSigAggregator {
 	agg := &ThreshSigAggregator{
 		m:      m,
 		params: params,
@@ -84,7 +88,7 @@ func New(m dsl.Module, params *Params) *ThreshSigAggregator {
 	}
 
 	dsl.UponCondition(m, func() error {
-		if agg.recoveryInProgress {
+		if agg.recoveryInProgress || agg.fullSig != nil {
 			return nil
 		}
 
@@ -136,6 +140,8 @@ func New(m dsl.Module, params *Params) *ThreshSigAggregator {
 			threshcryptopbdsl.VerifyFull(m, params.TCModuleID, params.SigData(), fullSignature, context)
 		} else {
 			// move to slow path
+			logger.Log(logging.LevelDebug, "Recover failed, moving to slow path", "error", error, "shareSources", agg.unknownShareSources)
+
 			agg.okShares = make([]tctypes.SigShare, 0, params.InitialNodeCount)
 			agg.recoveryInProgress = false
 		}
@@ -146,8 +152,13 @@ func New(m dsl.Module, params *Params) *ThreshSigAggregator {
 		if ok {
 			// we're done!
 			agg.fullSig = context.fullSig
+
+			// let shares be GC-ed
+			agg.unknownShareSources = nil
+			agg.unknownShares = nil
 		} else {
 			// move to slow path
+			logger.Log(logging.LevelDebug, "Verification failed, moving to slow path", "error", error, "shareSources", agg.unknownShareSources)
 			agg.okShares = make([]tctypes.SigShare, 0, params.InitialNodeCount)
 		}
 
@@ -157,7 +168,7 @@ func New(m dsl.Module, params *Params) *ThreshSigAggregator {
 
 	// slow path
 	threshcryptopbdsl.UponVerifyShareResult(m, func(ok bool, error string, context *verifyShareCtx) error {
-		if ok {
+		if ok && agg.okShares != nil {
 			agg.okShares = append(agg.okShares, context.share)
 		}
 
@@ -167,6 +178,11 @@ func New(m dsl.Module, params *Params) *ThreshSigAggregator {
 	threshcryptopbdsl.UponRecoverResult(m, func(fullSignature tctypes.FullSig, ok bool, error string, context *slowPathRecoverCtx) error {
 		if ok {
 			agg.fullSig = fullSignature
+
+			// let shares be GC-ed
+			agg.unknownShares = nil
+			agg.unknownShareSources = nil
+			agg.okShares = nil
 		} else {
 			return fmt.Errorf("enough valid shares from different sources but could not recover signatures. isn't this impossible?")
 		}

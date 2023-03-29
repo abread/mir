@@ -218,7 +218,7 @@ func setupVcbLeader(m dsl.Module, mc *ModuleConfig, params *ModuleParams, nodeID
 			MaxVerifyShareBatchSize: runtime.NumCPU(),
 			SigData:                 state.payload.SigData,
 			InitialNodeCount:        len(params.AllNodes),
-		}),
+		}, logging.Decorate(logger, "ThresholdSigAggregator: ")),
 	}
 
 	vcbdsl.UponEchoMessageReceived(m, func(from t.NodeID, signatureShare tctypes.SigShare) error {

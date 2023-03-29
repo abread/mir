@@ -67,7 +67,7 @@ func New(ctx context.Context, mc *ModuleConfig, params *ModuleParams, nodeID t.N
 				return coinData
 			},
 			InitialNodeCount: len(params.AllNodes),
-		}),
+		}, logging.Decorate(logger, "ThresholdSigAggregator: ")),
 	}
 
 	abbadsl.UponRoundInputValue(m, func(input bool) error {
