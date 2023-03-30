@@ -311,7 +311,7 @@ func newDeploymentAlea(ctx context.Context, conf *TestConfig) (*deploytest.Deplo
 		smrParams := DefaultParams(transportLayer.Nodes())
 		smrParams.Mempool.MaxTransactionsInBatch = 16
 		smrParams.AdjustSpeed(100 * time.Millisecond)
-		smrParams.ReliableNet.RetransmissionLoopInterval = 150 * time.Millisecond
+		smrParams.ReliableNet.RetransmissionLoopInterval = 100 * time.Millisecond
 		smrParams.Alea.MaxConcurrentVcbPerQueue = 2
 		smrParams.Alea.MaxOwnUnagreedBatchCount = 2
 		smrParams.Alea.MaxAbbaRoundLookahead = 1

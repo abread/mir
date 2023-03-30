@@ -231,7 +231,7 @@ func newDeployment(ctx context.Context, conf *TestConfig) (*deploytest.Deploymen
 
 		// Use a small retransmission delay to increase likelihood of duplicate messages
 		rnetParams := reliablenet.DefaultModuleParams(nodeIDs)
-		rnetParams.RetransmissionLoopInterval = 10 * time.Millisecond
+		rnetParams.RetransmissionLoopInterval = 20 * time.Millisecond
 
 		rnet, err := reliablenet.New(
 			nodeID,

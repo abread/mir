@@ -43,8 +43,9 @@ type state struct {
 	confRecvd               abbat.RecvTracker
 	confRecvdValueSetCounts abbat.ValueSetCounters
 
-	coinSig     *tsagg.ThreshSigAggregator
-	hashingCoin bool
+	ownCoinShare tctypes.SigShare
+	coinSig      *tsagg.ThreshSigAggregator
+	hashingCoin  bool
 
 	initWeakSupportReachedForValue abbat.BoolFlags
 	auxSent                        bool
@@ -82,6 +83,14 @@ func New(ctx context.Context, mc *ModuleConfig, params *ModuleParams, nodeID t.N
 
 		state.phase = phaseAwaitingNiceAux
 
+		// precompute coin sig share
+		threshDsl.SignShare[struct{}](m, mc.ThreshCrypto, coinData, nil)
+
+		return nil
+	})
+	threshDsl.UponSignShareResult(m, func(sigShare tctypes.SigShare, _ctx *struct{}) error {
+		state.ownCoinShare = sigShare
+		state.coinSig.Add(sigShare, nodeID)
 		return nil
 	})
 
@@ -192,28 +201,19 @@ func New(ctx context.Context, mc *ModuleConfig, params *ModuleParams, nodeID t.N
 			return nil
 		}
 
-		if state.isNiceConfValuesCount(params) {
+		if state.isNiceConfValuesCount(params) && state.ownCoinShare != nil {
 			logger.Log(logging.LevelDebug, "received enough support for CONF(C subset of values)", "values", state.values)
 
 			// 9. sample coin
 			state.phase = phaseTossingCoin
-			threshDsl.SignShare[struct{}](m, mc.ThreshCrypto, coinData, nil)
+
+			logger.Log(logging.LevelDebug, "tossing coin", "ownShare", state.ownCoinShare)
+			rnetdsl.SendMessage(m, mc.ReliableNet,
+				CoinMsgID(),
+				abbapbmsgs.RoundCoinMessage(mc.Self, state.ownCoinShare),
+				params.AllNodes,
+			)
 		}
-
-		return nil
-	})
-
-	// still in 9. sample coin
-	threshDsl.UponSignShareResult(m, func(sigShare tctypes.SigShare, _ctx *struct{}) error {
-		if state.phase != phaseTossingCoin {
-			return nil // already over/not tossing
-		}
-
-		rnetdsl.SendMessage(m, mc.ReliableNet,
-			CoinMsgID(),
-			abbapbmsgs.RoundCoinMessage(mc.Self, sigShare),
-			params.AllNodes,
-		)
 
 		return nil
 	})
