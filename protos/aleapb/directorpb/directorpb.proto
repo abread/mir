@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package aleapb.directorpb;
+
+option go_package = "github.com/filecoin-project/mir/pkg/pb/aleapb/directorpb";
+
+import "mir/codegen_extensions.proto";
+
+// ============================================================
+// Events
+// ============================================================
+
+message Event {
+  option (mir.event_class) = true;
+
+  oneof type {
+    option (mir.event_type) = true;
+
+    Heartbeat heartbeat = 1;
+  }
+}
+
+message Heartbeat {
+  option (mir.event) = true;
+}

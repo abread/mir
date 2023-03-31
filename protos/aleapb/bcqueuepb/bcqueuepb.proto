@@ -24,6 +24,7 @@ message Event {
     Deliver      deliver        = 2;
     FreeSlot     free_slot      = 3;
     PastVcbFinal past_vcb_final = 4;
+    BcStarted    bc_started = 5;
   }
 }
 
@@ -55,4 +56,10 @@ message PastVcbFinal {
   uint64                     queue_slot      = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/alea/aleatypes.QueueSlot"];
   repeated requestpb.Request txs             = 2;
   bytes                      signature       = 3 [(mir.type) = "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes.FullSig"];
+}
+
+message BcStarted {
+  option (mir.event) = true;
+
+  common.Slot slot = 1;
 }

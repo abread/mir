@@ -27,3 +27,7 @@ func FreeSlot(m dsl.Module, destModule types.ModuleID, queueSlot aleatypes.Queue
 func PastVcbFinal(m dsl.Module, destModule types.ModuleID, queueSlot aleatypes.QueueSlot, txs []*requestpb.Request, signature tctypes.FullSig) {
 	dsl.EmitMirEvent(m, events.PastVcbFinal(destModule, queueSlot, txs, signature))
 }
+
+func BcStarted(m dsl.Module, destModule types.ModuleID, slot *types1.Slot) {
+	dsl.EmitMirEvent(m, events.BcStarted(destModule, slot))
+}

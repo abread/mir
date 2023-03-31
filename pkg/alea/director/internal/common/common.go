@@ -43,4 +43,7 @@ type ModuleTunables struct {
 
 	// Time to wait before resorting to FILL-GAP messages
 	FillGapDelay t.TimeDuration
+
+	// Maximum time to stall agreement round waiting for broadcasts to complete
+	MaxAgreementDelay t.TimeDuration
 }

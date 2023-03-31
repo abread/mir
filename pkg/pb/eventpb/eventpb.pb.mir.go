@@ -50,6 +50,7 @@ func (*Event) ReflectTypeOptions() []reflect.Type {
 		reflect.TypeOf((*Event_AleaBroadcast)(nil)),
 		reflect.TypeOf((*Event_AleaAgreement)(nil)),
 		reflect.TypeOf((*Event_AleaBcqueue)(nil)),
+		reflect.TypeOf((*Event_AleaDirector)(nil)),
 		reflect.TypeOf((*Event_TestingString)(nil)),
 		reflect.TypeOf((*Event_TestingUint)(nil)),
 	}

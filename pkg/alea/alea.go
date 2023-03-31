@@ -61,6 +61,9 @@ type Params struct {
 
 	// Time to wait before resorting to FILL-GAP messages
 	FillGapDelay t.TimeDuration
+
+	// Maximum time to stall agreement round waiting for broadcasts to complete
+	MaxAgreementDelay t.TimeDuration
 }
 
 // DefaultConfig returns a valid module config with default names for all modules.
@@ -87,6 +90,9 @@ func DefaultConfig(consumer t.ModuleID) *Config {
 // A proper deployment is expected to craft a custom configuration,
 // for which DefaultParams can serve as a starting point.
 func DefaultParams(membership map[t.NodeID]t.NodeAddress) *Params {
+	aproxRTT := 50 * time.Millisecond
+	aproxBcDuration := 3*aproxRTT/2 + 20*time.Millisecond
+
 	return &Params{
 		InstanceUID:              []byte{42},
 		Membership:               membership,
@@ -94,8 +100,9 @@ func DefaultParams(membership map[t.NodeID]t.NodeAddress) *Params {
 		MaxOwnUnagreedBatchCount: 1,
 		MaxAbbaRoundLookahead:    4,
 		MaxAgRoundLookahead:      4,
-		BcEstimateMargin:         10 * time.Millisecond,
-		FillGapDelay:             t.TimeDuration(1 * time.Second),
+		BcEstimateMargin:         10*time.Millisecond + aproxRTT/2,
+		FillGapDelay:             t.TimeDuration(aproxBcDuration),
+		MaxAgreementDelay:        t.TimeDuration(aproxBcDuration),
 	}
 }
 
@@ -148,6 +155,7 @@ func New(ctx context.Context, ownID t.NodeID, config *Config, params *Params, st
 			MaxOwnUnagreedBatchCount: params.MaxOwnUnagreedBatchCount,
 			BcEstimateMargin:         params.BcEstimateMargin,
 			FillGapDelay:             params.FillGapDelay,
+			MaxAgreementDelay:        params.MaxAgreementDelay,
 		},
 		ownID,
 		logging.Decorate(logger, "AleaDirector: "),

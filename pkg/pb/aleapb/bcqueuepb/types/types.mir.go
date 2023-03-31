@@ -35,6 +35,8 @@ func Event_TypeFromPb(pb bcqueuepb.Event_Type) Event_Type {
 		return &Event_FreeSlot{FreeSlot: FreeSlotFromPb(pb.FreeSlot)}
 	case *bcqueuepb.Event_PastVcbFinal:
 		return &Event_PastVcbFinal{PastVcbFinal: PastVcbFinalFromPb(pb.PastVcbFinal)}
+	case *bcqueuepb.Event_BcStarted:
+		return &Event_BcStarted{BcStarted: BcStartedFromPb(pb.BcStarted)}
 	}
 	return nil
 }
@@ -109,6 +111,24 @@ func (w *Event_PastVcbFinal) Pb() bcqueuepb.Event_Type {
 
 func (*Event_PastVcbFinal) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*bcqueuepb.Event_PastVcbFinal]()}
+}
+
+type Event_BcStarted struct {
+	BcStarted *BcStarted
+}
+
+func (*Event_BcStarted) isEvent_Type() {}
+
+func (w *Event_BcStarted) Unwrap() *BcStarted {
+	return w.BcStarted
+}
+
+func (w *Event_BcStarted) Pb() bcqueuepb.Event_Type {
+	return &bcqueuepb.Event_BcStarted{BcStarted: (w.BcStarted).Pb()}
+}
+
+func (*Event_BcStarted) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*bcqueuepb.Event_BcStarted]()}
 }
 
 func EventFromPb(pb *bcqueuepb.Event) *Event {
@@ -214,4 +234,24 @@ func (m *PastVcbFinal) Pb() *bcqueuepb.PastVcbFinal {
 
 func (*PastVcbFinal) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*bcqueuepb.PastVcbFinal]()}
+}
+
+type BcStarted struct {
+	Slot *types.Slot
+}
+
+func BcStartedFromPb(pb *bcqueuepb.BcStarted) *BcStarted {
+	return &BcStarted{
+		Slot: types.SlotFromPb(pb.Slot),
+	}
+}
+
+func (m *BcStarted) Pb() *bcqueuepb.BcStarted {
+	return &bcqueuepb.BcStarted{
+		Slot: (m.Slot).Pb(),
+	}
+}
+
+func (*BcStarted) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*bcqueuepb.BcStarted]()}
 }

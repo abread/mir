@@ -72,3 +72,18 @@ func PastVcbFinal(destModule types.ModuleID, queueSlot aleatypes.QueueSlot, txs 
 		},
 	}
 }
+
+func BcStarted(destModule types.ModuleID, slot *types1.Slot) *types2.Event {
+	return &types2.Event{
+		DestModule: destModule,
+		Type: &types2.Event_AleaBcqueue{
+			AleaBcqueue: &types3.Event{
+				Type: &types3.Event_BcStarted{
+					BcStarted: &types3.BcStarted{
+						Slot: slot,
+					},
+				},
+			},
+		},
+	}
+}

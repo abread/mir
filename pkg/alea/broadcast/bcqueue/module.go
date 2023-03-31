@@ -169,12 +169,19 @@ func newVcbGenerator(queueMc *ModuleConfig, queueParams *ModuleParams, nodeID t.
 		mc := *baseConfig
 		mc.Self = id
 
+		queueSlot := aleatypes.QueueSlot(idx)
+
 		params := *baseParams
-		params.InstanceUID = bcutil.VCBInstanceUID(queueParams.BcInstanceUID, queueParams.QueueIdx, aleatypes.QueueSlot(idx))
+		params.InstanceUID = bcutil.VCBInstanceUID(queueParams.BcInstanceUID, queueParams.QueueIdx, queueSlot)
 
 		mod := vcb.NewModule(ctx, &mc, &params, nodeID, logging.Decorate(logger, "Vcb: ", "slot", idx))
 
-		return mod, &events.EventList{}, nil
+		return mod, events.ListOf(
+			bcqueuepbevents.BcStarted(queueMc.Consumer, &commontypes.Slot{
+				QueueIdx:  queueParams.QueueIdx,
+				QueueSlot: queueSlot,
+			}).Pb(),
+		), nil
 	}
 }
 

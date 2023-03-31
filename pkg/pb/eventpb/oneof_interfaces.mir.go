@@ -7,6 +7,7 @@ import (
 	agevents "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents"
 	bcpb "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb"
 	bcqueuepb "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb"
+	directorpb "github.com/filecoin-project/mir/pkg/pb/aleapb/directorpb"
 	availabilitypb "github.com/filecoin-project/mir/pkg/pb/availabilitypb"
 	batchdbpb "github.com/filecoin-project/mir/pkg/pb/availabilitypb/batchdbpb"
 	batchfetcherpb "github.com/filecoin-project/mir/pkg/pb/batchfetcherpb"
@@ -205,6 +206,10 @@ func (w *Event_AleaAgreement) Unwrap() *agevents.Event {
 
 func (w *Event_AleaBcqueue) Unwrap() *bcqueuepb.Event {
 	return w.AleaBcqueue
+}
+
+func (w *Event_AleaDirector) Unwrap() *directorpb.Event {
+	return w.AleaDirector
 }
 
 func (w *Event_TestingString) Unwrap() *wrapperspb.StringValue {

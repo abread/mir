@@ -34,6 +34,8 @@ func Event_TypeFromPb(pb bcpb.Event_Type) Event_Type {
 		return &Event_FreeSlot{FreeSlot: FreeSlotFromPb(pb.FreeSlot)}
 	case *bcpb.Event_FillGap:
 		return &Event_FillGap{FillGap: DoFillGapFromPb(pb.FillGap)}
+	case *bcpb.Event_BcStarted:
+		return &Event_BcStarted{BcStarted: BcStartedFromPb(pb.BcStarted)}
 	}
 	return nil
 }
@@ -108,6 +110,24 @@ func (w *Event_FillGap) Pb() bcpb.Event_Type {
 
 func (*Event_FillGap) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*bcpb.Event_FillGap]()}
+}
+
+type Event_BcStarted struct {
+	BcStarted *BcStarted
+}
+
+func (*Event_BcStarted) isEvent_Type() {}
+
+func (w *Event_BcStarted) Unwrap() *BcStarted {
+	return w.BcStarted
+}
+
+func (w *Event_BcStarted) Pb() bcpb.Event_Type {
+	return &bcpb.Event_BcStarted{BcStarted: (w.BcStarted).Pb()}
+}
+
+func (*Event_BcStarted) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*bcpb.Event_BcStarted]()}
 }
 
 func EventFromPb(pb *bcpb.Event) *Event {
@@ -207,4 +227,24 @@ func (m *DoFillGap) Pb() *bcpb.DoFillGap {
 
 func (*DoFillGap) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*bcpb.DoFillGap]()}
+}
+
+type BcStarted struct {
+	Slot *types.Slot
+}
+
+func BcStartedFromPb(pb *bcpb.BcStarted) *BcStarted {
+	return &BcStarted{
+		Slot: types.SlotFromPb(pb.Slot),
+	}
+}
+
+func (m *BcStarted) Pb() *bcpb.BcStarted {
+	return &bcpb.BcStarted{
+		Slot: (m.Slot).Pb(),
+	}
+}
+
+func (*BcStarted) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*bcpb.BcStarted]()}
 }

@@ -22,3 +22,7 @@ func (w *Event_FreeSlot) Unwrap() *FreeSlot {
 func (w *Event_PastVcbFinal) Unwrap() *PastVcbFinal {
 	return w.PastVcbFinal
 }
+
+func (w *Event_BcStarted) Unwrap() *BcStarted {
+	return w.BcStarted
+}

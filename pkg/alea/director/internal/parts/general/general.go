@@ -18,14 +18,16 @@ import (
 	aagdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents/dsl"
 	abcdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/dsl"
 	commontypes "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
+	directordsl "github.com/filecoin-project/mir/pkg/pb/aleapb/directorpb/dsl"
+	directorpbevents "github.com/filecoin-project/mir/pkg/pb/aleapb/directorpb/events"
 	"github.com/filecoin-project/mir/pkg/pb/availabilitypb"
+	"github.com/filecoin-project/mir/pkg/pb/eventpb"
+	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
 type set[T comparable] map[T]struct{}
-
-var ref = time.Now()
 
 type state struct {
 	stalledBatchCut trace.Span
@@ -37,16 +39,66 @@ type state struct {
 	agRound             uint64
 	stalledRoundSpan    trace.Span
 
-	avgAgTime   time.Duration
-	agStartTime time.Duration
+	avgAgTime   estimator
+	agStartTime time.Time
 
-	avgBcTime   time.Duration
-	bcStartTime time.Duration
+	bcStartTimes map[commontypes.Slot]time.Time
+	avgOwnBcTime estimator
+	avgBcTime    estimator
 }
 
 func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams, tunables *common.ModuleTunables, nodeID t.NodeID, logger logging.Logger) {
 	state := newState(params, tunables, nodeID)
 	ownQueueIdx := aleatypes.QueueIdx(slices.Index(params.AllNodes, nodeID))
+
+	dsl.UponInit(m, func() error {
+		dsl.EmitMirEvent(m, &eventpbtypes.Event{
+			DestModule: mc.Timer,
+			Type: &eventpbtypes.Event_TimerRepeat{
+				TimerRepeat: &eventpb.TimerRepeat{
+					Events: []*eventpb.Event{
+						directorpbevents.Heartbeat(mc.Self).Pb(),
+					},
+					Delay:          tunables.MaxAgreementDelay.Pb(),
+					RetentionIndex: 0,
+				},
+			},
+		})
+
+		return nil
+	})
+
+	directordsl.UponHeartbeat(m, func() error {
+		return nil // no-op, we just need our UponCondition code to run
+	})
+
+	// =============================================================================================
+	// Broadcast duration estimation
+	// =============================================================================================
+	abcdsl.UponBcStarted(m, func(slot *commontypes.Slot) error {
+		state.bcStartTimes[*slot] = time.Now()
+
+		return nil
+	})
+	abcdsl.UponDeliver(m, func(slotRef *commontypes.Slot) error {
+		slot := *slotRef
+
+		startTime, ok := state.bcStartTimes[slot]
+		if !ok {
+			return nil // already processed
+		}
+
+		duration := time.Since(startTime)
+
+		state.avgBcTime.AddSample(duration)
+		if slot.QueueIdx == ownQueueIdx {
+			state.avgOwnBcTime.AddSample(duration)
+		}
+
+		delete(state.bcStartTimes, slot)
+
+		return nil
+	})
 
 	// TODO: split sections into different parts (with independent state)
 
@@ -131,8 +183,8 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 		}
 
 		// TODO: consider progress in current round too (will mean adjustments below)
-		timeToOwnQueueAgRound := state.avgAgTime * time.Duration(waitRoundCount)
-		maxTimeBeforeBatch := state.avgBcTime + tunables.BcEstimateMargin
+		timeToOwnQueueAgRound := state.avgAgTime.Estimate() * time.Duration(waitRoundCount)
+		maxTimeBeforeBatch := state.avgOwnBcTime.Estimate() + tunables.BcEstimateMargin
 
 		if state.agCanDeliver() && timeToOwnQueueAgRound > maxTimeBeforeBatch {
 			// we have a lot of time before we reach our agreement round. let the batch fill up
@@ -160,19 +212,12 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 
 		abcdsl.StartBroadcast(m, mc.AleaBroadcast, state.bcOwnQueueHead, txs)
 		state.bcOwnQueueHead++
-		state.bcStartTime = time.Since(ref)
 		return nil
 	})
 	abcdsl.UponDeliver(m, func(slot *commontypes.Slot) error {
 		if slot.QueueIdx == ownQueueIdx && slot.QueueSlot == state.bcOwnQueueHead-1 {
 			// new batch was delivered, stall next one until ready
 			_, state.stalledBatchCut = m.DslHandle().PushSpan("stalling batch cut", trace.WithAttributes(attribute.Int64("slot", int64(state.bcOwnQueueHead))))
-
-			firstEst := state.avgBcTime == 0
-			state.avgBcTime = state.avgBcTime + time.Since(ref) - state.bcStartTime
-			if !firstEst {
-				state.avgBcTime /= 2
-			}
 		}
 		return nil
 	})
@@ -195,11 +240,7 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 			state.stalledRoundSpan.End()
 		}
 
-		firstEst := state.avgAgTime == 0
-		state.avgAgTime = state.avgAgTime + time.Since(ref) - state.agStartTime
-		if !firstEst {
-			state.avgAgTime /= 2
-		}
+		state.avgAgTime.AddSample(time.Since(state.agStartTime))
 
 		_, state.stalledRoundSpan = m.DslHandle().PushSpan("stalling agreement round", trace.WithAttributes(attribute.Int64("agRound", int64(state.agRound))))
 		return nil
@@ -212,20 +253,31 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 			return nil // nothing to do
 		}
 
-		shouldResumeAg := state.agCanDeliver()
+		canDeliverSomething := state.agCanDeliver()
 
 		nextQueueIdx := aleatypes.QueueIdx(state.agRound % uint64(len(params.AllNodes)))
 		nextQueueSlot := state.agQueueHeads[nextQueueIdx]
 
-		if shouldResumeAg {
+		if canDeliverSomething {
 			_, bcDone := state.slotsReadyToDeliver[nextQueueIdx][nextQueueSlot]
+			if !bcDone {
+				slot := commontypes.Slot{
+					QueueIdx:  nextQueueIdx,
+					QueueSlot: nextQueueSlot,
+				}
+				if startTime, ok := state.bcStartTimes[slot]; ok && time.Since(startTime) <= state.avgBcTime.Estimate() {
+					// stall agreement to allow in-flight broadcast to complete
+					return nil
+				}
+			}
+
 			logger.Log(logging.LevelDebug, "progressing to next agreement round", "agreementRound", state.agRound, "input", bcDone)
 
 			state.stalledRoundSpan.End()
 			state.stalledRoundSpan = nil
 
 			aagdsl.InputValue(m, mc.AleaAgreement, state.agRound, bcDone)
-			state.agStartTime = time.Since(ref)
+			state.agStartTime = time.Now()
 		}
 
 		return nil
@@ -255,6 +307,8 @@ func newState(params *common.ModuleParams, tunables *common.ModuleTunables, node
 		agQueueHeads: make([]aleatypes.QueueSlot, N),
 
 		slotsReadyToDeliver: make([]set[aleatypes.QueueSlot], N),
+
+		bcStartTimes: make(map[commontypes.Slot]time.Time, tunables.MaxConcurrentVcbPerQueue*len(params.AllNodes)),
 	}
 
 	ownQueueIdx := uint32(slices.Index(params.AllNodes, nodeID))

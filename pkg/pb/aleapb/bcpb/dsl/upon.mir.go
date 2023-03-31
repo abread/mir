@@ -45,3 +45,9 @@ func UponDoFillGap(m dsl.Module, handler func(slot *types2.Slot) error) {
 		return handler(ev.Slot)
 	})
 }
+
+func UponBcStarted(m dsl.Module, handler func(slot *types2.Slot) error) {
+	UponEvent[*types.Event_BcStarted](m, func(ev *types.BcStarted) error {
+		return handler(ev.Slot)
+	})
+}

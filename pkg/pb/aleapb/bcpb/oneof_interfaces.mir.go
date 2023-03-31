@@ -22,3 +22,7 @@ func (w *Event_FreeSlot) Unwrap() *FreeSlot {
 func (w *Event_FillGap) Unwrap() *DoFillGap {
 	return w.FillGap
 }
+
+func (w *Event_BcStarted) Unwrap() *BcStarted {
+	return w.BcStarted
+}

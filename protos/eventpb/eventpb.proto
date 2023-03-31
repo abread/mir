@@ -30,6 +30,7 @@ import "abbapb/abbapb.proto";
 import "aleapb/bcpb/bcpb.proto";
 import "aleapb/agreementpb/agevents/agevents.proto";
 import "aleapb/bcqueuepb/bcqueuepb.proto";
+import "aleapb/directorpb/directorpb.proto";
 import "reliablenetpb/reliablenetpb.proto";
 
 import "mir/codegen_extensions.proto";
@@ -88,6 +89,7 @@ message Event {
     aleapb.bcpb.Event       alea_broadcast          = 43;
     aleapb.agreementpb.Event alea_agreement         = 44;
     aleapb.bcqueuepb.Event  alea_bcqueue            = 45;
+    aleapb.directorpb.Event alea_director           = 46;
 
     // for unit-tests
     google.protobuf.StringValue testingString = 301;
@@ -273,17 +275,17 @@ message AppRestoreState {
 
 message TimerDelay {
   repeated Event  events = 1;
-  uint64          delay  = 2;
+  uint64          delay  = 2 [(mir.type) = "time.Duration"];
 }
 
 message TimerRepeat {
   repeated Event  events          = 1;
-  uint64          delay           = 2;
-  uint64          retention_index = 3;
+  uint64          delay           = 2 [(mir.type) = "time.Duration"];
+  uint64          retention_index = 3 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.RetentionIndex"];
 }
 
 message TimerGarbageCollect {
-  uint64 retention_index = 1;
+  uint64 retention_index = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.RetentionIndex"];
 }
 
 message NewEpoch {

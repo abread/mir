@@ -161,6 +161,11 @@ func newQueueController(ctx context.Context, mc *ModuleConfig, params *ModulePar
 		return nil
 	})
 
+	bcqueuedsl.UponBcStarted(m, func(slot *commontypes.Slot) error {
+		bcdsl.BcStarted(m, mc.Consumer, slot)
+		return nil
+	})
+
 	bcqueuedsl.UponDeliver(m, func(slot *commontypes.Slot) error {
 		bcdsl.Deliver(m, mc.Consumer, slot)
 		return nil

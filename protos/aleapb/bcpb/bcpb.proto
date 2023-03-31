@@ -24,6 +24,7 @@ message Event {
     Deliver        deliver         = 2;
     FreeSlot       free_slot       = 3;
     DoFillGap      fill_gap        = 4;
+    BcStarted      bc_started      = 5;
   }
 }
 
@@ -48,6 +49,12 @@ message FreeSlot {
 }
 
 message DoFillGap {
+  option (mir.event) = true;
+
+  common.Slot slot = 1;
+}
+
+message BcStarted {
   option (mir.event) = true;
 
   common.Slot slot = 1;

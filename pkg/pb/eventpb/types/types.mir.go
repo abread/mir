@@ -4,23 +4,24 @@ import (
 	wrapperspb "google.golang.org/protobuf/types/known/wrapperspb"
 
 	mirreflect "github.com/filecoin-project/mir/codegen/mirreflect"
-	types13 "github.com/filecoin-project/mir/codegen/model/types"
+	types14 "github.com/filecoin-project/mir/codegen/model/types"
 	types9 "github.com/filecoin-project/mir/pkg/pb/abbapb/types"
 	types11 "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents/types"
 	types10 "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/types"
 	types12 "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/types"
+	types13 "github.com/filecoin-project/mir/pkg/pb/aleapb/directorpb/types"
 	types4 "github.com/filecoin-project/mir/pkg/pb/availabilitypb/batchdbpb/types"
 	types3 "github.com/filecoin-project/mir/pkg/pb/availabilitypb/types"
 	types5 "github.com/filecoin-project/mir/pkg/pb/batchfetcherpb/types"
 	types1 "github.com/filecoin-project/mir/pkg/pb/bcbpb/types"
 	checkpointpb "github.com/filecoin-project/mir/pkg/pb/checkpointpb"
-	types14 "github.com/filecoin-project/mir/pkg/pb/contextstorepb/types"
-	types15 "github.com/filecoin-project/mir/pkg/pb/dslpb/types"
+	types15 "github.com/filecoin-project/mir/pkg/pb/contextstorepb/types"
+	types16 "github.com/filecoin-project/mir/pkg/pb/dslpb/types"
 	eventpb "github.com/filecoin-project/mir/pkg/pb/eventpb"
 	factorymodulepb "github.com/filecoin-project/mir/pkg/pb/factorymodulepb"
 	isspb "github.com/filecoin-project/mir/pkg/pb/isspb"
 	types2 "github.com/filecoin-project/mir/pkg/pb/mempoolpb/types"
-	types16 "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
+	types17 "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
 	ordererspb "github.com/filecoin-project/mir/pkg/pb/ordererspb"
 	pingpongpb "github.com/filecoin-project/mir/pkg/pb/pingpongpb"
 	types7 "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/types"
@@ -138,6 +139,8 @@ func Event_TypeFromPb(pb eventpb.Event_Type) Event_Type {
 		return &Event_AleaAgreement{AleaAgreement: types11.EventFromPb(pb.AleaAgreement)}
 	case *eventpb.Event_AleaBcqueue:
 		return &Event_AleaBcqueue{AleaBcqueue: types12.EventFromPb(pb.AleaBcqueue)}
+	case *eventpb.Event_AleaDirector:
+		return &Event_AleaDirector{AleaDirector: types13.EventFromPb(pb.AleaDirector)}
 	case *eventpb.Event_TestingString:
 		return &Event_TestingString{TestingString: pb.TestingString}
 	case *eventpb.Event_TestingUint:
@@ -938,6 +941,24 @@ func (*Event_AleaBcqueue) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*eventpb.Event_AleaBcqueue]()}
 }
 
+type Event_AleaDirector struct {
+	AleaDirector *types13.Event
+}
+
+func (*Event_AleaDirector) isEvent_Type() {}
+
+func (w *Event_AleaDirector) Unwrap() *types13.Event {
+	return w.AleaDirector
+}
+
+func (w *Event_AleaDirector) Pb() eventpb.Event_Type {
+	return &eventpb.Event_AleaDirector{AleaDirector: (w.AleaDirector).Pb()}
+}
+
+func (*Event_AleaDirector) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*eventpb.Event_AleaDirector]()}
+}
+
 type Event_TestingString struct {
 	TestingString *wrapperspb.StringValue
 }
@@ -977,7 +998,7 @@ func (*Event_TestingUint) MirReflect() mirreflect.Type {
 func EventFromPb(pb *eventpb.Event) *Event {
 	return &Event{
 		Type: Event_TypeFromPb(pb.Type),
-		Next: types13.ConvertSlice(pb.Next, func(t *eventpb.Event) *Event {
+		Next: types14.ConvertSlice(pb.Next, func(t *eventpb.Event) *Event {
 			return EventFromPb(t)
 		}),
 		DestModule: (types.ModuleID)(pb.DestModule),
@@ -988,7 +1009,7 @@ func EventFromPb(pb *eventpb.Event) *Event {
 func (m *Event) Pb() *eventpb.Event {
 	return &eventpb.Event{
 		Type: (m.Type).Pb(),
-		Next: types13.ConvertSlice(m.Next, func(t *Event) *eventpb.Event {
+		Next: types14.ConvertSlice(m.Next, func(t *Event) *eventpb.Event {
 			return (t).Pb()
 		}),
 		DestModule: (string)(m.DestModule),
@@ -1065,9 +1086,9 @@ type SignOrigin_TypeWrapper[T any] interface {
 func SignOrigin_TypeFromPb(pb eventpb.SignOrigin_Type) SignOrigin_Type {
 	switch pb := pb.(type) {
 	case *eventpb.SignOrigin_ContextStore:
-		return &SignOrigin_ContextStore{ContextStore: types14.OriginFromPb(pb.ContextStore)}
+		return &SignOrigin_ContextStore{ContextStore: types15.OriginFromPb(pb.ContextStore)}
 	case *eventpb.SignOrigin_Dsl:
-		return &SignOrigin_Dsl{Dsl: types15.OriginFromPb(pb.Dsl)}
+		return &SignOrigin_Dsl{Dsl: types16.OriginFromPb(pb.Dsl)}
 	case *eventpb.SignOrigin_Checkpoint:
 		return &SignOrigin_Checkpoint{Checkpoint: pb.Checkpoint}
 	case *eventpb.SignOrigin_Sb:
@@ -1077,12 +1098,12 @@ func SignOrigin_TypeFromPb(pb eventpb.SignOrigin_Type) SignOrigin_Type {
 }
 
 type SignOrigin_ContextStore struct {
-	ContextStore *types14.Origin
+	ContextStore *types15.Origin
 }
 
 func (*SignOrigin_ContextStore) isSignOrigin_Type() {}
 
-func (w *SignOrigin_ContextStore) Unwrap() *types14.Origin {
+func (w *SignOrigin_ContextStore) Unwrap() *types15.Origin {
 	return w.ContextStore
 }
 
@@ -1095,12 +1116,12 @@ func (*SignOrigin_ContextStore) MirReflect() mirreflect.Type {
 }
 
 type SignOrigin_Dsl struct {
-	Dsl *types15.Origin
+	Dsl *types16.Origin
 }
 
 func (*SignOrigin_Dsl) isSignOrigin_Type() {}
 
-func (w *SignOrigin_Dsl) Unwrap() *types15.Origin {
+func (w *SignOrigin_Dsl) Unwrap() *types16.Origin {
 	return w.Dsl
 }
 
@@ -1195,12 +1216,12 @@ type VerifyNodeSigs struct {
 
 func VerifyNodeSigsFromPb(pb *eventpb.VerifyNodeSigs) *VerifyNodeSigs {
 	return &VerifyNodeSigs{
-		Data: types13.ConvertSlice(pb.Data, func(t *eventpb.SigVerData) *SigVerData {
+		Data: types14.ConvertSlice(pb.Data, func(t *eventpb.SigVerData) *SigVerData {
 			return SigVerDataFromPb(t)
 		}),
 		Signatures: pb.Signatures,
 		Origin:     SigVerOriginFromPb(pb.Origin),
-		NodeIds: types13.ConvertSlice(pb.NodeIds, func(t string) types.NodeID {
+		NodeIds: types14.ConvertSlice(pb.NodeIds, func(t string) types.NodeID {
 			return (types.NodeID)(t)
 		}),
 	}
@@ -1208,12 +1229,12 @@ func VerifyNodeSigsFromPb(pb *eventpb.VerifyNodeSigs) *VerifyNodeSigs {
 
 func (m *VerifyNodeSigs) Pb() *eventpb.VerifyNodeSigs {
 	return &eventpb.VerifyNodeSigs{
-		Data: types13.ConvertSlice(m.Data, func(t *SigVerData) *eventpb.SigVerData {
+		Data: types14.ConvertSlice(m.Data, func(t *SigVerData) *eventpb.SigVerData {
 			return (t).Pb()
 		}),
 		Signatures: m.Signatures,
 		Origin:     (m.Origin).Pb(),
-		NodeIds: types13.ConvertSlice(m.NodeIds, func(t types.NodeID) string {
+		NodeIds: types14.ConvertSlice(m.NodeIds, func(t types.NodeID) string {
 			return (string)(t)
 		}),
 	}
@@ -1234,12 +1255,12 @@ type NodeSigsVerified struct {
 func NodeSigsVerifiedFromPb(pb *eventpb.NodeSigsVerified) *NodeSigsVerified {
 	return &NodeSigsVerified{
 		Origin: SigVerOriginFromPb(pb.Origin),
-		NodeIds: types13.ConvertSlice(pb.NodeIds, func(t string) types.NodeID {
+		NodeIds: types14.ConvertSlice(pb.NodeIds, func(t string) types.NodeID {
 			return (types.NodeID)(t)
 		}),
 		Valid: pb.Valid,
-		Errors: types13.ConvertSlice(pb.Errors, func(t string) error {
-			return types13.StringToError(t)
+		Errors: types14.ConvertSlice(pb.Errors, func(t string) error {
+			return types14.StringToError(t)
 		}),
 		AllOk: pb.AllOk,
 	}
@@ -1248,12 +1269,12 @@ func NodeSigsVerifiedFromPb(pb *eventpb.NodeSigsVerified) *NodeSigsVerified {
 func (m *NodeSigsVerified) Pb() *eventpb.NodeSigsVerified {
 	return &eventpb.NodeSigsVerified{
 		Origin: (m.Origin).Pb(),
-		NodeIds: types13.ConvertSlice(m.NodeIds, func(t types.NodeID) string {
+		NodeIds: types14.ConvertSlice(m.NodeIds, func(t types.NodeID) string {
 			return (string)(t)
 		}),
 		Valid: m.Valid,
-		Errors: types13.ConvertSlice(m.Errors, func(t error) string {
-			return types13.ErrorToString(t)
+		Errors: types14.ConvertSlice(m.Errors, func(t error) string {
+			return types14.ErrorToString(t)
 		}),
 		AllOk: m.AllOk,
 	}
@@ -1282,11 +1303,11 @@ type SigVerOrigin_TypeWrapper[T any] interface {
 func SigVerOrigin_TypeFromPb(pb eventpb.SigVerOrigin_Type) SigVerOrigin_Type {
 	switch pb := pb.(type) {
 	case *eventpb.SigVerOrigin_ContextStore:
-		return &SigVerOrigin_ContextStore{ContextStore: types14.OriginFromPb(pb.ContextStore)}
+		return &SigVerOrigin_ContextStore{ContextStore: types15.OriginFromPb(pb.ContextStore)}
 	case *eventpb.SigVerOrigin_Iss:
 		return &SigVerOrigin_Iss{Iss: pb.Iss}
 	case *eventpb.SigVerOrigin_Dsl:
-		return &SigVerOrigin_Dsl{Dsl: types15.OriginFromPb(pb.Dsl)}
+		return &SigVerOrigin_Dsl{Dsl: types16.OriginFromPb(pb.Dsl)}
 	case *eventpb.SigVerOrigin_Checkpoint:
 		return &SigVerOrigin_Checkpoint{Checkpoint: pb.Checkpoint}
 	case *eventpb.SigVerOrigin_Sb:
@@ -1296,12 +1317,12 @@ func SigVerOrigin_TypeFromPb(pb eventpb.SigVerOrigin_Type) SigVerOrigin_Type {
 }
 
 type SigVerOrigin_ContextStore struct {
-	ContextStore *types14.Origin
+	ContextStore *types15.Origin
 }
 
 func (*SigVerOrigin_ContextStore) isSigVerOrigin_Type() {}
 
-func (w *SigVerOrigin_ContextStore) Unwrap() *types14.Origin {
+func (w *SigVerOrigin_ContextStore) Unwrap() *types15.Origin {
 	return w.ContextStore
 }
 
@@ -1332,12 +1353,12 @@ func (*SigVerOrigin_Iss) MirReflect() mirreflect.Type {
 }
 
 type SigVerOrigin_Dsl struct {
-	Dsl *types15.Origin
+	Dsl *types16.Origin
 }
 
 func (*SigVerOrigin_Dsl) isSigVerOrigin_Type() {}
 
-func (w *SigVerOrigin_Dsl) Unwrap() *types15.Origin {
+func (w *SigVerOrigin_Dsl) Unwrap() *types16.Origin {
 	return w.Dsl
 }
 
@@ -1404,14 +1425,14 @@ func (*SigVerOrigin) MirReflect() mirreflect.Type {
 }
 
 type SendMessage struct {
-	Msg          *types16.Message
+	Msg          *types17.Message
 	Destinations []types.NodeID
 }
 
 func SendMessageFromPb(pb *eventpb.SendMessage) *SendMessage {
 	return &SendMessage{
-		Msg: types16.MessageFromPb(pb.Msg),
-		Destinations: types13.ConvertSlice(pb.Destinations, func(t string) types.NodeID {
+		Msg: types17.MessageFromPb(pb.Msg),
+		Destinations: types14.ConvertSlice(pb.Destinations, func(t string) types.NodeID {
 			return (types.NodeID)(t)
 		}),
 	}
@@ -1420,7 +1441,7 @@ func SendMessageFromPb(pb *eventpb.SendMessage) *SendMessage {
 func (m *SendMessage) Pb() *eventpb.SendMessage {
 	return &eventpb.SendMessage{
 		Msg: (m.Msg).Pb(),
-		Destinations: types13.ConvertSlice(m.Destinations, func(t types.NodeID) string {
+		Destinations: types14.ConvertSlice(m.Destinations, func(t types.NodeID) string {
 			return (string)(t)
 		}),
 	}
@@ -1432,13 +1453,13 @@ func (*SendMessage) MirReflect() mirreflect.Type {
 
 type MessageReceived struct {
 	From types.NodeID
-	Msg  *types16.Message
+	Msg  *types17.Message
 }
 
 func MessageReceivedFromPb(pb *eventpb.MessageReceived) *MessageReceived {
 	return &MessageReceived{
 		From: (types.NodeID)(pb.From),
-		Msg:  types16.MessageFromPb(pb.Msg),
+		Msg:  types17.MessageFromPb(pb.Msg),
 	}
 }
 

@@ -26,3 +26,7 @@ func FreeSlot(m dsl.Module, destModule types.ModuleID, slot *types1.Slot) {
 func DoFillGap(m dsl.Module, destModule types.ModuleID, slot *types1.Slot) {
 	dsl.EmitMirEvent(m, events.DoFillGap(destModule, slot))
 }
+
+func BcStarted(m dsl.Module, destModule types.ModuleID, slot *types1.Slot) {
+	dsl.EmitMirEvent(m, events.BcStarted(destModule, slot))
+}
