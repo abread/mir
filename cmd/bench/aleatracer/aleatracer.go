@@ -191,12 +191,14 @@ func (at *AleaTracer) interceptOne(event *eventpb.Event) error {
 				}
 			case *vcbpb.Message_FinalMessage:
 				slot := parseSlotFromModuleID(event.DestModule)
-				at.bcSlotTxs[slot] = m.FinalMessage.Txs
 
-				for _, tx := range m.FinalMessage.Txs {
-					at.endTxWaitingBcSpan(ts, tx.ClientId, tx.ReqNo)
-					at.startTxBcSpan(ts, tx.ClientId, tx.ReqNo)
-					at.startTxSpan(ts, tx.ClientId, tx.ReqNo)
+				txs, ok := at.bcSlotTxs[slot]
+				if ok {
+					for _, tx := range txs {
+						at.endTxWaitingBcSpan(ts, tx.ClientId, tx.ReqNo)
+						at.startTxBcSpan(ts, tx.ClientId, tx.ReqNo)
+						at.startTxSpan(ts, tx.ClientId, tx.ReqNo)
+					}
 				}
 			}
 		}
