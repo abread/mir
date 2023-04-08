@@ -19,10 +19,8 @@ import (
 	bcqueuedsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/dsl"
 	bcqueuepbevents "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/events"
 	commontypes "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
-	mempooldsl "github.com/filecoin-project/mir/pkg/pb/mempoolpb/dsl"
 	reliablenetpbdsl "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/dsl"
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"
-	threshcryptopbdsl "github.com/filecoin-project/mir/pkg/pb/threshcryptopb/dsl"
 	vcbpbdsl "github.com/filecoin-project/mir/pkg/pb/vcbpb/dsl"
 	vcbpbevents "github.com/filecoin-project/mir/pkg/pb/vcbpb/events"
 	vcbpbtypes "github.com/filecoin-project/mir/pkg/pb/vcbpb/types"
@@ -80,46 +78,6 @@ func newQueueController(ctx context.Context, mc *ModuleConfig, params *ModulePar
 		}
 
 		batchdbdsl.StoreBatch(m, mc.BatchDB, aleaCommon.FormatAleaBatchID(slot), ev.TxIds, ev.Txs, ev.Signature, slot)
-		return nil
-	})
-
-	// upon stale vcb final message, validate signature, store and deliver batch
-	bcqueuedsl.UponPastVcbFinal(m, func(queueSlot aleatypes.QueueSlot, txs []*requestpb.Request, signature tctypes.FullSig) error {
-		logger.Log(logging.LevelDebug, "processing out-of-order VCB final message", "queueSlot", queueSlot)
-
-		context := &processPastVcbCtx{
-			queueSlot: queueSlot,
-			txs:       txs,
-			signature: signature,
-		}
-		mempooldsl.RequestTransactionIDs(m, mc.Mempool, txs, context)
-
-		reliablenetpbdsl.Ack(m, mc.ReliableNet, mc.Self.Then(t.NewModuleIDFromInt(queueSlot)), vcb.FinalMsgID(), params.QueueOwner)
-
-		return nil
-	})
-	mempooldsl.UponTransactionIDsResponse(m, func(txIDs []t.TxID, context *processPastVcbCtx) error {
-		context.txIDs = txIDs
-		dsl.HashOneMessage(m, mc.Hasher, t.TxIDSlicePb(txIDs), context)
-		return nil
-	})
-	dsl.UponOneHashResult(m, func(txIDsHash []byte, context *processPastVcbCtx) error {
-		threshcryptopbdsl.VerifyFull(m, mc.ThreshCrypto, vcb.SigData(params.BcInstanceUID, txIDsHash), context.signature, context)
-		return nil
-	})
-	threshcryptopbdsl.UponVerifyFullResult(m, func(ok bool, error string, context *processPastVcbCtx) error {
-		if !ok {
-			return nil // bad batch
-			// TODO: report byz node?
-		}
-
-		logger.Log(logging.LevelDebug, "out-of-order VCB Final is valid. storing batch for delivery", "queueIdx", params.QueueIdx, "queueSlot", context.queueSlot)
-
-		slot := &commontypes.Slot{
-			QueueIdx:  params.QueueIdx,
-			QueueSlot: context.queueSlot,
-		}
-		batchdbdsl.StoreBatch(m, mc.BatchDB, aleaCommon.FormatAleaBatchID(slot), context.txIDs, context.txs, context.signature, slot)
 		return nil
 	})
 
