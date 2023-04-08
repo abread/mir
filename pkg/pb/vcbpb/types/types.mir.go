@@ -278,20 +278,17 @@ func (*EchoMessage) MirReflect() mirreflect.Type {
 }
 
 type FinalMessage struct {
-	Txs       []*requestpb.Request
 	Signature tctypes.FullSig
 }
 
 func FinalMessageFromPb(pb *vcbpb.FinalMessage) *FinalMessage {
 	return &FinalMessage{
-		Txs:       pb.Txs,
 		Signature: (tctypes.FullSig)(pb.Signature),
 	}
 }
 
 func (m *FinalMessage) Pb() *vcbpb.FinalMessage {
 	return &vcbpb.FinalMessage{
-		Txs:       m.Txs,
 		Signature: ([]uint8)(m.Signature),
 	}
 }

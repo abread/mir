@@ -50,7 +50,7 @@ func UponEchoMessageReceived(m dsl.Module, handler func(from types1.NodeID, sign
 	})
 }
 
-func UponFinalMessageReceived(m dsl.Module, handler func(from types1.NodeID, txs []*requestpb.Request, signature tctypes.FullSig) error) {
+func UponFinalMessageReceived(m dsl.Module, handler func(from types1.NodeID, signature tctypes.FullSig) error) {
 	UponMessageReceived[*types.Message_FinalMessage](m, func(from types1.NodeID, msg *types.FinalMessage) error {
 		spanFromAttr := attribute.String("from", string(from))
 		spanMsgAttr := attribute.String("message", msg.Pb().String())
@@ -58,6 +58,6 @@ func UponFinalMessageReceived(m dsl.Module, handler func(from types1.NodeID, txs
 		m.DslHandle().PushSpan("UponFinalMessageReceived", spanAttrs)
 		defer m.DslHandle().PopSpan()
 
-		return handler(from, msg.Txs, msg.Signature)
+		return handler(from, msg.Signature)
 	})
 }

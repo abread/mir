@@ -38,14 +38,13 @@ func EchoMessage(destModule types.ModuleID, signatureShare tctypes.SigShare) *ty
 	}
 }
 
-func FinalMessage(destModule types.ModuleID, txs []*requestpb.Request, signature tctypes.FullSig) *types1.Message {
+func FinalMessage(destModule types.ModuleID, signature tctypes.FullSig) *types1.Message {
 	return &types1.Message{
 		DestModule: destModule,
 		Type: &types1.Message_Vcb{
 			Vcb: &types2.Message{
 				Type: &types2.Message_FinalMessage{
 					FinalMessage: &types2.FinalMessage{
-						Txs:       txs,
 						Signature: signature,
 					},
 				},

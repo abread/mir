@@ -20,8 +20,6 @@ import (
 	bcqueuepbevents "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/events"
 	commontypes "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
 	mempooldsl "github.com/filecoin-project/mir/pkg/pb/mempoolpb/dsl"
-	messagepbtypes "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
-	modringpbtypes "github.com/filecoin-project/mir/pkg/pb/modringpb/types"
 	reliablenetpbdsl "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/dsl"
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"
 	threshcryptopbdsl "github.com/filecoin-project/mir/pkg/pb/threshcryptopb/dsl"
@@ -39,8 +37,7 @@ func New(ctx context.Context, mc *ModuleConfig, params *ModuleParams, tunables *
 	}
 
 	slots := modring.New(ctx, mc.Self, tunables.MaxConcurrentVcb, modring.ModuleParams{
-		Generator:      newVcbGenerator(mc, params, nodeID, logger),
-		PastMsgHandler: newPastMsgHandler(mc, params),
+		Generator: newVcbGenerator(mc, params, nodeID, logger),
 	}, logging.Decorate(logger, "Modring controller: "))
 
 	controller := newQueueController(ctx, mc, params, tunables, nodeID, logger, slots)
@@ -141,7 +138,8 @@ func newQueueController(ctx context.Context, mc *ModuleConfig, params *ModulePar
 			return fmt.Errorf("failed to free queue slot: %w", err)
 		}
 
-		// do not mark VCB FINAL messages as received, as they can avoid FILL-GAP messages
+		// clean up old messages
+		reliablenetpbdsl.MarkModuleMsgsRecvd(m, mc.ReliableNet, mc.Self.Then(t.NewModuleIDFromInt(queueSlot)), params.AllNodes)
 
 		return nil
 	})
@@ -182,38 +180,6 @@ func newVcbGenerator(queueMc *ModuleConfig, queueParams *ModuleParams, nodeID t.
 				QueueSlot: queueSlot,
 			}).Pb(),
 		), nil
-	}
-}
-
-func newPastMsgHandler(mc *ModuleConfig, params *ModuleParams) func([]*modringpbtypes.PastMessage) (*events.EventList, error) {
-	return func(pastMessages []*modringpbtypes.PastMessage) (*events.EventList, error) {
-		evsOut := &events.EventList{}
-
-		for _, msg := range pastMessages {
-			if msg.From != params.QueueOwner {
-				continue
-			}
-
-			vcbMsgWrapper, ok := msg.Message.Type.(*messagepbtypes.Message_Vcb)
-			if !ok {
-				continue
-			}
-
-			vcbFinalMsgWrapper, ok := vcbMsgWrapper.Unwrap().Type.(*vcbpbtypes.Message_FinalMessage)
-			if !ok {
-				continue
-			}
-			vcbFinalMsg := vcbFinalMsgWrapper.Unwrap()
-
-			evsOut.PushBack(bcqueuepbevents.PastVcbFinal(
-				mc.Self,
-				aleatypes.QueueSlot(msg.DestId),
-				vcbFinalMsg.Txs,
-				vcbFinalMsg.Signature,
-			).Pb())
-		}
-
-		return evsOut, nil
 	}
 }
 

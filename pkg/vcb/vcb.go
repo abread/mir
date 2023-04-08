@@ -111,7 +111,7 @@ func NewModule(ctx context.Context, mc *ModuleConfig, params *ModuleParams, node
 		})
 	}
 
-	vcbdsl.UponFinalMessageReceived(m, func(from t.NodeID, txs []*requestpb.Request, signature tctypes.FullSig) error {
+	vcbdsl.UponFinalMessageReceived(m, func(from t.NodeID, signature tctypes.FullSig) error {
 		if from != params.Leader {
 			return nil // byz node // TODO: suspect?
 		}
@@ -121,12 +121,11 @@ func NewModule(ctx context.Context, mc *ModuleConfig, params *ModuleParams, node
 			return nil // already received final
 		}
 
-		logger.Log(logging.LevelDebug, "recvd FINAL", "txs", txs, "signature", signature)
+		logger.Log(logging.LevelDebug, "recvd FINAL", "signature", signature)
 
 		// FINAL acts as ack for ECHO messages
 		rnetdsl.MarkRecvd(m, mc.ReliableNet, mc.Self, EchoMsgID(), []t.NodeID{params.Leader})
 
-		state.payload.Input(txs)
 		state.sig = signature
 
 		if from == nodeID {
@@ -242,7 +241,6 @@ func setupVcbLeader(m dsl.Module, mc *ModuleConfig, params *ModuleParams, nodeID
 
 			rnetdsl.SendMessage(m, mc.ReliableNet, FinalMsgID(), vcbmsgs.FinalMessage(
 				mc.Self,
-				state.payload.Txs(),
 				leaderState.sigAgg.FullSig(),
 			), params.AllNodes)
 
