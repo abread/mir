@@ -6,7 +6,7 @@ import (
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
 	events "github.com/filecoin-project/mir/pkg/pb/mempoolpb/events"
 	types1 "github.com/filecoin-project/mir/pkg/pb/mempoolpb/types"
-	requestpb "github.com/filecoin-project/mir/pkg/pb/requestpb"
+	types2 "github.com/filecoin-project/mir/pkg/pb/requestpb/types"
 	types "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -28,7 +28,7 @@ func RequestBatch[C any](m dsl.Module, destModule types.ModuleID, context *C) {
 	dsl.EmitMirEvent(m, events.RequestBatch(destModule, origin))
 }
 
-func NewBatch(m dsl.Module, destModule types.ModuleID, txIds []types.TxID, txs []*requestpb.Request, origin *types1.RequestBatchOrigin) {
+func NewBatch(m dsl.Module, destModule types.ModuleID, txIds []types.TxID, txs []*types2.Request, origin *types1.RequestBatchOrigin) {
 	dsl.EmitMirEvent(m, events.NewBatch(destModule, txIds, txs, origin))
 }
 
@@ -48,11 +48,11 @@ func RequestTransactions[C any](m dsl.Module, destModule types.ModuleID, txIds [
 	dsl.EmitMirEvent(m, events.RequestTransactions(destModule, txIds, origin))
 }
 
-func TransactionsResponse(m dsl.Module, destModule types.ModuleID, present []bool, txs []*requestpb.Request, origin *types1.RequestTransactionsOrigin) {
+func TransactionsResponse(m dsl.Module, destModule types.ModuleID, present []bool, txs []*types2.Request, origin *types1.RequestTransactionsOrigin) {
 	dsl.EmitMirEvent(m, events.TransactionsResponse(destModule, present, txs, origin))
 }
 
-func RequestTransactionIDs[C any](m dsl.Module, destModule types.ModuleID, txs []*requestpb.Request, context *C) {
+func RequestTransactionIDs[C any](m dsl.Module, destModule types.ModuleID, txs []*types2.Request, context *C) {
 	kind := trace.WithSpanKind(trace.SpanKindProducer)
 	m.DslHandle().PushSpan("RequestTransactionIDs", kind)
 	defer m.DslHandle().PopSpan()

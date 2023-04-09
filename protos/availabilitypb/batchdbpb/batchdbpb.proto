@@ -30,7 +30,7 @@ message Event {
 message LookupBatch {
   option (mir.event) = true;
 
-  bytes             batch_id = 1; // TODO: make codegen work for t.BatchID
+  bytes             batch_id = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.BatchID"];
   LookupBatchOrigin origin   = 2 [(mir.origin_request) = true];
 }
 
@@ -41,18 +41,20 @@ message LookupBatchResponse {
   bool                       found    = 1;
   repeated requestpb.Request txs      = 2;
   bytes                      metadata = 3;
+
   LookupBatchOrigin          origin   = 4 [(mir.origin_response) = true];
 }
 
 // StoreBatch is used to store a new batch in the local batch database.
 message StoreBatch {
-    option (mir.event) = true;
+  option (mir.event) = true;
 
-    bytes batch_id                 = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.BatchID"];
-    repeated bytes tx_ids          = 2 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.TxID"];
-    repeated requestpb.Request txs = 3;
-    bytes metadata                 = 4;
-    StoreBatchOrigin origin        = 5 [(mir.origin_request) = true];
+  bytes batch_id                 = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.BatchID"];
+  repeated bytes tx_ids          = 2 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.TxID"];
+  repeated requestpb.Request txs = 3;
+  bytes metadata                 = 4;
+
+  StoreBatchOrigin origin        = 5 [(mir.origin_request) = true];
 }
 
 // BatchStored is a response to a VerifyCert event.
@@ -67,20 +69,24 @@ message BatchStored {
 // ============================================================
 
 message LookupBatchOrigin {
-  option (mir.struct) = true;
+  option (mir.event_class) = true;
 
   string module = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.ModuleID"];
   oneof Type {
+    option (mir.event_type) = true;
+
     contextstorepb.Origin context_store = 2;
     dslpb.Origin          dsl           = 3;
   }
 }
 
 message StoreBatchOrigin {
-  option (mir.struct) = true;
+  option (mir.event_class) = true;
 
   string module = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.ModuleID"];
   oneof Type {
+    option (mir.event_type) = true;
+
     contextstorepb.Origin context_store = 2;
     dslpb.Origin          dsl           = 3;
   }

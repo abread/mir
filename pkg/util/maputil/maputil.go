@@ -85,10 +85,11 @@ func Any[K comparable, V any](m map[K]V) (V, bool) {
 	return zeroVal, false
 }
 
-func Transform[Ki comparable, Vi any, Ko comparable, Vo any](mi map[Ki]Vi, kt func(Ki) Ko, vt func(Vi) Vo) map[Ko]Vo {
+func Transform[Ki comparable, Vi any, Ko comparable, Vo any](mi map[Ki]Vi, f func(Ki, Vi) (Ko, Vo)) map[Ko]Vo {
 	mo := make(map[Ko]Vo, len(mi))
 	for ki, vi := range mi {
-		mo[kt(ki)] = vt(vi)
+		ko, vo := f(ki, vi)
+		mo[ko] = vo
 	}
 	return mo
 }
@@ -106,4 +107,12 @@ func FromSlices[K comparable, V any](keys []K, vals []V) map[K]V {
 	}
 
 	return m
+}
+
+func FindAndDeleteAll[K comparable, V any](m map[K]V, f func(key K, value V) bool) {
+	for k, v := range m {
+		if f(k, v) {
+			delete(m, k)
+		}
+	}
 }

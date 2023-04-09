@@ -2,10 +2,12 @@ package bcqueuepbtypes
 
 import (
 	mirreflect "github.com/filecoin-project/mir/codegen/mirreflect"
+	types2 "github.com/filecoin-project/mir/codegen/model/types"
 	aleatypes "github.com/filecoin-project/mir/pkg/alea/aleatypes"
 	bcqueuepb "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb"
 	types "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
 	requestpb "github.com/filecoin-project/mir/pkg/pb/requestpb"
+	types1 "github.com/filecoin-project/mir/pkg/pb/requestpb/types"
 	tctypes "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 	reflectutil "github.com/filecoin-project/mir/pkg/util/reflectutil"
 )
@@ -149,20 +151,24 @@ func (*Event) MirReflect() mirreflect.Type {
 
 type InputValue struct {
 	Slot *types.Slot
-	Txs  []*requestpb.Request
+	Txs  []*types1.Request
 }
 
 func InputValueFromPb(pb *bcqueuepb.InputValue) *InputValue {
 	return &InputValue{
 		Slot: types.SlotFromPb(pb.Slot),
-		Txs:  pb.Txs,
+		Txs: types2.ConvertSlice(pb.Txs, func(t *requestpb.Request) *types1.Request {
+			return types1.RequestFromPb(t)
+		}),
 	}
 }
 
 func (m *InputValue) Pb() *bcqueuepb.InputValue {
 	return &bcqueuepb.InputValue{
 		Slot: (m.Slot).Pb(),
-		Txs:  m.Txs,
+		Txs: types2.ConvertSlice(m.Txs, func(t *types1.Request) *requestpb.Request {
+			return (t).Pb()
+		}),
 	}
 }
 
@@ -212,14 +218,16 @@ func (*FreeSlot) MirReflect() mirreflect.Type {
 
 type PastVcbFinal struct {
 	QueueSlot aleatypes.QueueSlot
-	Txs       []*requestpb.Request
+	Txs       []*types1.Request
 	Signature tctypes.FullSig
 }
 
 func PastVcbFinalFromPb(pb *bcqueuepb.PastVcbFinal) *PastVcbFinal {
 	return &PastVcbFinal{
 		QueueSlot: (aleatypes.QueueSlot)(pb.QueueSlot),
-		Txs:       pb.Txs,
+		Txs: types2.ConvertSlice(pb.Txs, func(t *requestpb.Request) *types1.Request {
+			return types1.RequestFromPb(t)
+		}),
 		Signature: (tctypes.FullSig)(pb.Signature),
 	}
 }
@@ -227,7 +235,9 @@ func PastVcbFinalFromPb(pb *bcqueuepb.PastVcbFinal) *PastVcbFinal {
 func (m *PastVcbFinal) Pb() *bcqueuepb.PastVcbFinal {
 	return &bcqueuepb.PastVcbFinal{
 		QueueSlot: (uint64)(m.QueueSlot),
-		Txs:       m.Txs,
+		Txs: types2.ConvertSlice(m.Txs, func(t *types1.Request) *requestpb.Request {
+			return (t).Pb()
+		}),
 		Signature: ([]uint8)(m.Signature),
 	}
 }

@@ -9,7 +9,7 @@ import (
 	types "github.com/filecoin-project/mir/pkg/pb/aleapb/types"
 	dsl1 "github.com/filecoin-project/mir/pkg/pb/messagepb/dsl"
 	types2 "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
-	requestpb "github.com/filecoin-project/mir/pkg/pb/requestpb"
+	types4 "github.com/filecoin-project/mir/pkg/pb/requestpb/types"
 	tctypes "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 	types1 "github.com/filecoin-project/mir/pkg/types"
 )
@@ -39,7 +39,7 @@ func UponFillGapMessageReceived(m dsl.Module, handler func(from types1.NodeID, s
 	})
 }
 
-func UponFillerMessageReceived(m dsl.Module, handler func(from types1.NodeID, slot *types3.Slot, txs []*requestpb.Request, signature tctypes.FullSig) error) {
+func UponFillerMessageReceived(m dsl.Module, handler func(from types1.NodeID, slot *types3.Slot, txs []*types4.Request, signature tctypes.FullSig) error) {
 	UponMessageReceived[*types.Message_FillerMessage](m, func(from types1.NodeID, msg *types.FillerMessage) error {
 		spanFromAttr := attribute.String("from", string(from))
 		spanMsgAttr := attribute.String("message", msg.Pb().String())

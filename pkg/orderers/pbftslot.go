@@ -113,14 +113,6 @@ func (slot *pbftSlot) advanceState(pbft *Orderer, sn t.SeqNr) *events.EventList 
 				t.TimeDuration(pbft.config.ViewChangeSNTimeout),
 			))
 		}
-		eventsOut.PushBack(events.TimerDelay(
-			pbft.moduleConfig.Timer,
-			[]*eventpb.Event{OrdererEvent(pbft.moduleConfig.Self,
-				PbftViewChangeSNTimeout(
-					pbft.view,
-					pbft.numCommitted(pbft.view)))},
-			t.TimeDuration(pbft.config.ViewChangeSNTimeout),
-		))
 
 		// If all certificates have been committed (i.e. this is the last certificate to commit),
 		// send a Done message to all other nodes.
@@ -130,7 +122,7 @@ func (slot *pbftSlot) advanceState(pbft *Orderer, sn t.SeqNr) *events.EventList 
 			eventsOut.PushBackList(pbft.sendDoneMessages())
 		}
 
-		// Deliver availability certificate.
+		// Deliver availability certificate (will be verified by ISS)
 		eventsOut.PushBack(&eventpb.Event{
 			DestModule: pbft.moduleConfig.Ord.Pb(),
 			Type: &eventpb.Event_Iss{
@@ -144,7 +136,6 @@ func (slot *pbftSlot) advanceState(pbft *Orderer, sn t.SeqNr) *events.EventList 
 			},
 		})
 	}
-
 	return eventsOut
 }
 

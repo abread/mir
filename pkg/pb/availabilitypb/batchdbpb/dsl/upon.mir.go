@@ -6,7 +6,7 @@ import (
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
 	types "github.com/filecoin-project/mir/pkg/pb/availabilitypb/batchdbpb/types"
 	types1 "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
-	requestpb "github.com/filecoin-project/mir/pkg/pb/requestpb"
+	types3 "github.com/filecoin-project/mir/pkg/pb/requestpb/types"
 	types2 "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -23,7 +23,7 @@ func UponEvent[W types.Event_TypeWrapper[Ev], Ev any](m dsl.Module, handler func
 	})
 }
 
-func UponLookupBatch(m dsl.Module, handler func(batchId []uint8, origin *types.LookupBatchOrigin) error) {
+func UponLookupBatch(m dsl.Module, handler func(batchId types2.BatchID, origin *types.LookupBatchOrigin) error) {
 	UponEvent[*types.Event_Lookup](m, func(ev *types.LookupBatch) error {
 		originWrapper, ok := ev.Origin.Type.(*types.LookupBatchOrigin_Dsl)
 		if ok {
@@ -38,7 +38,7 @@ func UponLookupBatch(m dsl.Module, handler func(batchId []uint8, origin *types.L
 	})
 }
 
-func UponLookupBatchResponse[C any](m dsl.Module, handler func(found bool, txs []*requestpb.Request, metadata []uint8, context *C) error) {
+func UponLookupBatchResponse[C any](m dsl.Module, handler func(found bool, txs []*types3.Request, metadata []uint8, context *C) error) {
 	UponEvent[*types.Event_LookupResponse](m, func(ev *types.LookupBatchResponse) error {
 		originWrapper, ok := ev.Origin.Type.(*types.LookupBatchOrigin_Dsl)
 		if !ok {
@@ -61,7 +61,7 @@ func UponLookupBatchResponse[C any](m dsl.Module, handler func(found bool, txs [
 	})
 }
 
-func UponStoreBatch(m dsl.Module, handler func(batchId types2.BatchID, txIds []types2.TxID, txs []*requestpb.Request, metadata []uint8, origin *types.StoreBatchOrigin) error) {
+func UponStoreBatch(m dsl.Module, handler func(batchId types2.BatchID, txIds []types2.TxID, txs []*types3.Request, metadata []uint8, origin *types.StoreBatchOrigin) error) {
 	UponEvent[*types.Event_Store](m, func(ev *types.StoreBatch) error {
 		originWrapper, ok := ev.Origin.Type.(*types.StoreBatchOrigin_Dsl)
 		if ok {

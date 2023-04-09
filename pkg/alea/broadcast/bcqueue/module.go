@@ -10,7 +10,6 @@ import (
 	"github.com/filecoin-project/mir/pkg/alea/aleatypes"
 	"github.com/filecoin-project/mir/pkg/alea/broadcast/bcutil"
 	aleaCommon "github.com/filecoin-project/mir/pkg/alea/common"
-	batchdbdsl "github.com/filecoin-project/mir/pkg/availability/batchdb/dsl"
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/logging"
@@ -19,8 +18,10 @@ import (
 	bcqueuedsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/dsl"
 	bcqueuepbevents "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/events"
 	commontypes "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
+	batchdbdsl "github.com/filecoin-project/mir/pkg/pb/availabilitypb/batchdbpb/dsl"
 	reliablenetpbdsl "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/dsl"
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"
+	requestpbtypes "github.com/filecoin-project/mir/pkg/pb/requestpb/types"
 	vcbpbdsl "github.com/filecoin-project/mir/pkg/pb/vcbpb/dsl"
 	vcbpbevents "github.com/filecoin-project/mir/pkg/pb/vcbpb/events"
 	vcbpbtypes "github.com/filecoin-project/mir/pkg/pb/vcbpb/types"
@@ -46,7 +47,7 @@ func New(ctx context.Context, mc *ModuleConfig, params *ModuleParams, tunables *
 func newQueueController(ctx context.Context, mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger, slots *modring.Module) modules.PassiveModule {
 	m := dsl.NewModule(ctx, mc.Self)
 
-	bcqueuedsl.UponInputValue(m, func(slot *commontypes.Slot, txs []*requestpb.Request) error {
+	bcqueuedsl.UponInputValue(m, func(slot *commontypes.Slot, txs []*requestpbtypes.Request) error {
 		if slot.QueueIdx != params.QueueIdx {
 			return fmt.Errorf("input value given to wrong queue")
 		}

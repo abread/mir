@@ -13,7 +13,6 @@ import (
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/logging"
-	mempooldsl "github.com/filecoin-project/mir/pkg/mempool/dsl"
 	"github.com/filecoin-project/mir/pkg/pb/aleapb"
 	aagdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents/dsl"
 	abcdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/dsl"
@@ -23,7 +22,8 @@ import (
 	"github.com/filecoin-project/mir/pkg/pb/availabilitypb"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
 	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
-	"github.com/filecoin-project/mir/pkg/pb/requestpb"
+	mempooldsl "github.com/filecoin-project/mir/pkg/pb/mempoolpb/dsl"
+	requestpbtypes "github.com/filecoin-project/mir/pkg/pb/requestpb/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -201,7 +201,7 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 		mempooldsl.RequestBatch(m, mc.Mempool, &span)
 		return nil
 	})
-	mempooldsl.UponNewBatch(m, func(txIDs []t.TxID, txs []*requestpb.Request, span *trace.Span) error {
+	mempooldsl.UponNewBatch(m, func(txIDs []t.TxID, txs []*requestpbtypes.Request, span *trace.Span) error {
 		if len(txs) == 0 {
 			return fmt.Errorf("empty batch. did you misconfigure your mempool?")
 		}

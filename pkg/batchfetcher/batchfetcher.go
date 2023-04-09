@@ -3,15 +3,25 @@ package batchfetcher
 import (
 	"context"
 
-	availabilitydsl "github.com/filecoin-project/mir/pkg/availability/dsl"
 	bfevents "github.com/filecoin-project/mir/pkg/batchfetcher/events"
 	"github.com/filecoin-project/mir/pkg/checkpoint"
+	"github.com/filecoin-project/mir/pkg/logging"
+	"github.com/filecoin-project/mir/pkg/pb/batchfetcherpb"
+	checkpointpbtypes "github.com/filecoin-project/mir/pkg/pb/checkpointpb/types"
+	"github.com/filecoin-project/mir/pkg/pb/requestpb"
+
+	availabilitypbdsl "github.com/filecoin-project/mir/pkg/pb/availabilitypb/dsl"
+	apbtypes "github.com/filecoin-project/mir/pkg/pb/availabilitypb/types"
+	bfeventstypes "github.com/filecoin-project/mir/pkg/pb/batchfetcherpb/events"
+	requestpbtypes "github.com/filecoin-project/mir/pkg/pb/requestpb/types"
+
+	eventpbdsl "github.com/filecoin-project/mir/pkg/pb/eventpb/dsl"
+
 	"github.com/filecoin-project/mir/pkg/clientprogress"
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
-	"github.com/filecoin-project/mir/pkg/pb/requestpb"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -29,54 +39,92 @@ import (
 // and provides it to the checkpoint module when relaying a state snapshot request to the application.
 // Analogously, when relaying a RestoreState event, it restores its state (including the delivered transactions)
 // using the relayed information.
-func NewModule(ctx context.Context, mc *ModuleConfig, epochNr t.EpochNr, clientProgress *clientprogress.ClientProgress) modules.Module {
+func NewModule(ctx context.Context, mc *ModuleConfig, epochNr t.EpochNr, clientProgress *clientprogress.ClientProgress, logger logging.Logger) modules.Module {
 	m := dsl.NewModule(ctx, mc.Self)
-
 	// Queue of output events. It is required for buffering events being relayed
 	// in case a DeliverCert event received earlier has not yet been transformed to a ProvideTransactions event.
 	// In such a case, events received later must not be relayed until the pending certificate has been resolved.
 	var output outputQueue
 
-	// The NewEpoch handler updates the current epoch number and forwards the event to the output.
-	dsl.UponEvent[*eventpb.Event_NewEpoch](m, func(newEpoch *eventpb.NewEpoch) error {
-		_, span := m.DslHandle().PushSpan("NewEpoch")
+	// filterDuplicates takes a NewOrderedBatch event and removes all the contained transactions
+	// that have already been added to the clientProgress, i.e., that have already been delivered.
+	// filterDuplicates modification performs the modification in-place, on the provided batch.
+	// It is applied to each transaction batch immediately before delivering it to the application.
+	filterDuplicates := func(newOrderedBatch *batchfetcherpb.NewOrderedBatch) {
 
-		epochNr = t.EpochNr(newEpoch.EpochNr)
+		newTxs := make([]*requestpb.Request, 0, len(newOrderedBatch.Txs))
+
+		for _, tx := range newOrderedBatch.Txs {
+
+			// Convenience variables
+			clID := t.ClientID(tx.ClientId)
+			reqNo := t.ReqNo(tx.ReqNo)
+
+			// Only keep transaction if it has not yet been delivered.
+			if clientProgress.Add(clID, reqNo) {
+				newTxs = append(newTxs, tx)
+			}
+		}
+
+		// Replace the original list of transactions by the filtered one.
+		newOrderedBatch.Txs = newTxs
+	}
+
+	// The NewEpoch handler updates the current epoch number and forwards the event to the output.
+	eventpbdsl.UponNewEpoch(m, func(newEpochNr t.EpochNr) error {
+		_, span := m.DslHandle().StartSpanNoPush("UponNewEpoch") // span will be ended when the event is flushed
+
+		epochNr = newEpochNr
 		output.Enqueue(&outputItem{
-			event: events.NewEpoch(mc.Destination, t.EpochNr(newEpoch.EpochNr)),
+			event: events.NewEpoch(mc.Destination, epochNr),
 			span:  span,
 		})
 
-		m.DslHandle().PopSpanNoEnd()
 		output.Flush(m)
 		return nil
 	})
 
 	// The DeliverCert handler requests the transactions referenced by the received availability certificate
 	// from the availability layer.
-	// TODO: Make sure the certificate has been verified by the producer of this event.
-	dsl.UponEvent[*eventpb.Event_DeliverCert](m, func(cert *eventpb.DeliverCert) error {
-		_, span := m.DslHandle().PushSpan("DeliverCert")
+	eventpbdsl.UponDeliverCert(m, func(sn t.SeqNr, cert *apbtypes.Cert) error {
+		_, span := m.DslHandle().StartSpanNoPush("UponDeliverCert") // span will be ended when the event is flushed
 
 		// Create an empty output item and enqueue it immediately.
 		// Actual output will be delayed until the transactions have been received.
 		// This is necessary to preserve the order of incoming and outgoing events.
-		item := outputItem{event: nil, span: span}
+		item := outputItem{
+			event: nil,
+
+			// At the time of delivering the batch,
+			// filter out transactions that have already been delivered in previous batches.
+			// Note that this must be done immediately before delivering the batch,
+			// NOT on reception of the transaction payloads.
+			// (Otherwise, delivering the transaction payloads from the availability module
+			// in different order at different nodes would lead to inconsistencies).
+			f: func(e *eventpb.Event) {
+				// Casting event to the NewOrderedBatch type is safe,
+				// because no other event type is ever saved in an output item created at certificate delivery.
+				filterDuplicates(e.
+					Type.(*eventpb.Event_BatchFetcher).BatchFetcher.
+					Type.(*batchfetcherpb.Event_NewOrderedBatch).NewOrderedBatch)
+			},
+
+			span: span,
+		}
 		output.Enqueue(&item)
 
-		if cert.Cert.Type == nil {
+		//TODO cleanup check for empty certificates and make consistent across modules
+		if cert.Type == nil {
 			// Skip fetching transactions for padding certificates.
 			// Directly deliver an empty batch instead.
-			item.event = bfevents.NewOrderedBatch(mc.Destination, []*requestpb.Request{})
-
-			m.DslHandle().PopSpanNoEnd()
+			item.event = bfeventstypes.NewOrderedBatch(mc.Destination, []*requestpbtypes.Request{}).Pb()
 			output.Flush(m)
 		} else {
 			// If this is a proper certificate, request transactions from the availability layer.
-			availabilitydsl.RequestTransactions(
+			availabilitypbdsl.RequestTransactions(
 				m,
 				mc.Availability.Then(t.NewModuleIDFromInt(epochNr)),
-				cert.Cert,
+				cert,
 				&txRequestContext{queueItem: &item},
 			)
 		}
@@ -86,23 +134,21 @@ func NewModule(ctx context.Context, mc *ModuleConfig, epochNr t.EpochNr, clientP
 
 	// The AppSnapshotRequest handler triggers a ClientProgress event (for the checkpointing protocol)
 	// and forwards the original snapshot request event to the output.
-	dsl.UponEvent[*eventpb.Event_AppSnapshotRequest](m, func(snapshotRequest *eventpb.AppSnapshotRequest) error {
-		_, span := m.DslHandle().PushSpan("AppSnapshotRequest")
+	eventpbdsl.UponAppSnapshotRequest(m, func(replyTo t.ModuleID) error {
+		_, span := m.DslHandle().StartSpanNoPush("UponAppSnapshotRequest") // span will be ended when the event is flushed
 
 		// Save the number of the epoch when the AppSnapshotRequest has been received.
 		// This is necessary in case the epoch number changes
 		// by the time the AppSnapshotRequest event is output and the hook function (added below) executed.
-		epoch := epochNr
-
 		// Forward the original event to the output.
 		output.Enqueue(&outputItem{
-			event: events.AppSnapshotRequest(mc.Destination, t.ModuleID(snapshotRequest.ReplyTo)),
+			event: events.AppSnapshotRequest(mc.Destination, replyTo),
 
 			// At the time of forwarding, submit the client progress to the checkpointing protocol.
 			f: func(_ *eventpb.Event) {
 				clientProgress.GarbageCollect()
 				dsl.EmitEvent(m, bfevents.ClientProgress(
-					mc.Checkpoint.Then(t.NewModuleIDFromInt(epoch)),
+					mc.Checkpoint.Then(t.NewModuleIDFromInt(epochNr)),
 					clientProgress.Pb(),
 				))
 			},
@@ -110,7 +156,6 @@ func NewModule(ctx context.Context, mc *ModuleConfig, epochNr t.EpochNr, clientP
 			span: span,
 		})
 
-		m.DslHandle().PopSpanNoEnd()
 		output.Flush(m)
 
 		return nil
@@ -118,16 +163,15 @@ func NewModule(ctx context.Context, mc *ModuleConfig, epochNr t.EpochNr, clientP
 
 	// The AppRestoreState handler restores the batch fetcher's state from a checkpoint
 	// and forwards the event to the application, so it can restore its state too.
-	dsl.UponEvent[*eventpb.Event_AppRestoreState](m, func(restoreState *eventpb.AppRestoreState) error {
+	eventpbdsl.UponAppRestoreState(m, func(mirChkp *checkpointpbtypes.StableCheckpoint) error {
 
-		// Load the checkpoint from the received event.
-		chkp := checkpoint.StableCheckpointFromPb(restoreState.Checkpoint)
+		chkp := checkpoint.StableCheckpointFromPb(mirChkp.Pb())
 
 		// Update current epoch number.
 		epochNr = chkp.Epoch()
 
 		// Load client progress.
-		clientProgress.LoadPb(chkp.StateSnapshot().EpochData.ClientProgress)
+		clientProgress = chkp.ClientProgress(logger)
 
 		// Reset output event queue.
 		// This is necessary to prune any pending output to the application
@@ -137,7 +181,7 @@ func NewModule(ctx context.Context, mc *ModuleConfig, epochNr t.EpochNr, clientP
 		// Forward the RestoreState event to the application.
 		// We can output it directly without passing through the queue,
 		// since we've just reset it and know this would be its first and only item.
-		dsl.EmitEvent(m, events.AppRestoreState(mc.Destination, restoreState.Checkpoint))
+		eventpbdsl.AppRestoreState(m, mc.Destination, mirChkp)
 
 		return nil
 	})
@@ -147,43 +191,29 @@ func NewModule(ctx context.Context, mc *ModuleConfig, epochNr t.EpochNr, clientP
 	// assigns the remaining transactions to the corresponding output item
 	// (the one created on reception of the corresponding availability certificate in DeliverCert)
 	// and flushes the output stream.
-	availabilitydsl.UponProvideTransactions(m, func(txs []*requestpb.Request, context *txRequestContext) error {
+	availabilitypbdsl.UponProvideTransactions(m, func(txs []*requestpbtypes.Request, context *txRequestContext) error {
 
-		// Filter out transactions that already have been delivered
-		newTxs := make([]*requestpb.Request, 0, len(txs))
-		for _, req := range txs {
-			// Runs for each received transaction.
-
-			// Convenience variables
-			clID := t.ClientID(req.ClientId)
-			reqNo := t.ReqNo(req.ReqNo)
-
-			// Only keep request if it has not yet been delivered.
-			if clientProgress.Add(clID, reqNo) {
-				newTxs = append(newTxs, req)
-			}
-		}
-
-		context.queueItem.event = bfevents.NewOrderedBatch(mc.Destination, newTxs)
+		// Note that not necessarily all transactions will be part of the final batch.
+		// When the event leaves the output buffer, duplicates will be filtered out.
+		context.queueItem.event = bfeventstypes.NewOrderedBatch(mc.Destination, txs).Pb()
 		output.Flush(m)
 		return nil
 	})
 
 	// Explicitly ignore Init event. This prevents forwarding it to the destination module.
-	dsl.UponEvent[*eventpb.Event_Init](m, func(_ *eventpb.Init) error {
+	eventpbdsl.UponInit(m, func() error {
 		return nil
 	})
 
 	// All other events simply pass through the batch fetcher unchanged (except their destination module).
 	dsl.UponOtherEvent(m, func(ev *eventpb.Event) error {
-		_, span := m.DslHandle().PushSpan("ForeignEvent")
+		_, span := m.DslHandle().StartSpanNoPush("ForeignEvent") // span will be ended when the event is flushed
 
 		output.Enqueue(&outputItem{
 			event: events.Redirect(ev, mc.Destination),
 			span:  span,
 		})
 
-		m.DslHandle().PopSpanNoEnd()
 		output.Flush(m)
 		return nil
 	})

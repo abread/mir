@@ -9,21 +9,21 @@ import (
 	"github.com/filecoin-project/mir/pkg/alea/broadcast/bcutil"
 	"github.com/filecoin-project/mir/pkg/alea/common"
 	director "github.com/filecoin-project/mir/pkg/alea/director/internal/common"
-	batchdbdsl "github.com/filecoin-project/mir/pkg/availability/batchdb/dsl"
-	adsl "github.com/filecoin-project/mir/pkg/availability/dsl"
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/logging"
-	mempooldsl "github.com/filecoin-project/mir/pkg/mempool/dsl"
 	abcdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/dsl"
 	bcpbevents "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/events"
 	commontypes "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
 	aleadsl "github.com/filecoin-project/mir/pkg/pb/aleapb/dsl"
 	aleamsgs "github.com/filecoin-project/mir/pkg/pb/aleapb/msgs"
-	apb "github.com/filecoin-project/mir/pkg/pb/availabilitypb"
+	batchdbdsl "github.com/filecoin-project/mir/pkg/pb/availabilitypb/batchdbpb/dsl"
+	adsl "github.com/filecoin-project/mir/pkg/pb/availabilitypb/dsl"
+	availabilitypbtypes "github.com/filecoin-project/mir/pkg/pb/availabilitypb/types"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
+	mempooldsl "github.com/filecoin-project/mir/pkg/pb/mempoolpb/dsl"
 	rnetdsl "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/dsl"
-	"github.com/filecoin-project/mir/pkg/pb/requestpb"
+	requestpbtypes "github.com/filecoin-project/mir/pkg/pb/requestpb/types"
 	threshDsl "github.com/filecoin-project/mir/pkg/pb/threshcryptopb/dsl"
 	"github.com/filecoin-project/mir/pkg/reliablenet/rntypes"
 	"github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
@@ -39,7 +39,7 @@ type batchFetchingState struct {
 // RequestsState represents the state related to a request on the source node of the request.
 // The node disposes of this state as soon as the request is completed.
 type RequestsState struct {
-	ReqOrigins  []*apb.RequestTransactionsOrigin
+	ReqOrigins  []*availabilitypbtypes.RequestTransactionsOrigin
 	SentFillGap bool
 	Replies     map[t.NodeID]struct{}
 	span        trace.Span
@@ -59,14 +59,14 @@ func IncludeBatchFetching(
 	}
 
 	// When receive a request for transactions, first check the local storage.
-	adsl.UponRequestTransactions(m, func(anyCert *apb.Cert, origin *apb.RequestTransactionsOrigin) error {
-		certWrapper, present := anyCert.Type.(*apb.Cert_Alea)
+	adsl.UponRequestTransactions(m, func(anyCert *availabilitypbtypes.Cert, origin *availabilitypbtypes.RequestTransactionsOrigin) error {
+		certWrapper, present := anyCert.Type.(*availabilitypbtypes.Cert_Alea)
 		if !present {
 			return fmt.Errorf("unexpected certificate type. Expected: %T, got %T", certWrapper, anyCert.Type)
 		}
 		// NOTE: it is assumed that cert is valid.
 		cert := certWrapper.Alea
-		slot := commontypes.SlotFromPb(cert.Slot)
+		slot := cert.Slot
 
 		reqState, present := state.RequestsState[*slot]
 		if !present {
@@ -77,7 +77,7 @@ func IncludeBatchFetching(
 
 			// new request
 			reqState = &RequestsState{
-				ReqOrigins: make([]*apb.RequestTransactionsOrigin, 0, 1),
+				ReqOrigins: make([]*availabilitypbtypes.RequestTransactionsOrigin, 0, 1),
 				span:       span,
 			}
 			state.RequestsState[*slot] = reqState
@@ -89,7 +89,7 @@ func IncludeBatchFetching(
 		// add ourselves to the list of requestors in order to receive a reply
 		reqState.ReqOrigins = append(reqState.ReqOrigins, origin)
 
-		reqState.span.AddEvent("new requestor", trace.WithAttributes(attribute.String("originModule", origin.Module)))
+		reqState.span.AddEvent("new requestor", trace.WithAttributes(attribute.String("originModule", string(origin.Module))))
 
 		return nil
 	})
@@ -111,7 +111,7 @@ func IncludeBatchFetching(
 	})
 
 	// If the batch is present in the local storage, return it. Otherwise, ask other nodes.
-	batchdbdsl.UponLookupBatchResponse(m, func(found bool, txs []*requestpb.Request, metadata []byte, slot *commontypes.Slot) error {
+	batchdbdsl.UponLookupBatchResponse(m, func(found bool, txs []*requestpbtypes.Request, metadata []byte, slot *commontypes.Slot) error {
 		reqState, ok := state.RequestsState[*slot]
 		if !ok {
 			return nil // stale request
@@ -184,7 +184,7 @@ func IncludeBatchFetching(
 	})
 
 	// If the batch is found in the local storage, send it to the requesting node.
-	batchdbdsl.UponLookupBatchResponse(m, func(found bool, txs []*requestpb.Request, signature []byte, context *lookupBatchOnRemoteRequestContext) error {
+	batchdbdsl.UponLookupBatchResponse(m, func(found bool, txs []*requestpbtypes.Request, signature []byte, context *lookupBatchOnRemoteRequestContext) error {
 		if !found {
 			// Ignore invalid request.
 			return nil
@@ -198,7 +198,7 @@ func IncludeBatchFetching(
 	})
 
 	// When receive a requested batch, compute the ids of the received transactions.
-	aleadsl.UponFillerMessageReceived(m, func(from t.NodeID, slot *commontypes.Slot, txs []*requestpb.Request, signature tctypes.FullSig) error {
+	aleadsl.UponFillerMessageReceived(m, func(from t.NodeID, slot *commontypes.Slot, txs []*requestpbtypes.Request, signature tctypes.FullSig) error {
 		rnetdsl.MarkRecvd(m, mc.ReliableNet, mc.Self, FillGapMsgID(slot), []t.NodeID{from})
 
 		reqState, present := state.RequestsState[*slot]
@@ -295,7 +295,7 @@ type lookupBatchOnRemoteRequestContext struct {
 
 type handleFillerContext struct {
 	slot      *commontypes.Slot
-	txs       []*requestpb.Request
+	txs       []*requestpbtypes.Request
 	signature []byte
 
 	txIDs   []t.TxID

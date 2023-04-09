@@ -2,20 +2,20 @@ package bcpbevents
 
 import (
 	aleatypes "github.com/filecoin-project/mir/pkg/alea/aleatypes"
-	types2 "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/types"
-	types3 "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
-	types1 "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
-	requestpb "github.com/filecoin-project/mir/pkg/pb/requestpb"
+	types3 "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/types"
+	types4 "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
+	types2 "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
+	types1 "github.com/filecoin-project/mir/pkg/pb/requestpb/types"
 	types "github.com/filecoin-project/mir/pkg/types"
 )
 
-func StartBroadcast(destModule types.ModuleID, queueSlot aleatypes.QueueSlot, txs []*requestpb.Request) *types1.Event {
-	return &types1.Event{
+func StartBroadcast(destModule types.ModuleID, queueSlot aleatypes.QueueSlot, txs []*types1.Request) *types2.Event {
+	return &types2.Event{
 		DestModule: destModule,
-		Type: &types1.Event_AleaBroadcast{
-			AleaBroadcast: &types2.Event{
-				Type: &types2.Event_StartBroadcast{
-					StartBroadcast: &types2.StartBroadcast{
+		Type: &types2.Event_AleaBroadcast{
+			AleaBroadcast: &types3.Event{
+				Type: &types3.Event_StartBroadcast{
+					StartBroadcast: &types3.StartBroadcast{
 						QueueSlot: queueSlot,
 						Txs:       txs,
 					},
@@ -25,13 +25,13 @@ func StartBroadcast(destModule types.ModuleID, queueSlot aleatypes.QueueSlot, tx
 	}
 }
 
-func Deliver(destModule types.ModuleID, slot *types3.Slot) *types1.Event {
-	return &types1.Event{
+func Deliver(destModule types.ModuleID, slot *types4.Slot) *types2.Event {
+	return &types2.Event{
 		DestModule: destModule,
-		Type: &types1.Event_AleaBroadcast{
-			AleaBroadcast: &types2.Event{
-				Type: &types2.Event_Deliver{
-					Deliver: &types2.Deliver{
+		Type: &types2.Event_AleaBroadcast{
+			AleaBroadcast: &types3.Event{
+				Type: &types3.Event_Deliver{
+					Deliver: &types3.Deliver{
 						Slot: slot,
 					},
 				},
@@ -40,13 +40,13 @@ func Deliver(destModule types.ModuleID, slot *types3.Slot) *types1.Event {
 	}
 }
 
-func FreeSlot(destModule types.ModuleID, slot *types3.Slot) *types1.Event {
-	return &types1.Event{
+func FreeSlot(destModule types.ModuleID, slot *types4.Slot) *types2.Event {
+	return &types2.Event{
 		DestModule: destModule,
-		Type: &types1.Event_AleaBroadcast{
-			AleaBroadcast: &types2.Event{
-				Type: &types2.Event_FreeSlot{
-					FreeSlot: &types2.FreeSlot{
+		Type: &types2.Event_AleaBroadcast{
+			AleaBroadcast: &types3.Event{
+				Type: &types3.Event_FreeSlot{
+					FreeSlot: &types3.FreeSlot{
 						Slot: slot,
 					},
 				},
@@ -55,13 +55,13 @@ func FreeSlot(destModule types.ModuleID, slot *types3.Slot) *types1.Event {
 	}
 }
 
-func DoFillGap(destModule types.ModuleID, slot *types3.Slot) *types1.Event {
-	return &types1.Event{
+func DoFillGap(destModule types.ModuleID, slot *types4.Slot) *types2.Event {
+	return &types2.Event{
 		DestModule: destModule,
-		Type: &types1.Event_AleaBroadcast{
-			AleaBroadcast: &types2.Event{
-				Type: &types2.Event_FillGap{
-					FillGap: &types2.DoFillGap{
+		Type: &types2.Event_AleaBroadcast{
+			AleaBroadcast: &types3.Event{
+				Type: &types3.Event_FillGap{
+					FillGap: &types3.DoFillGap{
 						Slot: slot,
 					},
 				},
@@ -70,13 +70,13 @@ func DoFillGap(destModule types.ModuleID, slot *types3.Slot) *types1.Event {
 	}
 }
 
-func BcStarted(destModule types.ModuleID, slot *types3.Slot) *types1.Event {
-	return &types1.Event{
+func BcStarted(destModule types.ModuleID, slot *types4.Slot) *types2.Event {
+	return &types2.Event{
 		DestModule: destModule,
-		Type: &types1.Event_AleaBroadcast{
-			AleaBroadcast: &types2.Event{
-				Type: &types2.Event_BcStarted{
-					BcStarted: &types2.BcStarted{
+		Type: &types2.Event_AleaBroadcast{
+			AleaBroadcast: &types3.Event{
+				Type: &types3.Event_BcStarted{
+					BcStarted: &types3.BcStarted{
 						Slot: slot,
 					},
 				},

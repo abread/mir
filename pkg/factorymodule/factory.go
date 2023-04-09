@@ -16,6 +16,17 @@ import (
 
 // TODO: Add support for active modules as well.
 
+// FactoryModule provides the basic functionality of "submodules".
+// It can be used to dynamically create and garbage-collect passive modules,
+// and it automatically forwards events to them.
+// See: protos/factorymodulepb/factorymodulepb.proto for details on the interface of the factory module itself.
+//
+// The forwarding mechanism is as follows:
+//  1. All events destined for an existing submodule are forwarded to it automatically regardless of the event type.
+//  2. Incoming network messages destined for non-existent submodules are buffered within a limit.
+//     Once the limit is exceeded, the oldest messages are discarded.
+//     If a single message is too large to fit into the buffer, it is discarded.
+//  3. Other events destined for non-existent submodules are ignored.
 type FactoryModule struct {
 	ownID     t.ModuleID
 	generator ModuleGenerator
@@ -28,6 +39,7 @@ type FactoryModule struct {
 	logger logging.Logger
 }
 
+// New creates a new factory module.
 func New(id t.ModuleID, params ModuleParams, logger logging.Logger) *FactoryModule {
 	if logger == nil {
 		logger = logging.ConsoleErrorLogger

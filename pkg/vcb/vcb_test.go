@@ -22,11 +22,11 @@ import (
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/logging"
-	mpdsl "github.com/filecoin-project/mir/pkg/mempool/dsl"
 	"github.com/filecoin-project/mir/pkg/mempool/simplemempool"
 	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
-	"github.com/filecoin-project/mir/pkg/pb/requestpb"
+	mpdsl "github.com/filecoin-project/mir/pkg/pb/mempoolpb/dsl"
+	requestpbtypes "github.com/filecoin-project/mir/pkg/pb/requestpb/types"
 	vcbdsl "github.com/filecoin-project/mir/pkg/pb/vcbpb/dsl"
 	"github.com/filecoin-project/mir/pkg/reliablenet"
 	"github.com/filecoin-project/mir/pkg/testsim"
@@ -239,7 +239,7 @@ type countingApp struct {
 
 	deliveredCount int
 	firstSrcModule types.ModuleID
-	firstData      []*requestpb.Request
+	firstData      []*requestpbtypes.Request
 	firstTxIDs     []types.TxID
 	firstSignature tctypes.FullSig
 }
@@ -252,7 +252,7 @@ func newCountingApp(ctx context.Context, isLeader bool) *countingApp {
 	}
 
 	if isLeader {
-		txs := []*requestpb.Request{
+		txs := []*requestpbtypes.Request{
 			{
 				ClientId: "asd",
 				ReqNo:    42,
@@ -278,7 +278,7 @@ func newCountingApp(ctx context.Context, isLeader bool) *countingApp {
 		})
 	}
 
-	vcbdsl.UponDeliver(m, func(data []*requestpb.Request, txIDs []types.TxID, signature tctypes.FullSig, srcModule types.ModuleID) error {
+	vcbdsl.UponDeliver(m, func(data []*requestpbtypes.Request, txIDs []types.TxID, signature tctypes.FullSig, srcModule types.ModuleID) error {
 		if app.deliveredCount == 0 {
 			app.firstSrcModule = srcModule
 			app.firstData = data

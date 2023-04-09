@@ -2,18 +2,18 @@ package messagepbtypes
 
 import (
 	mirreflect "github.com/filecoin-project/mir/codegen/mirreflect"
-	types3 "github.com/filecoin-project/mir/pkg/pb/abbapb/types"
-	types5 "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/types"
-	types4 "github.com/filecoin-project/mir/pkg/pb/aleapb/types"
-	mscpb "github.com/filecoin-project/mir/pkg/pb/availabilitypb/mscpb"
+	types4 "github.com/filecoin-project/mir/pkg/pb/abbapb/types"
+	types6 "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/types"
+	types5 "github.com/filecoin-project/mir/pkg/pb/aleapb/types"
+	types2 "github.com/filecoin-project/mir/pkg/pb/availabilitypb/mscpb/types"
 	types1 "github.com/filecoin-project/mir/pkg/pb/bcbpb/types"
 	checkpointpb "github.com/filecoin-project/mir/pkg/pb/checkpointpb"
 	isspb "github.com/filecoin-project/mir/pkg/pb/isspb"
 	messagepb "github.com/filecoin-project/mir/pkg/pb/messagepb"
 	ordererspb "github.com/filecoin-project/mir/pkg/pb/ordererspb"
 	pingpongpb "github.com/filecoin-project/mir/pkg/pb/pingpongpb"
-	types6 "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/messages/types"
-	types2 "github.com/filecoin-project/mir/pkg/pb/vcbpb/types"
+	types7 "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/messages/types"
+	types3 "github.com/filecoin-project/mir/pkg/pb/vcbpb/types"
 	types "github.com/filecoin-project/mir/pkg/types"
 	reflectutil "github.com/filecoin-project/mir/pkg/util/reflectutil"
 )
@@ -42,7 +42,7 @@ func Message_TypeFromPb(pb messagepb.Message_Type) Message_Type {
 	case *messagepb.Message_Bcb:
 		return &Message_Bcb{Bcb: types1.MessageFromPb(pb.Bcb)}
 	case *messagepb.Message_MultisigCollector:
-		return &Message_MultisigCollector{MultisigCollector: pb.MultisigCollector}
+		return &Message_MultisigCollector{MultisigCollector: types2.MessageFromPb(pb.MultisigCollector)}
 	case *messagepb.Message_Pingpong:
 		return &Message_Pingpong{Pingpong: pb.Pingpong}
 	case *messagepb.Message_Checkpoint:
@@ -50,15 +50,15 @@ func Message_TypeFromPb(pb messagepb.Message_Type) Message_Type {
 	case *messagepb.Message_SbMessage:
 		return &Message_SbMessage{SbMessage: pb.SbMessage}
 	case *messagepb.Message_Vcb:
-		return &Message_Vcb{Vcb: types2.MessageFromPb(pb.Vcb)}
+		return &Message_Vcb{Vcb: types3.MessageFromPb(pb.Vcb)}
 	case *messagepb.Message_Abba:
-		return &Message_Abba{Abba: types3.MessageFromPb(pb.Abba)}
+		return &Message_Abba{Abba: types4.MessageFromPb(pb.Abba)}
 	case *messagepb.Message_Alea:
-		return &Message_Alea{Alea: types4.MessageFromPb(pb.Alea)}
+		return &Message_Alea{Alea: types5.MessageFromPb(pb.Alea)}
 	case *messagepb.Message_AleaAgreement:
-		return &Message_AleaAgreement{AleaAgreement: types5.MessageFromPb(pb.AleaAgreement)}
+		return &Message_AleaAgreement{AleaAgreement: types6.MessageFromPb(pb.AleaAgreement)}
 	case *messagepb.Message_ReliableNet:
-		return &Message_ReliableNet{ReliableNet: types6.MessageFromPb(pb.ReliableNet)}
+		return &Message_ReliableNet{ReliableNet: types7.MessageFromPb(pb.ReliableNet)}
 	}
 	return nil
 }
@@ -100,17 +100,17 @@ func (*Message_Bcb) MirReflect() mirreflect.Type {
 }
 
 type Message_MultisigCollector struct {
-	MultisigCollector *mscpb.Message
+	MultisigCollector *types2.Message
 }
 
 func (*Message_MultisigCollector) isMessage_Type() {}
 
-func (w *Message_MultisigCollector) Unwrap() *mscpb.Message {
+func (w *Message_MultisigCollector) Unwrap() *types2.Message {
 	return w.MultisigCollector
 }
 
 func (w *Message_MultisigCollector) Pb() messagepb.Message_Type {
-	return &messagepb.Message_MultisigCollector{MultisigCollector: w.MultisigCollector}
+	return &messagepb.Message_MultisigCollector{MultisigCollector: (w.MultisigCollector).Pb()}
 }
 
 func (*Message_MultisigCollector) MirReflect() mirreflect.Type {
@@ -172,12 +172,12 @@ func (*Message_SbMessage) MirReflect() mirreflect.Type {
 }
 
 type Message_Vcb struct {
-	Vcb *types2.Message
+	Vcb *types3.Message
 }
 
 func (*Message_Vcb) isMessage_Type() {}
 
-func (w *Message_Vcb) Unwrap() *types2.Message {
+func (w *Message_Vcb) Unwrap() *types3.Message {
 	return w.Vcb
 }
 
@@ -190,12 +190,12 @@ func (*Message_Vcb) MirReflect() mirreflect.Type {
 }
 
 type Message_Abba struct {
-	Abba *types3.Message
+	Abba *types4.Message
 }
 
 func (*Message_Abba) isMessage_Type() {}
 
-func (w *Message_Abba) Unwrap() *types3.Message {
+func (w *Message_Abba) Unwrap() *types4.Message {
 	return w.Abba
 }
 
@@ -208,12 +208,12 @@ func (*Message_Abba) MirReflect() mirreflect.Type {
 }
 
 type Message_Alea struct {
-	Alea *types4.Message
+	Alea *types5.Message
 }
 
 func (*Message_Alea) isMessage_Type() {}
 
-func (w *Message_Alea) Unwrap() *types4.Message {
+func (w *Message_Alea) Unwrap() *types5.Message {
 	return w.Alea
 }
 
@@ -226,12 +226,12 @@ func (*Message_Alea) MirReflect() mirreflect.Type {
 }
 
 type Message_AleaAgreement struct {
-	AleaAgreement *types5.Message
+	AleaAgreement *types6.Message
 }
 
 func (*Message_AleaAgreement) isMessage_Type() {}
 
-func (w *Message_AleaAgreement) Unwrap() *types5.Message {
+func (w *Message_AleaAgreement) Unwrap() *types6.Message {
 	return w.AleaAgreement
 }
 
@@ -244,12 +244,12 @@ func (*Message_AleaAgreement) MirReflect() mirreflect.Type {
 }
 
 type Message_ReliableNet struct {
-	ReliableNet *types6.Message
+	ReliableNet *types7.Message
 }
 
 func (*Message_ReliableNet) isMessage_Type() {}
 
-func (w *Message_ReliableNet) Unwrap() *types6.Message {
+func (w *Message_ReliableNet) Unwrap() *types7.Message {
 	return w.ReliableNet
 }
 

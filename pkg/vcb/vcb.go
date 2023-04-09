@@ -9,7 +9,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/modules"
 	rnetdsl "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/dsl"
-	"github.com/filecoin-project/mir/pkg/pb/requestpb"
+	requestpbtypes "github.com/filecoin-project/mir/pkg/pb/requestpb/types"
 	threshDsl "github.com/filecoin-project/mir/pkg/pb/threshcryptopb/dsl"
 	vcbdsl "github.com/filecoin-project/mir/pkg/pb/vcbpb/dsl"
 	vcbmsgs "github.com/filecoin-project/mir/pkg/pb/vcbpb/msgs"
@@ -106,7 +106,7 @@ func NewModule(ctx context.Context, mc *ModuleConfig, params *ModuleParams, node
 	if nodeID == params.Leader {
 		setupVcbLeader(m, mc, params, nodeID, logger, state)
 	} else {
-		vcbdsl.UponInputValue(m, func(txs []*requestpb.Request) error {
+		vcbdsl.UponInputValue(m, func(txs []*requestpbtypes.Request) error {
 			return fmt.Errorf("vcb input provided for non-leader")
 		})
 	}
@@ -172,7 +172,7 @@ func NewModule(ctx context.Context, mc *ModuleConfig, params *ModuleParams, node
 		return nil
 	})
 
-	vcbdsl.UponSendMessageReceived(m, func(from t.NodeID, txs []*requestpb.Request) error {
+	vcbdsl.UponSendMessageReceived(m, func(from t.NodeID, txs []*requestpbtypes.Request) error {
 		if from != params.Leader {
 			return nil // byz node // TODO: suspect?
 		}
@@ -252,7 +252,7 @@ func setupVcbLeader(m dsl.Module, mc *ModuleConfig, params *ModuleParams, nodeID
 		return nil
 	})
 
-	vcbdsl.UponInputValue(m, func(txs []*requestpb.Request) error {
+	vcbdsl.UponInputValue(m, func(txs []*requestpbtypes.Request) error {
 		if nodeID == params.Leader {
 			logger.Log(logging.LevelDebug, "inputting value", "txs", txs)
 			state.payload.Input(txs)

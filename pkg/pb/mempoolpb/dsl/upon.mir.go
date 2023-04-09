@@ -6,7 +6,7 @@ import (
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
 	types1 "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 	types "github.com/filecoin-project/mir/pkg/pb/mempoolpb/types"
-	requestpb "github.com/filecoin-project/mir/pkg/pb/requestpb"
+	types3 "github.com/filecoin-project/mir/pkg/pb/requestpb/types"
 	types2 "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -38,7 +38,7 @@ func UponRequestBatch(m dsl.Module, handler func(origin *types.RequestBatchOrigi
 	})
 }
 
-func UponNewBatch[C any](m dsl.Module, handler func(txIds []types2.TxID, txs []*requestpb.Request, context *C) error) {
+func UponNewBatch[C any](m dsl.Module, handler func(txIds []types2.TxID, txs []*types3.Request, context *C) error) {
 	UponEvent[*types.Event_NewBatch](m, func(ev *types.NewBatch) error {
 		originWrapper, ok := ev.Origin.Type.(*types.RequestBatchOrigin_Dsl)
 		if !ok {
@@ -76,7 +76,7 @@ func UponRequestTransactions(m dsl.Module, handler func(txIds []types2.TxID, ori
 	})
 }
 
-func UponTransactionsResponse[C any](m dsl.Module, handler func(present []bool, txs []*requestpb.Request, context *C) error) {
+func UponTransactionsResponse[C any](m dsl.Module, handler func(present []bool, txs []*types3.Request, context *C) error) {
 	UponEvent[*types.Event_TransactionsResponse](m, func(ev *types.TransactionsResponse) error {
 		originWrapper, ok := ev.Origin.Type.(*types.RequestTransactionsOrigin_Dsl)
 		if !ok {
@@ -99,7 +99,7 @@ func UponTransactionsResponse[C any](m dsl.Module, handler func(present []bool, 
 	})
 }
 
-func UponRequestTransactionIDs(m dsl.Module, handler func(txs []*requestpb.Request, origin *types.RequestTransactionIDsOrigin) error) {
+func UponRequestTransactionIDs(m dsl.Module, handler func(txs []*types3.Request, origin *types.RequestTransactionIDsOrigin) error) {
 	UponEvent[*types.Event_RequestTransactionIds](m, func(ev *types.RequestTransactionIDs) error {
 		originWrapper, ok := ev.Origin.Type.(*types.RequestTransactionIDsOrigin_Dsl)
 		if ok {

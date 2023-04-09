@@ -2,10 +2,12 @@ package bcpbtypes
 
 import (
 	mirreflect "github.com/filecoin-project/mir/codegen/mirreflect"
+	types1 "github.com/filecoin-project/mir/codegen/model/types"
 	aleatypes "github.com/filecoin-project/mir/pkg/alea/aleatypes"
 	bcpb "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb"
-	types "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
+	types2 "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
 	requestpb "github.com/filecoin-project/mir/pkg/pb/requestpb"
+	types "github.com/filecoin-project/mir/pkg/pb/requestpb/types"
 	reflectutil "github.com/filecoin-project/mir/pkg/util/reflectutil"
 )
 
@@ -148,20 +150,24 @@ func (*Event) MirReflect() mirreflect.Type {
 
 type StartBroadcast struct {
 	QueueSlot aleatypes.QueueSlot
-	Txs       []*requestpb.Request
+	Txs       []*types.Request
 }
 
 func StartBroadcastFromPb(pb *bcpb.StartBroadcast) *StartBroadcast {
 	return &StartBroadcast{
 		QueueSlot: (aleatypes.QueueSlot)(pb.QueueSlot),
-		Txs:       pb.Txs,
+		Txs: types1.ConvertSlice(pb.Txs, func(t *requestpb.Request) *types.Request {
+			return types.RequestFromPb(t)
+		}),
 	}
 }
 
 func (m *StartBroadcast) Pb() *bcpb.StartBroadcast {
 	return &bcpb.StartBroadcast{
 		QueueSlot: (uint64)(m.QueueSlot),
-		Txs:       m.Txs,
+		Txs: types1.ConvertSlice(m.Txs, func(t *types.Request) *requestpb.Request {
+			return (t).Pb()
+		}),
 	}
 }
 
@@ -170,12 +176,12 @@ func (*StartBroadcast) MirReflect() mirreflect.Type {
 }
 
 type Deliver struct {
-	Slot *types.Slot
+	Slot *types2.Slot
 }
 
 func DeliverFromPb(pb *bcpb.Deliver) *Deliver {
 	return &Deliver{
-		Slot: types.SlotFromPb(pb.Slot),
+		Slot: types2.SlotFromPb(pb.Slot),
 	}
 }
 
@@ -190,12 +196,12 @@ func (*Deliver) MirReflect() mirreflect.Type {
 }
 
 type FreeSlot struct {
-	Slot *types.Slot
+	Slot *types2.Slot
 }
 
 func FreeSlotFromPb(pb *bcpb.FreeSlot) *FreeSlot {
 	return &FreeSlot{
-		Slot: types.SlotFromPb(pb.Slot),
+		Slot: types2.SlotFromPb(pb.Slot),
 	}
 }
 
@@ -210,12 +216,12 @@ func (*FreeSlot) MirReflect() mirreflect.Type {
 }
 
 type DoFillGap struct {
-	Slot *types.Slot
+	Slot *types2.Slot
 }
 
 func DoFillGapFromPb(pb *bcpb.DoFillGap) *DoFillGap {
 	return &DoFillGap{
-		Slot: types.SlotFromPb(pb.Slot),
+		Slot: types2.SlotFromPb(pb.Slot),
 	}
 }
 
@@ -230,12 +236,12 @@ func (*DoFillGap) MirReflect() mirreflect.Type {
 }
 
 type BcStarted struct {
-	Slot *types.Slot
+	Slot *types2.Slot
 }
 
 func BcStartedFromPb(pb *bcpb.BcStarted) *BcStarted {
 	return &BcStarted{
-		Slot: types.SlotFromPb(pb.Slot),
+		Slot: types2.SlotFromPb(pb.Slot),
 	}
 }
 

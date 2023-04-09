@@ -4,8 +4,8 @@ import (
 	"crypto"
 
 	"github.com/filecoin-project/mir/pkg/dsl"
-	mpdsl "github.com/filecoin-project/mir/pkg/mempool/dsl"
-	"github.com/filecoin-project/mir/pkg/pb/requestpb"
+	mpdsl "github.com/filecoin-project/mir/pkg/pb/mempoolpb/dsl"
+	requestpbtypes "github.com/filecoin-project/mir/pkg/pb/requestpb/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -14,7 +14,7 @@ type vcbPayloadManager struct {
 	mc     *ModuleConfig
 	params *ModuleParams
 
-	txs       []*requestpb.Request
+	txs       []*requestpbtypes.Request
 	txIDs     []t.TxID
 	txIDsHash []byte
 	sigData   [][]byte
@@ -43,7 +43,7 @@ func newVcbPayloadManager(m dsl.Module, mc *ModuleConfig, params *ModuleParams) 
 
 type vcbPayloadMgrInputTxs struct{}
 
-func (mgr *vcbPayloadManager) Input(txs []*requestpb.Request) {
+func (mgr *vcbPayloadManager) Input(txs []*requestpbtypes.Request) {
 	if mgr.txs != nil {
 		return
 	}
@@ -52,7 +52,7 @@ func (mgr *vcbPayloadManager) Input(txs []*requestpb.Request) {
 	mpdsl.RequestTransactionIDs(mgr.m, mgr.mc.Mempool, txs, &vcbPayloadMgrInputTxs{})
 }
 
-func (mgr *vcbPayloadManager) Txs() []*requestpb.Request {
+func (mgr *vcbPayloadManager) Txs() []*requestpbtypes.Request {
 	return mgr.txs
 }
 

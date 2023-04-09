@@ -189,7 +189,6 @@ func NewISS(
 			Mempool: "mempool",
 			BatchDB: "batchdb",
 		},
-		ownID,
 		logger,
 	)
 
@@ -200,6 +199,7 @@ func NewISS(
 		batchfetcher.DefaultModuleConfig(),
 		startingCheckpoint.Epoch(),
 		startingCheckpoint.ClientProgress(logger),
+		logger,
 	)
 
 	// Let the ISS implementation complete the module set by adding default implementations of helper modules
@@ -347,6 +347,7 @@ func NewAlea(
 		clientprogress.FromPb(&commonpb.ClientProgress{
 			Progress: make(map[string]*commonpb.DeliveredReqs, 0),
 		}, logger),
+		logging.Decorate(logger, "BatchFetcher: "),
 	)
 
 	aleaProtocolModules[appID] = NewAppModule(app, transport, aleaConfig.AleaDirector)

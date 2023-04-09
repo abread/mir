@@ -6,13 +6,13 @@ import (
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
 	events "github.com/filecoin-project/mir/pkg/pb/availabilitypb/batchdbpb/events"
 	types1 "github.com/filecoin-project/mir/pkg/pb/availabilitypb/batchdbpb/types"
-	requestpb "github.com/filecoin-project/mir/pkg/pb/requestpb"
+	types2 "github.com/filecoin-project/mir/pkg/pb/requestpb/types"
 	types "github.com/filecoin-project/mir/pkg/types"
 )
 
 // Module-specific dsl functions for emitting events.
 
-func LookupBatch[C any](m dsl.Module, destModule types.ModuleID, batchId []uint8, context *C) {
+func LookupBatch[C any](m dsl.Module, destModule types.ModuleID, batchId types.BatchID, context *C) {
 	kind := trace.WithSpanKind(trace.SpanKindProducer)
 	m.DslHandle().PushSpan("LookupBatch", kind)
 	defer m.DslHandle().PopSpan()
@@ -28,11 +28,11 @@ func LookupBatch[C any](m dsl.Module, destModule types.ModuleID, batchId []uint8
 	dsl.EmitMirEvent(m, events.LookupBatch(destModule, batchId, origin))
 }
 
-func LookupBatchResponse(m dsl.Module, destModule types.ModuleID, found bool, txs []*requestpb.Request, metadata []uint8, origin *types1.LookupBatchOrigin) {
+func LookupBatchResponse(m dsl.Module, destModule types.ModuleID, found bool, txs []*types2.Request, metadata []uint8, origin *types1.LookupBatchOrigin) {
 	dsl.EmitMirEvent(m, events.LookupBatchResponse(destModule, found, txs, metadata, origin))
 }
 
-func StoreBatch[C any](m dsl.Module, destModule types.ModuleID, batchId types.BatchID, txIds []types.TxID, txs []*requestpb.Request, metadata []uint8, context *C) {
+func StoreBatch[C any](m dsl.Module, destModule types.ModuleID, batchId types.BatchID, txIds []types.TxID, txs []*types2.Request, metadata []uint8, context *C) {
 	kind := trace.WithSpanKind(trace.SpanKindProducer)
 	m.DslHandle().PushSpan("StoreBatch", kind)
 	defer m.DslHandle().PopSpan()

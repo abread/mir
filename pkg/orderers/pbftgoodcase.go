@@ -79,7 +79,7 @@ func (orderer *Orderer) applyProposeTimeout(numProposals int) (*events.EventList
 	return events.EmptyList(), nil
 }
 
-// requestNewCert asks (by means of a CertRequest event) ISS to provide a new availability certificate.
+// requestNewCert asks (by means of a CertRequest event) the availability module to provide a new availability certificate.
 // When the certificate is ready, it must be passed to the Orderer using the CertReady event.
 func (orderer *Orderer) requestNewCert() *events.EventList {
 
@@ -98,7 +98,7 @@ func (orderer *Orderer) requestNewCert() *events.EventList {
 }
 
 // applyCertReady processes a new availability certificate ready to be proposed.
-// This event is triggered by ISS in response to the CertRequest event produced by this Orderer.
+// This event is triggered by availability module in response to the CertRequest event produced by this Orderer.
 func (orderer *Orderer) applyCertReady(cert *availabilitypb.Cert) (*events.EventList, error) {
 	eventsOut := events.EmptyList()
 
@@ -119,7 +119,7 @@ func (orderer *Orderer) applyCertReady(cert *availabilitypb.Cert) (*events.Event
 			return nil, fmt.Errorf("failed to propose: %w", err)
 		}
 		eventsOut.PushBackList(l)
-	} else { // nolint:staticcheck
+	} else { // nolint:staticcheck,revive
 		// If the PBFT view advanced since the certificate was requested,
 		// do not propose the certificate and resurrect the requests it contains.
 		// eventsOut.PushBack(orderer.eventService.SBEvent(SBResurrectBatchEvent(batch.Batch)))
@@ -154,7 +154,6 @@ func (orderer *Orderer) propose(data []byte) (*events.EventList, error) {
 		orderer.segment.NodeIDs())
 
 	// Set up a new timer for the next proposal.
-
 	ordererEvent := OrdererEvent(orderer.moduleConfig.Self,
 		PbftProposeTimeout(uint64(orderer.proposal.proposalsMade+1)))
 
@@ -185,6 +184,7 @@ func (orderer *Orderer) applyMsgPreprepare(preprepare *ordererspbftpb.Preprepare
 	if err := orderer.externalValidator.Check(preprepare.Data); err != nil {
 		orderer.logger.Log(logging.LevelWarn, "Ignoring Preprepare message with invalid proposal.",
 			"sn", sn, "from", from, "err", err)
+		return events.EmptyList()
 	}
 
 	// Check that this is the first Preprepare message received.
@@ -203,9 +203,9 @@ func (orderer *Orderer) applyMsgPreprepare(preprepare *ordererspbftpb.Preprepare
 			"expectedLeader", primary,
 			"sender", from,
 		)
+		return events.EmptyList()
 	}
 
-	// Save the received preprepare message.
 	slot.Preprepare = preprepare
 
 	// Request the computation of the hash of the Preprepare message.

@@ -1,69 +1,59 @@
 package types
 
 import (
+	"reflect"
+
 	"github.com/dave/jennifer/jen"
 )
 
-// already defined in slice.go
-//var thisPackage = reflect.TypeOf(Map{}).PkgPath()
+var _thisPackage = reflect.TypeOf(Map{}).PkgPath()
 
-// Slice is used to represent repeated fields.
+// Map is used to represent map types.
 type Map struct {
-	Key Type
-	Val Type
+	KeyType   Type
+	ValueType Type
 }
 
-func (s Map) Same() bool {
-	return s.Key.Same() && s.Val.Same()
+func (m Map) Same() bool {
+	return m.KeyType.Same() && m.ValueType.Same()
 }
 
-func (s Map) PbType() *jen.Statement {
-	return jen.Map(s.Key.PbType()).Add(s.Val.PbType())
+func (m Map) PbType() *jen.Statement {
+	return jen.Map(m.KeyType.PbType()).Add(m.ValueType.PbType())
 }
 
-func (s Map) MirType() *jen.Statement {
-	return jen.Map(s.Key.MirType()).Add(s.Val.MirType())
+func (m Map) MirType() *jen.Statement {
+	return jen.Map(m.KeyType.MirType()).Add(m.ValueType.MirType())
 }
 
-func (s Map) ToMir(code jen.Code) *jen.Statement {
-	if s.Same() {
+func (m Map) ToMir(code jen.Code) *jen.Statement {
+	if m.Same() {
 		return jen.Add(code)
 	}
 
-	return jen.Qual(thisPackage, "ConvertMap").Call(code,
-		pb2MirFn(s.Key),
-		pb2MirFn(s.Val),
-	)
+	return jen.Qual(_thisPackage, "ConvertMap").Call(code,
+		jen.Func().Params(jen.Id("k").Add(m.KeyType.PbType()), jen.Id("v").Add(m.ValueType.PbType())).Params(m.KeyType.MirType(), m.ValueType.MirType()).Block(
+			jen.Return(m.KeyType.ToMir(jen.Id("k")), m.ValueType.ToMir(jen.Id("v"))),
+		))
 }
 
-func (s Map) ToPb(code jen.Code) *jen.Statement {
-	if s.Same() {
+func (m Map) ToPb(code jen.Code) *jen.Statement {
+	if m.Same() {
 		return jen.Add(code)
 	}
 
-	return jen.Qual(thisPackage, "ConvertMap").Call(code,
-		mir2PbFn(s.Key),
-		mir2PbFn(s.Val),
-	)
-}
-
-func mir2PbFn(t Type) jen.Code {
-	return jen.Func().Params(jen.Id("x").Add(t.MirType())).Add(t.PbType()).Block(
-		jen.Return(t.ToPb(jen.Id("x"))),
-	)
-}
-
-func pb2MirFn(t Type) jen.Code {
-	return jen.Func().Params(jen.Id("x").Add(t.PbType())).Add(t.MirType()).Block(
-		jen.Return(t.ToMir(jen.Id("x"))),
-	)
+	return jen.Qual(_thisPackage, "ConvertMap").Call(code,
+		jen.Func().Params(jen.Id("k").Add(m.KeyType.MirType()), jen.Id("v").Add(m.ValueType.MirType())).Params(m.KeyType.PbType(), m.ValueType.PbType()).Block(
+			jen.Return(m.KeyType.ToPb(jen.Id("k")), m.ValueType.ToPb(jen.Id("v"))),
+		))
 }
 
 // ConvertMap is used by the generated code.
-func ConvertMap[K1, K2 comparable, V1, V2 any](tm map[K1]V1, keyMapper func(k K1) K2, valMapper func(v V1) V2) map[K2]V2 {
-	rm := make(map[K2]V2, len(tm))
+func ConvertMap[K, Rk comparable, V, Rv any](tm map[K]V, f func(tk K, tv V) (Rk, Rv)) map[Rk]Rv {
+	rm := make(map[Rk]Rv)
 	for k, v := range tm {
-		rm[keyMapper(k)] = valMapper(v)
+		_k, _v := f(k, v)
+		rm[_k] = _v
 	}
 	return rm
 }

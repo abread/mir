@@ -1,20 +1,20 @@
 package vcbpbmsgs
 
 import (
-	types1 "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
-	requestpb "github.com/filecoin-project/mir/pkg/pb/requestpb"
-	types2 "github.com/filecoin-project/mir/pkg/pb/vcbpb/types"
+	types2 "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
+	types1 "github.com/filecoin-project/mir/pkg/pb/requestpb/types"
+	types3 "github.com/filecoin-project/mir/pkg/pb/vcbpb/types"
 	tctypes "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 	types "github.com/filecoin-project/mir/pkg/types"
 )
 
-func SendMessage(destModule types.ModuleID, txs []*requestpb.Request) *types1.Message {
-	return &types1.Message{
+func SendMessage(destModule types.ModuleID, txs []*types1.Request) *types2.Message {
+	return &types2.Message{
 		DestModule: destModule,
-		Type: &types1.Message_Vcb{
-			Vcb: &types2.Message{
-				Type: &types2.Message_SendMessage{
-					SendMessage: &types2.SendMessage{
+		Type: &types2.Message_Vcb{
+			Vcb: &types3.Message{
+				Type: &types3.Message_SendMessage{
+					SendMessage: &types3.SendMessage{
 						Txs: txs,
 					},
 				},
@@ -23,13 +23,13 @@ func SendMessage(destModule types.ModuleID, txs []*requestpb.Request) *types1.Me
 	}
 }
 
-func EchoMessage(destModule types.ModuleID, signatureShare tctypes.SigShare) *types1.Message {
-	return &types1.Message{
+func EchoMessage(destModule types.ModuleID, signatureShare tctypes.SigShare) *types2.Message {
+	return &types2.Message{
 		DestModule: destModule,
-		Type: &types1.Message_Vcb{
-			Vcb: &types2.Message{
-				Type: &types2.Message_EchoMessage{
-					EchoMessage: &types2.EchoMessage{
+		Type: &types2.Message_Vcb{
+			Vcb: &types3.Message{
+				Type: &types3.Message_EchoMessage{
+					EchoMessage: &types3.EchoMessage{
 						SignatureShare: signatureShare,
 					},
 				},
@@ -38,13 +38,13 @@ func EchoMessage(destModule types.ModuleID, signatureShare tctypes.SigShare) *ty
 	}
 }
 
-func FinalMessage(destModule types.ModuleID, signature tctypes.FullSig) *types1.Message {
-	return &types1.Message{
+func FinalMessage(destModule types.ModuleID, signature tctypes.FullSig) *types2.Message {
+	return &types2.Message{
 		DestModule: destModule,
-		Type: &types1.Message_Vcb{
-			Vcb: &types2.Message{
-				Type: &types2.Message_FinalMessage{
-					FinalMessage: &types2.FinalMessage{
+		Type: &types2.Message_Vcb{
+			Vcb: &types3.Message{
+				Type: &types3.Message_FinalMessage{
+					FinalMessage: &types3.FinalMessage{
 						Signature: signature,
 					},
 				},

@@ -248,6 +248,8 @@ func (n *Node) processWAL(ctx context.Context) error {
 // which mostly consists of routing events between the node's modules.
 // Stops and returns when ctx is canceled.
 func (n *Node) process(ctx context.Context) error { //nolint:gocyclo
+	n.Config.Logger.Log(logging.LevelInfo, "node process started")
+	defer n.Config.Logger.Log(logging.LevelInfo, "node process finished")
 
 	var wg sync.WaitGroup // Synchronizes all the worker functions
 
@@ -367,6 +369,9 @@ func (n *Node) startModules(ctx context.Context, wg *sync.WaitGroup) {
 		// For each module, we start a worker function reads a single work item (EventList) and processes it.
 		wg.Add(1)
 		go func(mID t.ModuleID, m modules.Module, workChan chan *events.EventList) {
+			n.Config.Logger.Log(logging.LevelInfo, "module started", "ID", mID.Pb())
+			defer n.Config.Logger.Log(logging.LevelInfo, "module finished", "ID", mID.Pb())
+
 			defer wg.Done()
 
 			// Create a context that is passed to the module event application function
@@ -472,6 +477,12 @@ func (n *Node) importEvents(
 // as those will be intercepted separately when processed.
 // Make sure to call the Strip method of the EventList before passing it to interceptEvents.
 func (n *Node) interceptEvents(events *events.EventList) {
+
+	// ATTENTION: n.interceptor is an interface type. If it is assigned the nil value of a concrete type,
+	// this condition will evaluate to true, and Intercept(events) will be called on nil.
+	// The implementation of the concrete type must make sure that calling Intercept even on the nil value
+	// does not cause any problems.
+	// For more explanation, see https://mangatmodi.medium.com/go-check-nil-interface-the-right-way-d142776edef1
 	if n.interceptor != nil {
 		if err := n.interceptor.Intercept(events); err != nil {
 			n.workErrNotifier.Fail(err)

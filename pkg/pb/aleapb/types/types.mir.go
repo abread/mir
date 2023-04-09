@@ -2,9 +2,11 @@ package aleapbtypes
 
 import (
 	mirreflect "github.com/filecoin-project/mir/codegen/mirreflect"
+	types2 "github.com/filecoin-project/mir/codegen/model/types"
 	aleapb "github.com/filecoin-project/mir/pkg/pb/aleapb"
 	types "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
 	requestpb "github.com/filecoin-project/mir/pkg/pb/requestpb"
+	types1 "github.com/filecoin-project/mir/pkg/pb/requestpb/types"
 	tctypes "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 	reflectutil "github.com/filecoin-project/mir/pkg/util/reflectutil"
 )
@@ -108,22 +110,26 @@ func (*FillGapMessage) MirReflect() mirreflect.Type {
 
 type FillerMessage struct {
 	Slot      *types.Slot
-	Txs       []*requestpb.Request
+	Txs       []*types1.Request
 	Signature tctypes.FullSig
 }
 
 func FillerMessageFromPb(pb *aleapb.FillerMessage) *FillerMessage {
 	return &FillerMessage{
-		Slot:      types.SlotFromPb(pb.Slot),
-		Txs:       pb.Txs,
+		Slot: types.SlotFromPb(pb.Slot),
+		Txs: types2.ConvertSlice(pb.Txs, func(t *requestpb.Request) *types1.Request {
+			return types1.RequestFromPb(t)
+		}),
 		Signature: (tctypes.FullSig)(pb.Signature),
 	}
 }
 
 func (m *FillerMessage) Pb() *aleapb.FillerMessage {
 	return &aleapb.FillerMessage{
-		Slot:      (m.Slot).Pb(),
-		Txs:       m.Txs,
+		Slot: (m.Slot).Pb(),
+		Txs: types2.ConvertSlice(m.Txs, func(t *types1.Request) *requestpb.Request {
+			return (t).Pb()
+		}),
 		Signature: ([]uint8)(m.Signature),
 	}
 }

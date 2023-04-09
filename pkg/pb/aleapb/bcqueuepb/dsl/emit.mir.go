@@ -5,14 +5,14 @@ import (
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
 	events "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/events"
 	types1 "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
-	requestpb "github.com/filecoin-project/mir/pkg/pb/requestpb"
+	types2 "github.com/filecoin-project/mir/pkg/pb/requestpb/types"
 	tctypes "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 	types "github.com/filecoin-project/mir/pkg/types"
 )
 
 // Module-specific dsl functions for emitting events.
 
-func InputValue(m dsl.Module, destModule types.ModuleID, slot *types1.Slot, txs []*requestpb.Request) {
+func InputValue(m dsl.Module, destModule types.ModuleID, slot *types1.Slot, txs []*types2.Request) {
 	dsl.EmitMirEvent(m, events.InputValue(destModule, slot, txs))
 }
 
@@ -24,7 +24,7 @@ func FreeSlot(m dsl.Module, destModule types.ModuleID, queueSlot aleatypes.Queue
 	dsl.EmitMirEvent(m, events.FreeSlot(destModule, queueSlot))
 }
 
-func PastVcbFinal(m dsl.Module, destModule types.ModuleID, queueSlot aleatypes.QueueSlot, txs []*requestpb.Request, signature tctypes.FullSig) {
+func PastVcbFinal(m dsl.Module, destModule types.ModuleID, queueSlot aleatypes.QueueSlot, txs []*types2.Request, signature tctypes.FullSig) {
 	dsl.EmitMirEvent(m, events.PastVcbFinal(destModule, queueSlot, txs, signature))
 }
 

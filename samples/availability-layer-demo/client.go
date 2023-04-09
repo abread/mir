@@ -115,7 +115,6 @@ func run() error {
 			AllNodes:    nodeIDs,
 			F:           (len(nodeIDs) - 1) / 2,
 		},
-		args.OwnID,
 	)
 	if err != nil {
 		return err

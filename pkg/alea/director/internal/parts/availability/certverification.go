@@ -4,9 +4,9 @@ import (
 	"fmt"
 
 	"github.com/filecoin-project/mir/pkg/alea/director/internal/common"
-	adsl "github.com/filecoin-project/mir/pkg/availability/dsl"
 	"github.com/filecoin-project/mir/pkg/dsl"
-	apb "github.com/filecoin-project/mir/pkg/pb/availabilitypb"
+	adsl "github.com/filecoin-project/mir/pkg/pb/availabilitypb/dsl"
+	availabilitypbtypes "github.com/filecoin-project/mir/pkg/pb/availabilitypb/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -18,7 +18,7 @@ func IncludeVerificationOfCertificates(
 	nodeID t.NodeID,
 ) {
 	// When receive a request to verify a certificate, check that it is structurally correct and verify the signatures.
-	adsl.UponVerifyCert(m, func(genericCert *apb.Cert, origin *apb.VerifyCertOrigin) error {
+	adsl.UponVerifyCert(m, func(genericCert *availabilitypbtypes.Cert, origin *availabilitypbtypes.VerifyCertOrigin) error {
 		return fmt.Errorf("operation not supported")
 	})
 }

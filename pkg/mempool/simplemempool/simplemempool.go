@@ -6,11 +6,11 @@ import (
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/mempool/simplemempool/internal/common"
 	"github.com/filecoin-project/mir/pkg/mempool/simplemempool/internal/parts/computeids"
-	"github.com/filecoin-project/mir/pkg/mempool/simplemempool/internal/parts/formbatches"
+	"github.com/filecoin-project/mir/pkg/mempool/simplemempool/internal/parts/formbatchesext"
+	"github.com/filecoin-project/mir/pkg/mempool/simplemempool/internal/parts/formbatchesint"
 	"github.com/filecoin-project/mir/pkg/mempool/simplemempool/internal/parts/lookuptxs"
 	"github.com/filecoin-project/mir/pkg/modules"
-	"github.com/filecoin-project/mir/pkg/pb/requestpb"
-	t "github.com/filecoin-project/mir/pkg/types"
+	requestpbtypes "github.com/filecoin-project/mir/pkg/pb/requestpb/types"
 )
 
 // ModuleConfig sets the module ids. All replicas are expected to use identical module configurations.
@@ -32,6 +32,7 @@ func DefaultModuleParams() *ModuleParams {
 	return &ModuleParams{
 		MinTransactionsInBatch: 0,
 		MaxTransactionsInBatch: 10,
+		TxFetcher:              nil,
 	}
 }
 
@@ -46,12 +47,17 @@ func NewModule(ctx context.Context, mc *ModuleConfig, params *ModuleParams) modu
 	m := dsl.NewModule(ctx, mc.Self)
 
 	commonState := &common.State{
-		TxByID: make(map[t.TxID]*requestpb.Request),
+		TxByID: make(map[string]*requestpbtypes.Request),
 	}
 
 	computeids.IncludeComputationOfTransactionAndBatchIDs(m, mc, params, commonState)
-	formbatches.IncludeBatchCreation(m, mc, params, commonState)
 	lookuptxs.IncludeTransactionLookupByID(m, mc, params, commonState)
+
+	if params.TxFetcher != nil {
+		formbatchesext.IncludeBatchCreation(m, mc, params.TxFetcher)
+	} else {
+		formbatchesint.IncludeBatchCreation(m, mc, params, commonState)
+	}
 
 	return m
 }
