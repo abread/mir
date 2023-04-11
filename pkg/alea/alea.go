@@ -90,7 +90,7 @@ func DefaultConfig(consumer t.ModuleID) *Config {
 // A proper deployment is expected to craft a custom configuration,
 // for which DefaultParams can serve as a starting point.
 func DefaultParams(membership map[t.NodeID]t.NodeAddress) *Params {
-	aproxRTT := 50 * time.Millisecond
+	aproxRTT := 220 * time.Microsecond
 	aproxBcDuration := 3*aproxRTT/2 + 20*time.Millisecond
 
 	return &Params{
