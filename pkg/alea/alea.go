@@ -60,10 +60,10 @@ type Params struct {
 	BcEstimateMargin time.Duration
 
 	// Time to wait before resorting to FILL-GAP messages
-	FillGapDelay t.TimeDuration
+	FillGapDelay time.Duration
 
 	// Maximum time to stall agreement round waiting for broadcasts to complete
-	MaxAgreementDelay t.TimeDuration
+	MaxAgreementDelay time.Duration
 }
 
 // DefaultConfig returns a valid module config with default names for all modules.
@@ -101,8 +101,8 @@ func DefaultParams(membership map[t.NodeID]t.NodeAddress) *Params {
 		MaxAbbaRoundLookahead:    4,
 		MaxAgRoundLookahead:      32,
 		BcEstimateMargin:         10*time.Millisecond + aproxRTT/2,
-		FillGapDelay:             t.TimeDuration(aproxBcDuration),
-		MaxAgreementDelay:        t.TimeDuration(aproxBcDuration),
+		FillGapDelay:             aproxBcDuration,
+		MaxAgreementDelay:        aproxBcDuration,
 	}
 }
 

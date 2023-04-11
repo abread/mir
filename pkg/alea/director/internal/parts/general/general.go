@@ -59,7 +59,7 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 					Events: []*eventpb.Event{
 						directorpbevents.Heartbeat(mc.Self).Pb(),
 					},
-					Delay:          tunables.MaxAgreementDelay.Pb(),
+					Delay:          t.TimeDuration(tunables.MaxAgreementDelay).Pb(),
 					RetentionIndex: 0,
 				},
 			},
@@ -265,9 +265,13 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 					QueueIdx:  nextQueueIdx,
 					QueueSlot: nextQueueSlot,
 				}
-				if startTime, ok := state.bcStartTimes[slot]; ok && time.Since(startTime) <= state.avgBcTime.Estimate() {
-					// stall agreement to allow in-flight broadcast to complete
-					return nil
+
+				if startTime, ok := state.bcStartTimes[slot]; ok {
+					stalledTime := time.Since(startTime)
+					if stalledTime <= state.avgBcTime.Estimate()+tunables.BcEstimateMargin && stalledTime < tunables.MaxAgreementDelay {
+						// stall agreement to allow in-flight broadcast to complete
+						return nil
+					}
 				}
 			}
 

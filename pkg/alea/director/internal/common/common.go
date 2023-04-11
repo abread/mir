@@ -42,8 +42,8 @@ type ModuleTunables struct {
 	BcEstimateMargin time.Duration
 
 	// Time to wait before resorting to FILL-GAP messages
-	FillGapDelay t.TimeDuration
+	FillGapDelay time.Duration
 
 	// Maximum time to stall agreement round waiting for broadcasts to complete
-	MaxAgreementDelay t.TimeDuration
+	MaxAgreementDelay time.Duration
 }
