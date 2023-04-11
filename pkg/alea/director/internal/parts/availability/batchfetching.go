@@ -120,7 +120,7 @@ func IncludeBatchFetching(
 
 		if found {
 			for _, origin := range reqState.ReqOrigins {
-				adsl.ProvideTransactions(m, t.ModuleID(origin.Module), txs, origin)
+				adsl.ProvideTransactions(m, origin.Module, txs, origin)
 			}
 
 			if reqState.SentFillGap {
@@ -258,7 +258,7 @@ func IncludeBatchFetching(
 		// send response to requests
 		logger.Log(logging.LevelDebug, "satisfying delayed requests with FILLER", "queueIdx", context.slot.QueueIdx, "queueSlot", context.slot.QueueSlot)
 		for _, origin := range requestState.ReqOrigins {
-			adsl.ProvideTransactions(m, t.ModuleID(origin.Module), context.txs, origin)
+			adsl.ProvideTransactions(m, origin.Module, context.txs, origin)
 		}
 		requestState.span.End()
 		delete(state.RequestsState, *context.slot)

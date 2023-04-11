@@ -20,12 +20,10 @@ import (
 	commontypes "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
 	batchdbdsl "github.com/filecoin-project/mir/pkg/pb/availabilitypb/batchdbpb/dsl"
 	reliablenetpbdsl "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/dsl"
-	"github.com/filecoin-project/mir/pkg/pb/requestpb"
 	requestpbtypes "github.com/filecoin-project/mir/pkg/pb/requestpb/types"
 	vcbpbdsl "github.com/filecoin-project/mir/pkg/pb/vcbpb/dsl"
 	vcbpbevents "github.com/filecoin-project/mir/pkg/pb/vcbpb/events"
 	vcbpbtypes "github.com/filecoin-project/mir/pkg/pb/vcbpb/types"
-	"github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 	t "github.com/filecoin-project/mir/pkg/types"
 	"github.com/filecoin-project/mir/pkg/vcb"
 )
@@ -140,11 +138,4 @@ func newVcbGenerator(queueMc *ModuleConfig, queueParams *ModuleParams, nodeID t.
 			}).Pb(),
 		), nil
 	}
-}
-
-type processPastVcbCtx struct {
-	queueSlot aleatypes.QueueSlot
-	txs       []*requestpb.Request
-	txIDs     []t.TxID
-	signature tctypes.FullSig
 }
