@@ -144,7 +144,7 @@ func IncludeBatchFetching(
 		// this way bc has more chances of completing before even trying to send a fill-gap message
 		dsl.EmitEvent(m, events.TimerDelay(mc.Timer, []*eventpb.Event{
 			bcpbevents.DoFillGap(mc.Self, slot).Pb(),
-		}, tunables.FillGapDelay))
+		}, t.TimeDuration(tunables.FillGapDelay)))
 
 		return nil
 	})
