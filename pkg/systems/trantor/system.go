@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/pkg/errors"
+	"golang.org/x/exp/slices"
 
 	"github.com/filecoin-project/mir/pkg/alea"
 	"github.com/filecoin-project/mir/pkg/clientprogress"
@@ -273,10 +274,13 @@ func NewAlea(
 		panic("checkpointing not supported yet")
 	}
 
+	// tune mempool for alea
 	if params.Mempool.MinTransactionsInBatch == 0 {
 		// Alea does not broadcast empty batches
 		params.Mempool.MinTransactionsInBatch = 1
 	}
+	params.Mempool.RandSeed = int64(slices.Index(params.Alea.AllNodes(), ownID))
+	params.Mempool.IncomingTxBucketCount = len(params.Alea.Membership)
 
 	// Instantiate the Alea ordering protocol with default configuration.
 	// We use the Alea's default module configuration (the expected IDs of modules it interacts with)

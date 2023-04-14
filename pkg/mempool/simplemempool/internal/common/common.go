@@ -17,6 +17,15 @@ type ModuleParams struct {
 	MinTransactionsInBatch int
 	MaxTransactionsInBatch int
 
+	// Divides transactions among N buckets, based on the transaction ID.
+	// Upon batch request, it will fill the batch with transactions starting from a pseudo-randomly
+	// chosen bucket.
+	// Must be at least 1.
+	IncomingTxBucketCount int
+
+	// Used for choosing a bucket. Can be e.g. an index in the list of nodes.
+	RandSeed int64
+
 	// If this parameter is not nil, the mempool will not receive transactions directly (through NewRequests) events.
 	// On reception of such an event, it will report an error (making the system crash).
 	// Instead, TxFetcher will be called to pull transactions from an external source

@@ -27,6 +27,7 @@ message Event {
     TransactionIDsResponse transaction_ids_response = 6;
     RequestBatchID         request_batch_id         = 7;
     BatchIDResponse        batch_id_response        = 8;
+    MarkDelivered          mark_delivered           = 9;
   }
 }
 
@@ -86,7 +87,7 @@ message TransactionIDsResponse {
 message RequestBatchID {
   option (mir.event) = true;
 
-  repeated bytes        tx_ids = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.TxID"];
+  repeated bytes       tx_ids = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.TxID"];
   RequestBatchIDOrigin origin = 2 [(mir.origin_request) = true];
 }
 
@@ -96,6 +97,12 @@ message BatchIDResponse {
 
   bytes                batch_id = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.BatchID"];
   RequestBatchIDOrigin origin   = 2 [(mir.origin_response) = true];
+}
+
+message MarkDelivered {
+  option (mir.event) = true;
+
+  repeated requestpb.Request txs = 1;
 }
 
 // TODO: add events related to garbage collection.

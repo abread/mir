@@ -174,3 +174,9 @@ func UponBatchIDResponse[C any](m dsl.Module, handler func(batchId types2.BatchI
 		return handler(ev.BatchId, context)
 	})
 }
+
+func UponMarkDelivered(m dsl.Module, handler func(txs []*types3.Request) error) {
+	UponEvent[*types.Event_MarkDelivered](m, func(ev *types.MarkDelivered) error {
+		return handler(ev.Txs)
+	})
+}

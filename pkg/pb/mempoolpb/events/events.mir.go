@@ -135,3 +135,18 @@ func BatchIDResponse(destModule types.ModuleID, batchId types.BatchID, origin *t
 		},
 	}
 }
+
+func MarkDelivered(destModule types.ModuleID, txs []*types3.Request) *types2.Event {
+	return &types2.Event{
+		DestModule: destModule,
+		Type: &types2.Event_Mempool{
+			Mempool: &types1.Event{
+				Type: &types1.Event_MarkDelivered{
+					MarkDelivered: &types1.MarkDelivered{
+						Txs: txs,
+					},
+				},
+			},
+		},
+	}
+}

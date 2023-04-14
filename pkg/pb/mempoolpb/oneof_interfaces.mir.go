@@ -44,6 +44,10 @@ func (w *Event_BatchIdResponse) Unwrap() *BatchIDResponse {
 	return w.BatchIdResponse
 }
 
+func (w *Event_MarkDelivered) Unwrap() *MarkDelivered {
+	return w.MarkDelivered
+}
+
 type RequestBatchOrigin_Type = isRequestBatchOrigin_Type
 
 type RequestBatchOrigin_TypeWrapper[T any] interface {

@@ -122,6 +122,7 @@ func IncludeBatchFetching(
 			for _, origin := range reqState.ReqOrigins {
 				adsl.ProvideTransactions(m, origin.Module, txs, origin)
 			}
+			mempooldsl.MarkDelivered(m, mc.Mempool, txs)
 
 			if reqState.SentFillGap {
 				// no need for FILLER anymore
@@ -142,6 +143,7 @@ func IncludeBatchFetching(
 
 		// send FILL-GAP after a timeout (if request was not satisfied)
 		// this way bc has more chances of completing before even trying to send a fill-gap message
+		// TODO: adjust delay according to bc estimate. don't delay when bc slot was already freed
 		dsl.EmitEvent(m, events.TimerDelay(mc.Timer, []*eventpb.Event{
 			bcpbevents.DoFillGap(mc.Self, slot).Pb(),
 		}, t.TimeDuration(tunables.FillGapDelay)))
@@ -260,6 +262,7 @@ func IncludeBatchFetching(
 		for _, origin := range requestState.ReqOrigins {
 			adsl.ProvideTransactions(m, origin.Module, context.txs, origin)
 		}
+		mempooldsl.MarkDelivered(m, mc.Mempool, context.txs)
 		requestState.span.End()
 		delete(state.RequestsState, *context.slot)
 

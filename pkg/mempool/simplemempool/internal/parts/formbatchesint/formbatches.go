@@ -1,6 +1,10 @@
 package formbatchesint
 
 import (
+	"math/rand"
+
+	"golang.org/x/exp/slices"
+
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/mempool/simplemempool/internal/common"
 	eventpbdsl "github.com/filecoin-project/mir/pkg/pb/eventpb/dsl"
@@ -12,7 +16,10 @@ import (
 
 type State struct {
 	*common.State
-	NewTxIDs []t.TxID
+
+	NewTxIDsBuckets [][]t.TxID
+	bucketRng       rand.Rand
+	pendingTxCount  int
 
 	pendingBatchRequests []*mppbtypes.RequestBatchOrigin
 }
@@ -25,8 +32,10 @@ func IncludeBatchCreation(
 	commonState *common.State,
 ) {
 	state := &State{
-		State:    commonState,
-		NewTxIDs: nil,
+		State:           commonState,
+
+		NewTxIDsBuckets: make([][]t.TxID, params.IncomingTxBucketCount),
+		bucketRng: *rand.New(rand.NewSource(params.RandSeed)),
 
 		pendingBatchRequests: nil,
 	}
@@ -39,8 +48,15 @@ func IncludeBatchCreation(
 	mpdsl.UponTransactionIDsResponse(m, func(txIDs []t.TxID, context *requestTxIDsContext) error {
 		for i := range txIDs {
 			if _, ok := state.TxByID[string(txIDs[i])]; !ok {
-				state.TxByID[string(txIDs[i])] = context.txs[i]
-				state.NewTxIDs = append(state.NewTxIDs, txIDs[i])
+				id := txIDs[i]
+
+				state.TxByID[string(id)] = context.txs[i]
+
+				// distribute txs among buckets
+				bucketIdx := txBucketIdx(len(state.NewTxIDsBuckets), id)
+				state.NewTxIDsBuckets[bucketIdx] = append(state.NewTxIDsBuckets[bucketIdx], id)
+
+				state.pendingTxCount++
 			}
 		}
 		return nil
@@ -52,36 +68,69 @@ func IncludeBatchCreation(
 	})
 
 	dsl.UponCondition(m, func() error {
-		for len(state.pendingBatchRequests) > 0 && len(state.NewTxIDs) >= params.MinTransactionsInBatch {
+		for len(state.pendingBatchRequests) > 0 && state.pendingTxCount >= params.MinTransactionsInBatch {
 			var txIDs []t.TxID
 			var txs []*requestpbtypes.Request
-			batchSize := 0
+			batchTxCount := 0
 
-			txCount := 0
-			for _, txID := range state.NewTxIDs {
-				tx := state.TxByID[string(txID)]
+			startingIdx := state.bucketRng.Intn(len(state.NewTxIDsBuckets))
+			for i := 0; i < len(state.NewTxIDsBuckets) && batchTxCount < params.MaxTransactionsInBatch; i++ {
+				bucket := &state.NewTxIDsBuckets[(startingIdx+i)%len(state.NewTxIDsBuckets)]
 
-				// TODO: add other limitations (if any) here.
-				if txCount == params.MaxTransactionsInBatch {
-					break
+				txCount := 0
+				for _, txID := range *bucket {
+					tx := state.TxByID[string(txID)]
+
+					// TODO: add other limitations (if any) here.
+					if batchTxCount == params.MaxTransactionsInBatch {
+						break
+					}
+
+					txIDs = append(txIDs, txID)
+					txs = append(txs, tx)
+					batchTxCount++
+					txCount++
 				}
 
-				txIDs = append(txIDs, txID)
-				txs = append(txs, tx)
-				batchSize += len(tx.Data)
-				txCount++
-			}
+				for _, txID := range (*bucket)[:txCount] {
+					delete(state.TxByID, string(txID))
+				}
 
-			for _, txID := range state.NewTxIDs[:txCount] {
-				delete(state.TxByID, string(txID))
+				*bucket = (*bucket)[txCount:]
 			}
-
-			state.NewTxIDs = state.NewTxIDs[txCount:]
 
 			origin := state.pendingBatchRequests[0]
 			state.pendingBatchRequests = state.pendingBatchRequests[1:]
+			state.pendingTxCount -= batchTxCount
 
 			mpdsl.NewBatch(m, origin.Module, txIDs, txs, origin)
+		}
+
+		return nil
+	})
+
+	mpdsl.UponMarkDelivered(m, func(txs []*requestpbtypes.Request) error {
+		mpdsl.RequestTransactionIDs[markDeliveredContext](m, mc.Self, txs, nil)
+		return nil
+	})
+	mpdsl.UponTransactionIDsResponse(m, func(txIDs []t.TxID, context *markDeliveredContext) error {
+		for _, txID := range txIDs {
+			if _, ok := state.TxByID[string(txID)]; !ok {
+				continue
+			}
+
+			state.pendingTxCount--
+			delete(state.TxByID, string(txID))
+
+			bucketIdx := txBucketIdx(len(state.NewTxIDsBuckets), txID)
+			for i, id := range state.NewTxIDsBuckets[bucketIdx] {
+				if slices.Equal(txID, id) {
+					bucket := state.NewTxIDsBuckets[bucketIdx]
+					// TODO: may be better served by a different data structure
+					state.NewTxIDsBuckets[bucketIdx] = append(bucket[:i], bucket[i+1:]...)
+				}
+			}
+
 		}
 
 		return nil
@@ -92,4 +141,10 @@ func IncludeBatchCreation(
 
 type requestTxIDsContext struct {
 	txs []*requestpbtypes.Request
+}
+
+type markDeliveredContext struct{}
+
+func txBucketIdx(nBuckets int, txID t.TxID) int {
+	return int(t.Uint64FromBytes(txID[len(txID)-8:]) % uint64(nBuckets))
 }

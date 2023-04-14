@@ -32,6 +32,7 @@ func DefaultModuleParams() *ModuleParams {
 	return &ModuleParams{
 		MinTransactionsInBatch: 0,
 		MaxTransactionsInBatch: 10,
+		IncomingTxBucketCount:  1,
 		TxFetcher:              nil,
 	}
 }

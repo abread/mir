@@ -45,6 +45,8 @@ func Event_TypeFromPb(pb mempoolpb.Event_Type) Event_Type {
 		return &Event_RequestBatchId{RequestBatchId: RequestBatchIDFromPb(pb.RequestBatchId)}
 	case *mempoolpb.Event_BatchIdResponse:
 		return &Event_BatchIdResponse{BatchIdResponse: BatchIDResponseFromPb(pb.BatchIdResponse)}
+	case *mempoolpb.Event_MarkDelivered:
+		return &Event_MarkDelivered{MarkDelivered: MarkDeliveredFromPb(pb.MarkDelivered)}
 	}
 	return nil
 }
@@ -191,6 +193,24 @@ func (w *Event_BatchIdResponse) Pb() mempoolpb.Event_Type {
 
 func (*Event_BatchIdResponse) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*mempoolpb.Event_BatchIdResponse]()}
+}
+
+type Event_MarkDelivered struct {
+	MarkDelivered *MarkDelivered
+}
+
+func (*Event_MarkDelivered) isEvent_Type() {}
+
+func (w *Event_MarkDelivered) Unwrap() *MarkDelivered {
+	return w.MarkDelivered
+}
+
+func (w *Event_MarkDelivered) Pb() mempoolpb.Event_Type {
+	return &mempoolpb.Event_MarkDelivered{MarkDelivered: (w.MarkDelivered).Pb()}
+}
+
+func (*Event_MarkDelivered) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*mempoolpb.Event_MarkDelivered]()}
 }
 
 func EventFromPb(pb *mempoolpb.Event) *Event {
@@ -422,6 +442,30 @@ func (m *BatchIDResponse) Pb() *mempoolpb.BatchIDResponse {
 
 func (*BatchIDResponse) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*mempoolpb.BatchIDResponse]()}
+}
+
+type MarkDelivered struct {
+	Txs []*types1.Request
+}
+
+func MarkDeliveredFromPb(pb *mempoolpb.MarkDelivered) *MarkDelivered {
+	return &MarkDelivered{
+		Txs: types2.ConvertSlice(pb.Txs, func(t *requestpb.Request) *types1.Request {
+			return types1.RequestFromPb(t)
+		}),
+	}
+}
+
+func (m *MarkDelivered) Pb() *mempoolpb.MarkDelivered {
+	return &mempoolpb.MarkDelivered{
+		Txs: types2.ConvertSlice(m.Txs, func(t *types1.Request) *requestpb.Request {
+			return (t).Pb()
+		}),
+	}
+}
+
+func (*MarkDelivered) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*mempoolpb.MarkDelivered]()}
 }
 
 type RequestBatchOrigin struct {

@@ -91,3 +91,7 @@ func RequestBatchID[C any](m dsl.Module, destModule types.ModuleID, txIds []type
 func BatchIDResponse(m dsl.Module, destModule types.ModuleID, batchId types.BatchID, origin *types1.RequestBatchIDOrigin) {
 	dsl.EmitMirEvent(m, events.BatchIDResponse(destModule, batchId, origin))
 }
+
+func MarkDelivered(m dsl.Module, destModule types.ModuleID, txs []*types2.Request) {
+	dsl.EmitMirEvent(m, events.MarkDelivered(destModule, txs))
+}
