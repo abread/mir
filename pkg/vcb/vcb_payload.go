@@ -1,8 +1,6 @@
 package vcb
 
 import (
-	"crypto"
-
 	"github.com/filecoin-project/mir/pkg/dsl"
 	mpdsl "github.com/filecoin-project/mir/pkg/pb/mempoolpb/dsl"
 	requestpbtypes "github.com/filecoin-project/mir/pkg/pb/requestpb/types"
@@ -63,8 +61,6 @@ func (mgr *vcbPayloadManager) TxIDs() []t.TxID {
 func (mgr *vcbPayloadManager) SigData() [][]byte {
 	return mgr.sigData
 }
-
-var hashAlgo = crypto.SHA256
 
 func SigData(instanceUID []byte, txIDsHash []byte) [][]byte {
 	return [][]byte{instanceUID, txIDsHash}
