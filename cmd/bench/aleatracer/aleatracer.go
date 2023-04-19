@@ -589,14 +589,14 @@ func (at *AleaTracer) _threshCryptoSpan(ts time.Duration, class string, destModu
 	return s
 }
 func (at *AleaTracer) startThreshCryptoSpan(ts time.Duration, class string, destModule t.ModuleID, ctxID dsl.ContextID) {
-	//at._threshCryptoSpan(ts, class, destModule, ctxID)
+	at._threshCryptoSpan(ts, class, destModule, ctxID)
 }
 func (at *AleaTracer) endThreshCryptoSpan(ts time.Duration, class string, destModule t.ModuleID, ctxID dsl.ContextID) {
-	/*s := at._threshCryptoSpan(ts, class, destModule, ctxID)
+	s := at._threshCryptoSpan(ts, class, destModule, ctxID)
 	if s.end == 0 {
 		s.end = ts
 		at.writeSpan(s)
-	}*/
+	}
 }
 
 func (at *AleaTracer) writeSpan(s *span) {
