@@ -57,8 +57,22 @@ func (el *EventList) PushBackList(newEvents *EventList) *EventList {
 	return el.PushBack(newEvents.evs...)
 }
 
+const growCap int = 4096 - 32 // voices on the internet say allocation overhead hangs around 32B
+const growMin int = 32
+
 func (el *EventList) grow(szHint int) {
-	el.evs = slices.Grow(el.evs, szHint)
+	growSz := len(el.evs)
+	if growSz > growCap {
+		growSz = growCap
+	}
+	if growSz < szHint {
+		growSz = szHint
+	}
+	if growSz < growMin {
+		growSz = growMin
+	}
+
+	el.evs = slices.Grow(el.evs, growSz)
 }
 
 // Head returns the first up to n events in the list as a new list.
