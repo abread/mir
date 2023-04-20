@@ -451,7 +451,9 @@ func (n *Node) importEvents(
 			}
 
 			for _, ev := range newEvents.Slice() {
-				localclock.AttachTs(ev)
+				if ev.LocalTs == 0 {
+					localclock.AttachTs(ev)
+				}
 			}
 
 			// If input events have been read, try to write them to the Node's central input channel.
