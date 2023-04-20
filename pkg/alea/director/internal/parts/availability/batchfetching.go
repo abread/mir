@@ -255,7 +255,7 @@ func IncludeBatchFetching(
 		rnetdsl.MarkRecvd(m, mc.ReliableNet, mc.Self, FillGapMsgID(context.slot), params.AllNodes)
 
 		// store batch asynchronously
-		batchdbdsl.StoreBatch(m, mc.BatchDB, context.batchID, context.txIDs, context.txs, context.signature /*metadata*/, context)
+		batchdbdsl.StoreBatch(m, mc.BatchDB, common.FormatAleaBatchID(context.slot), context.txIDs, context.txs, context.signature /*metadata*/, context)
 
 		// send response to requests
 		logger.Log(logging.LevelDebug, "satisfying delayed requests with FILLER", "queueIdx", context.slot.QueueIdx, "queueSlot", context.slot.QueueSlot)
@@ -301,6 +301,5 @@ type handleFillerContext struct {
 	txs       []*requestpbtypes.Request
 	signature []byte
 
-	txIDs   []t.TxID
-	batchID t.BatchID
+	txIDs []t.TxID
 }

@@ -167,11 +167,11 @@ func (at *AleaTracer) interceptOne(event *eventpb.Event) error {
 
 			queueIdx, err := strconv.ParseUint(idParts[0], 10, 64)
 			if err != nil {
-				return fmt.Errorf("bad queue index in batch id: %w", err)
+				return fmt.Errorf("bad queue index in batch id (%s): %w", id, err)
 			}
 			queueSlot, err := strconv.ParseUint(idParts[1], 10, 64)
 			if err != nil {
-				return fmt.Errorf("bad queue slot in batch id: %w", err)
+				return fmt.Errorf("bad queue slot in batch id (%s): %w", id, err)
 			}
 
 			slot := commontypes.Slot{QueueIdx: aleatypes.QueueIdx(queueIdx), QueueSlot: aleatypes.QueueSlot(queueSlot)}
