@@ -133,8 +133,8 @@ type poolModule struct {
 func NewGoRoutinePoolModule(ctx context.Context, processor EventProcessor, workers int) ActiveModule {
 	mod := &poolModule{
 		processor:  processor,
-		inputChan:  make(chan *eventpb.Event),
-		outputChan: make(chan *events.EventList, workers),
+		inputChan:  make(chan *eventpb.Event, workers),
+		outputChan: make(chan *events.EventList, workers*2),
 
 		nextInputReady: sync.NewCond(&sync.Mutex{}),
 		nextInputSeqNo: 1, // 0 will never be used

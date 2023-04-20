@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -16,8 +17,10 @@ import (
 	"github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb"
 	commontypes "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
 	"github.com/filecoin-project/mir/pkg/pb/availabilitypb"
+	"github.com/filecoin-project/mir/pkg/pb/availabilitypb/batchdbpb"
 	"github.com/filecoin-project/mir/pkg/pb/batchfetcherpb"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
+	"github.com/filecoin-project/mir/pkg/pb/messagepb"
 	"github.com/filecoin-project/mir/pkg/pb/threshcryptopb"
 	"github.com/filecoin-project/mir/pkg/pb/vcbpb"
 	t "github.com/filecoin-project/mir/pkg/types"
@@ -29,6 +32,8 @@ type AleaTracer struct {
 	nodeCount   int
 
 	wipBcSpan           map[commontypes.Slot]*span
+	wipBcAwaitEchoSpan  map[commontypes.Slot]*span
+	wipBcAwaitFinalSpan map[commontypes.Slot]*span
 	wipBcModSpan        map[commontypes.Slot]*span
 	wipAgSpan           map[uint64]*span
 	wipAgModSpan        map[uint64]*span
@@ -74,6 +79,8 @@ func NewAleaTracer(ctx context.Context, ownQueueIdx aleatypes.QueueIdx, nodeCoun
 		nodeCount:   nodeCount,
 
 		wipBcSpan:           make(map[commontypes.Slot]*span, nodeCount*N),
+		wipBcAwaitEchoSpan:  make(map[commontypes.Slot]*span, nodeCount*N),
+		wipBcAwaitFinalSpan: make(map[commontypes.Slot]*span, nodeCount*N),
 		wipBcModSpan:        make(map[commontypes.Slot]*span, nodeCount*N),
 		wipAgSpan:           make(map[uint64]*span, nodeCount*N),
 		wipAgModSpan:        make(map[uint64]*span, nodeCount*N),
@@ -147,11 +154,28 @@ func (at *AleaTracer) interceptOne(event *eventpb.Event) error {
 		case *bcpb.Event_StartBroadcast:
 			slot := commontypes.Slot{QueueIdx: at.ownQueueIdx, QueueSlot: aleatypes.QueueSlot(e.StartBroadcast.QueueSlot)}
 			at.startBcSpan(ts, slot)
-		case *bcpb.Event_Deliver:
-			slot := *commontypes.SlotFromPb(e.Deliver.Slot)
-			at.endBcSpan(ts, slot)
 		case *bcpb.Event_FreeSlot:
 			at.endBcModSpan(ts, *commontypes.SlotFromPb(e.FreeSlot.Slot))
+		}
+	case *eventpb.Event_BatchDb:
+		switch e := ev.BatchDb.Type.(type) {
+		case *batchdbpb.Event_Store:
+			// register bc end here to capture batches obtained from FILLER messages too
+			id := string(e.Store.BatchId)
+			id = strings.TrimPrefix(id, "alea-")
+			idParts := strings.Split(id, ":")
+
+			queueIdx, err := strconv.ParseUint(idParts[0], 10, 64)
+			if err != nil {
+				return fmt.Errorf("bad queue index in batch id: %w", err)
+			}
+			queueSlot, err := strconv.ParseUint(idParts[1], 10, 64)
+			if err != nil {
+				return fmt.Errorf("bad queue slot in batch id: %w", err)
+			}
+
+			slot := commontypes.Slot{QueueIdx: aleatypes.QueueIdx(queueIdx), QueueSlot: aleatypes.QueueSlot(queueSlot)}
+			at.endBcSpan(ts, slot)
 		}
 	case *eventpb.Event_AleaAgreement:
 		switch e := ev.AleaAgreement.Type.(type) {
@@ -176,6 +200,27 @@ func (at *AleaTracer) interceptOne(event *eventpb.Event) error {
 		case *vcbpb.Event_InputValue:
 			slot := parseSlotFromModuleID(event.DestModule)
 			at.startBcSpan(ts, slot)
+		}
+	case *eventpb.Event_SendMessage:
+		switch msg := ev.SendMessage.Msg.Type.(type) {
+		case *messagepb.Message_Vcb:
+			switch msg.Vcb.Type.(type) {
+			case *vcbpb.Message_EchoMessage:
+				slot := parseSlotFromModuleID(event.DestModule)
+				at.startBcAwaitFinalSpan(ts, slot)
+			case *vcbpb.Message_SendMessage:
+				slot := parseSlotFromModuleID(event.DestModule)
+				at.startBcAwaitEchoSpan(ts, slot)
+			}
+		}
+	case *eventpb.Event_MessageReceived:
+		switch msg := ev.MessageReceived.Msg.Type.(type) {
+		case *messagepb.Message_Vcb:
+			switch msg.Vcb.Type.(type) {
+			case *vcbpb.Message_FinalMessage:
+				slot := parseSlotFromModuleID(event.DestModule)
+				at.endBcAwaitFinalSpan(ts, slot)
+			}
 		}
 	case *eventpb.Event_Abba:
 		switch e := ev.Abba.Type.(type) {
@@ -288,6 +333,11 @@ func (at *AleaTracer) interceptOne(event *eventpb.Event) error {
 			}
 
 			at.endThreshCryptoSpan(ts, "tc:recover", t.ModuleID(e.RecoverResult.Origin.Module), dsl.ContextID(originW.Dsl.ContextID))
+
+			if strings.HasPrefix(e.RecoverResult.Origin.Module, "alea_bc") {
+				slot := parseSlotFromModuleID(e.RecoverResult.Origin.Module)
+				at.endBcAwaitEchoSpan(ts, slot)
+			}
 		}
 	}
 
@@ -395,6 +445,52 @@ func (at *AleaTracer) startBcSpan(ts time.Duration, slot commontypes.Slot) {
 }
 func (at *AleaTracer) endBcSpan(ts time.Duration, slot commontypes.Slot) {
 	s := at._bcSpan(ts, slot)
+	if s.end == 0 {
+		s.end = ts
+		at.writeSpan(s)
+	}
+}
+
+func (at *AleaTracer) _bcAwaitEchoSpan(ts time.Duration, slot commontypes.Slot) *span {
+	s, ok := at.wipBcSpan[slot]
+	if !ok {
+		at.wipBcSpan[slot] = &span{
+			class: "bc:waitEcho",
+			id:    fmt.Sprintf("%d/%d", slot.QueueIdx, slot.QueueSlot),
+			start: ts,
+		}
+		s = at.wipBcAwaitEchoSpan[slot]
+	}
+	return s
+}
+func (at *AleaTracer) startBcAwaitEchoSpan(ts time.Duration, slot commontypes.Slot) {
+	at._bcAwaitEchoSpan(ts, slot)
+}
+func (at *AleaTracer) endBcAwaitEchoSpan(ts time.Duration, slot commontypes.Slot) {
+	s := at._bcAwaitEchoSpan(ts, slot)
+	if s.end == 0 {
+		s.end = ts
+		at.writeSpan(s)
+	}
+}
+
+func (at *AleaTracer) _bcAwaitFinalSpan(ts time.Duration, slot commontypes.Slot) *span {
+	s, ok := at.wipBcSpan[slot]
+	if !ok {
+		at.wipBcSpan[slot] = &span{
+			class: "bc:waitFinal",
+			id:    fmt.Sprintf("%d/%d", slot.QueueIdx, slot.QueueSlot),
+			start: ts,
+		}
+		s = at.wipBcAwaitFinalSpan[slot]
+	}
+	return s
+}
+func (at *AleaTracer) startBcAwaitFinalSpan(ts time.Duration, slot commontypes.Slot) {
+	at._bcAwaitFinalSpan(ts, slot)
+}
+func (at *AleaTracer) endBcAwaitFinalSpan(ts time.Duration, slot commontypes.Slot) {
+	s := at._bcAwaitFinalSpan(ts, slot)
 	if s.end == 0 {
 		s.end = ts
 		at.writeSpan(s)
