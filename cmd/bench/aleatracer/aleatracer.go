@@ -206,10 +206,10 @@ func (at *AleaTracer) interceptOne(event *eventpb.Event) error {
 		case *messagepb.Message_Vcb:
 			switch msg.Vcb.Type.(type) {
 			case *vcbpb.Message_EchoMessage:
-				slot := parseSlotFromModuleID(event.DestModule)
+				slot := parseSlotFromModuleID(ev.SendMessage.Msg.DestModule)
 				at.startBcAwaitFinalSpan(ts, slot)
 			case *vcbpb.Message_SendMessage:
-				slot := parseSlotFromModuleID(event.DestModule)
+				slot := parseSlotFromModuleID(ev.SendMessage.Msg.DestModule)
 				at.startBcAwaitEchoSpan(ts, slot)
 			}
 		}
