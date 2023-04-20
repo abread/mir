@@ -452,9 +452,9 @@ func (at *AleaTracer) endBcSpan(ts time.Duration, slot commontypes.Slot) {
 }
 
 func (at *AleaTracer) _bcAwaitEchoSpan(ts time.Duration, slot commontypes.Slot) *span {
-	s, ok := at.wipBcSpan[slot]
+	s, ok := at.wipBcAwaitEchoSpan[slot]
 	if !ok {
-		at.wipBcSpan[slot] = &span{
+		at.wipBcAwaitEchoSpan[slot] = &span{
 			class: "bc:waitEcho",
 			id:    fmt.Sprintf("%d/%d", slot.QueueIdx, slot.QueueSlot),
 			start: ts,
@@ -475,9 +475,9 @@ func (at *AleaTracer) endBcAwaitEchoSpan(ts time.Duration, slot commontypes.Slot
 }
 
 func (at *AleaTracer) _bcAwaitFinalSpan(ts time.Duration, slot commontypes.Slot) *span {
-	s, ok := at.wipBcSpan[slot]
+	s, ok := at.wipBcAwaitFinalSpan[slot]
 	if !ok {
-		at.wipBcSpan[slot] = &span{
+		at.wipBcAwaitFinalSpan[slot] = &span{
 			class: "bc:waitFinal",
 			id:    fmt.Sprintf("%d/%d", slot.QueueIdx, slot.QueueSlot),
 			start: ts,
