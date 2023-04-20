@@ -122,7 +122,7 @@ func newController(ctx context.Context, mc *ModuleConfig, params *ModuleParams, 
 			return nil
 		}
 
-		for _, value := range []bool{false, true} {
+		for _, value := range []bool{true, false} {
 			// 1. upon receiving weak support for FINISH(v), broadcast FINISH(v)
 			if !state.finishSent && state.finishRecvdValueCounts.Get(value) >= params.weakSupportThresh() {
 				logger.Log(logging.LevelDebug, "received weak support for FINISH(v)", "v", value)
