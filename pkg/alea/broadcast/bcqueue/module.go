@@ -54,7 +54,7 @@ func newQueueController(ctx context.Context, mc *ModuleConfig, params *ModulePar
 			return fmt.Errorf("cannot broadcast an empty batch")
 		}
 
-		logger.Log(logging.LevelDebug, "starting broadcast", "queueSlot", slot.QueueSlot, "txs", txs)
+		// logger.Log(logging.LevelDebug, "starting broadcast", "queueSlot", slot.QueueSlot, "txs", txs)
 		dsl.EmitMirEvent(m, vcbpbevents.InputValue(
 			mc.Self.Then(t.NewModuleIDFromInt(slot.QueueSlot)),
 			txs,
@@ -81,7 +81,7 @@ func newQueueController(ctx context.Context, mc *ModuleConfig, params *ModulePar
 	})
 
 	batchdbdsl.UponBatchStored(m, func(slot *commontypes.Slot) error {
-		logger.Log(logging.LevelDebug, "delivering broadcast", "queueSlot", slot.QueueSlot)
+		// logger.Log(logging.LevelDebug, "delivering broadcast", "queueSlot", slot.QueueSlot)
 		bcqueuedsl.Deliver(m, mc.Consumer, slot)
 		return nil
 	})

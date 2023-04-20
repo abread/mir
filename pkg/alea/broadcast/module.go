@@ -124,7 +124,7 @@ func (m *bcMod) splitEvents(evs *events.EventList) (*events.EventList, []*events
 			dest := t.ModuleID(ev.DestModule).StripParent(m.ownID).Top()
 			idx, err := strconv.ParseInt(string(dest), 10, 64)
 			if err != nil || int(idx) >= len(queueEvents) || idx < 0 {
-				m.logger.Log(logging.LevelDebug, "event for invalid queue", "event", ev)
+				// m.logger.Log(logging.LevelDebug, "event for invalid queue", "event", ev)
 				continue // invalid event
 			}
 

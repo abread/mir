@@ -162,7 +162,7 @@ func IncludeBatchFetching(
 
 		reqState.Replies = make(map[t.NodeID]struct{}, len(params.AllNodes))
 
-		logger.Log(logging.LevelDebug, "broadcast component fell behind. requesting slot from other replicas with FILL-GAP", "queueIdx", slot.QueueIdx, "queueSlot", slot.QueueSlot)
+		// logger.Log(logging.LevelDebug, "broadcast component fell behind. requesting slot from other replicas with FILL-GAP", "queueIdx", slot.QueueIdx, "queueSlot", slot.QueueSlot)
 
 		// TODO: do this more inteligently: only contact some nodes, and try others if a timer expires
 		// until all were tried or a response is received.
@@ -180,7 +180,7 @@ func IncludeBatchFetching(
 	aleadsl.UponFillGapMessageReceived(m, func(from t.NodeID, slot *commontypes.Slot) error {
 		// do not ACK message - acknowledging means sending a FILLER reply
 
-		logger.Log(logging.LevelDebug, "satisfying FILL-GAP request", "queueIdx", slot.QueueIdx, "queueSlot", slot.QueueSlot, "from", from)
+		// logger.Log(logging.LevelDebug, "satisfying FILL-GAP request", "queueIdx", slot.QueueIdx, "queueSlot", slot.QueueSlot, "from", from)
 		batchdbdsl.LookupBatch(m, mc.BatchDB, common.FormatAleaBatchID(slot), &lookupBatchOnRemoteRequestContext{from, slot})
 		return nil
 	})
@@ -214,7 +214,7 @@ func IncludeBatchFetching(
 		}
 		reqState.Replies[from] = struct{}{}
 
-		logger.Log(logging.LevelDebug, "got FILLER for missing slot!", "queueIdx", slot.QueueIdx, "queueSlot", slot.QueueSlot, "from", from)
+		// logger.Log(logging.LevelDebug, "got FILLER for missing slot!", "queueIdx", slot.QueueIdx, "queueSlot", slot.QueueSlot, "from", from)
 
 		mempooldsl.RequestTransactionIDs(m, mc.Mempool, txs, &handleFillerContext{
 			slot:      slot,
@@ -258,7 +258,7 @@ func IncludeBatchFetching(
 		batchdbdsl.StoreBatch(m, mc.BatchDB, common.FormatAleaBatchID(context.slot), context.txIDs, context.txs, context.signature /*metadata*/, context)
 
 		// send response to requests
-		logger.Log(logging.LevelDebug, "satisfying delayed requests with FILLER", "queueIdx", context.slot.QueueIdx, "queueSlot", context.slot.QueueSlot)
+		// logger.Log(logging.LevelDebug, "satisfying delayed requests with FILLER", "queueIdx", context.slot.QueueIdx, "queueSlot", context.slot.QueueSlot)
 		for _, origin := range requestState.ReqOrigins {
 			adsl.ProvideTransactions(m, origin.Module, context.txs, origin)
 		}

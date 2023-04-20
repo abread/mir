@@ -109,7 +109,7 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 	abcdsl.UponDeliver(m, func(slot *commontypes.Slot) error {
 		if slot.QueueSlot >= state.agQueueHeads[slot.QueueIdx] {
 			// slot wasn't delivered yet by agreement component
-			logger.Log(logging.LevelDebug, "marking slot as ready for delivery", "queueIdx", slot.QueueIdx, "queueSlot", slot.QueueSlot)
+			// logger.Log(logging.LevelDebug, "marking slot as ready for delivery", "queueIdx", slot.QueueIdx, "queueSlot", slot.QueueSlot)
 			state.slotsReadyToDeliver[slot.QueueIdx][slot.QueueSlot] = struct{}{}
 		}
 
@@ -130,7 +130,7 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 		}
 
 		// next round won't start until we say so, and previous rounds already delivered, so we can deliver immediately
-		logger.Log(logging.LevelDebug, "delivering cert", "agreementRound", round, "queueIdx", slot.QueueIdx, "queueSlot", slot.QueueSlot)
+		// logger.Log(logging.LevelDebug, "delivering cert", "agreementRound", round, "queueIdx", slot.QueueIdx, "queueSlot", slot.QueueSlot)
 		dsl.EmitEvent(m, events.DeliverCert(mc.Consumer, t.SeqNr(round), &availabilitypb.Cert{
 			Type: &availabilitypb.Cert_Alea{
 				Alea: &aleapb.Cert{
@@ -191,7 +191,7 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 			return nil
 		}
 
-		logger.Log(logging.LevelDebug, "requesting more transactions")
+		// logger.Log(logging.LevelDebug, "requesting more transactions")
 		state.stalledBatchCut.AddEvent("resuming after unagreed own batch count got too low", trace.WithAttributes(attribute.Int64("unagreedOwnBatchCount", int64(unagreedOwnBatchCount))))
 
 		state.stalledBatchCut.End()
@@ -206,7 +206,7 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 			return fmt.Errorf("empty batch. did you misconfigure your mempool?")
 		}
 
-		logger.Log(logging.LevelDebug, "new batch", "nTransactions", len(txs))
+		// logger.Log(logging.LevelDebug, "new batch", "nTransactions", len(txs))
 		(*span).AddEvent("got transactions")
 		(*span).End()
 
@@ -275,7 +275,7 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 				}
 			}
 
-			logger.Log(logging.LevelDebug, "progressing to next agreement round", "agreementRound", state.agRound, "input", bcDone)
+			// logger.Log(logging.LevelDebug, "progressing to next agreement round", "agreementRound", state.agRound, "input", bcDone)
 
 			state.stalledRoundSpan.End()
 			state.stalledRoundSpan = nil

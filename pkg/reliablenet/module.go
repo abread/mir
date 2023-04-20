@@ -182,7 +182,7 @@ func (m *Module) retransmitAll() (*events.EventList, error) {
 	if len(m.stalerQueues) == 0 {
 		// ok we're really out of messages
 		m.retransmitLoopScheduled = false
-		m.logger.Log(logging.LevelDebug, "stopping retransmission loop: no more messages")
+		// m.logger.Log(logging.LevelDebug, "stopping retransmission loop: no more messages")
 		return evsOut, nil
 	}
 
@@ -228,7 +228,7 @@ func (m *Module) retransmitQueuePartial(moduleID t.ModuleID, evsOut *events.Even
 		}
 
 		if len(qmsg.Destinations) > 0 {
-			m.logger.Log(logging.LevelDebug, "Retransmitting message", "msg", qmsg)
+			// m.logger.Log(logging.LevelDebug, "Retransmitting message", "msg", qmsg)
 			evsOut.PushBack(
 				&eventpb.Event{
 					Type: &eventpb.Event_SendMessage{
@@ -254,7 +254,7 @@ func (m *Module) retransmitWholeQueue(moduleID t.ModuleID, evsOut *events.EventL
 
 	for _, qmsg := range queue {
 		if len(qmsg.Destinations) > 0 {
-			m.logger.Log(logging.LevelDebug, "Retransmitting message", "msg", qmsg)
+			// m.logger.Log(logging.LevelDebug, "Retransmitting message", "msg", qmsg)
 			evsOut.PushBack(
 				&eventpb.Event{
 					Type: &eventpb.Event_SendMessage{
@@ -286,7 +286,7 @@ func (m *Module) SendMessage(id rntypes.MsgID, msg *messagepb.Message, destinati
 	)
 
 	if !m.retransmitLoopScheduled {
-		m.logger.Log(logging.LevelDebug, "rescheduling retransmission loop")
+		// m.logger.Log(logging.LevelDebug, "rescheduling retransmission loop")
 		evsOut.PushBack(events.TimerDelay(
 			m.config.Timer,
 			[]*eventpb.Event{rnEvents.RetransmitAll(m.config.Self).Pb()},

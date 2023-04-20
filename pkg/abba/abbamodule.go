@@ -125,7 +125,7 @@ func newController(ctx context.Context, mc *ModuleConfig, params *ModuleParams, 
 		for _, value := range []bool{true, false} {
 			// 1. upon receiving weak support for FINISH(v), broadcast FINISH(v)
 			if !state.finishSent && state.finishRecvdValueCounts.Get(value) >= params.weakSupportThresh() {
-				logger.Log(logging.LevelDebug, "received weak support for FINISH(v)", "v", value)
+				// logger.Log(logging.LevelDebug, "received weak support for FINISH(v)", "v", value)
 				rnetdsl.SendMessage(m, mc.ReliableNet,
 					FinishMsgID(),
 					abbapbmsgs.FinishMessage(mc.Self, value),
@@ -136,7 +136,7 @@ func newController(ctx context.Context, mc *ModuleConfig, params *ModuleParams, 
 
 			// 2. upon receiving strong support for FINISH(v), output v and terminate
 			if state.finishRecvdValueCounts.Get(value) >= params.strongSupportThresh() {
-				logger.Log(logging.LevelDebug, "received strong support for FINISH(v)", "v", value)
+				// logger.Log(logging.LevelDebug, "received strong support for FINISH(v)", "v", value)
 
 				abbadsl.Deliver(m, mc.Consumer, value, mc.Self)
 				state.phase = phaseDelivered

@@ -121,7 +121,7 @@ func NewModule(ctx context.Context, mc *ModuleConfig, params *ModuleParams, node
 			return nil // already received final
 		}
 
-		logger.Log(logging.LevelDebug, "recvd FINAL", "signature", signature)
+		// logger.Log(logging.LevelDebug, "recvd FINAL", "signature", signature)
 
 		// FINAL acts as ack for ECHO messages
 		rnetdsl.MarkRecvd(m, mc.ReliableNet, mc.Self, EchoMsgID(), []t.NodeID{params.Leader})
@@ -157,7 +157,7 @@ func NewModule(ctx context.Context, mc *ModuleConfig, params *ModuleParams, node
 			logger.Log(logging.LevelWarn, "delivering failure")
 			vcbdsl.Deliver(m, mc.Consumer, nil, nil, nil, mc.Self)
 		case VcbPhaseAwaitingOkDelivery:
-			logger.Log(logging.LevelDebug, "delivering batch", "txs", state.payload.Txs(), "sig", state.sig)
+			// logger.Log(logging.LevelDebug, "delivering batch", "txs", state.payload.Txs(), "sig", state.sig)
 			vcbdsl.Deliver(m, mc.Consumer,
 				state.payload.Txs(),
 				state.payload.TxIDs(),
@@ -180,7 +180,7 @@ func NewModule(ctx context.Context, mc *ModuleConfig, params *ModuleParams, node
 			return nil // already moved on from this
 		}
 
-		logger.Log(logging.LevelDebug, "recvd SEND", "txs", txs)
+		// logger.Log(logging.LevelDebug, "recvd SEND", "txs", txs)
 		state.payload.Input(txs)
 		state.phase = VcbPhaseAwaitingSigData
 		return nil
@@ -194,7 +194,7 @@ func NewModule(ctx context.Context, mc *ModuleConfig, params *ModuleParams, node
 	})
 	threshDsl.UponSignShareResult(m, func(signatureShare tctypes.SigShare, _ctx *struct{}) error {
 		if state.phase == VcbPhaseAwaitingSigShare {
-			logger.Log(logging.LevelDebug, "sending ECHO", "sigShare", signatureShare)
+			// logger.Log(logging.LevelDebug, "sending ECHO", "sigShare", signatureShare)
 			rnetdsl.SendMessage(m, mc.ReliableNet,
 				EchoMsgID(),
 				vcbmsgs.EchoMessage(mc.Self, signatureShare),
@@ -226,7 +226,7 @@ func setupVcbLeader(m dsl.Module, mc *ModuleConfig, params *ModuleParams, nodeID
 		}
 
 		if leaderState.sigAgg.Add(signatureShare, from) {
-			logger.Log(logging.LevelDebug, "recvd ECHO", "sigShare", signatureShare, "from", from)
+			// logger.Log(logging.LevelDebug, "recvd ECHO", "sigShare", signatureShare, "from", from)
 
 			// ECHO message acts as acknowledgement for SEND message
 			rnetdsl.MarkRecvd(m, mc.ReliableNet, mc.Self, SendMsgID(), []t.NodeID{from})
@@ -237,7 +237,7 @@ func setupVcbLeader(m dsl.Module, mc *ModuleConfig, params *ModuleParams, nodeID
 
 	dsl.UponCondition(m, func() error {
 		if leaderState.phase == VcbLeaderPhaseAwaitingEchoes && leaderState.sigAgg.FullSig() != nil {
-			logger.Log(logging.LevelDebug, "recovered full sig. sending FINAL")
+			// logger.Log(logging.LevelDebug, "recovered full sig. sending FINAL")
 
 			rnetdsl.SendMessage(m, mc.ReliableNet, FinalMsgID(), vcbmsgs.FinalMessage(
 				mc.Self,
@@ -254,7 +254,7 @@ func setupVcbLeader(m dsl.Module, mc *ModuleConfig, params *ModuleParams, nodeID
 
 	vcbdsl.UponInputValue(m, func(txs []*requestpbtypes.Request) error {
 		if nodeID == params.Leader {
-			logger.Log(logging.LevelDebug, "inputting value", "txs", txs)
+			// logger.Log(logging.LevelDebug, "inputting value", "txs", txs)
 			state.payload.Input(txs)
 		}
 		return nil
@@ -262,7 +262,7 @@ func setupVcbLeader(m dsl.Module, mc *ModuleConfig, params *ModuleParams, nodeID
 	dsl.UponCondition(m, func() error {
 		if leaderState.phase == VcbLeaderPhaseAwaitingInput && state.payload.SigData() != nil {
 			// to make things easier, we only broadcast SEND when we are ready to validate the replies (ECHO messages)
-			logger.Log(logging.LevelDebug, "sending SEND", "txs", state.payload.Txs())
+			// logger.Log(logging.LevelDebug, "sending SEND", "txs", state.payload.Txs())
 			rnetdsl.SendMessage(m, mc.ReliableNet, SendMsgID(), vcbmsgs.SendMessage(
 				mc.Self,
 				state.payload.Txs(),

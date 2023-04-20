@@ -109,7 +109,7 @@ func newAgController(ctx context.Context, mc *ModuleConfig, params *ModuleParams
 			return fmt.Errorf("round input provided out-of-order. expected round %v got %v", state.currentRound, round)
 		}
 
-		logger.Log(logging.LevelDebug, "inputting value to agreement round", "agRound", round, "value", input)
+		// logger.Log(logging.LevelDebug, "inputting value to agreement round", "agRound", round, "value", input)
 		dsl.EmitMirEvent(m, abbapbevents.InputValue(
 			mc.agRoundModuleID(round),
 			input,
@@ -130,7 +130,7 @@ func newAgController(ctx context.Context, mc *ModuleConfig, params *ModuleParams
 			return fmt.Errorf("rounds delivered out-of-order. expected round %v got %v", state.currentRound, round)
 		}
 
-		logger.Log(logging.LevelDebug, "delivering round", "agRound", round, "decision", decision)
+		// logger.Log(logging.LevelDebug, "delivering round", "agRound", round, "decision", decision)
 
 		agreementpbdsl.Deliver(m, mc.Consumer, round, decision)
 
