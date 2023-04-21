@@ -62,6 +62,7 @@ func init() {
 	nodeCmd.Flags().IntVarP(&batchSize, "batchSize", "b", 1024, "maximum number of transactions in a batch (mempool module)")
 	nodeCmd.Flags().StringVarP(&statFileName, "statFile", "o", "", "output file for statistics")
 	nodeCmd.Flags().DurationVar(&statPeriod, "statPeriod", time.Second, "statistic record period")
+	nodeCmd.Flags().StringVar(&traceFileName, "traceFile", "", "output file for alea tracing")
 }
 
 func issSMRFactory(ctx context.Context, ownID t.NodeID, transport net.Transport, initialMembership map[t.NodeID]t.NodeAddress, smrParams trantor.Params, logger logging.Logger) (*trantor.System, error) {
