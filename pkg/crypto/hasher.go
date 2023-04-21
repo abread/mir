@@ -8,7 +8,11 @@ import (
 
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/modules"
+	"github.com/filecoin-project/mir/pkg/pb/commonpb"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
+	"github.com/filecoin-project/mir/pkg/pb/hasherpb"
+	hasherpbevents "github.com/filecoin-project/mir/pkg/pb/hasherpb/events"
+	hasherpbtypes "github.com/filecoin-project/mir/pkg/pb/hasherpb/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -39,32 +43,48 @@ func (hasher *hasherEventProc) ApplyEvent(ctx context.Context, event *eventpb.Ev
 	case *eventpb.Event_Init:
 		// no actions on init
 		return events.EmptyList()
-	case *eventpb.Event_HashRequest:
-		// HashRequest is the only event understood by the hasher module.
-
-		// Create a slice for the resulting digests containing one element for each data item to be hashed.
-		digests := make([][]byte, len(e.HashRequest.Data))
-
-		// Hash each data item contained in the event
-		for i, data := range e.HashRequest.Data {
-
-			// One data item consists of potentially multiple byte slices.
-			// Add each of them to the hash function.
-			h := hasher.hashImpl.New()
-			for _, d := range data.Data {
-				h.Write(d)
-			}
-
-			// Save resulting digest in the result slice
-			digests[i] = h.Sum(nil)
+	case *eventpb.Event_Hasher:
+		switch e := e.Hasher.Type.(type) {
+		case *hasherpb.Event_Request:
+			// Return all computed digests in one common event.
+			return events.ListOf(hasherpbevents.Result(
+				t.ModuleID(e.Request.Origin.Module),
+				hasher.computeDigests(e.Request.Data),
+				hasherpbtypes.HashOriginFromPb(e.Request.Origin),
+			).Pb())
+		case *hasherpb.Event_RequestOne:
+			// Return a single computed digests.
+			return events.ListOf(hasherpbevents.ResultOne(
+				t.ModuleID(e.RequestOne.Origin.Module),
+				hasher.computeDigests([]*commonpb.HashData{e.RequestOne.Data})[0],
+				hasherpbtypes.HashOriginFromPb(e.RequestOne.Origin),
+			).Pb())
+		default:
+			panic(fmt.Errorf("unexpected hasher event type: %T", e))
 		}
-
-		// Return all computed digests in one common event.
-		return events.ListOf(
-			events.HashResult(t.ModuleID(e.HashRequest.Origin.Module), digests, e.HashRequest.Origin),
-		)
 	default:
 		// Complain about all other incoming event types.
 		panic(fmt.Errorf("unexpected type of Hash event: %T", event.Type))
 	}
+}
+
+func (hasher *hasherEventProc) computeDigests(allData []*commonpb.HashData) [][]byte {
+	// Create a slice for the resulting digests containing one element for each data item to be hashed.
+	digests := make([][]byte, len(allData))
+
+	// Hash each data item contained in the event
+	for i, data := range allData {
+
+		// One data item consists of potentially multiple byte slices.
+		// Add each of them to the hash function.
+		h := hasher.hashImpl.New()
+		for _, d := range data.Data {
+			h.Write(d)
+		}
+
+		// Save resulting digest in the result slice
+		digests[i] = h.Sum(nil)
+	}
+
+	return digests
 }

@@ -6,8 +6,9 @@ option go_package = "github.com/filecoin-project/mir/pkg/pb/availabilitypb/batch
 
 import "contextstorepb/contextstorepb.proto";
 import "dslpb/dslpb.proto";
-import "mir/codegen_extensions.proto";
 import "requestpb/requestpb.proto";
+
+import "mir/codegen_extensions.proto";
 
 // ============================================================
 // Events
@@ -30,7 +31,7 @@ message Event {
 message LookupBatch {
   option (mir.event) = true;
 
-  bytes             batch_id = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.BatchID"];
+  bytes             batch_id = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/availability/multisigcollector/types.BatchID"];
   LookupBatchOrigin origin   = 2 [(mir.origin_request) = true];
 }
 
@@ -49,12 +50,11 @@ message LookupBatchResponse {
 message StoreBatch {
   option (mir.event) = true;
 
-  bytes batch_id                 = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.BatchID"];
-  repeated bytes tx_ids          = 2 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.TxID"];
-  repeated requestpb.Request txs = 3;
-  bytes metadata                 = 4;
-
-  StoreBatchOrigin origin        = 5 [(mir.origin_request) = true];
+  bytes                      batch_id = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/availability/multisigcollector/types.BatchID"];
+  repeated bytes             tx_ids   = 2 [(mir.type) = "github.com/filecoin-project/mir/pkg/trantor/types.TxID"];
+  repeated requestpb.Request txs      = 3;
+  bytes                      metadata = 4;
+  StoreBatchOrigin           origin   = 5 [(mir.origin_request) = true];
 }
 
 // BatchStored is a response to a VerifyCert event.

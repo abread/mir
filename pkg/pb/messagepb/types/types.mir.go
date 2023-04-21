@@ -2,18 +2,18 @@ package messagepbtypes
 
 import (
 	mirreflect "github.com/filecoin-project/mir/codegen/mirreflect"
-	types4 "github.com/filecoin-project/mir/pkg/pb/abbapb/types"
-	types6 "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/types"
-	types5 "github.com/filecoin-project/mir/pkg/pb/aleapb/types"
-	types2 "github.com/filecoin-project/mir/pkg/pb/availabilitypb/mscpb/types"
-	types1 "github.com/filecoin-project/mir/pkg/pb/bcbpb/types"
-	checkpointpb "github.com/filecoin-project/mir/pkg/pb/checkpointpb"
-	isspb "github.com/filecoin-project/mir/pkg/pb/isspb"
+	types7 "github.com/filecoin-project/mir/pkg/pb/abbapb/types"
+	types9 "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/types"
+	types8 "github.com/filecoin-project/mir/pkg/pb/aleapb/types"
+	types3 "github.com/filecoin-project/mir/pkg/pb/availabilitypb/mscpb/types"
+	types2 "github.com/filecoin-project/mir/pkg/pb/bcbpb/types"
+	types4 "github.com/filecoin-project/mir/pkg/pb/checkpointpb/types"
+	types1 "github.com/filecoin-project/mir/pkg/pb/isspb/types"
 	messagepb "github.com/filecoin-project/mir/pkg/pb/messagepb"
-	ordererspb "github.com/filecoin-project/mir/pkg/pb/ordererspb"
+	types5 "github.com/filecoin-project/mir/pkg/pb/ordererpb/types"
 	pingpongpb "github.com/filecoin-project/mir/pkg/pb/pingpongpb"
-	types7 "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/messages/types"
-	types3 "github.com/filecoin-project/mir/pkg/pb/vcbpb/types"
+	types10 "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/messages/types"
+	types6 "github.com/filecoin-project/mir/pkg/pb/vcbpb/types"
 	types "github.com/filecoin-project/mir/pkg/types"
 	reflectutil "github.com/filecoin-project/mir/pkg/util/reflectutil"
 )
@@ -37,43 +37,43 @@ type Message_TypeWrapper[T any] interface {
 func Message_TypeFromPb(pb messagepb.Message_Type) Message_Type {
 	switch pb := pb.(type) {
 	case *messagepb.Message_Iss:
-		return &Message_Iss{Iss: pb.Iss}
+		return &Message_Iss{Iss: types1.ISSMessageFromPb(pb.Iss)}
 	case *messagepb.Message_Bcb:
-		return &Message_Bcb{Bcb: types1.MessageFromPb(pb.Bcb)}
+		return &Message_Bcb{Bcb: types2.MessageFromPb(pb.Bcb)}
 	case *messagepb.Message_MultisigCollector:
-		return &Message_MultisigCollector{MultisigCollector: types2.MessageFromPb(pb.MultisigCollector)}
+		return &Message_MultisigCollector{MultisigCollector: types3.MessageFromPb(pb.MultisigCollector)}
 	case *messagepb.Message_Pingpong:
 		return &Message_Pingpong{Pingpong: pb.Pingpong}
 	case *messagepb.Message_Checkpoint:
-		return &Message_Checkpoint{Checkpoint: pb.Checkpoint}
-	case *messagepb.Message_SbMessage:
-		return &Message_SbMessage{SbMessage: pb.SbMessage}
+		return &Message_Checkpoint{Checkpoint: types4.MessageFromPb(pb.Checkpoint)}
+	case *messagepb.Message_Orderer:
+		return &Message_Orderer{Orderer: types5.MessageFromPb(pb.Orderer)}
 	case *messagepb.Message_Vcb:
-		return &Message_Vcb{Vcb: types3.MessageFromPb(pb.Vcb)}
+		return &Message_Vcb{Vcb: types6.MessageFromPb(pb.Vcb)}
 	case *messagepb.Message_Abba:
-		return &Message_Abba{Abba: types4.MessageFromPb(pb.Abba)}
+		return &Message_Abba{Abba: types7.MessageFromPb(pb.Abba)}
 	case *messagepb.Message_Alea:
-		return &Message_Alea{Alea: types5.MessageFromPb(pb.Alea)}
+		return &Message_Alea{Alea: types8.MessageFromPb(pb.Alea)}
 	case *messagepb.Message_AleaAgreement:
-		return &Message_AleaAgreement{AleaAgreement: types6.MessageFromPb(pb.AleaAgreement)}
+		return &Message_AleaAgreement{AleaAgreement: types9.MessageFromPb(pb.AleaAgreement)}
 	case *messagepb.Message_ReliableNet:
-		return &Message_ReliableNet{ReliableNet: types7.MessageFromPb(pb.ReliableNet)}
+		return &Message_ReliableNet{ReliableNet: types10.MessageFromPb(pb.ReliableNet)}
 	}
 	return nil
 }
 
 type Message_Iss struct {
-	Iss *isspb.ISSMessage
+	Iss *types1.ISSMessage
 }
 
 func (*Message_Iss) isMessage_Type() {}
 
-func (w *Message_Iss) Unwrap() *isspb.ISSMessage {
+func (w *Message_Iss) Unwrap() *types1.ISSMessage {
 	return w.Iss
 }
 
 func (w *Message_Iss) Pb() messagepb.Message_Type {
-	return &messagepb.Message_Iss{Iss: w.Iss}
+	return &messagepb.Message_Iss{Iss: (w.Iss).Pb()}
 }
 
 func (*Message_Iss) MirReflect() mirreflect.Type {
@@ -81,12 +81,12 @@ func (*Message_Iss) MirReflect() mirreflect.Type {
 }
 
 type Message_Bcb struct {
-	Bcb *types1.Message
+	Bcb *types2.Message
 }
 
 func (*Message_Bcb) isMessage_Type() {}
 
-func (w *Message_Bcb) Unwrap() *types1.Message {
+func (w *Message_Bcb) Unwrap() *types2.Message {
 	return w.Bcb
 }
 
@@ -99,12 +99,12 @@ func (*Message_Bcb) MirReflect() mirreflect.Type {
 }
 
 type Message_MultisigCollector struct {
-	MultisigCollector *types2.Message
+	MultisigCollector *types3.Message
 }
 
 func (*Message_MultisigCollector) isMessage_Type() {}
 
-func (w *Message_MultisigCollector) Unwrap() *types2.Message {
+func (w *Message_MultisigCollector) Unwrap() *types3.Message {
 	return w.MultisigCollector
 }
 
@@ -135,48 +135,48 @@ func (*Message_Pingpong) MirReflect() mirreflect.Type {
 }
 
 type Message_Checkpoint struct {
-	Checkpoint *checkpointpb.Message
+	Checkpoint *types4.Message
 }
 
 func (*Message_Checkpoint) isMessage_Type() {}
 
-func (w *Message_Checkpoint) Unwrap() *checkpointpb.Message {
+func (w *Message_Checkpoint) Unwrap() *types4.Message {
 	return w.Checkpoint
 }
 
 func (w *Message_Checkpoint) Pb() messagepb.Message_Type {
-	return &messagepb.Message_Checkpoint{Checkpoint: w.Checkpoint}
+	return &messagepb.Message_Checkpoint{Checkpoint: (w.Checkpoint).Pb()}
 }
 
 func (*Message_Checkpoint) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*messagepb.Message_Checkpoint]()}
 }
 
-type Message_SbMessage struct {
-	SbMessage *ordererspb.SBInstanceMessage
+type Message_Orderer struct {
+	Orderer *types5.Message
 }
 
-func (*Message_SbMessage) isMessage_Type() {}
+func (*Message_Orderer) isMessage_Type() {}
 
-func (w *Message_SbMessage) Unwrap() *ordererspb.SBInstanceMessage {
-	return w.SbMessage
+func (w *Message_Orderer) Unwrap() *types5.Message {
+	return w.Orderer
 }
 
-func (w *Message_SbMessage) Pb() messagepb.Message_Type {
-	return &messagepb.Message_SbMessage{SbMessage: w.SbMessage}
+func (w *Message_Orderer) Pb() messagepb.Message_Type {
+	return &messagepb.Message_Orderer{Orderer: (w.Orderer).Pb()}
 }
 
-func (*Message_SbMessage) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*messagepb.Message_SbMessage]()}
+func (*Message_Orderer) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*messagepb.Message_Orderer]()}
 }
 
 type Message_Vcb struct {
-	Vcb *types3.Message
+	Vcb *types6.Message
 }
 
 func (*Message_Vcb) isMessage_Type() {}
 
-func (w *Message_Vcb) Unwrap() *types3.Message {
+func (w *Message_Vcb) Unwrap() *types6.Message {
 	return w.Vcb
 }
 
@@ -189,12 +189,12 @@ func (*Message_Vcb) MirReflect() mirreflect.Type {
 }
 
 type Message_Abba struct {
-	Abba *types4.Message
+	Abba *types7.Message
 }
 
 func (*Message_Abba) isMessage_Type() {}
 
-func (w *Message_Abba) Unwrap() *types4.Message {
+func (w *Message_Abba) Unwrap() *types7.Message {
 	return w.Abba
 }
 
@@ -207,12 +207,12 @@ func (*Message_Abba) MirReflect() mirreflect.Type {
 }
 
 type Message_Alea struct {
-	Alea *types5.Message
+	Alea *types8.Message
 }
 
 func (*Message_Alea) isMessage_Type() {}
 
-func (w *Message_Alea) Unwrap() *types5.Message {
+func (w *Message_Alea) Unwrap() *types8.Message {
 	return w.Alea
 }
 
@@ -225,12 +225,12 @@ func (*Message_Alea) MirReflect() mirreflect.Type {
 }
 
 type Message_AleaAgreement struct {
-	AleaAgreement *types6.Message
+	AleaAgreement *types9.Message
 }
 
 func (*Message_AleaAgreement) isMessage_Type() {}
 
-func (w *Message_AleaAgreement) Unwrap() *types6.Message {
+func (w *Message_AleaAgreement) Unwrap() *types9.Message {
 	return w.AleaAgreement
 }
 
@@ -243,12 +243,12 @@ func (*Message_AleaAgreement) MirReflect() mirreflect.Type {
 }
 
 type Message_ReliableNet struct {
-	ReliableNet *types7.Message
+	ReliableNet *types10.Message
 }
 
 func (*Message_ReliableNet) isMessage_Type() {}
 
-func (w *Message_ReliableNet) Unwrap() *types7.Message {
+func (w *Message_ReliableNet) Unwrap() *types10.Message {
 	return w.ReliableNet
 }
 

@@ -12,6 +12,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
 	messagepbtypes "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
 	modringpbtypes "github.com/filecoin-project/mir/pkg/pb/modringpb/types"
+	"github.com/filecoin-project/mir/pkg/pb/transportpb"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -142,12 +143,14 @@ func (m *Module) splitEventsByDest(eventsIn *events.EventList) ([]events.EventLi
 		}
 
 		if m.ringController.IsPastSlot(subID) {
-			if ev, ok := event.Type.(*eventpb.Event_MessageReceived); ok {
-				pastMsgs = append(pastMsgs, &modringpbtypes.PastMessage{
-					DestId:  subID,
-					From:    t.NodeID(ev.MessageReceived.From),
-					Message: messagepbtypes.MessageFromPb(ev.MessageReceived.Msg),
-				})
+			if ev, ok := event.Type.(*eventpb.Event_Transport); ok {
+				if e, ok := ev.Transport.Type.(*transportpb.Event_MessageReceived); ok {
+					pastMsgs = append(pastMsgs, &modringpbtypes.PastMessage{
+						DestId:  subID,
+						From:    t.NodeID(e.MessageReceived.From),
+						Message: messagepbtypes.MessageFromPb(e.MessageReceived.Msg),
+					})
+				}
 			}
 			continue
 		}

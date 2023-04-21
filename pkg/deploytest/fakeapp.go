@@ -7,11 +7,10 @@ SPDX-License-Identifier: Apache-2.0
 package deploytest
 
 import (
-	"encoding/binary"
-
 	"github.com/filecoin-project/mir/pkg/checkpoint"
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"
+	"github.com/filecoin-project/mir/pkg/serializing"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -36,11 +35,11 @@ func (fa *FakeApp) ApplyTXs(txs []*requestpb.Request) error {
 }
 
 func (fa *FakeApp) Snapshot() ([]byte, error) {
-	return uint64ToBytes(fa.RequestsProcessed), nil
+	return serializing.Uint64ToBytes(fa.RequestsProcessed), nil
 }
 
 func (fa *FakeApp) RestoreState(checkpoint *checkpoint.StableCheckpoint) error {
-	fa.RequestsProcessed = uint64FromBytes(checkpoint.Snapshot.AppData)
+	fa.RequestsProcessed = serializing.Uint64FromBytes(checkpoint.Snapshot.AppData)
 	return nil
 }
 
@@ -53,14 +52,4 @@ func NewFakeApp(logger logging.Logger) *FakeApp {
 		RequestsProcessed: 0,
 		Logger:            logger,
 	}
-}
-
-func uint64ToBytes(value uint64) []byte {
-	byteValue := make([]byte, 8)
-	binary.LittleEndian.PutUint64(byteValue, value)
-	return byteValue
-}
-
-func uint64FromBytes(bytes []byte) uint64 {
-	return binary.LittleEndian.Uint64(bytes)
 }

@@ -4,7 +4,12 @@ import (
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/iss/config"
 	"github.com/filecoin-project/mir/pkg/logging"
-	"github.com/filecoin-project/mir/pkg/pb/ordererspbftpb"
+	"github.com/filecoin-project/mir/pkg/orderers/types"
+	commonpbtypes "github.com/filecoin-project/mir/pkg/pb/commonpb/types"
+	pbftpbmsgs "github.com/filecoin-project/mir/pkg/pb/pbftpb/msgs"
+	pbftpbtypes "github.com/filecoin-project/mir/pkg/pb/pbftpb/types"
+	transportpbevents "github.com/filecoin-project/mir/pkg/pb/transportpb/events"
+	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 	"github.com/filecoin-project/mir/pkg/util/maputil"
 )
@@ -14,14 +19,14 @@ import (
 // The transition from view 2 to view 3 will be tracked by a different instance of pbftViewChangeState.
 type pbftViewChangeState struct {
 	numNodes          int
-	signedViewChanges map[t.NodeID]*ordererspbftpb.SignedViewChange
+	signedViewChanges map[t.NodeID]*pbftpbtypes.SignedViewChange
 
 	// Digests of preprepares that need to be repropsed in a new view.
 	// At initialization, an explicit nil entry is created for each sequence number of the segment.
 	// Based on received ViewChange messages, each value will eventually be set to
 	// - either a non-zero-length byte slice representing a digest to be re-proposed
 	// - or a zero-length byte slice marking it safe to re-propose a special "null" certificate.
-	reproposals map[t.SeqNr][]byte
+	reproposals map[tt.SeqNr][]byte
 
 	// Preprepare messages to be reproposed in the new view.
 	// At initialization, an explicit nil entry is created for each sequence number of the segment.
@@ -29,16 +34,16 @@ type pbftViewChangeState struct {
 	// a new Preprepare message to be re-proposed (with a correctly set view number).
 	// This also holds for sequence numbers for which nothing was prepared in the previous view,
 	// in which case the value is set to a Preprepare with an empty certificate and the "aborted" flag set.
-	preprepares map[t.SeqNr]*ordererspbftpb.Preprepare
+	preprepares map[tt.SeqNr]*pbftpbtypes.Preprepare
 
-	prepreparedIDs map[t.SeqNr][]t.NodeID
+	prepreparedIDs map[tt.SeqNr][]t.NodeID
 
 	logger logging.Logger
 }
 
-func newPbftViewChangeState(seqNrs []t.SeqNr, membership []t.NodeID, logger logging.Logger) *pbftViewChangeState {
-	reproposals := make(map[t.SeqNr][]byte)
-	preprepares := make(map[t.SeqNr]*ordererspbftpb.Preprepare)
+func newPbftViewChangeState(seqNrs []tt.SeqNr, membership []t.NodeID, logger logging.Logger) *pbftViewChangeState {
+	reproposals := make(map[tt.SeqNr][]byte)
+	preprepares := make(map[tt.SeqNr]*pbftpbtypes.Preprepare)
 	for _, sn := range seqNrs {
 		reproposals[sn] = nil
 		preprepares[sn] = nil
@@ -46,9 +51,9 @@ func newPbftViewChangeState(seqNrs []t.SeqNr, membership []t.NodeID, logger logg
 
 	return &pbftViewChangeState{
 		numNodes:          len(membership),
-		signedViewChanges: make(map[t.NodeID]*ordererspbftpb.SignedViewChange),
+		signedViewChanges: make(map[t.NodeID]*pbftpbtypes.SignedViewChange),
 		reproposals:       reproposals,
-		prepreparedIDs:    make(map[t.SeqNr][]t.NodeID),
+		prepreparedIDs:    make(map[tt.SeqNr][]t.NodeID),
 		preprepares:       preprepares,
 		logger:            logger,
 	}
@@ -63,7 +68,7 @@ func (vcState *pbftViewChangeState) EnoughViewChanges() bool {
 	return true
 }
 
-func (vcState *pbftViewChangeState) AddSignedViewChange(svc *ordererspbftpb.SignedViewChange, from t.NodeID) {
+func (vcState *pbftViewChangeState) AddSignedViewChange(svc *pbftpbtypes.SignedViewChange, from t.NodeID) {
 
 	if vcState.EnoughViewChanges() {
 		return
@@ -91,12 +96,12 @@ func (vcState *pbftViewChangeState) updateReproposals() {
 	}
 }
 
-func (vcState *pbftViewChangeState) SetEmptyPreprepares(view t.PBFTViewNr, proposals map[t.SeqNr][]byte) [][][]byte {
+func (vcState *pbftViewChangeState) SetEmptyPreprepares(view types.ViewNr, proposals map[tt.SeqNr][]byte) []*commonpbtypes.HashData {
 
 	// dataToHash will store the serialized form of newly created empty ("aborted") Preprepares.
-	dataToHash := make([][][]byte, 0, len(vcState.reproposals))
+	dataToHash := make([]*commonpbtypes.HashData, 0, len(vcState.reproposals))
 
-	maputil.IterateSorted(vcState.reproposals, func(sn t.SeqNr, digest []byte) (cont bool) {
+	maputil.IterateSorted(vcState.reproposals, func(sn tt.SeqNr, digest []byte) (cont bool) {
 		if digest != nil && len(digest) == 0 {
 
 			// If there is a pre-configured proposal, use it, otherwise use an empty byte slice.
@@ -108,12 +113,7 @@ func (vcState *pbftViewChangeState) SetEmptyPreprepares(view t.PBFTViewNr, propo
 			}
 
 			// Create a new empty Preprepare message.
-			vcState.preprepares[sn] = pbftPreprepareMsg(
-				sn,
-				view,
-				data,
-				true,
-			)
+			vcState.preprepares[sn] = &pbftpbtypes.Preprepare{sn, view, data, true} // nolint:govet
 
 			// Serialize the newly created Preprepare message for hashing.
 			dataToHash = append(dataToHash, serializePreprepareForHashing(vcState.preprepares[sn]))
@@ -130,7 +130,7 @@ func (vcState *pbftViewChangeState) SetEmptyPreprepareDigests(digests [][]byte) 
 	i := 0
 
 	// Iterate over all empty reproposals the exactly same way as when setting the corresponding "aborted" Preprepares.
-	maputil.IterateSorted(vcState.reproposals, func(sn t.SeqNr, digest []byte) (cont bool) {
+	maputil.IterateSorted(vcState.reproposals, func(sn tt.SeqNr, digest []byte) (cont bool) {
 
 		// Assign the corresponding hash to each sequence number with an empty re-proposal.
 		if digest != nil && len(digest) == 0 {
@@ -146,7 +146,7 @@ func (vcState *pbftViewChangeState) SetEmptyPreprepareDigests(digests [][]byte) 
 	}
 }
 
-func (vcState *pbftViewChangeState) SetLocalPreprepares(pbft *Orderer, view t.PBFTViewNr) {
+func (vcState *pbftViewChangeState) SetLocalPreprepares(pbft *Orderer, view types.ViewNr) {
 	for sn, digest := range vcState.reproposals {
 		if vcState.preprepares[sn] == nil && digest != nil && len(digest) > 0 {
 			if preprepare := pbft.lookUpPreprepare(sn, digest); preprepare != nil {
@@ -172,14 +172,11 @@ func (vcState *pbftViewChangeState) askForMissingPreprepares(moduleConfig *Modul
 	eventsOut := events.EmptyList()
 	for sn, digest := range vcState.reproposals {
 		if len(digest) > 0 && vcState.preprepares[sn] == nil {
-			eventsOut.PushBack(events.SendMessage(
+			eventsOut.PushBack(transportpbevents.SendMessage(
 				moduleConfig.Net,
-				OrdererMessage(
-					PbftPreprepareRequestSBMessage(
-						pbftPreprepareRequestMsg(sn, digest)),
-					moduleConfig.Self),
-				removeNodeID(vcState.prepreparedIDs[sn], "1"), // TODO be smarter about this eventually, not asking everyone at once.
-			))
+				pbftpbmsgs.PreprepareRequest(moduleConfig.Self, digest, sn),
+				vcState.prepreparedIDs[sn],
+			).Pb()) // TODO be smarter about this eventually, not asking everyone at once.
 		}
 	}
 	return eventsOut

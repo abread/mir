@@ -22,6 +22,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
 	"github.com/filecoin-project/mir/pkg/pb/messagepb"
 	"github.com/filecoin-project/mir/pkg/pb/threshcryptopb"
+	"github.com/filecoin-project/mir/pkg/pb/transportpb"
 	"github.com/filecoin-project/mir/pkg/pb/vcbpb"
 	t "github.com/filecoin-project/mir/pkg/types"
 	"github.com/filecoin-project/mir/pkg/util/localclock"
@@ -144,7 +145,12 @@ func (at *AleaTracer) Intercept(evs *events.EventList) error {
 func (at *AleaTracer) interceptOne(event *eventpb.Event) error {
 	ts := time.Duration(event.LocalTs)
 
-	if _, ok := event.Type.(*eventpb.Event_MessageReceived); !ok {
+	// consider all non-messagereceived events as module initialization
+	if ev, ok := event.Type.(*eventpb.Event_Transport); ok {
+		if _, ok := ev.Transport.Type.(*transportpb.Event_MessageReceived); !ok {
+			at.registerModStart(ts, event)
+		}
+	} else {
 		at.registerModStart(ts, event)
 	}
 
@@ -201,25 +207,28 @@ func (at *AleaTracer) interceptOne(event *eventpb.Event) error {
 			slot := parseSlotFromModuleID(event.DestModule)
 			at.startBcSpan(ts, slot)
 		}
-	case *eventpb.Event_SendMessage:
-		switch msg := ev.SendMessage.Msg.Type.(type) {
-		case *messagepb.Message_Vcb:
-			switch msg.Vcb.Type.(type) {
-			case *vcbpb.Message_EchoMessage:
-				slot := parseSlotFromModuleID(ev.SendMessage.Msg.DestModule)
-				at.startBcAwaitFinalSpan(ts, slot)
-			case *vcbpb.Message_SendMessage:
-				slot := parseSlotFromModuleID(ev.SendMessage.Msg.DestModule)
-				at.startBcAwaitEchoSpan(ts, slot)
+	case *eventpb.Event_Transport:
+		switch e := ev.Transport.Type.(type) {
+		case *transportpb.Event_SendMessage:
+			switch msg := e.SendMessage.Msg.Type.(type) {
+			case *messagepb.Message_Vcb:
+				switch msg.Vcb.Type.(type) {
+				case *vcbpb.Message_EchoMessage:
+					slot := parseSlotFromModuleID(e.SendMessage.Msg.DestModule)
+					at.startBcAwaitFinalSpan(ts, slot)
+				case *vcbpb.Message_SendMessage:
+					slot := parseSlotFromModuleID(e.SendMessage.Msg.DestModule)
+					at.startBcAwaitEchoSpan(ts, slot)
+				}
 			}
-		}
-	case *eventpb.Event_MessageReceived:
-		switch msg := ev.MessageReceived.Msg.Type.(type) {
-		case *messagepb.Message_Vcb:
-			switch msg.Vcb.Type.(type) {
-			case *vcbpb.Message_FinalMessage:
-				slot := parseSlotFromModuleID(event.DestModule)
-				at.endBcAwaitFinalSpan(ts, slot)
+		case *transportpb.Event_MessageReceived:
+			switch msg := e.MessageReceived.Msg.Type.(type) {
+			case *messagepb.Message_Vcb:
+				switch msg.Vcb.Type.(type) {
+				case *vcbpb.Message_FinalMessage:
+					slot := parseSlotFromModuleID(event.DestModule)
+					at.endBcAwaitFinalSpan(ts, slot)
+				}
 			}
 		}
 	case *eventpb.Event_Abba:

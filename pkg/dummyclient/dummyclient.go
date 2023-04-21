@@ -15,9 +15,10 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/logging"
+	requestpbtypes "github.com/filecoin-project/mir/pkg/pb/requestpb/types"
 	"github.com/filecoin-project/mir/pkg/requestreceiver"
+	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -29,16 +30,16 @@ const (
 // TODO: Update the comments around crypto, hasher, and request signing.
 
 type DummyClient struct {
-	ownID     t.ClientID
+	ownID     tt.ClientID
 	hasher    crypto.Hash
-	nextReqNo t.ReqNo
+	nextReqNo tt.ReqNo
 	conns     map[t.NodeID]*grpc.ClientConn
 	clients   map[t.NodeID]requestreceiver.RequestReceiver_ListenClient
 	logger    logging.Logger
 }
 
 func NewDummyClient(
-	clientID t.ClientID,
+	clientID tt.ClientID,
 	hasher crypto.Hash,
 	l logging.Logger,
 ) *DummyClient {
@@ -106,7 +107,12 @@ func (dc *DummyClient) Connect(ctx context.Context, membership map[t.NodeID]stri
 func (dc *DummyClient) SubmitRequest(data []byte) error {
 
 	// Create new request message.
-	reqMsg := events.ClientRequest(dc.ownID, dc.nextReqNo, data)
+	reqMsg := &requestpbtypes.Request{
+		ClientId: dc.ownID,
+		ReqNo:    dc.nextReqNo,
+		Type:     0,
+		Data:     data,
+	}
 	dc.nextReqNo++
 
 	// Declare variables keeping track of failed send attempts.
@@ -120,7 +126,7 @@ func (dc *DummyClient) SubmitRequest(data []byte) error {
 	// Send the request to all nodes.
 	for nID, client := range dc.clients {
 		go func(nID t.NodeID, client requestreceiver.RequestReceiver_ListenClient) {
-			if err := client.Send(reqMsg); err != nil {
+			if err := client.Send(reqMsg.Pb()); err != nil {
 				lock.Lock()
 				// If sending the request to a node fails, record that node's ID.
 				sendFailures = append(sendFailures, nID)

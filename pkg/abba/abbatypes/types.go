@@ -1,6 +1,8 @@
 package abbatypes
 
-import t "github.com/filecoin-project/mir/pkg/types"
+import (
+	"github.com/filecoin-project/mir/pkg/serializing"
+)
 
 type RoundNumber uint64
 
@@ -9,5 +11,5 @@ func (r RoundNumber) Pb() uint64 {
 }
 
 func (r RoundNumber) Bytes() []byte {
-	return t.Uint64ToBytes(uint64(r))
+	return serializing.Uint64ToBytes(uint64(r))
 }

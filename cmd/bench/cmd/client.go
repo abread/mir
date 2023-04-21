@@ -21,6 +21,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/membership"
 	"github.com/filecoin-project/mir/pkg/rrclient"
+	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -56,13 +57,13 @@ type mirClient interface {
 	Disconnect()
 }
 
-type mirClientFactory func(clientID t.ClientID, hasher crypto.Hash, logger logging.Logger) mirClient
+type mirClientFactory func(clientID tt.ClientID, hasher crypto.Hash, logger logging.Logger) mirClient
 
 var clientFactories = map[string]mirClientFactory{
-	"dummy": func(clientID t.ClientID, hasher crypto.Hash, logger logging.Logger) mirClient {
+	"dummy": func(clientID tt.ClientID, hasher crypto.Hash, logger logging.Logger) mirClient {
 		return dummyclient.NewDummyClient(clientID, hasher, logger)
 	},
-	"rr": func(clientID t.ClientID, hasher crypto.Hash, logger logging.Logger) mirClient {
+	"rr": func(clientID tt.ClientID, hasher crypto.Hash, logger logging.Logger) mirClient {
 		return rrclient.NewRoundRobinClient(clientID, hasher, logger)
 	},
 }
@@ -104,7 +105,7 @@ func runClient(ctx context.Context) error {
 	ctx, stop := context.WithCancel(ctx)
 
 	client := clientFactories[clientType](
-		t.ClientID(id),
+		tt.ClientID(id),
 		crypto.SHA256,
 		logger,
 	)

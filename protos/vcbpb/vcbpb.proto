@@ -36,7 +36,7 @@ message Deliver {
   option (mir.event) = true;
 
   repeated requestpb.Request txs             = 1;
-  repeated bytes             tx_ids          = 2 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.TxID"];
+  repeated bytes             tx_ids          = 2 [(mir.type) = "github.com/filecoin-project/mir/pkg/trantor/types.TxID"];
   bytes                      signature       = 3 [(mir.type) = "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes.FullSig"];
 
   string src_module = 4 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.ModuleID"];

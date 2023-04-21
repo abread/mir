@@ -7,7 +7,8 @@ import (
 	types "github.com/filecoin-project/mir/pkg/pb/requestpb/types"
 	vcbpb "github.com/filecoin-project/mir/pkg/pb/vcbpb"
 	tctypes "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
-	types2 "github.com/filecoin-project/mir/pkg/types"
+	types2 "github.com/filecoin-project/mir/pkg/trantor/types"
+	types3 "github.com/filecoin-project/mir/pkg/types"
 	reflectutil "github.com/filecoin-project/mir/pkg/util/reflectutil"
 )
 
@@ -116,7 +117,7 @@ type Deliver struct {
 	Txs       []*types.Request
 	TxIds     []types2.TxID
 	Signature tctypes.FullSig
-	SrcModule types2.ModuleID
+	SrcModule types3.ModuleID
 }
 
 func DeliverFromPb(pb *vcbpb.Deliver) *Deliver {
@@ -128,7 +129,7 @@ func DeliverFromPb(pb *vcbpb.Deliver) *Deliver {
 			return (types2.TxID)(t)
 		}),
 		Signature: (tctypes.FullSig)(pb.Signature),
-		SrcModule: (types2.ModuleID)(pb.SrcModule),
+		SrcModule: (types3.ModuleID)(pb.SrcModule),
 	}
 }
 

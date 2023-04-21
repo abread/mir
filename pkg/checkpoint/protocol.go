@@ -6,6 +6,19 @@ import (
 	"bytes"
 	"time"
 
+	"github.com/filecoin-project/mir/pkg/pb/apppb"
+	checkpointpbmsgs "github.com/filecoin-project/mir/pkg/pb/checkpointpb/msgs"
+	"github.com/filecoin-project/mir/pkg/pb/cryptopb"
+	cryptopbevents "github.com/filecoin-project/mir/pkg/pb/cryptopb/events"
+	cryptopbtypes "github.com/filecoin-project/mir/pkg/pb/cryptopb/types"
+	eventpbevents "github.com/filecoin-project/mir/pkg/pb/eventpb/events"
+	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
+	"github.com/filecoin-project/mir/pkg/pb/transportpb"
+	transportpbevents "github.com/filecoin-project/mir/pkg/pb/transportpb/events"
+	"github.com/filecoin-project/mir/pkg/timer/types"
+	tt "github.com/filecoin-project/mir/pkg/trantor/types"
+	"github.com/filecoin-project/mir/pkg/util/sliceutil"
+
 	"github.com/pkg/errors"
 
 	"github.com/filecoin-project/mir/pkg/checkpoint/protobufs"
@@ -15,15 +28,17 @@ import (
 	"github.com/filecoin-project/mir/pkg/pb/batchfetcherpb"
 	"github.com/filecoin-project/mir/pkg/pb/checkpointpb"
 	"github.com/filecoin-project/mir/pkg/pb/commonpb"
+	commonpbtypes "github.com/filecoin-project/mir/pkg/pb/commonpb/types"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
+	"github.com/filecoin-project/mir/pkg/pb/hasherpb"
+	hasherevt "github.com/filecoin-project/mir/pkg/pb/hasherpb/events"
 	"github.com/filecoin-project/mir/pkg/pb/messagepb"
-	"github.com/filecoin-project/mir/pkg/serializing"
 	t "github.com/filecoin-project/mir/pkg/types"
 	"github.com/filecoin-project/mir/pkg/util/maputil"
 )
 
 const (
-	DefaultResendPeriod = t.TimeDuration(time.Second)
+	DefaultResendPeriod = types.Duration(time.Second)
 )
 
 // Protocol represents the state associated with a single instance of the checkpoint protocol
@@ -40,14 +55,14 @@ type Protocol struct {
 
 	// Epoch to which this checkpoint belongs.
 	// It is always the epoch the checkpoint's associated sequence number (seqNr) is part of.
-	epoch t.EpochNr
+	epoch tt.EpochNr
 
 	// Sequence number associated with this checkpoint protocol instance.
 	// This checkpoint encompasses seqNr sequence numbers,
 	// i.e., seqNr is the first sequence number *not* encompassed by this checkpoint.
 	// One can imagine that the checkpoint represents the state of the system just before seqNr,
 	// i.e., "between" seqNr-1 and seqNr.
-	seqNr t.SeqNr
+	seqNr tt.SeqNr
 
 	// The IDs of nodes to execute this instance of the checkpoint protocol.
 	// Note that it is the membership of epoch e-1 that constructs the membership for epoch e.
@@ -70,7 +85,7 @@ type Protocol struct {
 	pendingMessages map[t.NodeID]*checkpointpb.Checkpoint
 
 	// Time interval for repeated retransmission of checkpoint messages.
-	resendPeriod t.TimeDuration
+	resendPeriod types.Duration
 
 	// Flag ensuring that the stable checkpoint is only announced once.
 	// Set to true when announcing a stable checkpoint for the first time.
@@ -85,15 +100,15 @@ func NewProtocol(
 	membership map[t.NodeID]t.NodeAddress,
 	epochConfig *commonpb.EpochConfig,
 	leaderPolicyData []byte,
-	resendPeriod t.TimeDuration,
+	resendPeriod types.Duration,
 	logger logging.Logger,
 ) *Protocol {
 	return &Protocol{
 		Logger:          logger,
 		moduleConfig:    moduleConfig,
 		ownID:           ownID,
-		seqNr:           t.SeqNr(epochConfig.FirstSn),
-		epoch:           t.EpochNr(epochConfig.EpochNr),
+		seqNr:           tt.SeqNr(epochConfig.FirstSn),
+		epoch:           tt.EpochNr(epochConfig.EpochNr),
 		resendPeriod:    resendPeriod,
 		announced:       false,
 		signatures:      make(map[t.NodeID][]byte),
@@ -122,14 +137,29 @@ func (p *Protocol) applyEvent(event *eventpb.Event) (*events.EventList, error) {
 	switch e := event.Type.(type) {
 	case *eventpb.Event_Init:
 		return events.EmptyList(), nil // Nothing to initialize.
-	case *eventpb.Event_AppSnapshot:
-		return p.applyAppSnapshot(e.AppSnapshot)
-	case *eventpb.Event_HashResult:
-		return p.applyHashResult(e.HashResult)
-	case *eventpb.Event_SignResult:
-		return p.applySignResult(e.SignResult)
-	case *eventpb.Event_NodeSigsVerified:
-		return p.applyNodeSigsVerified(e.NodeSigsVerified)
+	case *eventpb.Event_App:
+		switch e := e.App.Type.(type) {
+		case *apppb.Event_Snapshot:
+			return p.applyAppSnapshot(e.Snapshot)
+		default:
+			return nil, errors.Errorf("unexpected app event type: %T", e)
+		}
+	case *eventpb.Event_Hasher:
+		switch e := e.Hasher.Type.(type) {
+		case *hasherpb.Event_Result:
+			return p.applyHashResult(e.Result)
+		default:
+			return nil, errors.Errorf("unexpected hasher event type: %T", e)
+		}
+	case *eventpb.Event_Crypto:
+		switch e := e.Crypto.Type.(type) {
+		case *cryptopb.Event_SignResult:
+			return p.applySignResult(e.SignResult)
+		case *cryptopb.Event_SigsVerified:
+			return p.applyNodeSigsVerified(e.SigsVerified)
+		default:
+			return nil, errors.Errorf("unexpected crypto event type: %T", e)
+		}
 	case *eventpb.Event_BatchFetcher:
 		switch e := e.BatchFetcher.Type.(type) {
 		case *batchfetcherpb.Event_ClientProgress:
@@ -137,24 +167,29 @@ func (p *Protocol) applyEvent(event *eventpb.Event) (*events.EventList, error) {
 		default:
 			return nil, errors.Errorf("unexpected batch fetcher event type: %T", e)
 		}
-	case *eventpb.Event_MessageReceived:
-		switch msg := e.MessageReceived.Msg.Type.(type) {
-		case *messagepb.Message_Checkpoint:
-			switch m := msg.Checkpoint.Type.(type) {
-			case *checkpointpb.Message_Checkpoint:
-				return p.applyMessage(m.Checkpoint, t.NodeID(e.MessageReceived.From)), nil
+	case *eventpb.Event_Transport:
+		switch e := e.Transport.Type.(type) {
+		case *transportpb.Event_MessageReceived:
+			switch msg := e.MessageReceived.Msg.Type.(type) {
+			case *messagepb.Message_Checkpoint:
+				switch m := msg.Checkpoint.Type.(type) {
+				case *checkpointpb.Message_Checkpoint:
+					return p.applyMessage(m.Checkpoint, t.NodeID(e.MessageReceived.From)), nil
+				default:
+					return nil, errors.Errorf("unexpected checkpoint message type: %T", m)
+				}
 			default:
-				return nil, errors.Errorf("unexpected checkpoint message type: %T", m)
+				return nil, errors.Errorf("unexpected message type: %T", e.MessageReceived.Msg.Type)
 			}
 		default:
-			return nil, errors.Errorf("unexpected message type: %T", e.MessageReceived.Msg.Type)
+			return nil, errors.Errorf("unexpected transport event type: %T", e)
 		}
 	default:
 		return nil, errors.Errorf("unknown event type: %T", e)
 	}
 }
 
-func (p *Protocol) applyAppSnapshot(appSnapshot *eventpb.AppSnapshot) (*events.EventList, error) {
+func (p *Protocol) applyAppSnapshot(appSnapshot *apppb.Snapshot) (*events.EventList, error) {
 
 	// Treat nil data as an empty byte slice.
 	var appData []byte
@@ -194,28 +229,29 @@ func (p *Protocol) snapshotReady() bool {
 func (p *Protocol) processStateSnapshot() (*events.EventList, error) {
 
 	// Initiate computing the hash of the snapshot.
-	return events.ListOf(events.HashRequest(
+	return events.ListOf(hasherevt.Request(
 		p.moduleConfig.Hasher,
-		[][][]byte{serializing.SnapshotForHash(p.stateSnapshot)},
+		[]*commonpbtypes.HashData{serializeSnapshotForHash(p.stateSnapshot)},
 		protobufs.HashOrigin(p.moduleConfig.Self),
-	)), nil
+	).Pb()), nil
 }
 
-func (p *Protocol) applyHashResult(result *eventpb.HashResult) (*events.EventList, error) {
+func (p *Protocol) applyHashResult(result *hasherpb.Result) (*events.EventList, error) {
 
 	// Save the received snapshot hash
 	p.stateSnapshotHash = result.Digests[0]
 
 	// Request signature
-	sigData := serializing.CheckpointForSig(p.epoch, p.seqNr, p.stateSnapshotHash)
-	return events.ListOf(events.SignRequest(
+	sigData := serializeCheckpointForSig(p.epoch, p.seqNr, p.stateSnapshotHash)
+
+	return events.ListOf(cryptopbevents.SignRequest(
 		p.moduleConfig.Crypto,
 		sigData,
 		protobufs.SignOrigin(p.moduleConfig.Self),
-	)), nil
+	).Pb()), nil
 }
 
-func (p *Protocol) applySignResult(result *eventpb.SignResult) (*events.EventList, error) {
+func (p *Protocol) applySignResult(result *cryptopb.SignResult) (*events.EventList, error) {
 
 	eventsOut := events.EmptyList()
 
@@ -230,12 +266,12 @@ func (p *Protocol) applySignResult(result *eventpb.SignResult) (*events.EventLis
 	}
 
 	// Send a checkpoint message to all nodes after persisting checkpoint to the WAL.
-	chkpMessage := protobufs.CheckpointMessage(p.moduleConfig.Self, p.epoch, p.seqNr, p.stateSnapshotHash, result.Signature)
-	eventsOut.PushBack(events.TimerRepeat(
+	chkpMessage := checkpointpbmsgs.Checkpoint(p.moduleConfig.Self, p.epoch, p.seqNr, p.stateSnapshotHash, result.Signature)
+	eventsOut.PushBack(eventpbevents.TimerRepeat(
 		"timer",
-		[]*eventpb.Event{events.SendMessage(p.moduleConfig.Net, chkpMessage, p.membership)},
+		[]*eventpbtypes.Event{transportpbevents.SendMessage(p.moduleConfig.Net, chkpMessage, p.membership)},
 		p.resendPeriod,
-		t.RetentionIndex(p.epoch)),
+		tt.RetentionIndex(p.epoch)).Pb(),
 	)
 
 	p.Log(logging.LevelDebug, "Sending checkpoint message",
@@ -258,10 +294,15 @@ func (p *Protocol) applySignResult(result *eventpb.SignResult) (*events.EventLis
 func (p *Protocol) applyMessage(msg *checkpointpb.Checkpoint, source t.NodeID) *events.EventList {
 	eventsOut := events.EmptyList()
 
+	// check if source is part of the membership
+	if !sliceutil.Contains(p.membership, source) {
+		p.Logger.Log(logging.LevelWarn, "sender %s is not a member.\n", source)
+		return events.EmptyList()
+	}
 	// Notify the protocol about the progress of the source node.
 	// If no progress is made for a configured number of epochs,
 	// the node is considered to be a straggler and is sent a stable checkpoint to catch up.
-	eventsOut.PushBack(protobufs.EpochProgressEvent(p.moduleConfig.Ord, source, t.EpochNr(msg.Epoch)))
+	eventsOut.PushBack(protobufs.EpochProgressEvent(p.moduleConfig.Ord, source, tt.EpochNr(msg.Epoch)))
 
 	// If checkpoint is already stable, ignore message.
 	if p.stable() {
@@ -289,19 +330,19 @@ func (p *Protocol) applyMessage(msg *checkpointpb.Checkpoint, source t.NodeID) *
 	p.signatures[source] = msg.Signature
 
 	// Verify signature of the sender.
-	sigData := serializing.CheckpointForSig(p.epoch, p.seqNr, p.stateSnapshotHash)
-	eventsOut.PushBack(events.VerifyNodeSigs(
+	sigData := serializeCheckpointForSig(p.epoch, p.seqNr, p.stateSnapshotHash)
+	eventsOut.PushBack(cryptopbevents.VerifySigs(
 		p.moduleConfig.Crypto,
-		[][][]byte{sigData},
+		[]*cryptopbtypes.SignedData{sigData},
 		[][]byte{msg.Signature},
-		[]t.NodeID{source},
 		protobufs.SigVerOrigin(p.moduleConfig.Self),
-	))
+		[]t.NodeID{source},
+	).Pb())
 
 	return eventsOut
 }
 
-func (p *Protocol) applyNodeSigsVerified(result *eventpb.NodeSigsVerified) (*events.EventList, error) {
+func (p *Protocol) applyNodeSigsVerified(result *cryptopb.SigsVerified) (*events.EventList, error) {
 
 	// A checkpoint only has one signature and thus each slice of the result only contains one element.
 	sourceNode := t.NodeID(result.NodeIds[0])

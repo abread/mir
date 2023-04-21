@@ -32,6 +32,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/testsim"
 	"github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 	"github.com/filecoin-project/mir/pkg/timer"
+	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 	"github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -239,7 +240,7 @@ type countingApp struct {
 	deliveredCount int
 	firstSrcModule types.ModuleID
 	firstData      []*requestpbtypes.Request
-	firstTxIDs     []types.TxID
+	firstTxIDs     []tt.TxID
 	firstSignature tctypes.FullSig
 }
 
@@ -271,13 +272,13 @@ func newCountingApp(isLeader bool) *countingApp {
 			return nil
 		})
 
-		mpdsl.UponTransactionIDsResponse(m, func(txIDs []types.TxID, _ctx *struct{}) error {
+		mpdsl.UponTransactionIDsResponse(m, func(txIDs []tt.TxID, _ctx *struct{}) error {
 			vcbdsl.InputValue(m, "vcb", txs)
 			return nil
 		})
 	}
 
-	vcbdsl.UponDeliver(m, func(data []*requestpbtypes.Request, txIDs []types.TxID, signature tctypes.FullSig, srcModule types.ModuleID) error {
+	vcbdsl.UponDeliver(m, func(data []*requestpbtypes.Request, txIDs []tt.TxID, signature tctypes.FullSig, srcModule types.ModuleID) error {
 		if app.deliveredCount == 0 {
 			app.firstSrcModule = srcModule
 			app.firstData = data

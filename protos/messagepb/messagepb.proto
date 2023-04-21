@@ -8,12 +8,14 @@ syntax = "proto3";
 
 package messagepb;
 
+option go_package = "github.com/filecoin-project/mir/pkg/pb/messagepb";
+
 import "isspb/isspb.proto";
 import "bcbpb/bcbpb.proto";
 import "availabilitypb/mscpb/mscpb.proto";
 import "pingpongpb/pingpongpb.proto";
 import "checkpointpb/checkpointpb.proto";
-import "ordererspb/ordererspb.proto";
+import "ordererpb/ordererpb.proto";
 import "vcbpb/vcbpb.proto";
 import "abbapb/abbapb.proto";
 import "aleapb/aleapb.proto";
@@ -22,8 +24,6 @@ import "reliablenetpb/messages/messages.proto";
 
 import "mir/codegen_extensions.proto";
 import "net/codegen_extensions.proto";
-
-option go_package = "github.com/filecoin-project/mir/pkg/pb/messagepb";
 
 message Message {
   option (net.message_root) = true;
@@ -38,7 +38,7 @@ message Message {
     availabilitypb.mscpb.Message multisig_collector = 4;
     pingpongpb.Message           pingpong           = 5;
     checkpointpb.Message         checkpoint         = 6;
-    ordererspb.SBInstanceMessage  sb_message         = 7;
+    ordererpb.Message            orderer            = 7;
     vcbpb.Message                vcb                = 8;
     abbapb.Message               abba               = 9;
     aleapb.Message               alea               = 10;

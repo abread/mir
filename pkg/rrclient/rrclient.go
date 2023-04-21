@@ -9,9 +9,10 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/logging"
+	requestpbtypes "github.com/filecoin-project/mir/pkg/pb/requestpb/types"
 	"github.com/filecoin-project/mir/pkg/requestreceiver"
+	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 	"github.com/filecoin-project/mir/pkg/util/maputil"
 )
@@ -24,9 +25,9 @@ const (
 // TODO: Update the comments around crypto, hasher, and request signing.
 
 type RoundRobinClient struct {
-	ownID     t.ClientID
+	ownID     tt.ClientID
 	hasher    crypto.Hash
-	nextReqNo t.ReqNo
+	nextReqNo tt.ReqNo
 	conns     map[t.NodeID]*grpc.ClientConn
 	clients   map[t.NodeID]requestreceiver.RequestReceiver_ListenClient
 	clientIDs []t.NodeID
@@ -36,7 +37,7 @@ type RoundRobinClient struct {
 }
 
 func NewRoundRobinClient(
-	clientID t.ClientID,
+	clientID tt.ClientID,
 	hasher crypto.Hash,
 	l logging.Logger,
 ) *RoundRobinClient {
@@ -106,14 +107,19 @@ func (rrc *RoundRobinClient) Connect(ctx context.Context, membership map[t.NodeI
 func (rrc *RoundRobinClient) SubmitRequest(data []byte) error {
 
 	// Create new request message.
-	reqMsg := events.ClientRequest(rrc.ownID, rrc.nextReqNo, data)
+	reqMsg := &requestpbtypes.Request{
+		ClientId: rrc.ownID,
+		ReqNo:    rrc.nextReqNo,
+		Type:     0,
+		Data:     data,
+	}
 	rrc.nextReqNo++
 
 	nID := rrc.clientIDs[rrc.nextClientIdx]
 	client := rrc.clients[nID]
 	rrc.nextClientIdx = (rrc.nextClientIdx + 1) % len(rrc.clients)
 
-	if err := client.Send(reqMsg); err != nil {
+	if err := client.Send(reqMsg.Pb()); err != nil {
 		return fmt.Errorf("failed sending request to node (%v): %w", nID, err)
 	}
 

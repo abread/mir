@@ -3,11 +3,15 @@ package orderers
 import (
 	"bytes"
 
-	"github.com/filecoin-project/mir/pkg/iss/config"
-	"github.com/filecoin-project/mir/pkg/pb/eventpb"
-
 	"github.com/filecoin-project/mir/pkg/events"
-	"github.com/filecoin-project/mir/pkg/pb/ordererspbftpb"
+	"github.com/filecoin-project/mir/pkg/iss/config"
+	types2 "github.com/filecoin-project/mir/pkg/orderers/types"
+	eventpbevents "github.com/filecoin-project/mir/pkg/pb/eventpb/events"
+	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
+	isspbevents "github.com/filecoin-project/mir/pkg/pb/isspb/events"
+	pbftpbtypes "github.com/filecoin-project/mir/pkg/pb/pbftpb/types"
+	"github.com/filecoin-project/mir/pkg/timer/types"
+	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -16,22 +20,22 @@ import (
 type pbftSlot struct {
 
 	// The received preprepare message.
-	Preprepare *ordererspbftpb.Preprepare
+	Preprepare *pbftpbtypes.Preprepare
 
 	// Prepare messages received.
 	// A nil entry signifies that an invalid message has been discarded.
-	Prepares map[t.NodeID]*ordererspbftpb.Prepare
+	Prepares map[t.NodeID]*pbftpbtypes.Prepare
 
 	// Valid prepare messages received.
 	// Serves mostly as an optimization to not re-validate already validated messages.
-	ValidPrepares []*ordererspbftpb.Prepare
+	ValidPrepares []*pbftpbtypes.Prepare
 
 	// Commit messages received.
-	Commits map[t.NodeID]*ordererspbftpb.Commit
+	Commits map[t.NodeID]*pbftpbtypes.Commit
 
 	// Valid commit messages received.
 	// Serves mostly as an optimization to not re-validate already validated messages.
-	ValidCommits []*ordererspbftpb.Commit
+	ValidCommits []*pbftpbtypes.Commit
 
 	// The digest of the proposed (preprepared) certificate
 	Digest []byte
@@ -53,10 +57,10 @@ type pbftSlot struct {
 func newPbftSlot(numNodes int) *pbftSlot {
 	return &pbftSlot{
 		Preprepare:    nil,
-		Prepares:      make(map[t.NodeID]*ordererspbftpb.Prepare),
-		ValidPrepares: make([]*ordererspbftpb.Prepare, 0),
-		Commits:       make(map[t.NodeID]*ordererspbftpb.Commit),
-		ValidCommits:  make([]*ordererspbftpb.Commit, 0),
+		Prepares:      make(map[t.NodeID]*pbftpbtypes.Prepare),
+		ValidPrepares: make([]*pbftpbtypes.Prepare, 0),
+		Commits:       make(map[t.NodeID]*pbftpbtypes.Commit),
+		ValidCommits:  make([]*pbftpbtypes.Commit, 0),
 		Digest:        nil,
 		Preprepared:   false,
 		Prepared:      false,
@@ -68,7 +72,7 @@ func newPbftSlot(numNodes int) *pbftSlot {
 // populateFromPrevious carries over state from a pbftSlot used in the previous view to this pbftSlot,
 // based on the state of the previous slot.
 // This is used during view change, when the protocol initializes a new PBFT view.
-func (slot *pbftSlot) populateFromPrevious(prevSlot *pbftSlot, view t.PBFTViewNr) {
+func (slot *pbftSlot) populateFromPrevious(prevSlot *pbftSlot, view types2.ViewNr) {
 
 	// If the slot has already committed a certificate, just copy over the result.
 	if prevSlot.Committed {
@@ -81,13 +85,13 @@ func (slot *pbftSlot) populateFromPrevious(prevSlot *pbftSlot, view t.PBFTViewNr
 // advanceSlotState checks whether the state of the pbftSlot can be advanced.
 // If it can, advanceSlotState updates the state of the pbftSlot and returns a list of Events that result from it.
 // Requires the PBFT instance as an argument to use it to generate the proper events.
-func (slot *pbftSlot) advanceState(pbft *Orderer, sn t.SeqNr) *events.EventList {
+func (slot *pbftSlot) advanceState(pbft *Orderer, sn tt.SeqNr) *events.EventList {
 	eventsOut := events.EmptyList()
 
 	// If the slot just became prepared, send the Commit message.
 	if !slot.Prepared && slot.checkPrepared() {
 		slot.Prepared = true
-		eventsOut.PushBackList(pbft.sendCommit(pbftCommitMsg(sn, pbft.view, slot.Digest)))
+		eventsOut.PushBackList(pbft.sendCommit(sn, pbft.view, slot.Digest))
 	}
 
 	// If the slot just became committed, reset SN timeout and deliver the certificate.
@@ -104,14 +108,14 @@ func (slot *pbftSlot) advanceState(pbft *Orderer, sn t.SeqNr) *events.EventList 
 		// It will be ignored if any of those values change by the time the timer fires
 		// or if a quorum of nodes confirms having committed all certificates.
 		if !pbft.segmentCheckpoint.Stable(len(pbft.segment.Membership)) {
-			eventsOut.PushBack(events.TimerDelay(
+			eventsOut.PushBack(eventpbevents.TimerDelay(
 				pbft.moduleConfig.Timer,
-				[]*eventpb.Event{OrdererEvent(pbft.moduleConfig.Self,
+				[]*eventpbtypes.Event{eventpbtypes.EventFromPb(OrdererEvent(pbft.moduleConfig.Self,
 					PbftViewChangeSNTimeout(
 						pbft.view,
-						pbft.numCommitted(pbft.view)))},
-				t.TimeDuration(pbft.config.ViewChangeSNTimeout),
-			))
+						pbft.numCommitted(pbft.view))))},
+				types.Duration(pbft.config.ViewChangeSNTimeout),
+			).Pb())
 		}
 
 		// If all certificates have been committed (i.e. this is the last certificate to commit),
@@ -123,18 +127,14 @@ func (slot *pbftSlot) advanceState(pbft *Orderer, sn t.SeqNr) *events.EventList 
 		}
 
 		// Deliver availability certificate (will be verified by ISS)
-		eventsOut.PushBack(&eventpb.Event{
-			DestModule: pbft.moduleConfig.Ord.Pb(),
-			Type: &eventpb.Event_Iss{
-				Iss: SBDeliverEvent(
-					sn,
-					slot.Preprepare.Data,
-					slot.Preprepare.Aborted,
-					pbft.segment.Leader,
-					pbft.moduleConfig.Self,
-				),
-			},
-		})
+		eventsOut.PushBack(isspbevents.SBDeliver(
+			pbft.moduleConfig.Ord,
+			sn,
+			slot.Preprepare.Data,
+			slot.Preprepare.Aborted,
+			pbft.segment.Leader,
+			pbft.moduleConfig.Self,
+		).Pb())
 	}
 	return eventsOut
 }
@@ -211,7 +211,7 @@ func (slot *pbftSlot) checkCommitted() bool {
 	return len(slot.ValidCommits) >= config.StrongQuorum(slot.numNodes)
 }
 
-func (slot *pbftSlot) getPreprepare(digest []byte) *ordererspbftpb.Preprepare {
+func (slot *pbftSlot) getPreprepare(digest []byte) *pbftpbtypes.Preprepare {
 	if slot.Preprepared && bytes.Equal(digest, slot.Digest) {
 		return slot.Preprepare
 	}
@@ -220,7 +220,7 @@ func (slot *pbftSlot) getPreprepare(digest []byte) *ordererspbftpb.Preprepare {
 }
 
 // Note: The Preprepare's view must match the view this slot is assigned to!
-func (slot *pbftSlot) catchUp(preprepare *ordererspbftpb.Preprepare, digest []byte) {
+func (slot *pbftSlot) catchUp(preprepare *pbftpbtypes.Preprepare, digest []byte) {
 	slot.Preprepare = preprepare
 	slot.Digest = digest
 	slot.Preprepared = true

@@ -11,6 +11,8 @@ import (
 	abbadsl "github.com/filecoin-project/mir/pkg/pb/abbapb/dsl"
 	abbapbevents "github.com/filecoin-project/mir/pkg/pb/abbapb/events"
 	abbapbmsgs "github.com/filecoin-project/mir/pkg/pb/abbapb/msgs"
+	commonpbtypes "github.com/filecoin-project/mir/pkg/pb/commonpb/types"
+	hasherpbdsl "github.com/filecoin-project/mir/pkg/pb/hasherpb/dsl"
 	rnetdsl "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/dsl"
 	threshDsl "github.com/filecoin-project/mir/pkg/pb/threshcryptopb/dsl"
 	"github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
@@ -238,7 +240,9 @@ func New(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging
 		}
 
 		if state.coinSig.FullSig() != nil && !state.hashingCoin {
-			dsl.HashOneMessage[struct{}](m, mc.Hasher, [][]byte{state.coinSig.FullSig()}, nil)
+			hasherpbdsl.RequestOne[struct{}](m, mc.Hasher, &commonpbtypes.HashData{
+				Data: [][]byte{state.coinSig.FullSig()},
+			}, nil)
 			state.hashingCoin = true
 		}
 
@@ -246,7 +250,7 @@ func New(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging
 	})
 
 	// still in 9. sample coin
-	dsl.UponOneHashResult(m, func(hash []byte, _ctx *struct{}) error {
+	hasherpbdsl.UponResultOne(m, func(hash []byte, _ctx *struct{}) error {
 		if state.phase != phaseTossingCoin {
 			return fmt.Errorf("impossible state reached: coin being tossed but round is already over")
 		}

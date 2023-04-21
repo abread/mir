@@ -1,11 +1,12 @@
 package mempoolpbdsl
 
 import (
+	types4 "github.com/filecoin-project/mir/pkg/availability/multisigcollector/types"
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
 	types1 "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 	types "github.com/filecoin-project/mir/pkg/pb/mempoolpb/types"
 	types3 "github.com/filecoin-project/mir/pkg/pb/requestpb/types"
-	types2 "github.com/filecoin-project/mir/pkg/types"
+	types2 "github.com/filecoin-project/mir/pkg/trantor/types"
 )
 
 // Module-specific dsl functions for processing events.
@@ -96,7 +97,7 @@ func UponRequestBatchID(m dsl.Module, handler func(txIds []types2.TxID, origin *
 	})
 }
 
-func UponBatchIDResponse[C any](m dsl.Module, handler func(batchId types2.BatchID, context *C) error) {
+func UponBatchIDResponse[C any](m dsl.Module, handler func(batchId types4.BatchID, context *C) error) {
 	UponEvent[*types.Event_BatchIdResponse](m, func(ev *types.BatchIDResponse) error {
 		originWrapper, ok := ev.Origin.Type.(*types.RequestBatchIDOrigin_Dsl)
 		if !ok {
@@ -110,6 +111,12 @@ func UponBatchIDResponse[C any](m dsl.Module, handler func(batchId types2.BatchI
 		}
 
 		return handler(ev.BatchId, context)
+	})
+}
+
+func UponNewRequests(m dsl.Module, handler func(requests []*types3.Request) error) {
+	UponEvent[*types.Event_NewRequests](m, func(ev *types.NewRequests) error {
+		return handler(ev.Requests)
 	})
 }
 

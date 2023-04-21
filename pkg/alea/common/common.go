@@ -3,10 +3,10 @@ package common
 import (
 	"fmt"
 
+	msct "github.com/filecoin-project/mir/pkg/availability/multisigcollector/types"
 	commontypes "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
-	t "github.com/filecoin-project/mir/pkg/types"
 )
 
-func FormatAleaBatchID(slot *commontypes.Slot) t.BatchID {
-	return t.BatchID(fmt.Sprintf("alea-%d:%d", slot.QueueIdx, slot.QueueSlot))
+func FormatAleaBatchID(slot *commontypes.Slot) msct.BatchID {
+	return msct.BatchID(fmt.Sprintf("alea-%d:%d", slot.QueueIdx, slot.QueueSlot))
 }

@@ -14,12 +14,23 @@ import (
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/messagebuffer"
 	"github.com/filecoin-project/mir/pkg/modules"
+	types2 "github.com/filecoin-project/mir/pkg/orderers/types"
 	"github.com/filecoin-project/mir/pkg/pb/availabilitypb"
+	"github.com/filecoin-project/mir/pkg/pb/cryptopb"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
+	eventpbevents "github.com/filecoin-project/mir/pkg/pb/eventpb/events"
+	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
+	"github.com/filecoin-project/mir/pkg/pb/hasherpb"
 	"github.com/filecoin-project/mir/pkg/pb/messagepb"
-	"github.com/filecoin-project/mir/pkg/pb/ordererspb"
-	"github.com/filecoin-project/mir/pkg/pb/ordererspbftpb"
+	"github.com/filecoin-project/mir/pkg/pb/ordererpb"
+	ordererpbtypes "github.com/filecoin-project/mir/pkg/pb/ordererpb/types"
+	"github.com/filecoin-project/mir/pkg/pb/pbftpb"
+	pbftpbtypes "github.com/filecoin-project/mir/pkg/pb/pbftpb/types"
+	"github.com/filecoin-project/mir/pkg/pb/transportpb"
+	"github.com/filecoin-project/mir/pkg/timer/types"
+	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 	t "github.com/filecoin-project/mir/pkg/types"
+	"github.com/filecoin-project/mir/pkg/util/sliceutil"
 )
 
 // ============================================================
@@ -63,7 +74,7 @@ type Orderer struct {
 
 	// For each view, slots contains one pbftSlot per sequence number this Orderer is responsible for.
 	// Each slot tracks the state of the agreement protocol for one sequence number.
-	slots map[t.PBFTViewNr]map[t.SeqNr]*pbftSlot
+	slots map[types2.ViewNr]map[tt.SeqNr]*pbftSlot
 
 	// Tracks the state of the segment-local checkpoint.
 	segmentCheckpoint *pbftSegmentChkp
@@ -72,7 +83,7 @@ type Orderer struct {
 	logger logging.Logger
 
 	// PBFT view
-	view t.PBFTViewNr
+	view types2.ViewNr
 
 	// Flag indicating whether this node is currently performing a view change.
 	// It is set on sending the ViewChange message and cleared on accepting a new view.
@@ -81,7 +92,7 @@ type Orderer struct {
 	// For each view transition, stores the state of the corresponding PBFT view change sub-protocol.
 	// The map itself is allocated on creation of the pbftInstance, but the entries are initialized lazily,
 	// only when needed (when the node initiates a view change).
-	viewChangeStates map[t.PBFTViewNr]*pbftViewChangeState
+	viewChangeStates map[types2.ViewNr]*pbftViewChangeState
 
 	// Contains the application-specific code for validating incoming proposals.
 	externalValidator ValidityChecker
@@ -113,7 +124,7 @@ func NewOrdererModule(
 		moduleConfig:      moduleConfig,
 		config:            config,
 		externalValidator: externalValidator,
-		slots:             make(map[t.PBFTViewNr]map[t.SeqNr]*pbftSlot),
+		slots:             make(map[types2.ViewNr]map[tt.SeqNr]*pbftSlot),
 		segmentCheckpoint: newPbftSegmentChkp(),
 		proposal: pbftProposalState{
 			proposalsMade:     0,
@@ -130,11 +141,11 @@ func NewOrdererModule(
 		logger:           logger,
 		view:             0,
 		inViewChange:     false,
-		viewChangeStates: make(map[t.PBFTViewNr]*pbftViewChangeState),
+		viewChangeStates: make(map[types2.ViewNr]*pbftViewChangeState),
 	}
 }
 
-func newOrdererConfig(issParams *issconfig.ModuleParams, membership []t.NodeID, epochNr t.EpochNr) *PBFTConfig {
+func newOrdererConfig(issParams *issconfig.ModuleParams, membership []t.NodeID, epochNr tt.EpochNr) *PBFTConfig {
 
 	// Return a new PBFT configuration with selected values from the ISS configuration.
 	return &PBFTConfig{
@@ -156,12 +167,22 @@ func (orderer *Orderer) ApplyEvent(event *eventpb.Event) (*events.EventList, err
 	switch ev := event.Type.(type) {
 	case *eventpb.Event_Init:
 		return orderer.applyInit(), nil
-	case *eventpb.Event_SignResult: // TODO Remove SBInstanceEvent_SignResult
-		return orderer.applySignResult(ev.SignResult), nil
-	case *eventpb.Event_MessageReceived:
-		return orderer.applyMessageReceived(ev.MessageReceived), nil
-	case *eventpb.Event_NodeSigsVerified:
-		return orderer.applyNodeSigsVerified(ev.NodeSigsVerified), nil
+	case *eventpb.Event_Crypto:
+		switch e := ev.Crypto.Type.(type) {
+		case *cryptopb.Event_SignResult:
+			return orderer.applySignResult(e.SignResult), nil
+		case *cryptopb.Event_SigsVerified:
+			return orderer.applyNodeSigsVerified(e.SigsVerified), nil
+		default:
+			return nil, fmt.Errorf("unknown crypto event type: %T", e)
+		}
+	case *eventpb.Event_Transport:
+		switch e := ev.Transport.Type.(type) {
+		case *transportpb.Event_MessageReceived:
+			return orderer.applyMessageReceived(e.MessageReceived), nil
+		default:
+			return nil, fmt.Errorf("unknown transport event type: %T", e)
+		}
 	case *eventpb.Event_Availability:
 		switch avEvent := ev.Availability.Type.(type) {
 		case *availabilitypb.Event_NewCert:
@@ -169,23 +190,31 @@ func (orderer *Orderer) ApplyEvent(event *eventpb.Event) (*events.EventList, err
 		default:
 			return nil, fmt.Errorf("unknown availability event type: %T", avEvent)
 		}
-	case *eventpb.Event_HashResult:
-		return orderer.applyHashResult(ev), nil
-	case *eventpb.Event_SbEvent:
-		switch e := ev.SbEvent.Type.(type) {
-		case *ordererspb.SBInstanceEvent_Init:
-			return orderer.applyInit(), nil
-		case *ordererspb.SBInstanceEvent_PbftProposeTimeout:
-			return orderer.applyProposeTimeout(int(e.PbftProposeTimeout))
-		case *ordererspb.SBInstanceEvent_PbftViewChangeSnTimeout:
-			return orderer.applyViewChangeSNTimeout(e.PbftViewChangeSnTimeout), nil
-		case *ordererspb.SBInstanceEvent_PbftViewChangeSegTimeout:
-			return orderer.applyViewChangeSegmentTimeout(t.PBFTViewNr(e.PbftViewChangeSegTimeout)), nil
+	case *eventpb.Event_Hasher:
+		switch e := ev.Hasher.Type.(type) {
+		case *hasherpb.Event_Result:
+			return orderer.applyHashResult(e.Result), nil
 		default:
-			return nil, fmt.Errorf("unknown PBFT SB instance event type: %T", ev.SbEvent.Type)
+			return nil, fmt.Errorf("unknown Hasher event: %T", e)
+		}
+	case *eventpb.Event_Orderer:
+		switch e := ev.Orderer.Type.(type) {
+		case *ordererpb.Event_Pbft:
+			switch e := e.Pbft.Type.(type) {
+			case *pbftpb.Event_ProposeTimeout:
+				return orderer.applyProposeTimeout(int(e.ProposeTimeout))
+			case *pbftpb.Event_ViewChangeSnTimeout:
+				return orderer.applyViewChangeSNTimeout(e.ViewChangeSnTimeout), nil
+			case *pbftpb.Event_ViewChangeSegTimeout:
+				return orderer.applyViewChangeSegmentTimeout(types2.ViewNr(e.ViewChangeSegTimeout)), nil
+			default:
+				return nil, fmt.Errorf("unknown PBFT event type: %T", e)
+			}
+		default:
+			return nil, fmt.Errorf("unknown orderer event type: %T", e)
 		}
 	default:
-		return nil, fmt.Errorf("unknown Orderer event type: %T", event.Type)
+		return nil, fmt.Errorf("unknown event type: %T", event.Type)
 	}
 
 }
@@ -194,23 +223,33 @@ func (orderer *Orderer) ApplyEvents(evts *events.EventList) (*events.EventList, 
 	return modules.ApplyEventsSequentially(evts, orderer.ApplyEvent)
 }
 
-func (orderer *Orderer) applyHashResult(result *eventpb.Event_HashResult) *events.EventList {
+func (orderer *Orderer) applyHashResult(result *hasherpb.Result) *events.EventList {
 	// Depending on the origin of the hash result, continue processing where the hash was needed.
 
-	origin := result.HashResult
-	switch ev := origin.Origin.Type.(type) {
-	case *eventpb.HashOrigin_Sb:
+	switch ev := result.Origin.Type.(type) {
+	case *hasherpb.HashOrigin_Sb:
 		switch e := ev.Sb.Type.(type) {
-		case *ordererspb.SBInstanceHashOrigin_PbftPreprepare:
-			return orderer.applyPreprepareHashResult(origin.Digests[0], e.PbftPreprepare)
-		case *ordererspb.SBInstanceHashOrigin_PbftEmptyPreprepares:
-			return orderer.applyEmptyPreprepareHashResult(origin.Digests, t.PBFTViewNr(e.PbftEmptyPreprepares))
-		case *ordererspb.SBInstanceHashOrigin_PbftMissingPreprepare:
-			return orderer.applyMissingPreprepareHashResult(origin.Digests[0], e.PbftMissingPreprepare)
-		case *ordererspb.SBInstanceHashOrigin_PbftNewView:
-			return orderer.applyNewViewHashResult(origin.Digests, e.PbftNewView)
-		case *ordererspb.SBInstanceHashOrigin_PbftCatchUpResponse:
-			return orderer.applyCatchUpResponseHashResult(origin.Digests[0], e.PbftCatchUpResponse)
+		case *ordererpb.HashOrigin_Pbft:
+			switch o := e.Pbft.Type.(type) {
+			case *pbftpb.HashOrigin_Preprepare:
+				return orderer.applyPreprepareHashResult(result.Digests[0], o.Preprepare)
+			case *pbftpb.HashOrigin_EmptyPreprepares:
+				return orderer.applyEmptyPreprepareHashResult(result.Digests, types2.ViewNr(o.EmptyPreprepares))
+			case *pbftpb.HashOrigin_MissingPreprepare:
+				return orderer.applyMissingPreprepareHashResult(
+					result.Digests[0],
+					pbftpbtypes.PreprepareFromPb(o.MissingPreprepare),
+				)
+			case *pbftpb.HashOrigin_NewView:
+				return orderer.applyNewViewHashResult(result.Digests, pbftpbtypes.NewViewFromPb(o.NewView))
+			case *pbftpb.HashOrigin_CatchUpResponse:
+				return orderer.applyCatchUpResponseHashResult(
+					result.Digests[0],
+					pbftpbtypes.PreprepareFromPb(o.CatchUpResponse),
+				)
+			default:
+				panic(fmt.Sprintf("unknown hash origin type: %T", o))
+			}
 		default:
 			panic(fmt.Sprintf("unknown hash origin type: %T", e))
 		}
@@ -219,13 +258,18 @@ func (orderer *Orderer) applyHashResult(result *eventpb.Event_HashResult) *event
 	}
 }
 
-func (orderer *Orderer) applySignResult(result *eventpb.SignResult) *events.EventList {
+func (orderer *Orderer) applySignResult(result *cryptopb.SignResult) *events.EventList {
 	// Depending on the origin of the sign result, continue processing where the signature was needed.
 	switch or := result.Origin.Type.(type) {
-	case *eventpb.SignOrigin_Sb:
+	case *cryptopb.SignOrigin_Sb:
 		switch origin := or.Sb.Type.(type) {
-		case *ordererspb.SBInstanceSignOrigin_PbftViewChange:
-			return orderer.applyViewChangeSignResult(result.Signature, origin.PbftViewChange)
+		case *ordererpb.SignOrigin_Pbft:
+			switch origin := origin.Pbft.Type.(type) {
+			case *pbftpb.SignOrigin_ViewChange:
+				return orderer.applyViewChangeSignResult(result.Signature, origin.ViewChange)
+			default:
+				panic(fmt.Sprintf("unknown PBFT sign origin type: %T", origin))
+			}
 		default:
 			panic(fmt.Sprintf("unknown sign origin type: %T", origin))
 		}
@@ -234,9 +278,9 @@ func (orderer *Orderer) applySignResult(result *eventpb.SignResult) *events.Even
 	}
 }
 
-func (orderer *Orderer) applyNodeSigsVerified(result *eventpb.NodeSigsVerified) *events.EventList {
+func (orderer *Orderer) applyNodeSigsVerified(result *cryptopb.SigsVerified) *events.EventList {
 
-	ordererOrigin := result.Origin.Type.(*eventpb.SigVerOrigin_Sb).Sb
+	ordererOrigin := result.Origin.Type.(*cryptopb.SigVerOrigin_Sb).Sb
 
 	// Ignore events with invalid signatures.
 	if !result.AllOk {
@@ -246,50 +290,78 @@ func (orderer *Orderer) applyNodeSigsVerified(result *eventpb.NodeSigsVerified) 
 			"type", fmt.Sprintf("%T", result.Origin.Type),
 			"errors", result.Errors,
 		)
+		return events.EmptyList()
+	}
+
+	// Verify all signers are part of the membership
+	if !sliceutil.ContainsAll(orderer.config.Membership, t.NodeIDSlice(result.NodeIds)) {
+		orderer.logger.Log(logging.LevelWarn,
+			"Ignoring message as it contains signatures from non members, ignoring event (with all signatures).",
+			"from", result.NodeIds,
+			"type", fmt.Sprintf("%T", result.Origin.Type),
+		)
+		return events.EmptyList()
 	}
 
 	// Depending on the origin of the sign result, continue processing where the signature verification was needed.
 	switch origin := ordererOrigin.Type.(type) {
-	case *ordererspb.SBInstanceSigVerOrigin_PbftSignedViewChange:
-		return orderer.applyVerifiedViewChange(origin.PbftSignedViewChange, t.NodeID(result.NodeIds[0]))
-	case *ordererspb.SBInstanceSigVerOrigin_PbftNewView:
-		return orderer.applyVerifiedNewView(origin.PbftNewView)
+	case *ordererpb.SigVerOrigin_Pbft:
+		switch origin := origin.Pbft.Type.(type) {
+		case *pbftpb.SigVerOrigin_SignedViewChange:
+			return orderer.applyVerifiedViewChange(origin.SignedViewChange, t.NodeID(result.NodeIds[0]))
+		case *pbftpb.SigVerOrigin_NewView:
+			return orderer.applyVerifiedNewView(origin.NewView)
+		default:
+			panic(fmt.Sprintf("unknown PBFT signature verification origin type: %T", origin))
+		}
 	default:
 		panic(fmt.Sprintf("unknown signature verification origin type: %T", origin))
 	}
 }
 
 // applyMessageReceived handles a received PBFT protocol message.
-func (orderer *Orderer) applyMessageReceived(messageReceived *eventpb.MessageReceived) *events.EventList {
+func (orderer *Orderer) applyMessageReceived(messageReceived *transportpb.MessageReceived) *events.EventList {
 
 	message := messageReceived.Msg
 	from := t.NodeID(messageReceived.From)
+
+	// check if from is part of the membership
+	if !sliceutil.Contains(orderer.config.Membership, from) {
+		orderer.logger.Log(logging.LevelWarn, "sender %s is not a member.\n", from)
+		return events.EmptyList()
+	}
+
 	switch msg := message.Type.(type) {
-	case *messagepb.Message_SbMessage:
+	case *messagepb.Message_Orderer:
 		// Based on the message type, call the appropriate handler method.
-		switch msg := msg.SbMessage.Type.(type) {
-		case *ordererspb.SBInstanceMessage_PbftPreprepare:
-			return orderer.applyMsgPreprepare(msg.PbftPreprepare, from)
-		case *ordererspb.SBInstanceMessage_PbftPrepare:
-			return orderer.applyMsgPrepare(msg.PbftPrepare, from)
-		case *ordererspb.SBInstanceMessage_PbftCommit:
-			return orderer.applyMsgCommit(msg.PbftCommit, from)
-		case *ordererspb.SBInstanceMessage_PbftSignedViewChange:
-			return orderer.applyMsgSignedViewChange(msg.PbftSignedViewChange, from)
-		case *ordererspb.SBInstanceMessage_PbftPreprepareRequest:
-			return orderer.applyMsgPreprepareRequest(msg.PbftPreprepareRequest, from)
-		case *ordererspb.SBInstanceMessage_PbftMissingPreprepare:
-			return orderer.applyMsgMissingPreprepare(msg.PbftMissingPreprepare, from)
-		case *ordererspb.SBInstanceMessage_PbftNewView:
-			return orderer.applyMsgNewView(msg.PbftNewView, from)
-		case *ordererspb.SBInstanceMessage_PbftDone:
-			return orderer.applyMsgDone(msg.PbftDone, from)
-		case *ordererspb.SBInstanceMessage_PbftCatchUpRequest:
-			return orderer.applyMsgCatchUpRequest(msg.PbftCatchUpRequest, from)
-		case *ordererspb.SBInstanceMessage_PbftCatchUpResponse:
-			return orderer.applyMsgCatchUpResponse(msg.PbftCatchUpResponse, from)
+		switch msg := ordererpbtypes.MessageFromPb(msg.Orderer).Type.(type) {
+		case *ordererpbtypes.Message_Pbft:
+			switch msg := msg.Pbft.Type.(type) {
+			case *pbftpbtypes.Message_Preprepare:
+				return orderer.applyMsgPreprepare(msg.Preprepare, from)
+			case *pbftpbtypes.Message_Prepare:
+				return orderer.applyMsgPrepare(msg.Prepare, from)
+			case *pbftpbtypes.Message_Commit:
+				return orderer.applyMsgCommit(msg.Commit, from)
+			case *pbftpbtypes.Message_SignedViewChange:
+				return orderer.applyMsgSignedViewChange(msg.SignedViewChange, from)
+			case *pbftpbtypes.Message_PreprepareRequest:
+				return orderer.applyMsgPreprepareRequest(msg.PreprepareRequest, from)
+			case *pbftpbtypes.Message_MissingPreprepare:
+				return orderer.applyMsgMissingPreprepare(msg.MissingPreprepare.Preprepare, from)
+			case *pbftpbtypes.Message_NewView:
+				return orderer.applyMsgNewView(msg.NewView, from)
+			case *pbftpbtypes.Message_Done:
+				return orderer.applyMsgDone(msg.Done, from)
+			case *pbftpbtypes.Message_CatchUpRequest:
+				return orderer.applyMsgCatchUpRequest(msg.CatchUpRequest, from)
+			case *pbftpbtypes.Message_CatchUpResponse:
+				return orderer.applyMsgCatchUpResponse(msg.CatchUpResponse.Resp, from)
+			default:
+				panic(fmt.Sprintf("unknown PBFT message type: %T", message.Type))
+			}
 		default:
-			panic(fmt.Sprintf("unknown ISS PBFT SB message type: %T", message.Type))
+			panic(fmt.Sprintf("unknown orderer message type: %T", message.Type))
 		}
 	default:
 		panic(fmt.Sprintf("unknown ISS PBFT message type: %T", message.Type))
@@ -342,20 +414,19 @@ func (orderer *Orderer) applyInit() *events.EventList {
 	// Initialize the first PBFT view
 	eventsOut.PushBackList(orderer.initView(0))
 
-	event := events.TimerDelay(
+	event := eventpbevents.TimerDelay(
 		orderer.moduleConfig.Timer,
-		[]*eventpb.Event{OrdererEvent(orderer.moduleConfig.Self,
-			PbftProposeTimeout(1))},
-		t.TimeDuration(orderer.config.MaxProposeDelay),
+		[]*eventpbtypes.Event{eventpbtypes.EventFromPb(OrdererEvent(orderer.moduleConfig.Self, PbftProposeTimeout(1)))},
+		types.Duration(orderer.config.MaxProposeDelay),
 	)
 
 	// Set up timer for the first proposal.
-	return eventsOut.PushBack(event)
+	return eventsOut.PushBack(event.Pb())
 
 }
 
 // numCommitted returns the number of slots that are already committed in the given view.
-func (orderer *Orderer) numCommitted(view t.PBFTViewNr) int {
+func (orderer *Orderer) numCommitted(view types2.ViewNr) int {
 	numCommitted := 0
 	for _, slot := range orderer.slots[view] {
 		if slot.Committed {
@@ -371,7 +442,7 @@ func (orderer *Orderer) allCommitted() bool {
 	return orderer.numCommitted(orderer.view) == len(orderer.slots[orderer.view])
 }
 
-func (orderer *Orderer) initView(view t.PBFTViewNr) *events.EventList {
+func (orderer *Orderer) initView(view types2.ViewNr) *events.EventList {
 	// Sanity check
 	if view < orderer.view {
 		panic(fmt.Sprintf("Starting a view (%d) older than the current one (%d)", view, orderer.view))
@@ -387,7 +458,7 @@ func (orderer *Orderer) initView(view t.PBFTViewNr) *events.EventList {
 	orderer.logger.Log(logging.LevelInfo, "Initializing new view.", "view", view)
 
 	// Initialize PBFT slots for the new view, one for each sequence number.
-	orderer.slots[view] = make(map[t.SeqNr]*pbftSlot)
+	orderer.slots[view] = make(map[tt.SeqNr]*pbftSlot)
 	for _, sn := range orderer.segment.SeqNrs() {
 
 		// Create a fresh, empty slot.
@@ -402,17 +473,17 @@ func (orderer *Orderer) initView(view t.PBFTViewNr) *events.EventList {
 
 	// Set view change timeouts
 	timerEvents := events.EmptyList()
-	timerEvents.PushBack(events.TimerDelay(
+	timerEvents.PushBack(eventpbevents.TimerDelay(
 		orderer.moduleConfig.Timer,
-		[]*eventpb.Event{OrdererEvent(orderer.moduleConfig.Self,
-			PbftViewChangeSNTimeout(view, orderer.numCommitted(view)))},
-		computeTimeout(t.TimeDuration(orderer.config.ViewChangeSNTimeout), view),
-	)).PushBack(events.TimerDelay(
+		[]*eventpbtypes.Event{eventpbtypes.EventFromPb(OrdererEvent(orderer.moduleConfig.Self,
+			PbftViewChangeSNTimeout(view, orderer.numCommitted(view))))},
+		computeTimeout(types.Duration(orderer.config.ViewChangeSNTimeout), view),
+	).Pb()).PushBack(eventpbevents.TimerDelay(
 		orderer.moduleConfig.Timer,
-		[]*eventpb.Event{OrdererEvent(orderer.moduleConfig.Self,
-			PbftViewChangeSegmentTimeout(view))},
-		computeTimeout(t.TimeDuration(orderer.config.ViewChangeSegmentTimeout), view),
-	))
+		[]*eventpbtypes.Event{eventpbtypes.EventFromPb(OrdererEvent(orderer.moduleConfig.Self,
+			PbftViewChangeSegmentTimeout(view)))},
+		computeTimeout(types.Duration(orderer.config.ViewChangeSegmentTimeout), view),
+	).Pb())
 
 	orderer.view = view
 	orderer.inViewChange = false
@@ -420,7 +491,7 @@ func (orderer *Orderer) initView(view t.PBFTViewNr) *events.EventList {
 	return timerEvents
 }
 
-func (orderer *Orderer) lookUpPreprepare(sn t.SeqNr, digest []byte) *ordererspbftpb.Preprepare {
+func (orderer *Orderer) lookUpPreprepare(sn tt.SeqNr, digest []byte) *pbftpbtypes.Preprepare {
 	// Traverse all views, starting in the current view.
 	for view := orderer.view; ; view-- {
 
@@ -440,7 +511,7 @@ func (orderer *Orderer) lookUpPreprepare(sn t.SeqNr, digest []byte) *ordererspbf
 		}
 
 		// This check cannot be replaced by a (view >= 0) condition in the loop header and must appear here.
-		// If the underlying type of t.PBFTViewNr is unsigned, view would underflow and we would loop forever.
+		// If the underlying type of ViewNr is unsigned, view would underflow and we would loop forever.
 		if view == 0 {
 			return nil
 		}
@@ -453,11 +524,8 @@ func (orderer *Orderer) lookUpPreprepare(sn t.SeqNr, digest []byte) *ordererspbf
 
 // computeTimeout adapts a view change timeout to the view in which it is used.
 // This is to implement the doubling of timeouts on every view change.
-func computeTimeout(timeout t.TimeDuration, view t.PBFTViewNr) t.TimeDuration {
-	for view > 0 {
-		timeout *= 2
-		view--
-	}
+func computeTimeout(timeout types.Duration, view types2.ViewNr) types.Duration {
+	timeout *= 1 << view
 	return timeout
 }
 

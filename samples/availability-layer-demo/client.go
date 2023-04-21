@@ -113,6 +113,7 @@ func run() error {
 			AllNodes:    nodeIDs,
 			F:           (len(nodeIDs) - 1) / 2,
 		},
+		logger,
 	)
 	if err != nil {
 		return err
@@ -126,13 +127,13 @@ func run() error {
 		"mempool":      mempool,
 		"batchdb":      batchdb,
 		"hasher":       mirCrypto.NewHasher(ctx, mirCrypto.DefaultHasherModuleParams(), crypto.SHA256),
-		"crypto":       mirCrypto.New(ctx, &mirCrypto.DummyCrypto{DummySig: []byte{0}}),
+		"crypto":       mirCrypto.New(&mirCrypto.DummyCrypto{DummySig: []byte{0}}),
 		"availability": availability,
 		"control":      control,
 	}
 
 	// create a Mir node
-	node, err := mir.NewNode("client", mir.DefaultNodeConfig().WithLogger(logger), m, nil, nil)
+	node, err := mir.NewNode("client", mir.DefaultNodeConfig().WithLogger(logger), m, nil)
 	if err != nil {
 		return fmt.Errorf("error creating a Mir node: %w", err)
 	}

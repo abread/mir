@@ -40,9 +40,14 @@ func (i *StatInterceptor) Intercept(events *events.EventList) error {
 	it := events.Iterator()
 	for evt := it.Next(); evt != nil; evt = it.Next() {
 		switch e := evt.Type.(type) {
-		case *eventpb.Event_NewRequests:
-			for _, req := range e.NewRequests.Requests {
-				i.Stats.NewRequest(req, evt.LocalTs)
+		case *eventpb.Event_Mempool:
+			switch e := e.Mempool.Type.(type) {
+			case *mempoolpb.Event_NewRequests:
+				for _, req := range e.NewRequests.Requests {
+					i.Stats.NewRequest(req, evt.LocalTs)
+				}
+			case *mempoolpb.Event_NewBatch:
+				i.Stats.MempoolNewBatch()
 			}
 		case *eventpb.Event_BatchFetcher:
 
@@ -56,10 +61,6 @@ func (i *StatInterceptor) Intercept(events *events.EventList) error {
 				for _, req := range e.NewOrderedBatch.Txs {
 					i.Stats.Delivered(req, evt.LocalTs)
 				}
-			}
-		case *eventpb.Event_Mempool:
-			if _, ok := e.Mempool.Type.(*mempoolpb.Event_NewBatch); ok {
-				i.Stats.MempoolNewBatch()
 			}
 		case *eventpb.Event_AleaAgreement:
 			if e2, ok := e.AleaAgreement.Type.(*agevents.Event_Deliver); ok {

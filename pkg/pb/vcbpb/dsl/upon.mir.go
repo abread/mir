@@ -6,7 +6,8 @@ import (
 	types2 "github.com/filecoin-project/mir/pkg/pb/requestpb/types"
 	types "github.com/filecoin-project/mir/pkg/pb/vcbpb/types"
 	tctypes "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
-	types3 "github.com/filecoin-project/mir/pkg/types"
+	types3 "github.com/filecoin-project/mir/pkg/trantor/types"
+	types4 "github.com/filecoin-project/mir/pkg/types"
 )
 
 // Module-specific dsl functions for processing events.
@@ -28,7 +29,7 @@ func UponInputValue(m dsl.Module, handler func(txs []*types2.Request) error) {
 	})
 }
 
-func UponDeliver(m dsl.Module, handler func(txs []*types2.Request, txIds []types3.TxID, signature tctypes.FullSig, srcModule types3.ModuleID) error) {
+func UponDeliver(m dsl.Module, handler func(txs []*types2.Request, txIds []types3.TxID, signature tctypes.FullSig, srcModule types4.ModuleID) error) {
 	UponEvent[*types.Event_Deliver](m, func(ev *types.Deliver) error {
 		return handler(ev.Txs, ev.TxIds, ev.Signature, ev.SrcModule)
 	})

@@ -7,6 +7,7 @@ import (
 	"github.com/herumi/bls-eth-go-binary/bls"
 	"golang.org/x/exp/slices"
 
+	"github.com/filecoin-project/mir/pkg/serializing"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -184,7 +185,7 @@ func serializeHerumiSigShare(sig *bls.Sign, id uint64) []byte {
 
 	serialized := make([]byte, 0, len(sigBytes)+8)
 
-	serialized = append(serialized, t.Uint64ToBytes(id)...)
+	serialized = append(serialized, serializing.Uint64ToBytes(id)...)
 	if len(serialized) != 8 {
 		panic("uint64 are supposed to be 8 bytes long")
 	}
@@ -195,7 +196,7 @@ func serializeHerumiSigShare(sig *bls.Sign, id uint64) []byte {
 }
 
 func deserializeHerumiSigShare(serialized []byte) (*bls.Sign, bls.ID, error) {
-	idNum := t.Uint64FromBytes(serialized[0:8])
+	idNum := serializing.Uint64FromBytes(serialized[0:8])
 	id, err := herumiID(idNum)
 	if err != nil {
 		return nil, id, err

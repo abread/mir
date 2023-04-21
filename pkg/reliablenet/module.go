@@ -10,12 +10,17 @@ import (
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
+	eventpbevents "github.com/filecoin-project/mir/pkg/pb/eventpb/events"
+	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 	"github.com/filecoin-project/mir/pkg/pb/messagepb"
 	"github.com/filecoin-project/mir/pkg/pb/reliablenetpb"
 	rnEvents "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/events"
 	rnpbmsg "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/messages"
 	rnetmsgs "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/messages/msgs"
+	"github.com/filecoin-project/mir/pkg/pb/transportpb"
+	transportpbevents "github.com/filecoin-project/mir/pkg/pb/transportpb/events"
 	"github.com/filecoin-project/mir/pkg/reliablenet/rntypes"
+	timert "github.com/filecoin-project/mir/pkg/timer/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 	"github.com/filecoin-project/mir/pkg/util/sliceutil"
 )
@@ -49,7 +54,7 @@ func DefaultModuleParams(allNodes []t.NodeID) *ModuleParams {
 	}
 }
 
-type queuesMap map[t.ModuleID]map[rntypes.MsgID]*eventpb.SendMessage
+type queuesMap map[t.ModuleID]map[rntypes.MsgID]*transportpb.SendMessage
 
 type Module struct {
 	config *ModuleConfig
@@ -77,8 +82,8 @@ func New(ownID t.NodeID, mc *ModuleConfig, params *ModuleParams, logger logging.
 	}, nil
 }
 
-func (m *Module) GetPendingMessages() []*eventpb.SendMessage {
-	pendingMsgs := make([]*eventpb.SendMessage, 0, len(m.fresherQueues)+len(m.stalerQueues))
+func (m *Module) GetPendingMessages() []*transportpb.SendMessage {
+	pendingMsgs := make([]*transportpb.SendMessage, 0, len(m.fresherQueues)+len(m.stalerQueues))
 	for _, queue := range m.fresherQueues {
 		for _, qmsg := range queue {
 			pendingMsgs = append(pendingMsgs, qmsg)
@@ -118,8 +123,13 @@ func (m *Module) applyEvent(event *eventpb.Event) (*events.EventList, error) {
 		return &events.EventList{}, nil
 	case *eventpb.Event_ReliableNet:
 		return m.applyRNEvent(ev.ReliableNet)
-	case *eventpb.Event_MessageReceived:
-		return m.applyMessage(ev.MessageReceived.Msg, t.NodeID(ev.MessageReceived.From))
+	case *eventpb.Event_Transport:
+		switch e := ev.Transport.Type.(type) {
+		case *transportpb.Event_MessageReceived:
+			return m.applyMessage(e.MessageReceived.Msg, t.NodeID(e.MessageReceived.From))
+		default:
+			return nil, fmt.Errorf("unsupported transport event type: %T", e)
+		}
 	default:
 		return nil, fmt.Errorf("unsupported event type: %T", ev)
 	}
@@ -163,11 +173,11 @@ func (m *Module) SendAck(msgDestModule t.ModuleID, msgID rntypes.MsgID, msgSourc
 	}
 
 	return events.ListOf(
-		events.SendMessage(
+		transportpbevents.SendMessage(
 			m.config.Net,
-			rnetmsgs.AckMessage(m.config.Self, msgDestModule, msgID).Pb(),
+			rnetmsgs.AckMessage(m.config.Self, msgDestModule, msgID),
 			[]t.NodeID{msgSource},
-		),
+		).Pb(),
 	), nil
 }
 
@@ -208,11 +218,11 @@ func (m *Module) retransmitAll() (*events.EventList, error) {
 		}
 	}
 
-	evsOut.PushBack(events.TimerDelay(
+	evsOut.PushBack(eventpbevents.TimerDelay(
 		m.config.Timer,
-		[]*eventpb.Event{rnEvents.RetransmitAll(m.config.Self).Pb()},
-		t.TimeDuration(m.params.RetransmissionLoopInterval),
-	))
+		[]*eventpbtypes.Event{rnEvents.RetransmitAll(m.config.Self)},
+		timert.Duration(m.params.RetransmissionLoopInterval),
+	).Pb())
 
 	return evsOut, nil
 }
@@ -231,10 +241,14 @@ func (m *Module) retransmitQueuePartial(moduleID t.ModuleID, evsOut *events.Even
 			// m.logger.Log(logging.LevelDebug, "Retransmitting message", "msg", qmsg)
 			evsOut.PushBack(
 				&eventpb.Event{
-					Type: &eventpb.Event_SendMessage{
-						SendMessage: qmsg,
-					},
 					DestModule: m.config.Net.Pb(),
+					Type: &eventpb.Event_Transport{
+						Transport: &transportpb.Event{
+							Type: &transportpb.Event_SendMessage{
+								SendMessage: qmsg,
+							},
+						},
+					},
 				})
 		} else {
 			return fmt.Errorf("queued message for module %v has no destinations", moduleID)
@@ -257,10 +271,14 @@ func (m *Module) retransmitWholeQueue(moduleID t.ModuleID, evsOut *events.EventL
 			// m.logger.Log(logging.LevelDebug, "Retransmitting message", "msg", qmsg)
 			evsOut.PushBack(
 				&eventpb.Event{
-					Type: &eventpb.Event_SendMessage{
-						SendMessage: qmsg,
-					},
 					DestModule: m.config.Net.Pb(),
+					Type: &eventpb.Event_Transport{
+						Transport: &transportpb.Event{
+							Type: &transportpb.Event_SendMessage{
+								SendMessage: qmsg,
+							},
+						},
+					},
 				})
 
 		} else {
@@ -276,22 +294,34 @@ func (m *Module) retransmitWholeQueue(moduleID t.ModuleID, evsOut *events.EventL
 
 func (m *Module) SendMessage(id rntypes.MsgID, msg *messagepb.Message, destinations []t.NodeID) (*events.EventList, error) {
 	m.ensureQueueExists(m.fresherQueues, t.ModuleID(msg.DestModule))
-	m.fresherQueues[t.ModuleID(msg.DestModule)][id] = &eventpb.SendMessage{
+	m.fresherQueues[t.ModuleID(msg.DestModule)][id] = &transportpb.SendMessage{
 		Msg:          msg,
 		Destinations: t.NodeIDSlicePb(destinations),
 	}
 
 	evsOut := events.ListOf(
-		events.SendMessage(m.config.Net, msg, destinations),
+		&eventpb.Event{
+			DestModule: m.config.Net.Pb(),
+			Type: &eventpb.Event_Transport{
+				Transport: &transportpb.Event{
+					Type: &transportpb.Event_SendMessage{
+						SendMessage: &transportpb.SendMessage{
+							Msg:          msg,
+							Destinations: t.NodeIDSlicePb(destinations),
+						},
+					},
+				},
+			},
+		},
 	)
 
 	if !m.retransmitLoopScheduled {
 		// m.logger.Log(logging.LevelDebug, "rescheduling retransmission loop")
-		evsOut.PushBack(events.TimerDelay(
+		evsOut.PushBack(eventpbevents.TimerDelay(
 			m.config.Timer,
-			[]*eventpb.Event{rnEvents.RetransmitAll(m.config.Self).Pb()},
-			t.TimeDuration(m.params.RetransmissionLoopInterval),
-		))
+			[]*eventpbtypes.Event{rnEvents.RetransmitAll(m.config.Self)},
+			timert.Duration(m.params.RetransmissionLoopInterval),
+		).Pb())
 		m.retransmitLoopScheduled = true
 	}
 
@@ -306,7 +336,7 @@ const initialQueueCapacity = 4
 
 func (m *Module) ensureQueueExists(qm queuesMap, destModule t.ModuleID) {
 	if _, present := qm[destModule]; !present {
-		qm[destModule] = make(map[rntypes.MsgID]*eventpb.SendMessage, initialQueueCapacity)
+		qm[destModule] = make(map[rntypes.MsgID]*transportpb.SendMessage, initialQueueCapacity)
 	}
 }
 
@@ -337,7 +367,7 @@ func (m *Module) MarkModuleMsgsRecvd(destModule t.ModuleID, destinations []t.Nod
 					delete(queue, msgID)
 				} else {
 					// don't modify the underlying message to avoid data races
-					queue[msgID] = &eventpb.SendMessage{
+					queue[msgID] = &transportpb.SendMessage{
 						Msg:          qmsg.Msg,
 						Destinations: newDests,
 					}
@@ -370,7 +400,7 @@ func (m *Module) MarkRecvd(destModule t.ModuleID, messageID rntypes.MsgID, desti
 				delete(queue, messageID)
 			} else {
 				// don't modify the underlying message to avoid data races
-				queue[messageID] = &eventpb.SendMessage{
+				queue[messageID] = &transportpb.SendMessage{
 					Msg:          qmsg.Msg,
 					Destinations: newDests,
 				}

@@ -5,6 +5,7 @@ import (
 	types1 "github.com/filecoin-project/mir/pkg/pb/requestpb/types"
 	types3 "github.com/filecoin-project/mir/pkg/pb/vcbpb/types"
 	tctypes "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
+	types4 "github.com/filecoin-project/mir/pkg/trantor/types"
 	types "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -23,7 +24,7 @@ func InputValue(destModule types.ModuleID, txs []*types1.Request) *types2.Event 
 	}
 }
 
-func Deliver(destModule types.ModuleID, txs []*types1.Request, txIds []types.TxID, signature tctypes.FullSig, srcModule types.ModuleID) *types2.Event {
+func Deliver(destModule types.ModuleID, txs []*types1.Request, txIds []types4.TxID, signature tctypes.FullSig, srcModule types.ModuleID) *types2.Event {
 	return &types2.Event{
 		DestModule: destModule,
 		Type: &types2.Event_Vcb{

@@ -7,7 +7,6 @@ import (
 	"github.com/filecoin-project/mir/pkg/alea/common"
 	director "github.com/filecoin-project/mir/pkg/alea/director/internal/common"
 	"github.com/filecoin-project/mir/pkg/dsl"
-	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/logging"
 	abcdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/dsl"
 	bcdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/dsl"
@@ -18,13 +17,19 @@ import (
 	batchdbdsl "github.com/filecoin-project/mir/pkg/pb/availabilitypb/batchdbpb/dsl"
 	adsl "github.com/filecoin-project/mir/pkg/pb/availabilitypb/dsl"
 	availabilitypbtypes "github.com/filecoin-project/mir/pkg/pb/availabilitypb/types"
-	"github.com/filecoin-project/mir/pkg/pb/eventpb"
+	commonpbtypes "github.com/filecoin-project/mir/pkg/pb/commonpb/types"
+	eventpbevents "github.com/filecoin-project/mir/pkg/pb/eventpb/events"
+	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
+	hasherpbdsl "github.com/filecoin-project/mir/pkg/pb/hasherpb/dsl"
 	mempooldsl "github.com/filecoin-project/mir/pkg/pb/mempoolpb/dsl"
 	rnetdsl "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/dsl"
 	requestpbtypes "github.com/filecoin-project/mir/pkg/pb/requestpb/types"
 	threshDsl "github.com/filecoin-project/mir/pkg/pb/threshcryptopb/dsl"
+	transportpbdsl "github.com/filecoin-project/mir/pkg/pb/transportpb/dsl"
 	"github.com/filecoin-project/mir/pkg/reliablenet/rntypes"
 	"github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
+	"github.com/filecoin-project/mir/pkg/timer/types"
+	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 	"github.com/filecoin-project/mir/pkg/vcb"
 )
@@ -126,9 +131,9 @@ func IncludeBatchFetching(
 		// send FILL-GAP after a timeout (if request was not satisfied)
 		// this way bc has more chances of completing before even trying to send a fill-gap message
 		// TODO: adjust delay according to bc estimate. don't delay when bc slot was already freed
-		dsl.EmitEvent(m, events.TimerDelay(mc.Timer, []*eventpb.Event{
-			bcpbevents.DoFillGap(mc.Self, slot).Pb(),
-		}, t.TimeDuration(tunables.FillGapDelay)))
+		dsl.EmitMirEvent(m, eventpbevents.TimerDelay(mc.Timer, []*eventpbtypes.Event{
+			bcpbevents.DoFillGap(mc.Self, slot),
+		}, types.Duration(tunables.FillGapDelay)))
 
 		return nil
 	})
@@ -172,8 +177,8 @@ func IncludeBatchFetching(
 			return nil
 		}
 
-		dsl.SendMessage(m, mc.Net,
-			aleamsgs.FillerMessage(mc.Self, context.slot, txs, signature).Pb(),
+		transportpbdsl.SendMessage(m, mc.Net,
+			aleamsgs.FillerMessage(mc.Self, context.slot, txs, signature),
 			[]t.NodeID{context.requester},
 		)
 		return nil
@@ -204,12 +209,14 @@ func IncludeBatchFetching(
 	})
 
 	// Compute signature data
-	mempooldsl.UponTransactionIDsResponse(m, func(txIDs []t.TxID, context *handleFillerContext) error {
+	mempooldsl.UponTransactionIDsResponse(m, func(txIDs []tt.TxID, context *handleFillerContext) error {
 		context.txIDs = txIDs
-		dsl.HashOneMessage(m, mc.Hasher, t.TxIDSlicePb(txIDs), context)
+		hasherpbdsl.RequestOne(m, mc.Hasher, &commonpbtypes.HashData{
+			Data: txIDs,
+		}, context)
 		return nil
 	})
-	dsl.UponOneHashResult(m, func(txIDsHash []byte, context *handleFillerContext) error {
+	hasherpbdsl.UponResultOne(m, func(txIDsHash []byte, context *handleFillerContext) error {
 		sigData := certSigData(params, context.slot, txIDsHash)
 		threshDsl.VerifyFull(m, mc.ThreshCrypto, sigData, context.signature, context)
 
@@ -279,5 +286,5 @@ type handleFillerContext struct {
 	txs       []*requestpbtypes.Request
 	signature []byte
 
-	txIDs []t.TxID
+	txIDs []tt.TxID
 }

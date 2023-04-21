@@ -121,16 +121,14 @@ func (n *SimNode) WrapModule(id t.ModuleID, m modules.Module) modules.Module {
 	case modules.PassiveModule:
 		return n.wrapPassive(m, moduleChan)
 	default:
-		panic("Unexpected module type")
+		panic(fmt.Sprintf("Unexpected module type: %v %T", m, m))
 	}
 }
 
 // Start initiates simulation with the events from the write-ahead log
 // on behalf of the given process. To be called concurrently with
 // mir.Node.Run().
-func (n *SimNode) Start(proc *testsim.Process, walEvents *events.EventList) {
-	n.SendEvents(proc, walEvents)
-
+func (n *SimNode) Start(proc *testsim.Process) {
 	initEvents := events.EmptyList()
 	for m := range n.moduleChans {
 		initEvents.PushBack(events.Init(m))
@@ -170,7 +168,7 @@ func newSimModule(n *SimNode, m modules.Module, simChan *testsim.Chan) *simModul
 			return events.EmptyList(), m.ApplyEvents(ctx, eventList)
 		}
 	default:
-		panic("Unexpected module type")
+		panic(fmt.Sprintf("Unexpected module type: %v %T", m, m))
 	}
 
 	sm := &simModule{

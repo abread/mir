@@ -3,15 +3,15 @@ package multisigcollector
 import (
 	"fmt"
 
-	"github.com/filecoin-project/mir/pkg/availability/multisigcollector/internal/common"
-	"github.com/filecoin-project/mir/pkg/availability/multisigcollector/internal/parts/batchreconstruction"
-	"github.com/filecoin-project/mir/pkg/availability/multisigcollector/internal/parts/certcreation"
-	"github.com/filecoin-project/mir/pkg/availability/multisigcollector/internal/parts/certverification"
+	"github.com/filecoin-project/mir/pkg/availability/multisigcollector/common"
+	"github.com/filecoin-project/mir/pkg/availability/multisigcollector/parts/batchreconstruction"
+	"github.com/filecoin-project/mir/pkg/availability/multisigcollector/parts/certcreation"
+	"github.com/filecoin-project/mir/pkg/availability/multisigcollector/parts/certverification"
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/factorymodule"
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/modules"
-	"github.com/filecoin-project/mir/pkg/pb/factorymodulepb"
+	"github.com/filecoin-project/mir/pkg/pb/factorypb"
 	t "github.com/filecoin-project/mir/pkg/types"
 	"github.com/filecoin-project/mir/pkg/util/maputil"
 )
@@ -39,16 +39,16 @@ type ModuleParams = common.ModuleParams
 // Whenever an availability certificate is requested, it pulls a batch from the mempool module,
 // sends it to all replicas and collects params.F+1 signatures confirming that
 // other nodes have persistently stored the batch.
-func NewModule(mc *ModuleConfig, params *ModuleParams) (modules.PassiveModule, error) {
+func NewModule(mc *ModuleConfig, params *ModuleParams, logger logging.Logger) (modules.PassiveModule, error) {
 	if len(params.AllNodes) < 2*params.F+1 {
 		return nil, fmt.Errorf("cannot tolerate %v / %v failures", params.F, len(params.AllNodes))
 	}
 
 	m := dsl.NewModule(mc.Self)
 
-	certcreation.IncludeCreatingCertificates(m, mc, params)
+	certcreation.IncludeCreatingCertificates(m, mc, params, logger)
 	certverification.IncludeVerificationOfCertificates(m, mc, params)
-	batchreconstruction.IncludeBatchReconstruction(m, mc)
+	batchreconstruction.IncludeBatchReconstruction(m, mc, params, logger)
 	return m, nil
 }
 
@@ -62,10 +62,10 @@ func NewReconfigurableModule(mc *ModuleConfig, logger logging.Logger) modules.Pa
 
 			// This function will be called whenever the factory module
 			// is asked to create a new instance of the multisig collector.
-			func(mscID t.ModuleID, params *factorymodulepb.GeneratorParams) (modules.PassiveModule, error) {
+			func(mscID t.ModuleID, params *factorypb.GeneratorParams) (modules.PassiveModule, error) {
 
 				// Extract the IDs of the nodes in the membership associated with this instance
-				mscParams := params.Type.(*factorymodulepb.GeneratorParams_MultisigCollector).MultisigCollector
+				mscParams := params.Type.(*factorypb.GeneratorParams_MultisigCollector).MultisigCollector
 
 				mscNodeIDs := maputil.GetSortedKeys(t.Membership(mscParams.Membership))
 
@@ -87,6 +87,7 @@ func NewReconfigurableModule(mc *ModuleConfig, logger logging.Logger) modules.Pa
 						Limit:       int(mscParams.Limit),
 						MaxRequests: int(mscParams.MaxRequests),
 					},
+					logger,
 				)
 				if err != nil {
 					return nil, err

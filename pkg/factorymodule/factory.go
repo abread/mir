@@ -10,7 +10,9 @@ import (
 	"github.com/filecoin-project/mir/pkg/messagebuffer"
 	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
-	"github.com/filecoin-project/mir/pkg/pb/factorymodulepb"
+	"github.com/filecoin-project/mir/pkg/pb/factorypb"
+	"github.com/filecoin-project/mir/pkg/pb/transportpb"
+	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -19,7 +21,7 @@ import (
 // FactoryModule provides the basic functionality of "submodules".
 // It can be used to dynamically create and garbage-collect passive modules,
 // and it automatically forwards events to them.
-// See: protos/factorymodulepb/factorymodulepb.proto for details on the interface of the factory module itself.
+// See: protos/factorypb/factorypb.proto for details on the interface of the factory module itself.
 //
 // The forwarding mechanism is as follows:
 //  1. All events destined for an existing submodule are forwarded to it automatically regardless of the event type.
@@ -32,8 +34,8 @@ type FactoryModule struct {
 	generator ModuleGenerator
 
 	submodules      map[t.ModuleID]modules.PassiveModule
-	moduleRetention map[t.RetentionIndex][]t.ModuleID
-	retIdx          t.RetentionIndex
+	moduleRetention map[tt.RetentionIndex][]t.ModuleID
+	retIdx          tt.RetentionIndex
 	messageBuffer   *messagebuffer.MessageBuffer // TODO: Split by NodeID (using NewBuffers). Future configurations...?
 
 	logger logging.Logger
@@ -55,7 +57,7 @@ func New(id t.ModuleID, params ModuleParams, logger logging.Logger) *FactoryModu
 		generator: params.Generator,
 
 		submodules:      make(map[t.ModuleID]modules.PassiveModule),
-		moduleRetention: make(map[t.RetentionIndex][]t.ModuleID),
+		moduleRetention: make(map[tt.RetentionIndex][]t.ModuleID),
 		retIdx:          0,
 		messageBuffer:   messagebuffer.New(zeroID, params.MsgBufSize, logging.Decorate(logger, "MsgBuf: ")),
 
@@ -80,9 +82,9 @@ func (fm *FactoryModule) applyEvent(event *eventpb.Event) (*events.EventList, er
 			return events.EmptyList(), nil // Nothing to do at initialization.
 		case *eventpb.Event_Factory:
 			switch e := e.Factory.Type.(type) {
-			case *factorymodulepb.Factory_NewModule:
+			case *factorypb.Event_NewModule:
 				return fm.applyNewModule(e.NewModule)
-			case *factorymodulepb.Factory_GarbageCollect:
+			case *factorypb.Event_GarbageCollect:
 				return fm.applyGarbageCollect(e.GarbageCollect)
 			default:
 				return nil, fmt.Errorf("unsupported factory event subtype: %T", e)
@@ -94,11 +96,11 @@ func (fm *FactoryModule) applyEvent(event *eventpb.Event) (*events.EventList, er
 	return fm.forwardEvent(event)
 }
 
-func (fm *FactoryModule) applyNewModule(newModule *factorymodulepb.NewModule) (*events.EventList, error) {
+func (fm *FactoryModule) applyNewModule(newModule *factorypb.NewModule) (*events.EventList, error) {
 
 	// Convenience variables
 	id := t.ModuleID(newModule.ModuleId)
-	retIdx := t.RetentionIndex(newModule.RetentionIndex)
+	retIdx := tt.RetentionIndex(newModule.RetentionIndex)
 
 	// The new module's ID must have the factory's ID as a prefix.
 	if id.Top() != fm.ownID {
@@ -150,9 +152,9 @@ func (fm *FactoryModule) applyNewModule(newModule *factorymodulepb.NewModule) (*
 	return eventsOut, nil
 }
 
-func (fm *FactoryModule) applyGarbageCollect(gc *factorymodulepb.GarbageCollect) (*events.EventList, error) {
+func (fm *FactoryModule) applyGarbageCollect(gc *factorypb.GarbageCollect) (*events.EventList, error) {
 	// While the new retention index is larger than the current one
-	for t.RetentionIndex(gc.RetentionIndex) > fm.retIdx {
+	for tt.RetentionIndex(gc.RetentionIndex) > fm.retIdx {
 
 		// Delete all modules associated with the current retention index.
 		for _, mID := range fm.moduleRetention[fm.retIdx] {
@@ -187,8 +189,17 @@ func (fm *FactoryModule) forwardEvent(event *eventpb.Event) (*events.EventList, 
 }
 
 func (fm *FactoryModule) tryBuffering(event *eventpb.Event) {
-	msg, ok := event.Type.(*eventpb.Event_MessageReceived)
-	if !ok {
+
+	// Check if this is a MessageReceived event.
+	isMessageReceivedEvent := false
+	var msg *transportpb.Event_MessageReceived
+	e, isTransportEvent := event.Type.(*eventpb.Event_Transport)
+	if isTransportEvent {
+		msg, isMessageReceivedEvent = e.Transport.Type.(*transportpb.Event_MessageReceived)
+	}
+
+	if !isMessageReceivedEvent {
+		// Events other than MessageReceived are ignored.
 		fm.logger.Log(logging.LevelDebug, "Ignoring submodule event. Destination module not found.",
 			"moduleID", t.ModuleID(event.DestModule),
 			"eventType", fmt.Sprintf("%T", event.Type),

@@ -18,10 +18,11 @@ import (
 	agreementpbevents "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents/events"
 	agreementpbmsgdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/dsl"
 	agreementpbmsgs "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/msgs"
-	eventpbevents "github.com/filecoin-project/mir/pkg/pb/eventpb/events"
 	messagepbtypes "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
 	modringpbtypes "github.com/filecoin-project/mir/pkg/pb/modringpb/types"
 	reliablenetpbdsl "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/dsl"
+	transportpbdsl "github.com/filecoin-project/mir/pkg/pb/transportpb/dsl"
+	transportpbevents "github.com/filecoin-project/mir/pkg/pb/transportpb/events"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -158,7 +159,7 @@ func newAgController(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, lo
 			// Note: this must not be done after the relevant round delivers, or it will lead to an
 			// infinite loop of FinishAbbaMessages, as it will trigger the PastMessagesRecvd handler.
 
-			dsl.EmitMirEvent(m, eventpbevents.MessageReceived(
+			dsl.EmitMirEvent(m, transportpbevents.MessageReceived(
 				destModule,
 				from,
 				abbapbmsgs.FinishMessage(destModule, value),
@@ -176,12 +177,12 @@ func newAgController(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, lo
 			}
 
 			if _, ok := msg.Message.Type.(*messagepbtypes.Message_Abba); ok {
-				dsl.SendMessage(m, mc.Net,
+				transportpbdsl.SendMessage(m, mc.Net,
 					agreementpbmsgs.FinishAbbaMessage(
 						mc.Self,
 						msg.DestId,
 						decision,
-					).Pb(),
+					),
 					[]t.NodeID{msg.From},
 				)
 			}

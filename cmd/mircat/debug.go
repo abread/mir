@@ -26,7 +26,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
 	"github.com/filecoin-project/mir/pkg/pb/recordingpb"
-	"github.com/filecoin-project/mir/pkg/systems/trantor"
+	"github.com/filecoin-project/mir/pkg/trantor"
 	t "github.com/filecoin-project/mir/pkg/types"
 	"github.com/filecoin-project/mir/pkg/util/libp2p"
 )
@@ -187,7 +187,7 @@ func debuggerNode(id t.NodeID, membership map[t.NodeID]t.NodeAddress) (*mir.Node
 		panic(fmt.Errorf("error initializing the Mir modules: %w", err))
 	}
 
-	node, err := mir.NewNode(id, mir.DefaultNodeConfig().WithLogger(logger), modulesWithDefaults, nil, nil)
+	node, err := mir.NewNode(id, mir.DefaultNodeConfig().WithLogger(logger), modulesWithDefaults, nil)
 	if err != nil {
 		return nil, fmt.Errorf("could not instantiate mir node: %w", err)
 	}

@@ -9,19 +9,21 @@ import (
 	"github.com/filecoin-project/mir/pkg/alea/aleatypes"
 	"github.com/filecoin-project/mir/pkg/alea/director/internal/common"
 	"github.com/filecoin-project/mir/pkg/dsl"
-	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/logging"
-	"github.com/filecoin-project/mir/pkg/pb/aleapb"
 	aagdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents/dsl"
 	abcdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/dsl"
 	commontypes "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
 	directordsl "github.com/filecoin-project/mir/pkg/pb/aleapb/directorpb/dsl"
 	directorpbevents "github.com/filecoin-project/mir/pkg/pb/aleapb/directorpb/events"
-	"github.com/filecoin-project/mir/pkg/pb/availabilitypb"
-	"github.com/filecoin-project/mir/pkg/pb/eventpb"
+	aleapbtypes "github.com/filecoin-project/mir/pkg/pb/aleapb/types"
+	availabilitypbtypes "github.com/filecoin-project/mir/pkg/pb/availabilitypb/types"
+	eventpbdsl "github.com/filecoin-project/mir/pkg/pb/eventpb/dsl"
 	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
+	isspbdsl "github.com/filecoin-project/mir/pkg/pb/isspb/dsl"
 	mempooldsl "github.com/filecoin-project/mir/pkg/pb/mempoolpb/dsl"
 	requestpbtypes "github.com/filecoin-project/mir/pkg/pb/requestpb/types"
+	timert "github.com/filecoin-project/mir/pkg/timer/types"
+	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -50,18 +52,13 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 	ownQueueIdx := aleatypes.QueueIdx(slices.Index(params.AllNodes, nodeID))
 
 	dsl.UponInit(m, func() error {
-		dsl.EmitMirEvent(m, &eventpbtypes.Event{
-			DestModule: mc.Timer,
-			Type: &eventpbtypes.Event_TimerRepeat{
-				TimerRepeat: &eventpb.TimerRepeat{
-					Events: []*eventpb.Event{
-						directorpbevents.Heartbeat(mc.Self).Pb(),
-					},
-					Delay:          t.TimeDuration(tunables.MaxAgreementDelay).Pb(),
-					RetentionIndex: 0,
-				},
+		eventpbdsl.TimerRepeat(m, mc.Timer,
+			[]*eventpbtypes.Event{
+				directorpbevents.Heartbeat(mc.Self),
 			},
-		})
+			timert.Duration(tunables.MaxAgreementDelay),
+			tt.RetentionIndex(0),
+		)
 
 		return nil
 	})
@@ -129,13 +126,13 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 
 		// next round won't start until we say so, and previous rounds already delivered, so we can deliver immediately
 		// logger.Log(logging.LevelDebug, "delivering cert", "agreementRound", round, "queueIdx", slot.QueueIdx, "queueSlot", slot.QueueSlot)
-		dsl.EmitEvent(m, events.DeliverCert(mc.Consumer, t.SeqNr(round), &availabilitypb.Cert{
-			Type: &availabilitypb.Cert_Alea{
-				Alea: &aleapb.Cert{
-					Slot: slot.Pb(),
+		isspbdsl.DeliverCert(m, mc.Consumer, tt.SeqNr(round), &availabilitypbtypes.Cert{
+			Type: &availabilitypbtypes.Cert_Alea{
+				Alea: &aleapbtypes.Cert{
+					Slot: slot,
 				},
 			},
-		}))
+		})
 
 		// pop queue
 		state.agQueueHeads[queueIdx]++
@@ -194,7 +191,7 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 		mempooldsl.RequestBatch[struct{}](m, mc.Mempool, nil)
 		return nil
 	})
-	mempooldsl.UponNewBatch(m, func(txIDs []t.TxID, txs []*requestpbtypes.Request, ctx *struct{}) error {
+	mempooldsl.UponNewBatch(m, func(txIDs []tt.TxID, txs []*requestpbtypes.Request, ctx *struct{}) error {
 		if len(txs) == 0 {
 			return fmt.Errorf("empty batch. did you misconfigure your mempool?")
 		}
