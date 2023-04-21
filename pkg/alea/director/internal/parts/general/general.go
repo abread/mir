@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"time"
 
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/exp/slices"
 
 	"github.com/filecoin-project/mir/pkg/alea/aleatypes"
@@ -30,14 +28,14 @@ import (
 type set[T comparable] map[T]struct{}
 
 type state struct {
-	stalledBatchCut trace.Span
+	stalledBatchCut bool
 	bcOwnQueueHead  aleatypes.QueueSlot
 
 	agQueueHeads []aleatypes.QueueSlot
 
 	slotsReadyToDeliver []set[aleatypes.QueueSlot]
 	agRound             uint64
-	stalledRoundSpan    trace.Span
+	stalledAgRound      bool
 
 	avgAgTime   estimator
 	agStartTime time.Time
@@ -156,10 +154,9 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 
 	// upon init, cut a new batch
 	dsl.UponInit(m, func() error {
-		state.stalledBatchCut = nil
+		state.stalledBatchCut = false
+		mempooldsl.RequestBatch[struct{}](m, mc.Mempool, nil)
 
-		_, span := m.DslHandle().PushSpan("fetching new batch from mempool")
-		mempooldsl.RequestBatch(m, mc.Mempool, &span)
 		return nil
 	})
 
@@ -170,7 +167,7 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 		// agQueueHeads[ownQueueIdx] is the next slot to be agreed on
 		unagreedOwnBatchCount := uint64(state.bcOwnQueueHead - state.agQueueHeads[ownQueueIdx])
 
-		if state.stalledBatchCut == nil || unagreedOwnBatchCount >= tunables.MaxOwnUnagreedBatchCount {
+		if !state.stalledBatchCut || unagreedOwnBatchCount >= tunables.MaxOwnUnagreedBatchCount {
 			// batch cut in progress, or enough are cut already
 			return nil
 		}
@@ -192,23 +189,17 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 		}
 
 		// logger.Log(logging.LevelDebug, "requesting more transactions")
-		state.stalledBatchCut.AddEvent("resuming after unagreed own batch count got too low", trace.WithAttributes(attribute.Int64("unagreedOwnBatchCount", int64(unagreedOwnBatchCount))))
+		state.stalledBatchCut = false
 
-		state.stalledBatchCut.End()
-		state.stalledBatchCut = nil
-
-		_, span := m.DslHandle().PushSpan("fetching new batch from mempool")
-		mempooldsl.RequestBatch(m, mc.Mempool, &span)
+		mempooldsl.RequestBatch[struct{}](m, mc.Mempool, nil)
 		return nil
 	})
-	mempooldsl.UponNewBatch(m, func(txIDs []t.TxID, txs []*requestpbtypes.Request, span *trace.Span) error {
+	mempooldsl.UponNewBatch(m, func(txIDs []t.TxID, txs []*requestpbtypes.Request, ctx *struct{}) error {
 		if len(txs) == 0 {
 			return fmt.Errorf("empty batch. did you misconfigure your mempool?")
 		}
 
 		// logger.Log(logging.LevelDebug, "new batch", "nTransactions", len(txs))
-		(*span).AddEvent("got transactions")
-		(*span).End()
 
 		abcdsl.StartBroadcast(m, mc.AleaBroadcast, state.bcOwnQueueHead, txs)
 		state.bcOwnQueueHead++
@@ -216,8 +207,8 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 	})
 	abcdsl.UponDeliver(m, func(slot *commontypes.Slot) error {
 		if slot.QueueIdx == ownQueueIdx && slot.QueueSlot == state.bcOwnQueueHead-1 {
-			// new batch was delivered, stall next one until ready
-			_, state.stalledBatchCut = m.DslHandle().PushSpan("stalling batch cut", trace.WithAttributes(attribute.Int64("slot", int64(state.bcOwnQueueHead))))
+			// new batch was delivered
+			state.stalledBatchCut = true
 		}
 		return nil
 	})
@@ -228,28 +219,23 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 
 	// upon init, stall agreement until a slot is deliverable
 	dsl.UponInit(m, func() error {
-		_, state.stalledRoundSpan = m.DslHandle().PushSpan("stalling agreement round", trace.WithAttributes(attribute.Int64("agRound", int64(state.agRound))))
+		state.stalledAgRound = true
 		return nil
 	})
 
 	// upon agreement round completion, prepare next round
 	aagdsl.UponDeliver(m, func(round uint64, decision bool) error {
 		state.agRound++
-		if state.stalledRoundSpan != nil {
-			state.stalledRoundSpan.AddEvent("agreement delivered without local input")
-			state.stalledRoundSpan.End()
-		}
-
 		state.avgAgTime.AddSample(time.Since(state.agStartTime))
 
-		_, state.stalledRoundSpan = m.DslHandle().PushSpan("stalling agreement round", trace.WithAttributes(attribute.Int64("agRound", int64(state.agRound))))
+		state.stalledAgRound = true
 		return nil
 	})
 
 	// if no agreement round is running, and any queue is able to deliver in this node, start the next round
 	// a queue is able to deliver in this node if its head has been broadcast to it
 	dsl.UponCondition(m, func() error {
-		if state.stalledRoundSpan == nil {
+		if !state.stalledAgRound {
 			return nil // nothing to do
 		}
 
@@ -277,10 +263,8 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 
 			// logger.Log(logging.LevelDebug, "progressing to next agreement round", "agreementRound", state.agRound, "input", bcDone)
 
-			state.stalledRoundSpan.End()
-			state.stalledRoundSpan = nil
-
 			aagdsl.InputValue(m, mc.AleaAgreement, state.agRound, bcDone)
+			state.stalledAgRound = false
 			state.agStartTime = time.Now()
 		}
 

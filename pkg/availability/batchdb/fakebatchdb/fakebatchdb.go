@@ -1,8 +1,6 @@
 package fakebatchdb
 
 import (
-	"context"
-
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/mempool/simplemempool/emptybatchid"
 	"github.com/filecoin-project/mir/pkg/modules"
@@ -38,8 +36,8 @@ type batchInfo struct {
 
 // NewModule returns a new module for a fake batch database.
 // It stores all the data in memory in plain go maps.
-func NewModule(ctx context.Context, mc *ModuleConfig) modules.Module {
-	m := dsl.NewModule(ctx, mc.Self)
+func NewModule(mc *ModuleConfig) modules.Module {
+	m := dsl.NewModule(mc.Self)
 
 	state := moduleState{
 		BatchStore:       make(map[t.BatchIDString]batchInfo),

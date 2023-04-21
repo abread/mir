@@ -1,8 +1,6 @@
 package simplemempool
 
 import (
-	"context"
-
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/mempool/simplemempool/internal/common"
 	"github.com/filecoin-project/mir/pkg/mempool/simplemempool/internal/parts/computeids"
@@ -44,8 +42,8 @@ func DefaultModuleParams() *ModuleParams {
 // previous batch request as possible with respect to params.MaxTransactionsInBatch.
 //
 // This implementation uses the hash function provided by the mc.Hasher module to compute transaction IDs and batch IDs.
-func NewModule(ctx context.Context, mc *ModuleConfig, params *ModuleParams) modules.Module {
-	m := dsl.NewModule(ctx, mc.Self)
+func NewModule(mc *ModuleConfig, params *ModuleParams) modules.Module {
+	m := dsl.NewModule(mc.Self)
 
 	commonState := &common.State{
 		TxByID: make(map[string]*requestpbtypes.Request),

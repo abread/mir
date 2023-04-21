@@ -1,7 +1,6 @@
 package bcqueue
 
 import (
-	"context"
 	"fmt"
 	"strconv"
 
@@ -28,22 +27,22 @@ import (
 	"github.com/filecoin-project/mir/pkg/vcb"
 )
 
-func New(ctx context.Context, mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
+func New(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
 	if slices.Index(params.AllNodes, params.QueueOwner) != int(params.QueueIdx) {
 		return nil, fmt.Errorf("invalid queue index/owner combination: %v - %v", params.QueueIdx, params.QueueOwner)
 	}
 
-	slots := modring.New(ctx, mc.Self, tunables.MaxConcurrentVcb, modring.ModuleParams{
+	slots := modring.New(mc.Self, tunables.MaxConcurrentVcb, modring.ModuleParams{
 		Generator: newVcbGenerator(mc, params, nodeID, logger),
 	}, logging.Decorate(logger, "Modring controller: "))
 
-	controller := newQueueController(ctx, mc, params, tunables, nodeID, logger, slots)
+	controller := newQueueController(mc, params, tunables, nodeID, logger, slots)
 
 	return modules.RoutedModule(mc.Self, controller, slots), nil
 }
 
-func newQueueController(ctx context.Context, mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger, slots *modring.Module) modules.PassiveModule {
-	m := dsl.NewModule(ctx, mc.Self)
+func newQueueController(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger, slots *modring.Module) modules.PassiveModule {
+	m := dsl.NewModule(mc.Self)
 
 	bcqueuedsl.UponInputValue(m, func(slot *commontypes.Slot, txs []*requestpbtypes.Request) error {
 		if slot.QueueIdx != params.QueueIdx {
@@ -104,7 +103,7 @@ func newQueueController(ctx context.Context, mc *ModuleConfig, params *ModulePar
 	return m
 }
 
-func newVcbGenerator(queueMc *ModuleConfig, queueParams *ModuleParams, nodeID t.NodeID, logger logging.Logger) func(ctx context.Context, id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
+func newVcbGenerator(queueMc *ModuleConfig, queueParams *ModuleParams, nodeID t.NodeID, logger logging.Logger) func(id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
 	baseConfig := &vcb.ModuleConfig{
 		Self:         "INVALID",
 		Consumer:     queueMc.Self,
@@ -120,7 +119,7 @@ func newVcbGenerator(queueMc *ModuleConfig, queueParams *ModuleParams, nodeID t.
 		Leader:      queueParams.QueueOwner,
 	}
 
-	return func(ctx context.Context, id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
+	return func(id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
 		mc := *baseConfig
 		mc.Self = id
 
@@ -129,7 +128,7 @@ func newVcbGenerator(queueMc *ModuleConfig, queueParams *ModuleParams, nodeID t.
 		params := *baseParams
 		params.InstanceUID = bcutil.VCBInstanceUID(queueParams.BcInstanceUID, queueParams.QueueIdx, queueSlot)
 
-		mod := vcb.NewModule(ctx, &mc, &params, nodeID, logging.Decorate(logger, "Vcb: ", "slot", idx))
+		mod := vcb.NewModule(&mc, &params, nodeID, logging.Decorate(logger, "Vcb: ", "slot", idx))
 
 		return mod, events.ListOf(
 			bcqueuepbevents.BcStarted(queueMc.Consumer, &commontypes.Slot{

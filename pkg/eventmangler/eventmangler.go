@@ -1,7 +1,6 @@
 package eventmangler
 
 import (
-	"context"
 	"fmt"
 	"math/rand"
 	"time"
@@ -67,7 +66,7 @@ func CheckParams(p *ModuleParams) error {
 // NewModule returns a new instance of the event mangler module.
 // The event mangler probabilistically drops or delays all incoming events.
 // The drop rate and interval of possible delays is determined by the params argument.
-func NewModule(ctx context.Context, mc *ModuleConfig, params *ModuleParams) (modules.PassiveModule, error) {
+func NewModule(mc *ModuleConfig, params *ModuleParams) (modules.PassiveModule, error) {
 	// Check whether parameters are valid.
 	if err := CheckParams(params); err != nil {
 		return nil, fmt.Errorf("invalid event mangler parameters: %w", err)
@@ -84,7 +83,7 @@ func NewModule(ctx context.Context, mc *ModuleConfig, params *ModuleParams) (mod
 	}
 
 	// Create DSL module.
-	m := dsl.NewModule(ctx, mc.Self)
+	m := dsl.NewModule(mc.Self)
 
 	// Register only a single handler for all events, dropping and / or delaying them as configured.
 	dsl.UponOtherEvent(m, func(ev *eventpb.Event) error {

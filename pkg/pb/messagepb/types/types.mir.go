@@ -19,9 +19,8 @@ import (
 )
 
 type Message struct {
-	DestModule   types.ModuleID
-	TraceContext map[string]string
-	Type         Message_Type
+	DestModule types.ModuleID
+	Type       Message_Type
 }
 
 type Message_Type interface {
@@ -263,17 +262,15 @@ func (*Message_ReliableNet) MirReflect() mirreflect.Type {
 
 func MessageFromPb(pb *messagepb.Message) *Message {
 	return &Message{
-		DestModule:   (types.ModuleID)(pb.DestModule),
-		TraceContext: pb.TraceContext,
-		Type:         Message_TypeFromPb(pb.Type),
+		DestModule: (types.ModuleID)(pb.DestModule),
+		Type:       Message_TypeFromPb(pb.Type),
 	}
 }
 
 func (m *Message) Pb() *messagepb.Message {
 	return &messagepb.Message{
-		DestModule:   (string)(m.DestModule),
-		TraceContext: m.TraceContext,
-		Type:         (m.Type).Pb(),
+		DestModule: (string)(m.DestModule),
+		Type:       (m.Type).Pb(),
 	}
 }
 

@@ -1,8 +1,6 @@
 package eventpbdsl
 
 import (
-	trace "go.opentelemetry.io/otel/trace"
-
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
 	types5 "github.com/filecoin-project/mir/pkg/pb/availabilitypb/types"
 	types6 "github.com/filecoin-project/mir/pkg/pb/checkpointpb/types"
@@ -25,16 +23,11 @@ func NewRequests(m dsl.Module, destModule types.ModuleID, requests []*types1.Req
 }
 
 func HashRequest[C any](m dsl.Module, destModule types.ModuleID, data []*types2.HashData, context *C) {
-	kind := trace.WithSpanKind(trace.SpanKindProducer)
-	m.DslHandle().PushSpan("HashRequest", kind)
-	defer m.DslHandle().PopSpan()
-
 	contextID := m.DslHandle().StoreContext(context)
-	traceCtx := m.DslHandle().TraceContextAsMap()
 
 	origin := &types3.HashOrigin{
 		Module: m.ModuleID(),
-		Type:   &types3.HashOrigin_Dsl{Dsl: dsl.MirOrigin(contextID, traceCtx)},
+		Type:   &types3.HashOrigin_Dsl{Dsl: dsl.MirOrigin(contextID)},
 	}
 
 	dsl.EmitMirEvent(m, events.HashRequest(destModule, data, origin))
@@ -45,16 +38,11 @@ func HashResult(m dsl.Module, destModule types.ModuleID, digests [][]uint8, orig
 }
 
 func SignRequest[C any](m dsl.Module, destModule types.ModuleID, data [][]uint8, context *C) {
-	kind := trace.WithSpanKind(trace.SpanKindProducer)
-	m.DslHandle().PushSpan("SignRequest", kind)
-	defer m.DslHandle().PopSpan()
-
 	contextID := m.DslHandle().StoreContext(context)
-	traceCtx := m.DslHandle().TraceContextAsMap()
 
 	origin := &types3.SignOrigin{
 		Module: m.ModuleID(),
-		Type:   &types3.SignOrigin_Dsl{Dsl: dsl.MirOrigin(contextID, traceCtx)},
+		Type:   &types3.SignOrigin_Dsl{Dsl: dsl.MirOrigin(contextID)},
 	}
 
 	dsl.EmitMirEvent(m, events.SignRequest(destModule, data, origin))
@@ -65,16 +53,11 @@ func SignResult(m dsl.Module, destModule types.ModuleID, signature []uint8, orig
 }
 
 func VerifyNodeSigs[C any](m dsl.Module, destModule types.ModuleID, data []*types3.SigVerData, signatures [][]uint8, nodeIds []types.NodeID, context *C) {
-	kind := trace.WithSpanKind(trace.SpanKindProducer)
-	m.DslHandle().PushSpan("VerifyNodeSigs", kind)
-	defer m.DslHandle().PopSpan()
-
 	contextID := m.DslHandle().StoreContext(context)
-	traceCtx := m.DslHandle().TraceContextAsMap()
 
 	origin := &types3.SigVerOrigin{
 		Module: m.ModuleID(),
-		Type:   &types3.SigVerOrigin_Dsl{Dsl: dsl.MirOrigin(contextID, traceCtx)},
+		Type:   &types3.SigVerOrigin_Dsl{Dsl: dsl.MirOrigin(contextID)},
 	}
 
 	dsl.EmitMirEvent(m, events.VerifyNodeSigs(destModule, data, signatures, origin, nodeIds))

@@ -1,7 +1,6 @@
 package deploytest
 
 import (
-	"context"
 	"fmt"
 
 	mirCrypto "github.com/filecoin-project/mir/pkg/crypto"
@@ -12,7 +11,7 @@ import (
 
 type LocalCryptoSystem interface {
 	Crypto(id t.NodeID) mirCrypto.Crypto
-	Module(ctx context.Context, id t.NodeID) modules.Module
+	Module(id t.NodeID) modules.Module
 }
 
 type localPseudoCryptoSystem struct {
@@ -33,6 +32,6 @@ func (cs *localPseudoCryptoSystem) Crypto(id t.NodeID) mirCrypto.Crypto {
 	return cryptoImpl
 }
 
-func (cs *localPseudoCryptoSystem) Module(ctx context.Context, id t.NodeID) modules.Module {
-	return mirCrypto.New(ctx, cs.Crypto(id))
+func (cs *localPseudoCryptoSystem) Module(id t.NodeID) modules.Module {
+	return mirCrypto.New(cs.Crypto(id))
 }

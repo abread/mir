@@ -1,8 +1,6 @@
 package batchfetcher
 
 import (
-	"context"
-
 	bfevents "github.com/filecoin-project/mir/pkg/batchfetcher/events"
 	"github.com/filecoin-project/mir/pkg/checkpoint"
 	"github.com/filecoin-project/mir/pkg/logging"
@@ -39,8 +37,8 @@ import (
 // and provides it to the checkpoint module when relaying a state snapshot request to the application.
 // Analogously, when relaying a RestoreState event, it restores its state (including the delivered transactions)
 // using the relayed information.
-func NewModule(ctx context.Context, mc *ModuleConfig, epochNr t.EpochNr, clientProgress *clientprogress.ClientProgress, logger logging.Logger) modules.Module {
-	m := dsl.NewModule(ctx, mc.Self)
+func NewModule(mc *ModuleConfig, epochNr t.EpochNr, clientProgress *clientprogress.ClientProgress, logger logging.Logger) modules.Module {
+	m := dsl.NewModule(mc.Self)
 	// Queue of output events. It is required for buffering events being relayed
 	// in case a DeliverCert event received earlier has not yet been transformed to a ProvideTransactions event.
 	// In such a case, events received later must not be relayed until the pending certificate has been resolved.
@@ -72,12 +70,9 @@ func NewModule(ctx context.Context, mc *ModuleConfig, epochNr t.EpochNr, clientP
 
 	// The NewEpoch handler updates the current epoch number and forwards the event to the output.
 	eventpbdsl.UponNewEpoch(m, func(newEpochNr t.EpochNr) error {
-		_, span := m.DslHandle().StartSpanNoPush("UponNewEpoch") // span will be ended when the event is flushed
-
 		epochNr = newEpochNr
 		output.Enqueue(&outputItem{
 			event: events.NewEpoch(mc.Destination, epochNr),
-			span:  span,
 		})
 
 		output.Flush(m)
@@ -87,8 +82,6 @@ func NewModule(ctx context.Context, mc *ModuleConfig, epochNr t.EpochNr, clientP
 	// The DeliverCert handler requests the transactions referenced by the received availability certificate
 	// from the availability layer.
 	eventpbdsl.UponDeliverCert(m, func(sn t.SeqNr, cert *apbtypes.Cert) error {
-		_, span := m.DslHandle().StartSpanNoPush("UponDeliverCert") // span will be ended when the event is flushed
-
 		// Create an empty output item and enqueue it immediately.
 		// Actual output will be delayed until the transactions have been received.
 		// This is necessary to preserve the order of incoming and outgoing events.
@@ -108,8 +101,6 @@ func NewModule(ctx context.Context, mc *ModuleConfig, epochNr t.EpochNr, clientP
 					Type.(*eventpb.Event_BatchFetcher).BatchFetcher.
 					Type.(*batchfetcherpb.Event_NewOrderedBatch).NewOrderedBatch)
 			},
-
-			span: span,
 		}
 		output.Enqueue(&item)
 
@@ -135,7 +126,6 @@ func NewModule(ctx context.Context, mc *ModuleConfig, epochNr t.EpochNr, clientP
 	// The AppSnapshotRequest handler triggers a ClientProgress event (for the checkpointing protocol)
 	// and forwards the original snapshot request event to the output.
 	eventpbdsl.UponAppSnapshotRequest(m, func(replyTo t.ModuleID) error {
-		_, span := m.DslHandle().StartSpanNoPush("UponAppSnapshotRequest") // span will be ended when the event is flushed
 
 		// Save the number of the epoch when the AppSnapshotRequest has been received.
 		// This is necessary in case the epoch number changes
@@ -152,8 +142,6 @@ func NewModule(ctx context.Context, mc *ModuleConfig, epochNr t.EpochNr, clientP
 					clientProgress.Pb(),
 				))
 			},
-
-			span: span,
 		})
 
 		output.Flush(m)
@@ -207,11 +195,9 @@ func NewModule(ctx context.Context, mc *ModuleConfig, epochNr t.EpochNr, clientP
 
 	// All other events simply pass through the batch fetcher unchanged (except their destination module).
 	dsl.UponOtherEvent(m, func(ev *eventpb.Event) error {
-		_, span := m.DslHandle().StartSpanNoPush("ForeignEvent") // span will be ended when the event is flushed
 
 		output.Enqueue(&outputItem{
 			event: events.Redirect(ev, mc.Destination),
-			span:  span,
 		})
 
 		output.Flush(m)

@@ -1,9 +1,6 @@
 package mscpbdsl
 
 import (
-	attribute "go.opentelemetry.io/otel/attribute"
-	trace "go.opentelemetry.io/otel/trace"
-
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
 	types "github.com/filecoin-project/mir/pkg/pb/availabilitypb/mscpb/types"
 	dsl1 "github.com/filecoin-project/mir/pkg/pb/messagepb/dsl"
@@ -27,48 +24,24 @@ func UponMessageReceived[W types.Message_TypeWrapper[M], M any](m dsl.Module, ha
 
 func UponRequestSigMessageReceived(m dsl.Module, handler func(from types1.NodeID, txs []*types3.Request, reqId uint64) error) {
 	UponMessageReceived[*types.Message_RequestSig](m, func(from types1.NodeID, msg *types.RequestSigMessage) error {
-		spanFromAttr := attribute.String("from", string(from))
-		spanMsgAttr := attribute.String("message", msg.Pb().String())
-		spanAttrs := trace.WithAttributes(spanFromAttr, spanMsgAttr)
-		m.DslHandle().PushSpan("UponRequestSigMessageReceived", spanAttrs)
-		defer m.DslHandle().PopSpan()
-
 		return handler(from, msg.Txs, msg.ReqId)
 	})
 }
 
 func UponSigMessageReceived(m dsl.Module, handler func(from types1.NodeID, signature []uint8, reqId uint64) error) {
 	UponMessageReceived[*types.Message_Sig](m, func(from types1.NodeID, msg *types.SigMessage) error {
-		spanFromAttr := attribute.String("from", string(from))
-		spanMsgAttr := attribute.String("message", msg.Pb().String())
-		spanAttrs := trace.WithAttributes(spanFromAttr, spanMsgAttr)
-		m.DslHandle().PushSpan("UponSigMessageReceived", spanAttrs)
-		defer m.DslHandle().PopSpan()
-
 		return handler(from, msg.Signature, msg.ReqId)
 	})
 }
 
 func UponRequestBatchMessageReceived(m dsl.Module, handler func(from types1.NodeID, batchId []uint8, reqId uint64) error) {
 	UponMessageReceived[*types.Message_RequestBatch](m, func(from types1.NodeID, msg *types.RequestBatchMessage) error {
-		spanFromAttr := attribute.String("from", string(from))
-		spanMsgAttr := attribute.String("message", msg.Pb().String())
-		spanAttrs := trace.WithAttributes(spanFromAttr, spanMsgAttr)
-		m.DslHandle().PushSpan("UponRequestBatchMessageReceived", spanAttrs)
-		defer m.DslHandle().PopSpan()
-
 		return handler(from, msg.BatchId, msg.ReqId)
 	})
 }
 
 func UponProvideBatchMessageReceived(m dsl.Module, handler func(from types1.NodeID, txs []*types3.Request, reqId uint64, batchId []uint8) error) {
 	UponMessageReceived[*types.Message_ProvideBatch](m, func(from types1.NodeID, msg *types.ProvideBatchMessage) error {
-		spanFromAttr := attribute.String("from", string(from))
-		spanMsgAttr := attribute.String("message", msg.Pb().String())
-		spanAttrs := trace.WithAttributes(spanFromAttr, spanMsgAttr)
-		m.DslHandle().PushSpan("UponProvideBatchMessageReceived", spanAttrs)
-		defer m.DslHandle().PopSpan()
-
 		return handler(from, msg.Txs, msg.ReqId, msg.BatchId)
 	})
 }

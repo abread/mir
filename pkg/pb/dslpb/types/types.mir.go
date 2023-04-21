@@ -7,21 +7,18 @@ import (
 )
 
 type Origin struct {
-	ContextID    uint64
-	TraceContext map[string]string
+	ContextID uint64
 }
 
 func OriginFromPb(pb *dslpb.Origin) *Origin {
 	return &Origin{
-		ContextID:    pb.ContextID,
-		TraceContext: pb.TraceContext,
+		ContextID: pb.ContextID,
 	}
 }
 
 func (m *Origin) Pb() *dslpb.Origin {
 	return &dslpb.Origin{
-		ContextID:    m.ContextID,
-		TraceContext: m.TraceContext,
+		ContextID: m.ContextID,
 	}
 }
 

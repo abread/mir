@@ -172,7 +172,6 @@ func newDeployment(ctx context.Context, conf *TestConfig) (*deploytest.Deploymen
 
 		// Use a simple mempool for incoming requests.
 		mempool := simplemempool.NewModule(
-			ctx,
 			&simplemempool.ModuleConfig{
 				Self:   "mempool",
 				Hasher: vcbConfig.Hasher,
@@ -182,7 +181,7 @@ func newDeployment(ctx context.Context, conf *TestConfig) (*deploytest.Deploymen
 			},
 		)
 
-		vcb := NewModule(ctx, vcbConfig, &ModuleParams{
+		vcb := NewModule(vcbConfig, &ModuleParams{
 			InstanceUID: []byte{0},
 			AllNodes:    nodeIDs,
 			Leader:      leader,
@@ -207,7 +206,7 @@ func newDeployment(ctx context.Context, conf *TestConfig) (*deploytest.Deploymen
 		}
 
 		modulesWithDefaults := map[types.ModuleID]modules.Module{
-			vcbConfig.Consumer:     newCountingApp(ctx, nodeID == leader),
+			vcbConfig.Consumer:     newCountingApp(nodeID == leader),
 			vcbConfig.Self:         vcb,
 			vcbConfig.ThreshCrypto: threshCryptoSystem.Module(ctx, nodeID),
 			vcbConfig.Mempool:      mempool,
@@ -244,8 +243,8 @@ type countingApp struct {
 	firstSignature tctypes.FullSig
 }
 
-func newCountingApp(ctx context.Context, isLeader bool) *countingApp {
-	m := dsl.NewModule(ctx, "app")
+func newCountingApp(isLeader bool) *countingApp {
+	m := dsl.NewModule("app")
 
 	app := &countingApp{
 		module: m,

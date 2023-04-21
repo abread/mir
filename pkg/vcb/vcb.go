@@ -1,7 +1,6 @@
 package vcb
 
 import (
-	"context"
 	"fmt"
 	"runtime"
 
@@ -94,8 +93,8 @@ const (
 	VcbLeaderPhaseDone
 )
 
-func NewModule(ctx context.Context, mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging.Logger) modules.PassiveModule {
-	m := dsl.NewModule(ctx, mc.Self)
+func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging.Logger) modules.PassiveModule {
+	m := dsl.NewModule(mc.Self)
 
 	state := &state{
 		payload: newVcbPayloadManager(m, mc, params),

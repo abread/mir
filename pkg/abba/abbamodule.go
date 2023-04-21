@@ -1,7 +1,6 @@
 package abba
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/filecoin-project/mir/pkg/abba/abbaround"
@@ -71,23 +70,23 @@ type state struct {
 
 const modringSubName t.ModuleID = t.ModuleID("r")
 
-func NewModule(ctx context.Context, mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
+func NewModule(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
 	if tunables.MaxRoundLookahead <= 0 {
 		return nil, fmt.Errorf("MaxRoundLookahead must be at least 1")
 	}
 
 	// rounds use a submodule namespace to allow us to mark all round messages as received at once
-	rounds := modring.New(ctx, mc.Self.Then(modringSubName), tunables.MaxRoundLookahead, modring.ModuleParams{
+	rounds := modring.New(mc.Self.Then(modringSubName), tunables.MaxRoundLookahead, modring.ModuleParams{
 		Generator: newRoundGenerator(mc, params, nodeID, logger),
 	}, logging.Decorate(logger, "Modring controller: "))
 
-	controller := newController(ctx, mc, params, tunables, nodeID, logger, rounds)
+	controller := newController(mc, params, tunables, nodeID, logger, rounds)
 
 	return modules.RoutedModule(mc.Self, controller, rounds), nil
 }
 
-func newController(ctx context.Context, mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger, rounds *modring.Module) modules.PassiveModule {
-	m := dsl.NewModule(ctx, mc.Self)
+func newController(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger, rounds *modring.Module) modules.PassiveModule {
+	m := dsl.NewModule(mc.Self)
 
 	state := &state{
 		phase:       phaseAwaitingInput,
@@ -185,9 +184,9 @@ func newController(ctx context.Context, mc *ModuleConfig, params *ModuleParams, 
 	return m
 }
 
-func newRoundGenerator(controllerMc *ModuleConfig, controllerParams *ModuleParams, nodeID t.NodeID, logger logging.Logger) func(ctx context.Context, id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
+func newRoundGenerator(controllerMc *ModuleConfig, controllerParams *ModuleParams, nodeID t.NodeID, logger logging.Logger) func(id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
 
-	return func(ctx context.Context, id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
+	return func(id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
 		mc := &abbaround.ModuleConfig{
 			Self:         id,
 			Consumer:     controllerMc.Self,
@@ -202,7 +201,7 @@ func newRoundGenerator(controllerMc *ModuleConfig, controllerParams *ModuleParam
 			RoundNumber: idx,
 		}
 
-		mod := abbaround.New(ctx, mc, params, nodeID, logging.Decorate(logger, "Abba Round: ", "abbaRound", idx))
+		mod := abbaround.New(mc, params, nodeID, logging.Decorate(logger, "Abba Round: ", "abbaRound", idx))
 
 		initialEvs := &events.EventList{}
 		return mod, initialEvs, nil

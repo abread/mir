@@ -1,8 +1,6 @@
 package availabilitypbdsl
 
 import (
-	trace "go.opentelemetry.io/otel/trace"
-
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
 	events "github.com/filecoin-project/mir/pkg/pb/availabilitypb/events"
 	types1 "github.com/filecoin-project/mir/pkg/pb/availabilitypb/types"
@@ -13,16 +11,11 @@ import (
 // Module-specific dsl functions for emitting events.
 
 func RequestCert[C any](m dsl.Module, destModule types.ModuleID, context *C) {
-	kind := trace.WithSpanKind(trace.SpanKindProducer)
-	m.DslHandle().PushSpan("RequestCert", kind)
-	defer m.DslHandle().PopSpan()
-
 	contextID := m.DslHandle().StoreContext(context)
-	traceCtx := m.DslHandle().TraceContextAsMap()
 
 	origin := &types1.RequestCertOrigin{
 		Module: m.ModuleID(),
-		Type:   &types1.RequestCertOrigin_Dsl{Dsl: dsl.MirOrigin(contextID, traceCtx)},
+		Type:   &types1.RequestCertOrigin_Dsl{Dsl: dsl.MirOrigin(contextID)},
 	}
 
 	dsl.EmitMirEvent(m, events.RequestCert(destModule, origin))
@@ -33,16 +26,11 @@ func NewCert(m dsl.Module, destModule types.ModuleID, cert *types1.Cert, origin 
 }
 
 func VerifyCert[C any](m dsl.Module, destModule types.ModuleID, cert *types1.Cert, context *C) {
-	kind := trace.WithSpanKind(trace.SpanKindProducer)
-	m.DslHandle().PushSpan("VerifyCert", kind)
-	defer m.DslHandle().PopSpan()
-
 	contextID := m.DslHandle().StoreContext(context)
-	traceCtx := m.DslHandle().TraceContextAsMap()
 
 	origin := &types1.VerifyCertOrigin{
 		Module: m.ModuleID(),
-		Type:   &types1.VerifyCertOrigin_Dsl{Dsl: dsl.MirOrigin(contextID, traceCtx)},
+		Type:   &types1.VerifyCertOrigin_Dsl{Dsl: dsl.MirOrigin(contextID)},
 	}
 
 	dsl.EmitMirEvent(m, events.VerifyCert(destModule, cert, origin))
@@ -53,16 +41,11 @@ func CertVerified(m dsl.Module, destModule types.ModuleID, valid bool, err strin
 }
 
 func RequestTransactions[C any](m dsl.Module, destModule types.ModuleID, cert *types1.Cert, context *C) {
-	kind := trace.WithSpanKind(trace.SpanKindProducer)
-	m.DslHandle().PushSpan("RequestTransactions", kind)
-	defer m.DslHandle().PopSpan()
-
 	contextID := m.DslHandle().StoreContext(context)
-	traceCtx := m.DslHandle().TraceContextAsMap()
 
 	origin := &types1.RequestTransactionsOrigin{
 		Module: m.ModuleID(),
-		Type:   &types1.RequestTransactionsOrigin_Dsl{Dsl: dsl.MirOrigin(contextID, traceCtx)},
+		Type:   &types1.RequestTransactionsOrigin_Dsl{Dsl: dsl.MirOrigin(contextID)},
 	}
 
 	dsl.EmitMirEvent(m, events.RequestTransactions(destModule, cert, origin))

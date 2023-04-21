@@ -87,7 +87,6 @@ func run() error {
 	transport.Connect(nodeAddrs)
 
 	mempool := simplemempool.NewModule(
-		ctx,
 		&simplemempool.ModuleConfig{
 			Self:   "mempool",
 			Hasher: "hasher",
@@ -97,12 +96,11 @@ func run() error {
 		},
 	)
 
-	batchdb := fakebatchdb.NewModule(ctx, &fakebatchdb.ModuleConfig{
+	batchdb := fakebatchdb.NewModule(&fakebatchdb.ModuleConfig{
 		Self: "batchdb",
 	})
 
 	availability, err := multisigcollector.NewModule(
-		ctx,
 		&multisigcollector.ModuleConfig{
 			Self:    "availability",
 			Mempool: "mempool",

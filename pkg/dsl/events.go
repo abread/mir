@@ -3,9 +3,6 @@ package dsl
 import (
 	"errors"
 
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
-
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/pb/dslpb"
 	dslpbtypes "github.com/filecoin-project/mir/pkg/pb/dslpb/types"
@@ -16,18 +13,16 @@ import (
 )
 
 // Origin creates a dslpb.Origin protobuf.
-func Origin(contextID ContextID, traceContext map[string]string) *dslpb.Origin {
+func Origin(contextID ContextID) *dslpb.Origin {
 	return &dslpb.Origin{
-		ContextID:    contextID.Pb(),
-		TraceContext: traceContext,
+		ContextID: contextID.Pb(),
 	}
 }
 
 // MirOrigin creates a dslpb.Origin protobuf.
-func MirOrigin(contextID ContextID, traceContext map[string]string) *dslpbtypes.Origin {
+func MirOrigin(contextID ContextID) *dslpbtypes.Origin {
 	return &dslpbtypes.Origin{
-		ContextID:    contextID.Pb(),
-		TraceContext: traceContext,
+		ContextID: contextID.Pb(),
 	}
 }
 
@@ -38,13 +33,6 @@ func MirOrigin(contextID ContextID, traceContext map[string]string) *dslpbtypes.
 // SendMessage emits a request event to send a message over the network.
 // The message should be processed on the receiving end using UponMessageReceived.
 func SendMessage(m Module, destModule t.ModuleID, msg *messagepb.Message, dest []t.NodeID) {
-	m.DslHandle().PushSpan("SendMessage", trace.WithSpanKind(trace.SpanKindProducer))
-	defer m.DslHandle().PopSpan()
-
-	if len(msg.TraceContext) == 0 {
-		msg.TraceContext = m.DslHandle().TraceContextAsMap()
-	}
-
 	EmitEvent(m, events.SendMessage(destModule, msg, dest))
 }
 
@@ -56,17 +44,13 @@ func SendMessage(m Module, destModule t.ModuleID, msg *messagepb.Message, dest [
 // context by value when they send a request, but accept it by reference in the handler (or vice versa). This would
 // make the handler not match the response event.
 func SignRequest[C any](m Module, destModule t.ModuleID, data [][]byte, context *C) {
-	m.DslHandle().PushSpan("SignRequest", trace.WithSpanKind(trace.SpanKindProducer))
-	defer m.DslHandle().PopSpan()
-
 	contextID := m.DslHandle().StoreContext(context)
 
 	origin := &eventpb.SignOrigin{
 		Module: m.ModuleID().Pb(),
 		Type: &eventpb.SignOrigin_Dsl{
 			Dsl: &dslpb.Origin{
-				ContextID:    contextID.Pb(),
-				TraceContext: m.DslHandle().TraceContextAsMap(),
+				ContextID: contextID.Pb(),
 			},
 		},
 	}
@@ -84,17 +68,13 @@ func VerifyNodeSigs[C any](
 	nodeIDs []t.NodeID,
 	context *C,
 ) {
-	m.DslHandle().PushSpan("VerifyNodeSigs", trace.WithSpanKind(trace.SpanKindProducer))
-	defer m.DslHandle().PopSpan()
-
 	contextID := m.DslHandle().StoreContext(context)
 
 	origin := &eventpb.SigVerOrigin{
 		Module: m.ModuleID().Pb(),
 		Type: &eventpb.SigVerOrigin_Dsl{
 			Dsl: &dslpb.Origin{
-				ContextID:    contextID.Pb(),
-				TraceContext: m.DslHandle().TraceContextAsMap(),
+				ContextID: contextID.Pb(),
 			},
 		},
 	}
@@ -113,9 +93,6 @@ func VerifyOneNodeSig[C any](
 	nodeID t.NodeID,
 	context *C,
 ) {
-	m.DslHandle().PushSpan("VerifyOneNodeSig")
-	defer m.DslHandle().PopSpan()
-
 	VerifyNodeSigs(m, destModule, [][][]byte{data}, [][]byte{signature}, []t.NodeID{nodeID}, context)
 }
 
@@ -123,17 +100,13 @@ func VerifyOneNodeSig[C any](
 // The response should be processed using UponHashResult with the same context type C.
 // C can be an arbitrary type and does not have to be serializable.
 func HashRequest[C any](m Module, destModule t.ModuleID, data [][][]byte, context *C) {
-	m.DslHandle().PushSpan("HashRequest", trace.WithSpanKind(trace.SpanKindProducer))
-	defer m.DslHandle().PopSpan()
-
 	contextID := m.DslHandle().StoreContext(context)
 
 	origin := &eventpb.HashOrigin{
 		Module: m.ModuleID().Pb(),
 		Type: &eventpb.HashOrigin_Dsl{
 			Dsl: &dslpb.Origin{
-				ContextID:    contextID.Pb(),
-				TraceContext: m.DslHandle().TraceContextAsMap(),
+				ContextID: contextID.Pb(),
 			},
 		},
 	}
@@ -145,9 +118,6 @@ func HashRequest[C any](m Module, destModule t.ModuleID, data [][][]byte, contex
 // This is a wrapper around HashRequest.
 // May be useful in combination with UponOneHashResult.
 func HashOneMessage[C any](m Module, destModule t.ModuleID, data [][]byte, context *C) {
-	m.DslHandle().PushSpan("HashOneMessage")
-	defer m.DslHandle().PopSpan()
-
 	HashRequest(m, destModule, [][][]byte{data}, context)
 }
 
@@ -176,10 +146,6 @@ func UponSignResult[C any](m Module, handler func(signature []byte, context *C) 
 			return nil
 		}
 
-		m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
-		m.DslHandle().PushSpan("SignResult", trace.WithSpanKind(trace.SpanKindConsumer))
-		defer m.DslHandle().PopSpan()
-
 		return handler(ev.Signature, context)
 	})
 }
@@ -201,10 +167,6 @@ func UponNodeSigsVerified[C any](
 		if !ok {
 			return nil
 		}
-
-		m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
-		m.DslHandle().PushSpan("NodeSigsVerified", trace.WithSpanKind(trace.SpanKindConsumer))
-		defer m.DslHandle().PopSpan()
 
 		errs := make([]error, len(ev.Valid))
 		for i := range ev.Valid {
@@ -249,10 +211,6 @@ func UponHashResult[C any](m Module, handler func(hashes [][]byte, context *C) e
 			return nil
 		}
 
-		m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
-		m.DslHandle().PushSpan("HashResult", trace.WithSpanKind(trace.SpanKindConsumer))
-		defer m.DslHandle().PopSpan()
-
 		return handler(ev.Digests, context)
 	})
 }
@@ -275,12 +233,6 @@ func UponOneHashResult[C any](m Module, handler func(hash []byte, context *C) er
 // UponMessageReceived invokes handler when the module receives a message over the network.
 func UponMessageReceived(m Module, handler func(from t.NodeID, msg *messagepb.Message) error) {
 	UponEvent[*eventpb.Event_MessageReceived](m, func(ev *eventpb.MessageReceived) error {
-		m.DslHandle().ImportTraceContextFromMap(ev.Msg.TraceContext)
-		m.DslHandle().PushSpan("UponMessageReceived", trace.WithSpanKind(trace.SpanKindConsumer), trace.WithAttributes(
-			attribute.String("net.peer.name", ev.From),
-		))
-		defer m.DslHandle().PopSpan()
-
 		return handler(t.NodeID(ev.From), ev.Msg)
 	})
 }

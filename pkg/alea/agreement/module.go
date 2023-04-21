@@ -1,7 +1,6 @@
 package agreement
 
 import (
-	"context"
 	"fmt"
 	"strconv"
 
@@ -66,7 +65,7 @@ type ModuleTunables struct {
 	MaxAbbaRoundLookahead int
 }
 
-func NewModule(ctx context.Context, mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
+func NewModule(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
 	if tunables.MaxRoundLookahead <= 0 {
 		return nil, fmt.Errorf("MaxRoundLookahead must be at least 1")
 	} else if tunables.MaxAbbaRoundLookahead <= 0 {
@@ -74,7 +73,6 @@ func NewModule(ctx context.Context, mc *ModuleConfig, params *ModuleParams, tuna
 	}
 
 	agRounds := modring.New(
-		ctx,
 		mc.Self,
 		tunables.MaxRoundLookahead,
 		modring.ModuleParams{
@@ -84,7 +82,7 @@ func NewModule(ctx context.Context, mc *ModuleConfig, params *ModuleParams, tuna
 		logging.Decorate(logger, "Modring controller: "),
 	)
 
-	controller := newAgController(ctx, mc, params, nodeID, logger, agRounds)
+	controller := newAgController(mc, params, nodeID, logger, agRounds)
 
 	return modules.RoutedModule(mc.Self, controller, agRounds), nil
 }
@@ -99,8 +97,8 @@ type state struct {
 	currentRound uint64
 }
 
-func newAgController(ctx context.Context, mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging.Logger, agRounds *modring.Module) modules.PassiveModule {
-	m := dsl.NewModule(ctx, mc.Self)
+func newAgController(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging.Logger, agRounds *modring.Module) modules.PassiveModule {
+	m := dsl.NewModule(mc.Self)
 
 	state := state{}
 
@@ -203,7 +201,7 @@ func newPastMessageHandler(mc *ModuleConfig) func(pastMessages []*modringpbtypes
 	}
 }
 
-func newAbbaGenerator(agMc *ModuleConfig, agParams *ModuleParams, agTunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) func(ctx context.Context, id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
+func newAbbaGenerator(agMc *ModuleConfig, agParams *ModuleParams, agTunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) func(id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
 	params := &abba.ModuleParams{
 		InstanceUID: agParams.InstanceUID, // TODO: review
 		AllNodes:    agParams.AllNodes,
@@ -212,7 +210,7 @@ func newAbbaGenerator(agMc *ModuleConfig, agParams *ModuleParams, agTunables *Mo
 		MaxRoundLookahead: agTunables.MaxAbbaRoundLookahead,
 	}
 
-	return func(ctx context.Context, id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
+	return func(id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
 		mc := &abba.ModuleConfig{
 			Self:         id,
 			Consumer:     agMc.Self,
@@ -221,7 +219,7 @@ func newAbbaGenerator(agMc *ModuleConfig, agParams *ModuleParams, agTunables *Mo
 			Hasher:       agMc.Hasher,
 		}
 
-		mod, err := abba.NewModule(ctx, mc, params, tunables, nodeID, logging.Decorate(logger, "Abba: ", "agRound", idx))
+		mod, err := abba.NewModule(mc, params, tunables, nodeID, logging.Decorate(logger, "Abba: ", "agRound", idx))
 		if err != nil {
 			return nil, nil, err
 		}

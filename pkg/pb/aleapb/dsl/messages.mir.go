@@ -1,9 +1,6 @@
 package aleapbdsl
 
 import (
-	attribute "go.opentelemetry.io/otel/attribute"
-	trace "go.opentelemetry.io/otel/trace"
-
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
 	types3 "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
 	types "github.com/filecoin-project/mir/pkg/pb/aleapb/types"
@@ -29,24 +26,12 @@ func UponMessageReceived[W types.Message_TypeWrapper[M], M any](m dsl.Module, ha
 
 func UponFillGapMessageReceived(m dsl.Module, handler func(from types1.NodeID, slot *types3.Slot) error) {
 	UponMessageReceived[*types.Message_FillGapMessage](m, func(from types1.NodeID, msg *types.FillGapMessage) error {
-		spanFromAttr := attribute.String("from", string(from))
-		spanMsgAttr := attribute.String("message", msg.Pb().String())
-		spanAttrs := trace.WithAttributes(spanFromAttr, spanMsgAttr)
-		m.DslHandle().PushSpan("UponFillGapMessageReceived", spanAttrs)
-		defer m.DslHandle().PopSpan()
-
 		return handler(from, msg.Slot)
 	})
 }
 
 func UponFillerMessageReceived(m dsl.Module, handler func(from types1.NodeID, slot *types3.Slot, txs []*types4.Request, signature tctypes.FullSig) error) {
 	UponMessageReceived[*types.Message_FillerMessage](m, func(from types1.NodeID, msg *types.FillerMessage) error {
-		spanFromAttr := attribute.String("from", string(from))
-		spanMsgAttr := attribute.String("message", msg.Pb().String())
-		spanAttrs := trace.WithAttributes(spanFromAttr, spanMsgAttr)
-		m.DslHandle().PushSpan("UponFillerMessageReceived", spanAttrs)
-		defer m.DslHandle().PopSpan()
-
 		return handler(from, msg.Slot, msg.Txs, msg.Signature)
 	})
 }

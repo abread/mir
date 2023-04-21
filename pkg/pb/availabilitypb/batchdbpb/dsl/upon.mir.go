@@ -1,8 +1,6 @@
 package batchdbpbdsl
 
 import (
-	trace "go.opentelemetry.io/otel/trace"
-
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
 	types "github.com/filecoin-project/mir/pkg/pb/availabilitypb/batchdbpb/types"
 	types1 "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
@@ -25,15 +23,6 @@ func UponEvent[W types.Event_TypeWrapper[Ev], Ev any](m dsl.Module, handler func
 
 func UponLookupBatch(m dsl.Module, handler func(batchId types2.BatchID, origin *types.LookupBatchOrigin) error) {
 	UponEvent[*types.Event_Lookup](m, func(ev *types.LookupBatch) error {
-		originWrapper, ok := ev.Origin.Type.(*types.LookupBatchOrigin_Dsl)
-		if ok {
-			m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
-		}
-
-		kind := trace.WithSpanKind(trace.SpanKindConsumer)
-		m.DslHandle().PushSpan("LookupBatch", kind)
-		defer m.DslHandle().PopSpan()
-
 		return handler(ev.BatchId, ev.Origin)
 	})
 }
@@ -51,27 +40,12 @@ func UponLookupBatchResponse[C any](m dsl.Module, handler func(found bool, txs [
 			return nil
 		}
 
-		m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
-
-		kind := trace.WithSpanKind(trace.SpanKindConsumer)
-		m.DslHandle().PushSpan("LookupBatchResponse", kind)
-		defer m.DslHandle().PopSpan()
-
 		return handler(ev.Found, ev.Txs, ev.Metadata, context)
 	})
 }
 
 func UponStoreBatch(m dsl.Module, handler func(batchId types2.BatchID, txIds []types2.TxID, txs []*types3.Request, metadata []uint8, origin *types.StoreBatchOrigin) error) {
 	UponEvent[*types.Event_Store](m, func(ev *types.StoreBatch) error {
-		originWrapper, ok := ev.Origin.Type.(*types.StoreBatchOrigin_Dsl)
-		if ok {
-			m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
-		}
-
-		kind := trace.WithSpanKind(trace.SpanKindConsumer)
-		m.DslHandle().PushSpan("StoreBatch", kind)
-		defer m.DslHandle().PopSpan()
-
 		return handler(ev.BatchId, ev.TxIds, ev.Txs, ev.Metadata, ev.Origin)
 	})
 }
@@ -88,12 +62,6 @@ func UponBatchStored[C any](m dsl.Module, handler func(context *C) error) {
 		if !ok {
 			return nil
 		}
-
-		m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
-
-		kind := trace.WithSpanKind(trace.SpanKindConsumer)
-		m.DslHandle().PushSpan("BatchStored", kind)
-		defer m.DslHandle().PopSpan()
 
 		return handler(context)
 	})

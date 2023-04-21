@@ -1,14 +1,8 @@
 package dsl
 
 import (
-	"context"
 	"fmt"
 	"reflect"
-
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/propagation"
-	"go.opentelemetry.io/otel/trace"
 
 	cs "github.com/filecoin-project/mir/pkg/contextstore"
 	"github.com/filecoin-project/mir/pkg/events"
@@ -29,10 +23,6 @@ type dslModuleImpl struct {
 	contextStore cs.ContextStore[any]
 	// eventCleanupContextIDs is used to dispose of the used up entries in contextStore.
 	eventCleanupContextIDs map[ContextID]struct{}
-
-	initialGoCtx context.Context
-	goCtxStack   []context.Context
-	spanStack    []trace.Span
 }
 
 // Handle is used to manage internal state of the dsl module.
@@ -56,7 +46,7 @@ type Module interface {
 }
 
 // NewModule creates a new dsl module with a given id.
-func NewModule(goCtx context.Context, moduleID t.ModuleID) Module {
+func NewModule(moduleID t.ModuleID) Module {
 	return &dslModuleImpl{
 		moduleID:               moduleID,
 		defaultEventHandler:    failExceptForInit,
@@ -64,8 +54,6 @@ func NewModule(goCtx context.Context, moduleID t.ModuleID) Module {
 		outputEvents:           &events.EventList{},
 		contextStore:           cs.NewSequentialContextStore[any](),
 		eventCleanupContextIDs: make(map[ContextID]struct{}),
-
-		initialGoCtx: goCtx,
 	}
 }
 
@@ -120,8 +108,8 @@ func UponCondition(m Module, handler func() error) {
 
 // StoreContext stores the given data and returns an automatically deterministically generated unique id.
 // The data can be later recovered or disposed of using this id.
-func (h Handle) StoreContext(ctx any) ContextID {
-	return h.impl.contextStore.Store(ctx)
+func (h Handle) StoreContext(context any) ContextID {
+	return h.impl.contextStore.Store(context)
 }
 
 // CleanupContext schedules a disposal of context with the given id after the current batch of events is processed.
@@ -146,69 +134,6 @@ func (h Handle) RecoverAndCleanupContext(id ContextID) any {
 	res := h.RecoverAndRetainContext(id)
 	h.CleanupContext(id)
 	return res
-}
-
-func (h Handle) CurrentSpan() (context.Context, trace.Span) {
-	if len(h.impl.goCtxStack) == 0 {
-		return h.impl.initialGoCtx, nil
-	}
-
-	return h.impl.goCtxStack[len(h.impl.goCtxStack)-1], h.impl.spanStack[len(h.impl.spanStack)-1]
-}
-
-func (h Handle) StartSpanNoPush(name string, opts ...trace.SpanStartOption) (context.Context, trace.Span) {
-	currentGoCtx, _ := h.CurrentSpan()
-	return otel.Tracer(string(h.impl.moduleID)).Start(currentGoCtx, name, opts...)
-}
-
-func (h Handle) PushSpan(name string, opts ...trace.SpanStartOption) (context.Context, trace.Span) {
-	goCtx, span := h.StartSpanNoPush(name, opts...)
-
-	h.impl.goCtxStack = append(h.impl.goCtxStack, goCtx)
-	h.impl.spanStack = append(h.impl.spanStack, span)
-
-	return goCtx, span
-}
-
-func (h Handle) PushExistingSpan(span trace.Span) {
-	currentCtx, _ := h.CurrentSpan()
-	ctx := trace.ContextWithSpan(currentCtx, span)
-
-	h.impl.goCtxStack = append(h.impl.goCtxStack, ctx)
-	h.impl.spanStack = append(h.impl.spanStack, span)
-}
-
-func (h Handle) PopSpan() {
-	_, span := h.PopSpanNoEnd()
-	if span != nil {
-		span.End()
-	}
-}
-
-func (h Handle) PopSpanNoEnd() (context.Context, trace.Span) {
-	ctx, span := h.CurrentSpan()
-	if span != nil {
-		h.impl.goCtxStack = h.impl.goCtxStack[:len(h.impl.goCtxStack)-1]
-		h.impl.spanStack = h.impl.spanStack[:len(h.impl.spanStack)-1]
-	}
-
-	return ctx, span
-}
-
-func (h Handle) TraceContextAsMap() propagation.MapCarrier {
-	ctx, _ := h.CurrentSpan()
-	res := make(propagation.MapCarrier, 2)
-	propagation.TraceContext{}.Inject(ctx, res)
-
-	return res
-}
-
-func (h Handle) ImportTraceContextFromMap(m propagation.MapCarrier) {
-	ctx := propagation.TraceContext{}.Extract(h.impl.initialGoCtx, m)
-	span := trace.SpanFromContext(ctx)
-
-	h.impl.goCtxStack = []context.Context{ctx}
-	h.impl.spanStack = []trace.Span{span}
 }
 
 // The ImplementsModule method only serves the purpose of indicating that this is a Module and must not be called.
@@ -238,12 +163,7 @@ func (m *dslModuleImpl) ApplyEvents(evs *events.EventList) (*events.EventList, e
 
 		// If no specific handler was defined for this event type, execute the default handler.
 		if !ok {
-			m.DslHandle().PushSpan(
-				"defaultEventHandler",
-				trace.WithAttributes(attribute.KeyValue{Key: "event", Value: attribute.StringValue(ev.String())}),
-			)
 			err := m.defaultEventHandler(ev)
-			m.DslHandle().PopSpan()
 			if err != nil {
 				return nil, err
 			}
@@ -257,9 +177,6 @@ func (m *dslModuleImpl) ApplyEvents(evs *events.EventList) (*events.EventList, e
 			}
 		}
 
-		// clear span stacks
-		m.goCtxStack = nil
-		m.spanStack = nil
 	}
 
 	// Run condition handlers.

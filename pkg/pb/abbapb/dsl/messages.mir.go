@@ -1,9 +1,6 @@
 package abbapbdsl
 
 import (
-	attribute "go.opentelemetry.io/otel/attribute"
-	trace "go.opentelemetry.io/otel/trace"
-
 	abbatypes "github.com/filecoin-project/mir/pkg/abba/abbatypes"
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
 	types "github.com/filecoin-project/mir/pkg/pb/abbapb/types"
@@ -28,12 +25,6 @@ func UponMessageReceived[W types.Message_TypeWrapper[M], M any](m dsl.Module, ha
 
 func UponFinishMessageReceived(m dsl.Module, handler func(from types1.NodeID, value bool) error) {
 	UponMessageReceived[*types.Message_Finish](m, func(from types1.NodeID, msg *types.FinishMessage) error {
-		spanFromAttr := attribute.String("from", string(from))
-		spanMsgAttr := attribute.String("message", msg.Pb().String())
-		spanAttrs := trace.WithAttributes(spanFromAttr, spanMsgAttr)
-		m.DslHandle().PushSpan("UponFinishMessageReceived", spanAttrs)
-		defer m.DslHandle().PopSpan()
-
 		return handler(from, msg.Value)
 	})
 }
@@ -51,48 +42,24 @@ func UponRoundMessageReceived[W types.RoundMessage_TypeWrapper[M], M any](m dsl.
 
 func UponRoundInitMessageReceived(m dsl.Module, handler func(from types1.NodeID, estimate bool) error) {
 	UponRoundMessageReceived[*types.RoundMessage_Init](m, func(from types1.NodeID, msg *types.RoundInitMessage) error {
-		spanFromAttr := attribute.String("from", string(from))
-		spanMsgAttr := attribute.String("message", msg.Pb().String())
-		spanAttrs := trace.WithAttributes(spanFromAttr, spanMsgAttr)
-		m.DslHandle().PushSpan("UponRoundInitMessageReceived", spanAttrs)
-		defer m.DslHandle().PopSpan()
-
 		return handler(from, msg.Estimate)
 	})
 }
 
 func UponRoundAuxMessageReceived(m dsl.Module, handler func(from types1.NodeID, value bool) error) {
 	UponRoundMessageReceived[*types.RoundMessage_Aux](m, func(from types1.NodeID, msg *types.RoundAuxMessage) error {
-		spanFromAttr := attribute.String("from", string(from))
-		spanMsgAttr := attribute.String("message", msg.Pb().String())
-		spanAttrs := trace.WithAttributes(spanFromAttr, spanMsgAttr)
-		m.DslHandle().PushSpan("UponRoundAuxMessageReceived", spanAttrs)
-		defer m.DslHandle().PopSpan()
-
 		return handler(from, msg.Value)
 	})
 }
 
 func UponRoundConfMessageReceived(m dsl.Module, handler func(from types1.NodeID, values abbatypes.ValueSet) error) {
 	UponRoundMessageReceived[*types.RoundMessage_Conf](m, func(from types1.NodeID, msg *types.RoundConfMessage) error {
-		spanFromAttr := attribute.String("from", string(from))
-		spanMsgAttr := attribute.String("message", msg.Pb().String())
-		spanAttrs := trace.WithAttributes(spanFromAttr, spanMsgAttr)
-		m.DslHandle().PushSpan("UponRoundConfMessageReceived", spanAttrs)
-		defer m.DslHandle().PopSpan()
-
 		return handler(from, msg.Values)
 	})
 }
 
 func UponRoundCoinMessageReceived(m dsl.Module, handler func(from types1.NodeID, coinShare tctypes.SigShare) error) {
 	UponRoundMessageReceived[*types.RoundMessage_Coin](m, func(from types1.NodeID, msg *types.RoundCoinMessage) error {
-		spanFromAttr := attribute.String("from", string(from))
-		spanMsgAttr := attribute.String("message", msg.Pb().String())
-		spanAttrs := trace.WithAttributes(spanFromAttr, spanMsgAttr)
-		m.DslHandle().PushSpan("UponRoundCoinMessageReceived", spanAttrs)
-		defer m.DslHandle().PopSpan()
-
 		return handler(from, msg.CoinShare)
 	})
 }

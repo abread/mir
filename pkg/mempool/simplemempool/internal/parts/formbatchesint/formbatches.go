@@ -32,10 +32,10 @@ func IncludeBatchCreation(
 	commonState *common.State,
 ) {
 	state := &State{
-		State:           commonState,
+		State: commonState,
 
 		NewTxIDsBuckets: make([][]t.TxID, params.IncomingTxBucketCount),
-		bucketRng: *rand.New(rand.NewSource(params.RandSeed)),
+		bucketRng:       *rand.New(rand.NewSource(params.RandSeed)),
 
 		pendingBatchRequests: nil,
 	}

@@ -1,7 +1,6 @@
 package bcb
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/filecoin-project/mir/pkg/dsl"
@@ -67,8 +66,8 @@ type bcbModuleState struct {
 // secure distributed programming". It serves as a motivating example for the DSL module interface.
 // The pseudocode can also be found in https://dcl.epfl.ch/site/_media/education/sdc_byzconsensus.pdf (Algorithm 4
 // (Echo broadcast [Rei94]))
-func NewModule(ctx context.Context, mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID) modules.PassiveModule {
-	m := dsl.NewModule(ctx, mc.Self)
+func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID) modules.PassiveModule {
+	m := dsl.NewModule(mc.Self)
 
 	state := bcbModuleState{
 		request: nil,

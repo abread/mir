@@ -208,7 +208,6 @@ func newDeployment(ctx context.Context, conf *TestConfig) (*deploytest.Deploymen
 
 		abbaConfig := DefaultModuleConfig("app")
 		abba, err := NewModule(
-			ctx,
 			abbaConfig,
 			&ModuleParams{
 				InstanceUID: []byte{0},
@@ -248,7 +247,7 @@ func newDeployment(ctx context.Context, conf *TestConfig) (*deploytest.Deploymen
 		}
 
 		modulesWithDefaults := map[types.ModuleID]modules.Module{
-			"app":                   newCountingApp(ctx, inputValue),
+			"app":                   newCountingApp(inputValue),
 			abbaConfig.Self:         abba,
 			abbaConfig.ThreshCrypto: threshCryptoSystem.Module(ctx, nodeID),
 			abbaConfig.Hasher:       mirCrypto.NewHasher(ctx, mirCrypto.DefaultHasherModuleParams(), crypto.SHA256),
@@ -282,8 +281,8 @@ type countingApp struct {
 	firstDelivered bool
 }
 
-func newCountingApp(ctx context.Context, inputValue bool) *countingApp {
-	m := dsl.NewModule(ctx, "app")
+func newCountingApp(inputValue bool) *countingApp {
+	m := dsl.NewModule("app")
 
 	app := &countingApp{
 		module: m,

@@ -1,7 +1,6 @@
 package broadcast
 
 import (
-	"context"
 	"fmt"
 	"strconv"
 
@@ -59,13 +58,13 @@ type ModuleTunables struct {
 	MaxConcurrentVcbPerQueue int
 }
 
-func NewModule(ctx context.Context, mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
-	controller, err := newQueueController(ctx, mc, params, tunables, nodeID, logger)
+func NewModule(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
+	controller, err := newQueueController(mc, params, tunables, nodeID, logger)
 	if err != nil {
 		return nil, err
 	}
 
-	queues, err := createQueues(ctx, mc, params, tunables, nodeID, logger)
+	queues, err := createQueues(mc, params, tunables, nodeID, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -135,8 +134,8 @@ func (m *bcMod) splitEvents(evs *events.EventList) (*events.EventList, []*events
 	return ownEvents, queueEvents
 }
 
-func newQueueController(ctx context.Context, mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
-	m := dsl.NewModule(ctx, mc.Self)
+func newQueueController(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
+	m := dsl.NewModule(mc.Self)
 
 	ownQueueIdx := slices.Index(params.AllNodes, nodeID)
 	if ownQueueIdx == -1 {
@@ -179,7 +178,7 @@ func newQueueController(ctx context.Context, mc *ModuleConfig, params *ModulePar
 	return m, nil
 }
 
-func createQueues(ctx context.Context, bcMc *ModuleConfig, bcParams *ModuleParams, queueTunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) ([]modules.PassiveModule, error) {
+func createQueues(bcMc *ModuleConfig, bcParams *ModuleParams, queueTunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) ([]modules.PassiveModule, error) {
 	tunables := &bcqueue.ModuleTunables{
 		MaxConcurrentVcb: queueTunables.MaxConcurrentVcbPerQueue,
 	}
@@ -205,7 +204,7 @@ func createQueues(ctx context.Context, bcMc *ModuleConfig, bcParams *ModuleParam
 			QueueOwner: bcParams.AllNodes[idx],
 		}
 
-		mod, err := bcqueue.New(ctx, mc, params, tunables, nodeID, logging.Decorate(logger, "BcQueue: ", "queueIdx", idx))
+		mod, err := bcqueue.New(mc, params, tunables, nodeID, logging.Decorate(logger, "BcQueue: ", "queueIdx", idx))
 		if err != nil {
 			return nil, err
 		}

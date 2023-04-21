@@ -42,13 +42,12 @@ func debug(args *arguments) error {
 	}
 
 	// Create a debugger node and a new Context.
-	ctx, stopNode := context.WithCancel(context.Background())
-	defer stopNode()
-
-	node, err := debuggerNode(ctx, args.ownID, membership)
+	node, err := debuggerNode(args.ownID, membership)
 	if err != nil {
 		return err
 	}
+	ctx, stopNode := context.WithCancel(context.Background())
+	defer stopNode()
 
 	// Create channel for node output events and start printing its contents.
 	var nodeOutput chan *events.EventList
@@ -144,7 +143,8 @@ func debug(args *arguments) error {
 }
 
 // debuggerNode creates a new Mir node instance to be used for debugging.
-func debuggerNode(ctx context.Context, id t.NodeID, membership map[t.NodeID]t.NodeAddress) (*mir.Node, error) {
+func debuggerNode(id t.NodeID, membership map[t.NodeID]t.NodeAddress) (*mir.Node, error) {
+
 	// Logger used by the node.
 	logger := logging.ConsoleDebugLogger
 
@@ -175,7 +175,7 @@ func debuggerNode(ctx context.Context, id t.NodeID, membership map[t.NodeID]t.No
 	// Instantiate and return a minimal Mir Node.
 	modulesWithDefaults, err := iss.DefaultModules(map[t.ModuleID]modules.Module{
 		"net":    nullTransport,
-		"crypto": mirCrypto.New(ctx, cryptoImpl),
+		"crypto": mirCrypto.New(cryptoImpl),
 		"app": trantor.NewAppModule(
 			trantor.AppLogicFromStatic(deploytest.NewFakeApp(logger), map[t.NodeID]t.NodeAddress{}),
 			nullTransport,

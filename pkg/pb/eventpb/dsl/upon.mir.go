@@ -1,8 +1,6 @@
 package eventpbdsl
 
 import (
-	trace "go.opentelemetry.io/otel/trace"
-
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
 	types5 "github.com/filecoin-project/mir/pkg/pb/availabilitypb/types"
 	types6 "github.com/filecoin-project/mir/pkg/pb/checkpointpb/types"
@@ -29,15 +27,6 @@ func UponNewRequests(m dsl.Module, handler func(requests []*types1.Request) erro
 
 func UponHashRequest(m dsl.Module, handler func(data []*types2.HashData, origin *types.HashOrigin) error) {
 	dsl.UponMirEvent[*types.Event_HashRequest](m, func(ev *types.HashRequest) error {
-		originWrapper, ok := ev.Origin.Type.(*types.HashOrigin_Dsl)
-		if ok {
-			m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
-		}
-
-		kind := trace.WithSpanKind(trace.SpanKindConsumer)
-		m.DslHandle().PushSpan("HashRequest", kind)
-		defer m.DslHandle().PopSpan()
-
 		return handler(ev.Data, ev.Origin)
 	})
 }
@@ -55,27 +44,12 @@ func UponHashResult[C any](m dsl.Module, handler func(digests [][]uint8, context
 			return nil
 		}
 
-		m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
-
-		kind := trace.WithSpanKind(trace.SpanKindConsumer)
-		m.DslHandle().PushSpan("HashResult", kind)
-		defer m.DslHandle().PopSpan()
-
 		return handler(ev.Digests, context)
 	})
 }
 
 func UponSignRequest(m dsl.Module, handler func(data [][]uint8, origin *types.SignOrigin) error) {
 	dsl.UponMirEvent[*types.Event_SignRequest](m, func(ev *types.SignRequest) error {
-		originWrapper, ok := ev.Origin.Type.(*types.SignOrigin_Dsl)
-		if ok {
-			m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
-		}
-
-		kind := trace.WithSpanKind(trace.SpanKindConsumer)
-		m.DslHandle().PushSpan("SignRequest", kind)
-		defer m.DslHandle().PopSpan()
-
 		return handler(ev.Data, ev.Origin)
 	})
 }
@@ -93,27 +67,12 @@ func UponSignResult[C any](m dsl.Module, handler func(signature []uint8, context
 			return nil
 		}
 
-		m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
-
-		kind := trace.WithSpanKind(trace.SpanKindConsumer)
-		m.DslHandle().PushSpan("SignResult", kind)
-		defer m.DslHandle().PopSpan()
-
 		return handler(ev.Signature, context)
 	})
 }
 
 func UponVerifyNodeSigs(m dsl.Module, handler func(data []*types.SigVerData, signatures [][]uint8, origin *types.SigVerOrigin, nodeIds []types3.NodeID) error) {
 	dsl.UponMirEvent[*types.Event_VerifyNodeSigs](m, func(ev *types.VerifyNodeSigs) error {
-		originWrapper, ok := ev.Origin.Type.(*types.SigVerOrigin_Dsl)
-		if ok {
-			m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
-		}
-
-		kind := trace.WithSpanKind(trace.SpanKindConsumer)
-		m.DslHandle().PushSpan("VerifyNodeSigs", kind)
-		defer m.DslHandle().PopSpan()
-
 		return handler(ev.Data, ev.Signatures, ev.Origin, ev.NodeIds)
 	})
 }
@@ -130,12 +89,6 @@ func UponNodeSigsVerified[C any](m dsl.Module, handler func(nodeIds []types3.Nod
 		if !ok {
 			return nil
 		}
-
-		m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
-
-		kind := trace.WithSpanKind(trace.SpanKindConsumer)
-		m.DslHandle().PushSpan("NodeSigsVerified", kind)
-		defer m.DslHandle().PopSpan()
 
 		return handler(ev.NodeIds, ev.Valid, ev.Errors, ev.AllOk, context)
 	})

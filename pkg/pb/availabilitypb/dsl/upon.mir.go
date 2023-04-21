@@ -1,8 +1,6 @@
 package availabilitypbdsl
 
 import (
-	trace "go.opentelemetry.io/otel/trace"
-
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
 	types "github.com/filecoin-project/mir/pkg/pb/availabilitypb/types"
 	types1 "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
@@ -24,15 +22,6 @@ func UponEvent[W types.Event_TypeWrapper[Ev], Ev any](m dsl.Module, handler func
 
 func UponRequestCert(m dsl.Module, handler func(origin *types.RequestCertOrigin) error) {
 	UponEvent[*types.Event_RequestCert](m, func(ev *types.RequestCert) error {
-		originWrapper, ok := ev.Origin.Type.(*types.RequestCertOrigin_Dsl)
-		if ok {
-			m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
-		}
-
-		kind := trace.WithSpanKind(trace.SpanKindConsumer)
-		m.DslHandle().PushSpan("RequestCert", kind)
-		defer m.DslHandle().PopSpan()
-
 		return handler(ev.Origin)
 	})
 }
@@ -50,27 +39,12 @@ func UponNewCert[C any](m dsl.Module, handler func(cert *types.Cert, context *C)
 			return nil
 		}
 
-		m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
-
-		kind := trace.WithSpanKind(trace.SpanKindConsumer)
-		m.DslHandle().PushSpan("NewCert", kind)
-		defer m.DslHandle().PopSpan()
-
 		return handler(ev.Cert, context)
 	})
 }
 
 func UponVerifyCert(m dsl.Module, handler func(cert *types.Cert, origin *types.VerifyCertOrigin) error) {
 	UponEvent[*types.Event_VerifyCert](m, func(ev *types.VerifyCert) error {
-		originWrapper, ok := ev.Origin.Type.(*types.VerifyCertOrigin_Dsl)
-		if ok {
-			m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
-		}
-
-		kind := trace.WithSpanKind(trace.SpanKindConsumer)
-		m.DslHandle().PushSpan("VerifyCert", kind)
-		defer m.DslHandle().PopSpan()
-
 		return handler(ev.Cert, ev.Origin)
 	})
 }
@@ -88,27 +62,12 @@ func UponCertVerified[C any](m dsl.Module, handler func(valid bool, err string, 
 			return nil
 		}
 
-		m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
-
-		kind := trace.WithSpanKind(trace.SpanKindConsumer)
-		m.DslHandle().PushSpan("CertVerified", kind)
-		defer m.DslHandle().PopSpan()
-
 		return handler(ev.Valid, ev.Err, context)
 	})
 }
 
 func UponRequestTransactions(m dsl.Module, handler func(cert *types.Cert, origin *types.RequestTransactionsOrigin) error) {
 	UponEvent[*types.Event_RequestTransactions](m, func(ev *types.RequestTransactions) error {
-		originWrapper, ok := ev.Origin.Type.(*types.RequestTransactionsOrigin_Dsl)
-		if ok {
-			m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
-		}
-
-		kind := trace.WithSpanKind(trace.SpanKindConsumer)
-		m.DslHandle().PushSpan("RequestTransactions", kind)
-		defer m.DslHandle().PopSpan()
-
 		return handler(ev.Cert, ev.Origin)
 	})
 }
@@ -125,12 +84,6 @@ func UponProvideTransactions[C any](m dsl.Module, handler func(txs []*types2.Req
 		if !ok {
 			return nil
 		}
-
-		m.DslHandle().ImportTraceContextFromMap(originWrapper.Dsl.TraceContext)
-
-		kind := trace.WithSpanKind(trace.SpanKindConsumer)
-		m.DslHandle().PushSpan("ProvideTransactions", kind)
-		defer m.DslHandle().PopSpan()
 
 		return handler(ev.Txs, context)
 	})

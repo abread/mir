@@ -1,7 +1,6 @@
 package dsl
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"strconv"
@@ -34,7 +33,7 @@ func defaultSimpleModuleConfig() *simpleModuleConfig {
 }
 
 func newSimpleTestingModule(mc *simpleModuleConfig) modules.PassiveModule {
-	m := NewModule(context.TODO(), mc.Self)
+	m := NewModule(mc.Self)
 
 	// state
 	var testingStrings []string
@@ -233,7 +232,7 @@ type testingStringContext struct {
 }
 
 func newContextTestingModule(mc *contextTestingModuleModuleConfig) Module {
-	m := NewModule(context.TODO(), mc.Self)
+	m := NewModule(mc.Self)
 
 	UponTestingString(m, func(s string) error {
 		SignRequest(m, mc.Crypto, [][]byte{[]byte(s)}, &testingStringContext{s})
@@ -315,7 +314,7 @@ func TestDslModule_ContextRecoveryAndCleanup(t *testing.T) {
 			assert.Panics(t, func() {
 				// Context with id 42 doesn't exist. The module should panic.
 				_, _ = m.ApplyEvents(events.ListOf(
-					events.SignResult(mc.Self, []byte{}, DslSignOrigin(mc.Self, ContextID(42), m.DslHandle().TraceContextAsMap()))))
+					events.SignResult(mc.Self, []byte{}, DslSignOrigin(mc.Self, ContextID(42)))))
 			})
 		},
 
@@ -400,11 +399,11 @@ func TestDslModule_ContextRecoveryAndCleanup(t *testing.T) {
 
 // event wrappers (similar to the ones in pkg/events/events.go)
 
-func DslSignOrigin(module types.ModuleID, contextID ContextID, traceCtx map[string]string) *eventpb.SignOrigin {
+func DslSignOrigin(module types.ModuleID, contextID ContextID) *eventpb.SignOrigin {
 	return &eventpb.SignOrigin{
 		Module: module.Pb(),
 		Type: &eventpb.SignOrigin_Dsl{
-			Dsl: Origin(contextID, traceCtx),
+			Dsl: Origin(contextID),
 		},
 	}
 }

@@ -1,7 +1,6 @@
 package abbaround
 
 import (
-	"context"
 	"fmt"
 	"runtime"
 
@@ -52,8 +51,8 @@ type state struct {
 }
 
 // nolint: gocognit
-func New(ctx context.Context, mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging.Logger) modules.PassiveModule {
-	m := dsl.NewModule(ctx, mc.Self)
+func New(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging.Logger) modules.PassiveModule {
+	m := dsl.NewModule(mc.Self)
 
 	coinData := genCoinData(mc, params)
 	state := state{
