@@ -54,6 +54,6 @@ message ClientProgress {
 message DeliveredReqs {
   option (mir.struct) = true;
 
-  uint64          low_wm    = 1;
-  repeated uint64 delivered = 2;
+  uint64          low_wm    = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/trantor/types.ReqNo"];
+  repeated uint64 delivered = 2 [(mir.type) = "github.com/filecoin-project/mir/pkg/trantor/types.ReqNo"];
 }

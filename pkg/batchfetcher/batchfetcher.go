@@ -6,16 +6,15 @@ import (
 	"github.com/filecoin-project/mir/pkg/logging"
 	apppbdsl "github.com/filecoin-project/mir/pkg/pb/apppb/dsl"
 	apppbevents "github.com/filecoin-project/mir/pkg/pb/apppb/events"
-	"github.com/filecoin-project/mir/pkg/pb/batchfetcherpb"
 	checkpointpbtypes "github.com/filecoin-project/mir/pkg/pb/checkpointpb/types"
 	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 	isspbdsl "github.com/filecoin-project/mir/pkg/pb/isspb/dsl"
-	"github.com/filecoin-project/mir/pkg/pb/requestpb"
 	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 
 	availabilitypbdsl "github.com/filecoin-project/mir/pkg/pb/availabilitypb/dsl"
 	apbtypes "github.com/filecoin-project/mir/pkg/pb/availabilitypb/types"
 	bfeventstypes "github.com/filecoin-project/mir/pkg/pb/batchfetcherpb/events"
+	batchfetcherpbtypes "github.com/filecoin-project/mir/pkg/pb/batchfetcherpb/types"
 	requestpbtypes "github.com/filecoin-project/mir/pkg/pb/requestpb/types"
 
 	eventpbdsl "github.com/filecoin-project/mir/pkg/pb/eventpb/dsl"
@@ -24,7 +23,6 @@ import (
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/modules"
-	"github.com/filecoin-project/mir/pkg/pb/eventpb"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -53,18 +51,14 @@ func NewModule(mc *ModuleConfig, epochNr tt.EpochNr, clientProgress *clientprogr
 	// that have already been added to the clientProgress, i.e., that have already been delivered.
 	// filterDuplicates modification performs the modification in-place, on the provided batch.
 	// It is applied to each transaction batch immediately before delivering it to the application.
-	filterDuplicates := func(newOrderedBatch *batchfetcherpb.NewOrderedBatch) {
+	filterDuplicates := func(newOrderedBatch *batchfetcherpbtypes.NewOrderedBatch) {
 
-		newTxs := make([]*requestpb.Request, 0, len(newOrderedBatch.Txs))
+		newTxs := make([]*requestpbtypes.Request, 0, len(newOrderedBatch.Txs))
 
 		for _, tx := range newOrderedBatch.Txs {
 
-			// Convenience variables
-			clID := tt.ClientID(tx.ClientId)
-			reqNo := tt.ReqNo(tx.ReqNo)
-
 			// Only keep transaction if it has not yet been delivered.
-			if clientProgress.Add(clID, reqNo) {
+			if clientProgress.Add(tx.ClientId, tx.ReqNo) {
 				newTxs = append(newTxs, tx)
 			}
 		}
@@ -77,7 +71,7 @@ func NewModule(mc *ModuleConfig, epochNr tt.EpochNr, clientProgress *clientprogr
 	apppbdsl.UponNewEpoch(m, func(newEpochNr tt.EpochNr) error {
 		epochNr = newEpochNr
 		output.Enqueue(&outputItem{
-			event: apppbevents.NewEpoch(mc.Destination, epochNr).Pb(),
+			event: apppbevents.NewEpoch(mc.Destination, epochNr),
 		})
 
 		output.Flush(m)
@@ -99,12 +93,12 @@ func NewModule(mc *ModuleConfig, epochNr tt.EpochNr, clientProgress *clientprogr
 			// NOT on reception of the transaction payloads.
 			// (Otherwise, delivering the transaction payloads from the availability module
 			// in different order at different nodes would lead to inconsistencies).
-			f: func(e *eventpb.Event) {
+			f: func(e *eventpbtypes.Event) {
 				// Casting event to the NewOrderedBatch type is safe,
 				// because no other event type is ever saved in an output item created at certificate delivery.
 				filterDuplicates(e.
-					Type.(*eventpb.Event_BatchFetcher).BatchFetcher.
-					Type.(*batchfetcherpb.Event_NewOrderedBatch).NewOrderedBatch)
+					Type.(*eventpbtypes.Event_BatchFetcher).BatchFetcher.
+					Type.(*batchfetcherpbtypes.Event_NewOrderedBatch).NewOrderedBatch)
 			},
 		}
 		output.Enqueue(&item)
@@ -113,7 +107,7 @@ func NewModule(mc *ModuleConfig, epochNr tt.EpochNr, clientProgress *clientprogr
 		if cert.Type == nil {
 			// Skip fetching transactions for padding certificates.
 			// Directly deliver an empty batch instead.
-			item.event = bfeventstypes.NewOrderedBatch(mc.Destination, []*requestpbtypes.Request{}).Pb()
+			item.event = bfeventstypes.NewOrderedBatch(mc.Destination, []*requestpbtypes.Request{})
 			output.Flush(m)
 		} else {
 			// If this is a proper certificate, request transactions from the availability layer.
@@ -137,14 +131,14 @@ func NewModule(mc *ModuleConfig, epochNr tt.EpochNr, clientProgress *clientprogr
 		// by the time the AppSnapshotRequest event is output and the hook function (added below) executed.
 		// Forward the original event to the output.
 		output.Enqueue(&outputItem{
-			event: apppbevents.SnapshotRequest(mc.Destination, replyTo).Pb(),
+			event: apppbevents.SnapshotRequest(mc.Destination, replyTo),
 
 			// At the time of forwarding, submit the client progress to the checkpointing protocol.
-			f: func(_ *eventpb.Event) {
+			f: func(_ *eventpbtypes.Event) {
 				clientProgress.GarbageCollect()
-				dsl.EmitEvent(m, bfevents.ClientProgress(
+				dsl.EmitMirEvent(m, bfevents.ClientProgress(
 					mc.Checkpoint.Then(t.NewModuleIDFromInt(epochNr)),
-					clientProgress.Pb(),
+					clientProgress.DslStruct(),
 				))
 			},
 		})
@@ -188,7 +182,7 @@ func NewModule(mc *ModuleConfig, epochNr tt.EpochNr, clientProgress *clientprogr
 
 		// Note that not necessarily all transactions will be part of the final batch.
 		// When the event leaves the output buffer, duplicates will be filtered out.
-		context.queueItem.event = bfeventstypes.NewOrderedBatch(mc.Destination, txs).Pb()
+		context.queueItem.event = bfeventstypes.NewOrderedBatch(mc.Destination, txs)
 		output.Flush(m)
 		return nil
 	})
@@ -199,10 +193,10 @@ func NewModule(mc *ModuleConfig, epochNr tt.EpochNr, clientProgress *clientprogr
 	})
 
 	// All other events simply pass through the batch fetcher unchanged (except their destination module).
-	dsl.UponOtherEvent(m, func(ev *eventpb.Event) error {
+	dsl.UponOtherMirEvent(m, func(ev *eventpbtypes.Event) error {
 
 		output.Enqueue(&outputItem{
-			event: events.Redirect(eventpbtypes.EventFromPb(ev), mc.Destination).Pb(),
+			event: events.Redirect(ev, mc.Destination),
 		})
 
 		output.Flush(m)

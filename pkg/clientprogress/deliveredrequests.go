@@ -3,6 +3,7 @@ package clientprogress
 import (
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/pb/commonpb"
+	commonpbtypes "github.com/filecoin-project/mir/pkg/pb/commonpb/types"
 	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 	"github.com/filecoin-project/mir/pkg/util/maputil"
 )
@@ -23,18 +24,32 @@ type DeliveredReqs struct {
 
 // EmptyDeliveredReqs allocates and returns a new DeliveredReqs.
 func EmptyDeliveredReqs(logger logging.Logger) *DeliveredReqs {
+	return NewDeliveredReqs(logger, 1)
+}
+
+// NewDeliveredReqs allocates (with the given capacity for delivered requests) and returns a new DeliveredReqs.
+func NewDeliveredReqs(logger logging.Logger, capacity int) *DeliveredReqs {
 	return &DeliveredReqs{
 		lowWM:     0,
-		delivered: make(map[tt.ReqNo]struct{}),
+		delivered: make(map[tt.ReqNo]struct{}, capacity),
 		logger:    logger,
 	}
 }
 
 func DeliveredReqsFromPb(pb *commonpb.DeliveredReqs, logger logging.Logger) *DeliveredReqs {
-	dr := EmptyDeliveredReqs(logger)
+	dr := NewDeliveredReqs(logger, len(pb.Delivered))
 	dr.lowWM = tt.ReqNo(pb.LowWm)
 	for _, reqNo := range pb.Delivered {
 		dr.delivered[tt.ReqNo(reqNo)] = struct{}{}
+	}
+	return dr
+}
+
+func DeliveredReqsFromDslStruct(ds *commonpbtypes.DeliveredReqs, logger logging.Logger) *DeliveredReqs {
+	dr := NewDeliveredReqs(logger, len(ds.Delivered))
+	dr.lowWM = ds.LowWm
+	for _, reqNo := range ds.Delivered {
+		dr.delivered[reqNo] = struct{}{}
 	}
 	return dr
 }
@@ -78,5 +93,12 @@ func (dr *DeliveredReqs) Pb() *commonpb.DeliveredReqs {
 	return &commonpb.DeliveredReqs{
 		LowWm:     dr.lowWM.Pb(),
 		Delivered: delivered,
+	}
+}
+
+func (dr *DeliveredReqs) DslStruct() *commonpbtypes.DeliveredReqs {
+	return &commonpbtypes.DeliveredReqs{
+		LowWm:     dr.lowWM,
+		Delivered: maputil.GetSortedKeys(dr.delivered),
 	}
 }

@@ -3,6 +3,7 @@ package clientprogress
 import (
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/pb/commonpb"
+	commonpbtypes "github.com/filecoin-project/mir/pkg/pb/commonpb/types"
 	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 )
 
@@ -32,6 +33,24 @@ func (cp *ClientProgress) GarbageCollect() map[tt.ClientID]tt.ReqNo {
 		lowWMs[clientID] = cwmt.GarbageCollect()
 	}
 	return lowWMs
+}
+
+func (cp *ClientProgress) DslStruct() *commonpbtypes.ClientProgress {
+	ds := make(map[string]*commonpbtypes.DeliveredReqs)
+	for clientID, clientTracker := range cp.ClientTrackers {
+		ds[clientID.Pb()] = clientTracker.DslStruct()
+	}
+	return &commonpbtypes.ClientProgress{Progress: ds}
+}
+
+func (cp *ClientProgress) LoadDslStruct(ds *commonpbtypes.ClientProgress) {
+	cp.ClientTrackers = make(map[tt.ClientID]*DeliveredReqs)
+	for clientID, deliveredReqs := range ds.Progress {
+		cp.ClientTrackers[tt.ClientID(clientID)] = DeliveredReqsFromDslStruct(
+			deliveredReqs,
+			logging.Decorate(cp.logger, "", "clID", clientID),
+		)
+	}
 }
 
 func (cp *ClientProgress) Pb() *commonpb.ClientProgress {

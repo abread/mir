@@ -2,12 +2,12 @@ package batchfetcher
 
 import (
 	"github.com/filecoin-project/mir/pkg/dsl"
-	"github.com/filecoin-project/mir/pkg/pb/eventpb"
+	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 )
 
 type outputItem struct {
-	event *eventpb.Event
-	f     func(e *eventpb.Event)
+	event *eventpbtypes.Event
+	f     func(e *eventpbtypes.Event)
 }
 
 type outputQueue struct {
@@ -29,7 +29,7 @@ func (oq *outputQueue) Flush(m dsl.Module) {
 		}
 
 		// Emit queued event.
-		dsl.EmitEvent(m, item.event)
+		dsl.EmitMirEvent(m, item.event)
 
 		// Remove item from queue.
 		oq.items = oq.items[1:]

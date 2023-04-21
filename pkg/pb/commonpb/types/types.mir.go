@@ -163,21 +163,25 @@ func (*ClientProgress) MirReflect() mirreflect.Type {
 }
 
 type DeliveredReqs struct {
-	LowWm     uint64
-	Delivered []uint64
+	LowWm     types.ReqNo
+	Delivered []types.ReqNo
 }
 
 func DeliveredReqsFromPb(pb *commonpb.DeliveredReqs) *DeliveredReqs {
 	return &DeliveredReqs{
-		LowWm:     pb.LowWm,
-		Delivered: pb.Delivered,
+		LowWm: (types.ReqNo)(pb.LowWm),
+		Delivered: types1.ConvertSlice(pb.Delivered, func(t uint64) types.ReqNo {
+			return (types.ReqNo)(t)
+		}),
 	}
 }
 
 func (m *DeliveredReqs) Pb() *commonpb.DeliveredReqs {
 	return &commonpb.DeliveredReqs{
-		LowWm:     m.LowWm,
-		Delivered: m.Delivered,
+		LowWm: (uint64)(m.LowWm),
+		Delivered: types1.ConvertSlice(m.Delivered, func(t types.ReqNo) uint64 {
+			return (uint64)(t)
+		}),
 	}
 }
 

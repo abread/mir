@@ -98,6 +98,12 @@ func UponOtherEvent(m Module, handler func(ev *eventpb.Event) error) {
 	m.DslHandle().impl.defaultEventHandler = handler
 }
 
+func UponOtherMirEvent(m Module, handler func(ev *eventpbtypes.Event) error) {
+	m.DslHandle().impl.defaultEventHandler = func(ev *eventpb.Event) error {
+		return handler(eventpbtypes.EventFromPb(ev))
+	}
+}
+
 // UponCondition registers a special type of handler that will be invoked each time after processing a batch of events.
 // The handler is assumed to represent a conditional action: it is supposed to check some predicate on the state
 // and perform actions if the predicate is satisfied.
