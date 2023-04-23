@@ -27,6 +27,13 @@ func (cp *ClientProgress) Add(clID tt.ClientID, reqNo tt.ReqNo) bool {
 	return cp.ClientTrackers[clID].Add(reqNo)
 }
 
+func (cp *ClientProgress) CanAdd(clID tt.ClientID, reqNo tt.ReqNo) bool {
+	if _, ok := cp.ClientTrackers[clID]; !ok {
+		cp.ClientTrackers[clID] = EmptyDeliveredReqs(logging.Decorate(cp.logger, "", "clID", clID))
+	}
+	return cp.ClientTrackers[clID].CanAdd(reqNo)
+}
+
 func (cp *ClientProgress) GarbageCollect() map[tt.ClientID]tt.ReqNo {
 	lowWMs := make(map[tt.ClientID]tt.ReqNo)
 	for clientID, cwmt := range cp.ClientTrackers {

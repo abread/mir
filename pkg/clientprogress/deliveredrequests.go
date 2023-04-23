@@ -58,7 +58,18 @@ func DeliveredReqsFromDslStruct(ds *commonpbtypes.DeliveredReqs, logger logging.
 // Returns true if the request number has been added now (after not being previously present).
 // Returns false if the request number has already been added before the call to Add.
 func (dr *DeliveredReqs) Add(reqNo tt.ReqNo) bool {
+	if dr.CanAdd(reqNo) {
+		dr.delivered[reqNo] = struct{}{}
+		return true
+	}
 
+	return false
+}
+
+// CanAdd checks if a request number is considered delivered in the DeliveredReqs.
+// Returns true if the request number has not been added previously.
+// Returns false if the request number has already been added before the call to CanAdd.
+func (dr *DeliveredReqs) CanAdd(reqNo tt.ReqNo) bool {
 	if reqNo < dr.lowWM {
 		dr.logger.Log(logging.LevelDebug, "Request sequence number below client's watermark window.",
 			"lowWM", dr.lowWM, "reqNo", reqNo)
@@ -66,7 +77,6 @@ func (dr *DeliveredReqs) Add(reqNo tt.ReqNo) bool {
 	}
 
 	_, alreadyPresent := dr.delivered[reqNo]
-	dr.delivered[reqNo] = struct{}{}
 	return !alreadyPresent
 }
 

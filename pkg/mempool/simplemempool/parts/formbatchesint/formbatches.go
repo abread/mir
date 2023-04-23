@@ -5,7 +5,9 @@ import (
 
 	"golang.org/x/exp/slices"
 
+	"github.com/filecoin-project/mir/pkg/clientprogress"
 	"github.com/filecoin-project/mir/pkg/dsl"
+	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/mempool/simplemempool/common"
 	mpdsl "github.com/filecoin-project/mir/pkg/pb/mempoolpb/dsl"
 	mppbtypes "github.com/filecoin-project/mir/pkg/pb/mempoolpb/types"
@@ -22,6 +24,8 @@ type State struct {
 	pendingTxCount  int
 
 	pendingBatchRequests []*mppbtypes.RequestBatchOrigin
+
+	clientProgress *clientprogress.ClientProgress
 }
 
 // IncludeBatchCreation registers event handlers for processing NewRequests and RequestBatch events.
@@ -38,10 +42,19 @@ func IncludeBatchCreation(
 		bucketRng:       *rand.New(rand.NewSource(params.RandSeed)),
 
 		pendingBatchRequests: nil,
+		clientProgress:       clientprogress.NewClientProgress(logging.NilLogger),
 	}
 
 	mpdsl.UponNewRequests(m, func(txs []*requestpbtypes.Request) error {
-		mpdsl.RequestTransactionIDs(m, mc.Self, txs, &requestTxIDsContext{txs})
+		filteredTxs := make([]*requestpbtypes.Request, 0, len(txs))
+		for _, tx := range txs {
+			// TODO: can we use Add here? depends on whether we can trust incoming requests to be valid
+			if state.clientProgress.CanAdd(tx.ClientId, tx.ReqNo) {
+				filteredTxs = append(filteredTxs, tx)
+			}
+		}
+
+		mpdsl.RequestTransactionIDs(m, mc.Self, filteredTxs, &requestTxIDsContext{filteredTxs})
 		return nil
 	})
 
@@ -110,6 +123,10 @@ func IncludeBatchCreation(
 	})
 
 	mpdsl.UponMarkDelivered(m, func(txs []*requestpbtypes.Request) error {
+		for _, tx := range txs {
+			state.clientProgress.Add(tx.ClientId, tx.ReqNo)
+		}
+
 		mpdsl.RequestTransactionIDs[markDeliveredContext](m, mc.Self, txs, nil)
 		return nil
 	})
