@@ -39,12 +39,12 @@ type state struct {
 	agRound             uint64
 	stalledAgRound      bool
 
-	avgAgTime   estimator
+	avgAgTime   *estimator
 	agStartTime time.Time
 
 	bcStartTimes map[commontypes.Slot]time.Time
-	avgOwnBcTime estimator
-	avgBcTime    estimator
+	avgOwnBcTime *estimator
+	avgBcTime    *estimator
 }
 
 func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams, tunables *common.ModuleTunables, nodeID t.NodeID, logger logging.Logger) {
@@ -177,8 +177,8 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 		}
 
 		// TODO: consider progress in current round too (will mean adjustments below)
-		timeToOwnQueueAgRound := state.avgAgTime.Estimate() * time.Duration(waitRoundCount)
-		maxTimeBeforeBatch := state.avgOwnBcTime.Estimate() + tunables.BcEstimateMargin
+		timeToOwnQueueAgRound := state.avgAgTime.MinEstimate() * time.Duration(waitRoundCount)
+		maxTimeBeforeBatch := state.avgOwnBcTime.MaxEstimate() + tunables.BcEstimateMargin
 
 		if state.agCanDeliver() && timeToOwnQueueAgRound > maxTimeBeforeBatch {
 			// we have a lot of time before we reach our agreement round. let the batch fill up
@@ -251,7 +251,7 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 
 				if startTime, ok := state.bcStartTimes[slot]; ok {
 					stalledTime := time.Since(startTime)
-					if stalledTime <= state.avgBcTime.Estimate()+tunables.BcEstimateMargin && stalledTime < tunables.MaxAgreementDelay {
+					if stalledTime <= state.avgBcTime.MaxEstimate()+tunables.BcEstimateMargin && stalledTime < tunables.MaxAgreementDelay {
 						// stall agreement to allow in-flight broadcast to complete
 						return nil
 					}
@@ -293,7 +293,11 @@ func newState(params *common.ModuleParams, tunables *common.ModuleTunables, node
 
 		slotsReadyToDeliver: make([]set[aleatypes.QueueSlot], N),
 
+		avgAgTime: NewEstimator(N * tunables.MaxConcurrentVcbPerQueue),
+
 		bcStartTimes: make(map[commontypes.Slot]time.Time, tunables.MaxConcurrentVcbPerQueue*len(params.AllNodes)),
+		avgOwnBcTime: NewEstimator(N * tunables.MaxConcurrentVcbPerQueue),
+		avgBcTime:    NewEstimator(N * tunables.MaxConcurrentVcbPerQueue),
 	}
 
 	ownQueueIdx := uint32(slices.Index(params.AllNodes, nodeID))
