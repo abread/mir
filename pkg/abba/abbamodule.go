@@ -107,7 +107,7 @@ func newController(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunab
 		rnetdsl.Ack(m, mc.ReliableNet, mc.Self, FinishMsgID(), from)
 
 		if !state.finishRecvd.Register(from) {
-			logger.Log(logging.LevelWarn, "duplicate FINISH(v)", "v", value)
+			// logger.Log(logging.LevelWarn, "duplicate FINISH(v)", "v", value)
 			return nil // duplicate message
 		}
 
@@ -117,7 +117,7 @@ func newController(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunab
 	})
 
 	dsl.UponCondition(m, func() error {
-		if state.phase != phaseRunning {
+		if state.phase == phaseDelivered {
 			return nil
 		}
 

@@ -99,7 +99,7 @@ func New(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging
 		rnetdsl.Ack(m, mc.ReliableNet, mc.Self, InitMsgID(est), from)
 
 		if !state.initRecvd.Register(est, from) {
-			logger.Log(logging.LevelWarn, "duplicate INIT", "est", est, "from", from)
+			// logger.Log(logging.LevelWarn, "duplicate INIT", "est", est, "from", from)
 			return nil // duplicate message
 		}
 
@@ -151,7 +151,7 @@ func New(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging
 		rnetdsl.Ack(m, mc.ReliableNet, mc.Self, AuxMsgID(), from)
 
 		if !state.auxRecvd.Register(from) {
-			logger.Log(logging.LevelWarn, "duplicate AUX(_)", "from", from)
+			// logger.Log(logging.LevelWarn, "duplicate AUX(_)", "from", from)
 			return nil // duplicate message
 		}
 		state.auxRecvdValueCounts.Increment(value)
@@ -186,7 +186,7 @@ func New(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging
 		rnetdsl.Ack(m, mc.ReliableNet, mc.Self, ConfMsgID(), from)
 
 		if !state.confRecvd.Register(from) {
-			logger.Log(logging.LevelWarn, "duplicate CONF(_)", "from", from)
+			// logger.Log(logging.LevelWarn, "duplicate CONF(_)", "from", from)
 			return nil // duplicate message
 		}
 
@@ -224,7 +224,7 @@ func New(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging
 		rnetdsl.Ack(m, mc.ReliableNet, mc.Self, CoinMsgID(), from)
 
 		if state.phase == phaseDone {
-			logger.Log(logging.LevelWarn, "already terminated (recvd COIN)")
+			// logger.Log(logging.LevelWarn, "already terminated (recvd COIN)")
 			return nil // already terminated
 		}
 

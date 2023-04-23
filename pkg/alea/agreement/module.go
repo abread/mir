@@ -13,7 +13,6 @@ import (
 	abbapbdsl "github.com/filecoin-project/mir/pkg/pb/abbapb/dsl"
 	abbapbevents "github.com/filecoin-project/mir/pkg/pb/abbapb/events"
 	abbapbmsgs "github.com/filecoin-project/mir/pkg/pb/abbapb/msgs"
-	abbapbtypes "github.com/filecoin-project/mir/pkg/pb/abbapb/types"
 	agreementpbdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents/dsl"
 	agreementpbevents "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents/events"
 	agreementpbmsgdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/dsl"
@@ -83,7 +82,7 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables,
 		logging.Decorate(logger, "Modring controller: "),
 	)
 
-	controller := newAgController(mc, params, nodeID, logger, agRounds)
+	controller := newAgController(mc, params, tunables, nodeID, logger, agRounds)
 
 	return modules.RoutedModule(mc.Self, controller, agRounds), nil
 }
@@ -96,18 +95,17 @@ type state struct {
 	roundDecisionHistory AgRoundHistory
 
 	currentRound uint64
+
+	undeliveredRounds map[uint64]bool
 }
 
-func newAgController(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging.Logger, agRounds *modring.Module) modules.PassiveModule {
+func newAgController(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger, agRounds *modring.Module) modules.PassiveModule {
 	m := dsl.NewModule(mc.Self)
-
-	state := state{}
+	state := state{
+		undeliveredRounds: make(map[uint64]bool, tunables.MaxRoundLookahead),
+	}
 
 	agreementpbdsl.UponInputValue(m, func(round uint64, input bool) error {
-		if round != state.currentRound {
-			return fmt.Errorf("round input provided out-of-order. expected round %v got %v", state.currentRound, round)
-		}
-
 		// logger.Log(logging.LevelDebug, "inputting value to agreement round", "agRound", round, "value", input)
 		dsl.EmitMirEvent(m, abbapbevents.InputValue(
 			mc.agRoundModuleID(round),
@@ -116,28 +114,35 @@ func newAgController(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, lo
 		return nil
 	})
 
-	abbapbdsl.UponEvent[*abbapbtypes.Event_Deliver](m, func(ev *abbapbtypes.Deliver) error {
-		roundStr := ev.SrcModule.StripParent(mc.Self).Top()
+	abbapbdsl.UponDeliver(m, func(decision bool, srcModule t.ModuleID) error {
+		roundStr := srcModule.StripParent(mc.Self).Top()
 		round, err := strconv.ParseUint(string(roundStr), 10, 64)
 		if err != nil {
 			return fmt.Errorf("deliver event for invalid round: %w", err)
 		}
 
-		decision := ev.Result
+		// queue result for delivery (when ready)
+		state.undeliveredRounds[round] = decision
+		return nil
+	})
 
-		if round != state.currentRound {
-			return fmt.Errorf("rounds delivered out-of-order. expected round %v got %v", state.currentRound, round)
+	dsl.UponCondition(m, func() error {
+		decision, ok := state.undeliveredRounds[state.currentRound]
+		for ok {
+			// logger.Log(logging.LevelDebug, "delivering round", "agRound", state.currentRound, "decision", decision)
+
+			agreementpbdsl.Deliver(m, mc.Consumer, state.currentRound, decision)
+
+			state.roundDecisionHistory.Push(decision)
+
+			state.currentRound++
+			decision, ok = state.undeliveredRounds[state.currentRound]
 		}
 
-		// logger.Log(logging.LevelDebug, "delivering round", "agRound", round, "decision", decision)
-
-		agreementpbdsl.Deliver(m, mc.Consumer, round, decision)
-
-		state.roundDecisionHistory.Push(decision)
-		state.currentRound++
-
-		if err := agRounds.MarkSubmodulePast(round); err != nil {
-			return fmt.Errorf("failed to clean up finished agreement round: %w", err)
+		if state.currentRound > 0 {
+			if err := agRounds.MarkSubmodulePast(state.currentRound - 1); err != nil {
+				return fmt.Errorf("failed to clean up finished agreement round: %w", err)
+			}
 		}
 
 		return nil
