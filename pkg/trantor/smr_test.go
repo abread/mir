@@ -368,7 +368,7 @@ func newDeployment(ctx context.Context, conf *TestConfig) (*deploytest.Deploymen
 		}
 
 		// ISS configuration
-		issConfig := issconfig.DefaultParams(transportLayer.Nodes())
+		issConfig := issconfig.DefaultParams(transportLayer.Membership())
 		if conf.SlowProposeReplicas[i] {
 			// Increase MaxProposeDelay such that it is likely to trigger view change by the SN timeout.
 			// Since a sensible value for the segment timeout needs to be stricter than the SN timeout,
@@ -391,7 +391,7 @@ func newDeployment(ctx context.Context, conf *TestConfig) (*deploytest.Deploymen
 			transport,
 			checkpoint.Genesis(stateSnapshotpb),
 			cryptoSystem.Crypto(nodeID),
-			AppLogicFromStatic(fakeApp, transportLayer.Nodes()),
+			AppLogicFromStatic(fakeApp, transportLayer.Membership()),
 			Params{
 				Mempool: &simplemempool.ModuleParams{
 					MaxTransactionsInBatch: 10,
@@ -414,7 +414,7 @@ func newDeployment(ctx context.Context, conf *TestConfig) (*deploytest.Deploymen
 		Simulation:             simulation,
 		TransportLayer:         transportLayer,
 		NodeIDs:                nodeIDs,
-		Nodes:                  transportLayer.Nodes(),
+		Membership:             transportLayer.Membership(),
 		NodeModules:            nodeModules,
 		NumClients:             conf.NumClients,
 		NumFakeRequests:        conf.NumFakeRequests,

@@ -18,8 +18,6 @@ import (
 type FakeApp struct {
 	ProtocolModule t.ModuleID
 
-	Membership map[t.NodeID]t.NodeAddress
-
 	// The state of the FakeApp only consists of a counter of processed requests.
 	RequestsProcessed uint64
 

@@ -10,6 +10,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/checkpoint"
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/modules"
+	commonpbtypes "github.com/filecoin-project/mir/pkg/pb/commonpb/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 	"github.com/filecoin-project/mir/pkg/util/maputil"
 )
@@ -37,7 +38,7 @@ type Params struct {
 
 	// The identities of all nodes that execute the protocol.
 	// Must not be empty.
-	Membership map[t.NodeID]t.NodeAddress
+	Membership *commonpbtypes.Membership
 
 	// Maximum number of concurrent VCB instances per queue
 	// Must be at least 1
@@ -88,7 +89,7 @@ func DefaultConfig(consumer t.ModuleID) *Config {
 // DefaultParams is intended for use during testing and hello-world examples.
 // A proper deployment is expected to craft a custom configuration,
 // for which DefaultParams can serve as a starting point.
-func DefaultParams(membership map[t.NodeID]t.NodeAddress) *Params {
+func DefaultParams(membership *commonpbtypes.Membership) *Params {
 	aproxRTT := 220 * time.Microsecond
 	aproxBcDuration := 3*aproxRTT/2 + 20*time.Millisecond
 
@@ -218,7 +219,7 @@ func New(ownID t.NodeID, config *Config, params *Params, startingChkp *checkpoin
 }
 
 func (p *Params) Check() error {
-	if len(p.Membership) == 0 {
+	if len(p.Membership.Nodes) == 0 {
 		return fmt.Errorf("cannot start Alea with an empty membership")
 	}
 
@@ -234,5 +235,5 @@ func (p *Params) Check() error {
 }
 
 func (p *Params) AllNodes() []t.NodeID {
-	return maputil.GetSortedKeys(p.Membership)
+	return maputil.GetSortedKeys(p.Membership.Nodes)
 }

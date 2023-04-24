@@ -130,8 +130,8 @@ func runNode(ctx context.Context) error {
 	ownNumericID, err := strconv.Atoi(id)
 	if err != nil {
 		return fmt.Errorf("unable to convert node ID: %w", err)
-	} else if ownNumericID < 0 || ownNumericID >= len(initialMembership) {
-		return fmt.Errorf("ID must be in [0, %d]", len(initialMembership)-1)
+	} else if ownNumericID < 0 || ownNumericID >= len(initialMembership.Nodes) {
+		return fmt.Errorf("ID must be in [0, %d]", len(initialMembership.Nodes)-1)
 	}
 	ownID := t.NodeID(id)
 
@@ -144,7 +144,7 @@ func runNode(ctx context.Context) error {
 
 	// Assemble listening address.
 	// In this benchmark code, we always listen on tha address 0.0.0.0.
-	portStr, err := getPortStr(initialMembership[ownID])
+	portStr, err := getPortStr(initialMembership.Nodes[ownID].Addr)
 	if err != nil {
 		return fmt.Errorf("could not parse port from own address: %w", err)
 	}
@@ -275,7 +275,12 @@ func runNode(ctx context.Context) error {
 	return nodeErr
 }
 
-func getPortStr(address t.NodeAddress) (string, error) {
+func getPortStr(addressStr string) (string, error) {
+	address, err := multiaddr.NewMultiaddr(addressStr)
+	if err != nil {
+		return "", err
+	}
+
 	_, addrStr, err := manet.DialArgs(address)
 	if err != nil {
 		return "", err
