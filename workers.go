@@ -97,7 +97,7 @@ func (n *Node) processModuleEvents(
 
 		// Add newly generated Events to the output.
 		for _, ev := range newEvents.Slice() {
-			localclock.AttachTs(ev)
+			localclock.AttachTS(ev)
 		}
 		eventsOut.PushBackList(newEvents)
 

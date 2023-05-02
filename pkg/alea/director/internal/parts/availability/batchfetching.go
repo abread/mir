@@ -9,7 +9,6 @@ import (
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/logging"
 	abcdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/dsl"
-	bcdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/dsl"
 	bcpbevents "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/events"
 	commontypes "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
 	aleadsl "github.com/filecoin-project/mir/pkg/pb/aleapb/dsl"
@@ -139,7 +138,7 @@ func IncludeBatchFetching(
 	})
 
 	// TODO: move this event to the right component
-	bcdsl.UponDoFillGap(m, func(slot *commontypes.Slot) error {
+	abcdsl.UponDoFillGap(m, func(slot *commontypes.Slot) error {
 		reqState, present := state.RequestsState[*slot]
 		if !present {
 			return nil // already handled

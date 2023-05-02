@@ -39,7 +39,7 @@ func IncludeBatchCreation(
 		State: commonState,
 
 		NewTxIDsBuckets: make([][]tt.TxID, params.IncomingTxBucketCount),
-		bucketRng:       *rand.New(rand.NewSource(params.RandSeed)),
+		bucketRng:       *rand.New(rand.NewSource(params.RandSeed)), // nolint: gosec
 
 		pendingBatchRequests: nil,
 		clientProgress:       clientprogress.NewClientProgress(logging.NilLogger),

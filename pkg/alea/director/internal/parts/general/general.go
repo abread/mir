@@ -293,11 +293,11 @@ func newState(params *common.ModuleParams, tunables *common.ModuleTunables, node
 
 		slotsReadyToDeliver: make([]set[aleatypes.QueueSlot], N),
 
-		avgAgTime: NewEstimator(N * tunables.MaxConcurrentVcbPerQueue),
+		avgAgTime: newEstimator(N * tunables.MaxConcurrentVcbPerQueue),
 
 		bcStartTimes: make(map[commontypes.Slot]time.Time, tunables.MaxConcurrentVcbPerQueue*len(params.AllNodes)),
-		avgOwnBcTime: NewEstimator(N * tunables.MaxConcurrentVcbPerQueue),
-		avgBcTime:    NewEstimator(N * tunables.MaxConcurrentVcbPerQueue),
+		avgOwnBcTime: newEstimator(N * tunables.MaxConcurrentVcbPerQueue),
+		avgBcTime:    newEstimator(N * tunables.MaxConcurrentVcbPerQueue),
 	}
 
 	ownQueueIdx := uint32(slices.Index(params.AllNodes, nodeID))

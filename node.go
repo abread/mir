@@ -148,7 +148,7 @@ func (n *Node) Debug(ctx context.Context, eventsOut chan *events.EventList) erro
 // InjectEvents inserts a list of Events in the Node.
 func (n *Node) InjectEvents(ctx context.Context, events *events.EventList) error {
 	for _, ev := range events.Slice() {
-		localclock.AttachTs(ev)
+		localclock.AttachTS(ev)
 	}
 
 	// Enqueue event in a work channel to be handled by the processing thread.
@@ -402,7 +402,7 @@ func (n *Node) importEvents(
 
 			for _, ev := range newEvents.Slice() {
 				if ev.LocalTs == 0 {
-					localclock.AttachTs(ev)
+					localclock.AttachTS(ev)
 				}
 			}
 
@@ -466,7 +466,7 @@ func (n *Node) waitForInputEnabled() {
 func createInitEvents(m modules.Modules) *events.EventList {
 	initEvents := events.EmptyList()
 	for moduleID := range m {
-		initEvents.PushBack(localclock.AttachTs(events.Init(moduleID)))
+		initEvents.PushBack(localclock.AttachTS(events.Init(moduleID)))
 	}
 	return initEvents
 }

@@ -20,7 +20,7 @@ func RefTime() time.Time {
 	return clock
 }
 
-func AttachTs(event *eventpb.Event) *eventpb.Event {
+func AttachTS(event *eventpb.Event) *eventpb.Event {
 	event.LocalTs = Now().Nanoseconds()
 	return event
 }
