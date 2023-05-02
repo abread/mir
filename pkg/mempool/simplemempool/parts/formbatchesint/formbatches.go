@@ -80,7 +80,7 @@ func IncludeBatchCreation(
 		return nil
 	})
 
-	dsl.UponCondition(m, func() error {
+	dsl.UponStateUpdates(m, func() error {
 		for len(state.pendingBatchRequests) > 0 && state.pendingTxCount >= params.MinTransactionsInBatch {
 			var txIDs []tt.TxID
 			var txs []*requestpbtypes.Request

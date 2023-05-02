@@ -116,7 +116,7 @@ func newController(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunab
 		return nil
 	})
 
-	dsl.UponCondition(m, func() error {
+	dsl.UponStateUpdates(m, func() error {
 		if state.phase == phaseDelivered {
 			return nil
 		}

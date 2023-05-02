@@ -308,7 +308,7 @@ func newDeploymentAlea(ctx context.Context, conf *TestConfig) (*deploytest.Deplo
 	fakeApps := make(map[t.NodeID]*deploytest.FakeApp)
 
 	for i, nodeID := range nodeIDs {
-		smrParams := DefaultParams(transportLayer.Nodes())
+		smrParams := DefaultParams(transportLayer.Membership())
 		smrParams.Mempool.MaxTransactionsInBatch = 16
 		smrParams.AdjustSpeed(100 * time.Millisecond)
 		smrParams.ReliableNet.RetransmissionLoopInterval = 100 * time.Millisecond
@@ -335,7 +335,7 @@ func newDeploymentAlea(ctx context.Context, conf *TestConfig) (*deploytest.Deplo
 			transport,
 			nil,
 			cryptoSystem.ThreshCrypto(nodeID),
-			AppLogicFromStatic(fakeApp, transportLayer.Nodes()),
+			AppLogicFromStatic(fakeApp, transportLayer.Membership()),
 			smrParams,
 			nodeLogger,
 		)
@@ -352,7 +352,7 @@ func newDeploymentAlea(ctx context.Context, conf *TestConfig) (*deploytest.Deplo
 		Simulation:             simulation,
 		TransportLayer:         transportLayer,
 		NodeIDs:                nodeIDs,
-		Nodes:                  transportLayer.Nodes(),
+		Membership:             transportLayer.Membership(),
 		NodeModules:            nodeModules,
 		NumClients:             conf.NumClients,
 		NumFakeRequests:        conf.NumFakeRequests,

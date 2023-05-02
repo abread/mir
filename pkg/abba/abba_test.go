@@ -264,7 +264,7 @@ func newDeployment(ctx context.Context, conf *TestConfig) (*deploytest.Deploymen
 		Simulation:     simulation,
 		TransportLayer: transportLayer,
 		NodeIDs:        nodeIDs,
-		Nodes:          transportLayer.Nodes(),
+		Membership:     transportLayer.Membership(),
 		NodeModules:    nodeModules,
 		Directory:      conf.Directory,
 		Logger:         logger,

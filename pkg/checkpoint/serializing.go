@@ -88,11 +88,11 @@ func serializeClientProgressForHash(clientProgress *commonpbtypes.ClientProgress
 		clientProgress.Progress,
 		func(clientID tt.ClientID, deliveredReqs *commonpbtypes.DeliveredReqs) (cont bool) {
 			// Append client ID and low watermark.
-			data = append(data, []byte(clientID.Pb()), serializing.Uint64ToBytes(deliveredReqs.LowWm))
+			data = append(data, []byte(clientID.Pb()), serializing.Uint64ToBytes(uint64(deliveredReqs.LowWm)))
 
 			// Append all request numbers delivered after the watermark.
 			for _, reqNo := range deliveredReqs.Delivered {
-				data = append(data, serializing.Uint64ToBytes(reqNo))
+				data = append(data, serializing.Uint64ToBytes(uint64(reqNo)))
 			}
 			return true
 		},

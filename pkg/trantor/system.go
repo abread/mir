@@ -278,7 +278,7 @@ func NewAlea(
 		params.Mempool.MinTransactionsInBatch = 1
 	}
 	params.Mempool.RandSeed = int64(slices.Index(params.Alea.AllNodes(), ownID))
-	params.Mempool.IncomingTxBucketCount = len(params.Alea.Membership)
+	params.Mempool.IncomingTxBucketCount = len(params.Alea.Membership.Nodes)
 
 	// Instantiate the Alea ordering protocol with default configuration.
 	// We use the Alea's default module configuration (the expected IDs of modules it interacts with)
@@ -353,7 +353,7 @@ func NewAlea(
 	return &System{
 		modules:            aleaProtocolModules,
 		transport:          transport,
-		initialMemberships: []map[t.NodeID]t.NodeAddress{params.Alea.Membership},
+		initialMemberships: []*commonpbtypes.Membership{params.Alea.Membership},
 	}, nil
 }
 

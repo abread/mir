@@ -135,7 +135,7 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 		}
 		return nil
 	})
-	dsl.UponCondition(m, func() error {
+	dsl.UponStateUpdates(m, func() error {
 		if state.phase == VcbPhasePendingVerification && state.payload.SigData() != nil {
 			threshDsl.VerifyFull[struct{}](m, mc.ThreshCrypto, state.payload.SigData(), state.sig, nil)
 			state.phase = VcbPhaseVerifying
@@ -150,7 +150,7 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 		}
 		return nil
 	})
-	dsl.UponCondition(m, func() error {
+	dsl.UponStateUpdates(m, func() error {
 		switch state.phase {
 		case VcbPhaseAwaitingNilDelivery:
 			logger.Log(logging.LevelWarn, "delivering failure")
@@ -184,7 +184,7 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 		state.phase = VcbPhaseAwaitingSigData
 		return nil
 	})
-	dsl.UponCondition(m, func() error {
+	dsl.UponStateUpdates(m, func() error {
 		if state.phase == VcbPhaseAwaitingSigData && state.payload.SigData() != nil {
 			threshDsl.SignShare[struct{}](m, mc.ThreshCrypto, state.payload.SigData(), nil)
 			state.phase = VcbPhaseAwaitingSigShare
@@ -234,7 +234,7 @@ func setupVcbLeader(m dsl.Module, mc *ModuleConfig, params *ModuleParams, nodeID
 		return nil
 	})
 
-	dsl.UponCondition(m, func() error {
+	dsl.UponStateUpdates(m, func() error {
 		if leaderState.phase == VcbLeaderPhaseAwaitingEchoes && leaderState.sigAgg.FullSig() != nil {
 			// logger.Log(logging.LevelDebug, "recovered full sig. sending FINAL")
 
@@ -258,7 +258,7 @@ func setupVcbLeader(m dsl.Module, mc *ModuleConfig, params *ModuleParams, nodeID
 		}
 		return nil
 	})
-	dsl.UponCondition(m, func() error {
+	dsl.UponStateUpdates(m, func() error {
 		if leaderState.phase == VcbLeaderPhaseAwaitingInput && state.payload.SigData() != nil {
 			// to make things easier, we only broadcast SEND when we are ready to validate the replies (ECHO messages)
 			// logger.Log(logging.LevelDebug, "sending SEND", "txs", state.payload.Txs())

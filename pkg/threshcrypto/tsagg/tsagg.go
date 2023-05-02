@@ -87,7 +87,7 @@ func New(m dsl.Module, params *Params, logger logging.Logger) *ThreshSigAggregat
 		unknownShares: make([]tctypes.SigShare, 0, params.InitialNodeCount),
 	}
 
-	dsl.UponCondition(m, func() error {
+	dsl.UponStateUpdates(m, func() error {
 		if agg.recoveryInProgress || agg.fullSig != nil {
 			return nil
 		}

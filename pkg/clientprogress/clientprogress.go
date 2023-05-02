@@ -43,9 +43,9 @@ func (cp *ClientProgress) GarbageCollect() map[tt.ClientID]tt.ReqNo {
 }
 
 func (cp *ClientProgress) DslStruct() *commonpbtypes.ClientProgress {
-	ds := make(map[string]*commonpbtypes.DeliveredReqs)
+	ds := make(map[tt.ClientID]*commonpbtypes.DeliveredReqs)
 	for clientID, clientTracker := range cp.ClientTrackers {
-		ds[clientID.Pb()] = clientTracker.DslStruct()
+		ds[clientID] = clientTracker.DslStruct()
 	}
 	return &commonpbtypes.ClientProgress{Progress: ds}
 }
@@ -53,7 +53,7 @@ func (cp *ClientProgress) DslStruct() *commonpbtypes.ClientProgress {
 func (cp *ClientProgress) LoadDslStruct(ds *commonpbtypes.ClientProgress) {
 	cp.ClientTrackers = make(map[tt.ClientID]*DeliveredReqs)
 	for clientID, deliveredReqs := range ds.Progress {
-		cp.ClientTrackers[tt.ClientID(clientID)] = DeliveredReqsFromDslStruct(
+		cp.ClientTrackers[clientID] = DeliveredReqsFromDslStruct(
 			deliveredReqs,
 			logging.Decorate(cp.logger, "", "clID", clientID),
 		)

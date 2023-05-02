@@ -159,7 +159,7 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 
 	// upon nice condition (unagreed batch count < max, no batch being cut, timeToNextAgForThisNode < estBc+margin || stalled ag), cut a new batch and broadcast it
 	// TODO: move to bc component
-	dsl.UponCondition(m, func() error {
+	dsl.UponStateUpdates(m, func() error {
 		// bcOwnQueueHead is the next slot to be broadcast
 		// agQueueHeads[ownQueueIdx] is the next slot to be agreed on
 		unagreedOwnBatchCount := uint64(state.bcOwnQueueHead - state.agQueueHeads[ownQueueIdx])
@@ -231,7 +231,7 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 
 	// if no agreement round is running, and any queue is able to deliver in this node, start the next round
 	// a queue is able to deliver in this node if its head has been broadcast to it
-	dsl.UponCondition(m, func() error {
+	dsl.UponStateUpdates(m, func() error {
 		if !state.stalledAgRound {
 			return nil // nothing to do
 		}

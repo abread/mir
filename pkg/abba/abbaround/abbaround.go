@@ -108,7 +108,7 @@ func New(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging
 		return nil
 	})
 
-	dsl.UponCondition(m, func() error {
+	dsl.UponStateUpdates(m, func() error {
 		if state.phase == phaseAwaitingInput || state.phase == phaseDone {
 			return nil // did not perform the initial INIT broadcast or has already terminated
 		}
@@ -162,7 +162,7 @@ func New(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging
 	})
 
 	// 7. wait until there exists a subset of nodes with size >= q_S(= N-F), from which we have received AUX(v', r) with any v' in round.values, then broadcast CONF(values, r)
-	dsl.UponCondition(m, func() error {
+	dsl.UponStateUpdates(m, func() error {
 		if state.phase != phaseAwaitingNiceAux {
 			return nil
 		}
@@ -197,7 +197,7 @@ func New(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging
 	})
 
 	// 8. wait until there exists a subset of nodes with size >= q_S(= N-F), from which we have received CONF(vs', r) with any vs' subset of round.values
-	dsl.UponCondition(m, func() error {
+	dsl.UponStateUpdates(m, func() error {
 		if state.phase != phaseAwaitingNiceConf {
 			return nil
 		}
@@ -234,7 +234,7 @@ func New(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging
 	})
 
 	// still in 9. sample coin
-	dsl.UponCondition(m, func() error {
+	dsl.UponStateUpdates(m, func() error {
 		if state.phase != phaseTossingCoin {
 			return nil
 		}

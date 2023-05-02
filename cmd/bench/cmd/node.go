@@ -29,6 +29,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/membership"
 	"github.com/filecoin-project/mir/pkg/net"
 	libp2p2 "github.com/filecoin-project/mir/pkg/net/libp2p"
+	commonpbtypes "github.com/filecoin-project/mir/pkg/pb/commonpb/types"
 	"github.com/filecoin-project/mir/pkg/requestreceiver"
 	"github.com/filecoin-project/mir/pkg/trantor"
 	t "github.com/filecoin-project/mir/pkg/types"
@@ -65,7 +66,7 @@ func init() {
 	nodeCmd.Flags().StringVar(&traceFileName, "traceFile", "", "output file for alea tracing")
 }
 
-func issSMRFactory(ctx context.Context, ownID t.NodeID, transport net.Transport, initialMembership map[t.NodeID]t.NodeAddress, smrParams trantor.Params, logger logging.Logger) (*trantor.System, error) {
+func issSMRFactory(ctx context.Context, ownID t.NodeID, transport net.Transport, initialMembership *commonpbtypes.Membership, smrParams trantor.Params, logger logging.Logger) (*trantor.System, error) {
 	localCrypto := deploytest.NewLocalCryptoSystem("pseudo", membership.GetIDs(initialMembership), logger)
 
 	genesisCheckpoint, err := trantor.GenesisCheckpoint([]byte{}, smrParams)
@@ -85,8 +86,8 @@ func issSMRFactory(ctx context.Context, ownID t.NodeID, transport net.Transport,
 	)
 }
 
-func aleaSMRFactory(ctx context.Context, ownID t.NodeID, transport net.Transport, initialMembership map[t.NodeID]t.NodeAddress, smrParams trantor.Params, logger logging.Logger) (*trantor.System, error) {
-	F := (len(initialMembership) - 1) / 3
+func aleaSMRFactory(ctx context.Context, ownID t.NodeID, transport net.Transport, initialMembership *commonpbtypes.Membership, smrParams trantor.Params, logger logging.Logger) (*trantor.System, error) {
+	F := (len(initialMembership.Nodes) - 1) / 3
 	localCrypto := deploytest.NewLocalThreshCryptoSystem("pseudo", membership.GetIDs(initialMembership), 2*F+1, logger)
 
 	return trantor.NewAlea(
@@ -101,7 +102,7 @@ func aleaSMRFactory(ctx context.Context, ownID t.NodeID, transport net.Transport
 	)
 }
 
-type smrFactory func(ctx context.Context, ownID t.NodeID, transport net.Transport, initialMembership map[t.NodeID]t.NodeAddress, smrParams trantor.Params, logger logging.Logger) (*trantor.System, error)
+type smrFactory func(ctx context.Context, ownID t.NodeID, transport net.Transport, initialMembership *commonpbtypes.Membership, smrParams trantor.Params, logger logging.Logger) (*trantor.System, error)
 
 var smrFactories = map[string]smrFactory{
 	"iss":  issSMRFactory,
@@ -140,7 +141,7 @@ func runNode(ctx context.Context) error {
 	smrParams.Mempool.MaxTransactionsInBatch = batchSize
 
 	// derived to match mean alea latency with 1tx/s load (directed at the next leader replica) - 2ms
-	smrParams.AdjustSpeed(time.Duration(10879+1467*len(initialMembership)) * time.Microsecond)
+	smrParams.AdjustSpeed(time.Duration(10879+1467*len(initialMembership.Nodes)) * time.Microsecond)
 
 	// Assemble listening address.
 	// In this benchmark code, we always listen on tha address 0.0.0.0.
@@ -204,7 +205,7 @@ func runNode(ctx context.Context) error {
 		}()
 
 		ownQueueIdx := slices.Index(smrParams.Alea.AllNodes(), ownID)
-		aleaTracer := aleatracer.NewAleaTracer(ctx, aleatypes.QueueIdx(ownQueueIdx), len(initialMembership), traceFile)
+		aleaTracer := aleatracer.NewAleaTracer(ctx, aleatypes.QueueIdx(ownQueueIdx), len(initialMembership.Nodes), traceFile)
 		defer aleaTracer.Stop()
 		tracer = aleaTracer
 	}

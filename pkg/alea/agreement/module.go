@@ -126,7 +126,7 @@ func newAgController(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTun
 		return nil
 	})
 
-	dsl.UponCondition(m, func() error {
+	dsl.UponStateUpdates(m, func() error {
 		decision, ok := state.undeliveredRounds[state.currentRound]
 		for ok {
 			// logger.Log(logging.LevelDebug, "delivering round", "agRound", state.currentRound, "decision", decision)
