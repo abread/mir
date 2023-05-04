@@ -88,7 +88,7 @@ func issSMRFactory(ctx context.Context, ownID t.NodeID, transport net.Transport,
 
 func aleaSMRFactory(ctx context.Context, ownID t.NodeID, transport net.Transport, initialMembership *commonpbtypes.Membership, smrParams trantor.Params, logger logging.Logger) (*trantor.System, error) {
 	F := (len(initialMembership.Nodes) - 1) / 3
-	localCrypto := deploytest.NewLocalThreshCryptoSystem("pseudo", membership.GetIDs(initialMembership), 2*F+1, logger)
+	localCrypto := deploytest.NewLocalThreshCryptoSystem("pseudo", membership.GetIDs(initialMembership), F+1, logger)
 
 	return trantor.NewAlea(
 		ctx,
