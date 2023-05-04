@@ -138,7 +138,7 @@ func (m *Module) splitEventsByDest(eventsIn *events.EventList) ([]events.EventLi
 		subIDStr := t.ModuleID(event.DestModule).StripParent(m.ownID).Top()
 		subID, err := strconv.ParseUint(string(subIDStr), 10, 64)
 		if err != nil {
-			m.logger.Log(logging.LevelWarn, "event received for invalid submodule index", "submoduleIdx", subIDStr)
+			// m.logger.Log(logging.LevelWarn, "event received for invalid submodule index", "submoduleIdx", subIDStr)
 			continue
 		}
 
@@ -156,7 +156,7 @@ func (m *Module) splitEventsByDest(eventsIn *events.EventList) ([]events.EventLi
 		}
 
 		if !m.ringController.IsSlotInView(subID) {
-			m.logger.Log(logging.LevelDebug, "event received for out of view submodule", "submoduleID", subID)
+			// m.logger.Log(logging.LevelDebug, "event received for out of view submodule", "submoduleID", subID)
 			continue
 		}
 
@@ -207,7 +207,7 @@ func (m *Module) getSubByRingIdx(ringIdx int) (modules.PassiveModule, *eventpb.E
 		initEvent.Next = append(initEvent.Next, initialEvs.Slice()...)
 
 		m.ring[ringIdx] = sub
-		m.logger.Log(logging.LevelDebug, "module created", "id", subID)
+		// m.logger.Log(logging.LevelDebug, "module created", "id", subID)
 
 		return m.ring[ringIdx], initEvent, err
 	default:
@@ -234,7 +234,7 @@ func (m *Module) AdvanceViewToAtLeastSubmodule(id uint64) error {
 		return fmt.Errorf("cannot advance view: %w", err)
 	}
 
-	m.logger.Log(logging.LevelDebug, "fast-forwarded view", "id", id, "newMinSlot", m.ringController.minSlot)
+	// m.logger.Log(logging.LevelDebug, "fast-forwarded view", "id", id, "newMinSlot", m.ringController.minSlot)
 
 	return nil
 }
@@ -259,7 +259,7 @@ func (m *Module) MarkSubmodulePast(id uint64) error {
 
 	m.ring[ringIdx] = nil
 
-	m.logger.Log(logging.LevelDebug, "module freed", "id", id, "newMinSlot", m.ringController.minSlot)
+	// m.logger.Log(logging.LevelDebug, "module freed", "id", id, "newMinSlot", m.ringController.minSlot)
 	return nil
 }
 
