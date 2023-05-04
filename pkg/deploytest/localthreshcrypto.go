@@ -17,18 +17,33 @@ type LocalThreshCryptoSystem interface {
 }
 
 type localPseudoThreshCryptoSystem struct {
-	nodeIDs   []t.NodeID
-	threshold int
+	cryptoType string
+	nodeIDs    []t.NodeID
+	threshold  int
 }
 
 // NewLocalCryptoSystem creates an instance of LocalCryptoSystem suitable for tests.
 // In the current implementation, cryptoType can only be "pseudo".
 func NewLocalThreshCryptoSystem(cryptoType string, nodeIDs []t.NodeID, threshold int, logger logging.Logger) LocalThreshCryptoSystem {
-	return &localPseudoThreshCryptoSystem{nodeIDs, threshold}
+	return &localPseudoThreshCryptoSystem{cryptoType, nodeIDs, threshold}
 }
 
 func (cs *localPseudoThreshCryptoSystem) ThreshCrypto(id t.NodeID) threshcrypto.ThreshCrypto {
-	cryptoImpl, err := threshcrypto.HerumiTBLSPseudo(cs.nodeIDs, cs.threshold, id, mirCrypto.DefaultPseudoSeed)
+	var cryptoImpl threshcrypto.ThreshCrypto
+	var err error
+
+	if cs.cryptoType == "pseudo" {
+		cryptoImpl, err = threshcrypto.HerumiTBLSPseudo(cs.nodeIDs, cs.threshold, id, mirCrypto.DefaultPseudoSeed)
+	} else if cs.cryptoType == "dummy" {
+		cryptoImpl = &threshcrypto.DummyCrypto{
+			DummySigShareSuffix: []byte("sigshare"),
+			NodeID:              id,
+			DummySigFull:        []byte("fullthreshsig"),
+		}
+	} else {
+		err = fmt.Errorf("unknown local crypto system type: %v (must be pseudo or dummy)", cs.cryptoType)
+	}
+
 	if err != nil {
 		panic(fmt.Sprintf("error creating crypto module: %v", err))
 	}

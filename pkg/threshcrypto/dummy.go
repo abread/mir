@@ -17,7 +17,7 @@ type DummyCrypto struct {
 	DummySigShareSuffix []byte
 
 	// Current node ID
-	Self t.NodeID
+	NodeID t.NodeID
 
 	// The only accepted full signature
 	DummySigFull []byte
@@ -25,7 +25,7 @@ type DummyCrypto struct {
 
 // SignShare always returns the dummy signature DummySig, regardless of the data.
 func (dc *DummyCrypto) SignShare(_ [][]byte) ([]byte, error) {
-	return dc.buildSigShare(dc.Self), nil
+	return dc.buildSigShare(dc.NodeID), nil
 }
 
 // VerifyShare returns nil (i.e. success) only if signature share equals nodeID||DummySigShareSuffix.

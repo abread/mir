@@ -41,11 +41,12 @@ const (
 )
 
 var (
-	protocol      string
-	batchSize     int
-	statFileName  string
-	statPeriod    time.Duration
-	traceFileName string
+	protocol       string
+	batchSize      int
+	statFileName   string
+	statPeriod     time.Duration
+	traceFileName  string
+	cryptoImplType string
 
 	nodeCmd = &cobra.Command{
 		Use:   "node",
@@ -64,10 +65,11 @@ func init() {
 	nodeCmd.Flags().StringVarP(&statFileName, "statFile", "o", "", "output file for statistics")
 	nodeCmd.Flags().DurationVar(&statPeriod, "statPeriod", time.Second, "statistic record period")
 	nodeCmd.Flags().StringVar(&traceFileName, "traceFile", "", "output file for alea tracing")
+	nodeCmd.Flags().StringVarP(&cryptoImplType, "cryptoImplType", "c", "pseudo", "type of cryptography to use (acceptable values: pseudo or dummy)")
 }
 
 func issSMRFactory(ctx context.Context, ownID t.NodeID, transport net.Transport, initialMembership *commonpbtypes.Membership, smrParams trantor.Params, logger logging.Logger) (*trantor.System, error) {
-	localCrypto := deploytest.NewLocalCryptoSystem("pseudo", membership.GetIDs(initialMembership), logger)
+	localCrypto := deploytest.NewLocalCryptoSystem(cryptoImplType, membership.GetIDs(initialMembership), logger)
 
 	genesisCheckpoint, err := trantor.GenesisCheckpoint([]byte{}, smrParams)
 	if err != nil {
@@ -88,7 +90,7 @@ func issSMRFactory(ctx context.Context, ownID t.NodeID, transport net.Transport,
 
 func aleaSMRFactory(ctx context.Context, ownID t.NodeID, transport net.Transport, initialMembership *commonpbtypes.Membership, smrParams trantor.Params, logger logging.Logger) (*trantor.System, error) {
 	F := (len(initialMembership.Nodes) - 1) / 3
-	localCrypto := deploytest.NewLocalThreshCryptoSystem("pseudo", membership.GetIDs(initialMembership), F+1, logger)
+	localCrypto := deploytest.NewLocalThreshCryptoSystem(cryptoImplType, membership.GetIDs(initialMembership), F+1, logger)
 
 	return trantor.NewAlea(
 		ctx,

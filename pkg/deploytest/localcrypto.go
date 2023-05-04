@@ -15,17 +15,30 @@ type LocalCryptoSystem interface {
 }
 
 type localPseudoCryptoSystem struct {
-	nodeIDs []t.NodeID
+	nodeIDs    []t.NodeID
+	cryptoType string
 }
 
 // NewLocalCryptoSystem creates an instance of LocalCryptoSystem suitable for tests.
-// In the current implementation, cryptoType can only be "pseudo".
-func NewLocalCryptoSystem(_ string, nodeIDs []t.NodeID, _ logging.Logger) LocalCryptoSystem {
-	return &localPseudoCryptoSystem{nodeIDs}
+// In the current implementation, cryptoType can only be "pseudo" or "dummy".
+func NewLocalCryptoSystem(cryptoType string, nodeIDs []t.NodeID, _ logging.Logger) LocalCryptoSystem {
+	return &localPseudoCryptoSystem{nodeIDs, cryptoType}
 }
 
 func (cs *localPseudoCryptoSystem) Crypto(id t.NodeID) mirCrypto.Crypto {
-	cryptoImpl, err := mirCrypto.InsecureCryptoForTestingOnly(cs.nodeIDs, id, mirCrypto.DefaultPseudoSeed)
+	var cryptoImpl mirCrypto.Crypto
+	var err error
+
+	if cs.cryptoType == "pseudo" {
+		cryptoImpl, err = mirCrypto.InsecureCryptoForTestingOnly(cs.nodeIDs, id, mirCrypto.DefaultPseudoSeed)
+	} else if cs.cryptoType == "dummy" {
+		cryptoImpl = &mirCrypto.DummyCrypto{
+			DummySig: []byte("a valid signature"),
+		}
+	} else {
+		err = fmt.Errorf("unknown local crypto system type: %v (must be pseudo or dummy)", cs.cryptoType)
+	}
+
 	if err != nil {
 		panic(fmt.Sprintf("error creating crypto module: %v", err))
 	}
