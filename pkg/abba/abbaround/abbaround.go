@@ -11,8 +11,8 @@ import (
 	abbadsl "github.com/filecoin-project/mir/pkg/pb/abbapb/dsl"
 	abbapbevents "github.com/filecoin-project/mir/pkg/pb/abbapb/events"
 	abbapbmsgs "github.com/filecoin-project/mir/pkg/pb/abbapb/msgs"
-	commonpbtypes "github.com/filecoin-project/mir/pkg/pb/commonpb/types"
 	hasherpbdsl "github.com/filecoin-project/mir/pkg/pb/hasherpb/dsl"
+	hasherpbtypes "github.com/filecoin-project/mir/pkg/pb/hasherpb/types"
 	rnetdsl "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/dsl"
 	threshDsl "github.com/filecoin-project/mir/pkg/pb/threshcryptopb/dsl"
 	"github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
@@ -240,7 +240,7 @@ func New(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging
 		}
 
 		if state.coinSig.FullSig() != nil && !state.hashingCoin {
-			hasherpbdsl.RequestOne[struct{}](m, mc.Hasher, &commonpbtypes.HashData{
+			hasherpbdsl.RequestOne[struct{}](m, mc.Hasher, &hasherpbtypes.HashData{
 				Data: [][]byte{state.coinSig.FullSig()},
 			}, nil)
 			state.hashingCoin = true

@@ -18,7 +18,6 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/filecoin-project/mir/pkg/checkpoint"
-	chkpprotos "github.com/filecoin-project/mir/pkg/checkpoint/protobufs"
 	"github.com/filecoin-project/mir/pkg/clientprogress"
 	"github.com/filecoin-project/mir/pkg/crypto"
 	"github.com/filecoin-project/mir/pkg/dsl"
@@ -34,8 +33,7 @@ import (
 	apbtypes "github.com/filecoin-project/mir/pkg/pb/availabilitypb/types"
 	chkppbdsl "github.com/filecoin-project/mir/pkg/pb/checkpointpb/dsl"
 	chkppbmsgs "github.com/filecoin-project/mir/pkg/pb/checkpointpb/msgs"
-	chkppbtypes "github.com/filecoin-project/mir/pkg/pb/checkpointpb/types"
-	commonpbtypes "github.com/filecoin-project/mir/pkg/pb/commonpb/types"
+	checkpointpbtypes "github.com/filecoin-project/mir/pkg/pb/checkpointpb/types"
 	eventpbdsl "github.com/filecoin-project/mir/pkg/pb/eventpb/dsl"
 	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 	factorypbdsl "github.com/filecoin-project/mir/pkg/pb/factorypb/dsl"
@@ -43,6 +41,7 @@ import (
 	isspbdsl "github.com/filecoin-project/mir/pkg/pb/isspb/dsl"
 	isspbevents "github.com/filecoin-project/mir/pkg/pb/isspb/events"
 	transportpbdsl "github.com/filecoin-project/mir/pkg/pb/transportpb/dsl"
+	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	"github.com/filecoin-project/mir/pkg/timer/types"
 	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 	t "github.com/filecoin-project/mir/pkg/types"
@@ -87,13 +86,13 @@ type ISS struct {
 	// The memberships for the current epoch and the params.ConfigOffset following epochs
 	// (totalling params.ConfigOffset memberships).
 	// E.g., if params.ConfigOffset 3 and the current epoch is 5, this field contains memberships for epoch 5, 6, 7 and 8.
-	memberships []*commonpbtypes.Membership
+	memberships []*trantorpbtypes.Membership
 
 	// The latest new membership obtained from the application.
 	// To be included as last of the list of membership in the next new configuration.
 	// The epoch number this membership corresponds to is the current epoch number + params.ConfigOffset.
 	// At epoch initialization, this is set to nil. We then set it to the next membership announced by the application.
-	nextNewMembership *commonpbtypes.Membership
+	nextNewMembership *trantorpbtypes.Membership
 
 	// The final log of committed availability certificates.
 	// For each sequence number, it holds the committed certificate (or the special abort value).
@@ -213,30 +212,28 @@ func New(
 		apppbdsl.RestoreState(
 			iss.m,
 			iss.moduleConfig.App,
-			chkppbtypes.StableCheckpointFromPb(iss.lastStableCheckpoint.Pb()),
+			checkpointpbtypes.StableCheckpointFromPb(iss.lastStableCheckpoint.Pb()),
 		)
 
 		// Start the first epoch (not necessarily epoch 0, depending on the starting checkpoint).
-		iss.startEpoch(iss.lastStableCheckpoint.Epoch())
-
-		return nil
+		return iss.startEpoch(iss.lastStableCheckpoint.Epoch())
 	})
 
 	// Upon SBDeliver event, process the event of an SB instance delivering data.
 	// It invokes the appropriate handler depending on whether this data is
 	// an availability certificate (or the special abort value) or a common checkpoint.
 	isspbdsl.UponSBDeliver(iss.m, func(sn tt.SeqNr, data []uint8, aborted bool, leader t.NodeID, instanceId t.ModuleID) error {
-		// If checkpoint ordering instance, deliver without verification
+		// If this is a delivery of an agreed-upon stable checkpoint, deliver without verification.
 		if instanceId.Sub().Sub() == "chkp" {
 			return iss.deliverCommonCheckpoint(data)
 		}
 
-		// If decided empty certificate, deliver already
-		if len(data) == 0 {
+		// If the agreement on this sequence number has been aborted, deliver no certificate.
+		if aborted {
 			return iss.deliverCert(sn, data, aborted, leader)
 		}
 
-		// verify the certificate before deciding it
+		// Verify the certificate before delivering it.
 		return iss.verifyCert(sn, data, aborted, leader)
 	})
 
@@ -250,7 +247,7 @@ func New(
 		return iss.deliverCert(context.sn, context.data, context.aborted, context.leader)
 	})
 
-	isspbdsl.UponNewConfig(iss.m, func(epochNr tt.EpochNr, membership *commonpbtypes.Membership) error {
+	isspbdsl.UponNewConfig(iss.m, func(epochNr tt.EpochNr, membership *trantorpbtypes.Membership) error {
 		iss.logger.Log(logging.LevelDebug, "Received new configuration.",
 			"numNodes", len(membership.Nodes), "epochNr", epochNr, "currentEpoch", iss.epoch.Nr())
 
@@ -305,7 +302,7 @@ func New(
 
 	// applyStableCheckpoint handles a new stable checkpoint produced by the checkpoint protocol.
 	// It serializes and submits the checkpoint for agreement.
-	chkppbdsl.UponStableCheckpoint(iss.m, func(sn tt.SeqNr, snapshot *commonpbtypes.StateSnapshot, cert map[t.NodeID][]byte) error {
+	chkppbdsl.UponStableCheckpoint(iss.m, func(sn tt.SeqNr, snapshot *trantorpbtypes.StateSnapshot, cert map[t.NodeID][]byte) error {
 		// Ignore old checkpoints.
 		if sn <= iss.lastPendingCheckpointSN {
 			iss.logger.Log(logging.LevelDebug, "Ignoring outdated stable checkpoint.", "sn", sn)
@@ -338,7 +335,7 @@ func New(
 		leader := maputil.GetSortedKeys(membership.Nodes)[int(epoch)%len(membership.Nodes)]
 
 		// Serialize checkpoint, so it can be proposed as a value.
-		stableCheckpoint := chkppbtypes.StableCheckpoint{
+		stableCheckpoint := checkpointpbtypes.StableCheckpoint{
 			Sn:       sn,
 			Snapshot: snapshot,
 			Cert:     cert,
@@ -348,13 +345,18 @@ func New(
 			return fmt.Errorf("failed serializing stable checkpoint: %w", err)
 		}
 
+		seg, err := orderers.NewSegment(leader, membership, map[tt.SeqNr][]byte{0: chkpData})
+		if err != nil {
+			return fmt.Errorf("error creating new segment: %w", err)
+		}
+
 		// Instantiate a new PBFT orderer.
 		factorypbdsl.NewModule(iss.m,
 			iss.moduleConfig.Ordering,
 			iss.moduleConfig.Ordering.Then(t.ModuleID(fmt.Sprintf("%v", epoch))).Then("chkp"),
 			tt.RetentionIndex(epoch),
 			orderers.InstanceParams(
-				orderers.NewSegment(leader, membership, map[tt.SeqNr][]byte{0: chkpData}),
+				seg,
 				"", // The checkpoint orderer should never talk to the availability module, as it has a set proposal.
 				epoch,
 				orderers.CheckpointValidityChecker,
@@ -406,8 +408,8 @@ func New(
 		return nil
 	})
 
-	chkppbdsl.UponStableCheckpointReceived(iss.m, func(sender t.NodeID, sn tt.SeqNr, snapshot *commonpbtypes.StateSnapshot, cert map[t.NodeID][]byte) error {
-		_chkp := chkppbtypes.StableCheckpoint{
+	chkppbdsl.UponStableCheckpointReceived(iss.m, func(sender t.NodeID, sn tt.SeqNr, snapshot *trantorpbtypes.StateSnapshot, cert map[t.NodeID][]byte) error {
+		_chkp := checkpointpbtypes.StableCheckpoint{
 			Sn:       sn,
 			Snapshot: snapshot,
 			Cert:     cert,
@@ -489,12 +491,14 @@ func New(
 		// Create an event to request the application module for
 		// restoring its state from the snapshot received in the new
 		// stable checkpoint message.
-		apppbdsl.RestoreState(iss.m, iss.moduleConfig.App, chkppbtypes.StableCheckpointFromPb(chkp.Pb()))
+		apppbdsl.RestoreState(iss.m, iss.moduleConfig.App, checkpointpbtypes.StableCheckpointFromPb(chkp.Pb()))
 
 		// Start executing the current epoch (the one the checkpoint corresponds to).
 		// This must happen after the state is restored,
 		// so the application has the correct state for returning the next configuration.
-		iss.startEpoch(chkp.Epoch())
+		if err := iss.startEpoch(chkp.Epoch()); err != nil {
+			return fmt.Errorf("error starting epoch %v: %w", chkp.Epoch(), err)
+		}
 
 		// Deliver the checkpoint to the application in the proper epoch.
 		// Technically, this could be made redundant, since it is the same checkpoint the application is restoring from.
@@ -530,7 +534,7 @@ func New(
 func InitialStateSnapshot(
 	appState []byte,
 	params *issconfig.ModuleParams,
-) (*commonpbtypes.StateSnapshot, error) {
+) (*trantorpbtypes.StateSnapshot, error) {
 
 	// Create the first membership and all ConfigOffset following ones (by using the initial one).
 	memberships := sliceutil.Repeat(params.InitialMembership, params.ConfigOffset+1)
@@ -556,19 +560,19 @@ func InitialStateSnapshot(
 	}
 
 	firstEpochLength := uint64(params.SegmentLength * len(params.InitialMembership.Nodes))
-	return &commonpbtypes.StateSnapshot{
+	return &trantorpbtypes.StateSnapshot{
 		AppData: appState,
-		EpochData: &commonpbtypes.EpochData{
-			EpochConfig: &commonpbtypes.EpochConfig{
+		EpochData: &trantorpbtypes.EpochData{
+			EpochConfig: &trantorpbtypes.EpochConfig{
 				EpochNr:     0,
 				FirstSn:     0,
 				Length:      firstEpochLength,
 				Memberships: memberships,
 			},
-			ClientProgress: commonpbtypes.ClientProgressFromPb(clientprogress.NewClientProgress(nil).Pb()),
+			ClientProgress: trantorpbtypes.ClientProgressFromPb(clientprogress.NewClientProgress(nil).Pb()),
 			LeaderPolicy:   leaderPolicyData,
 			// TODO: Revisit this when nil values are properly supported in generated types.
-			PreviousMembership: &commonpbtypes.Membership{Nodes: make(map[t.NodeID]*commonpbtypes.NodeIdentity)},
+			PreviousMembership: &trantorpbtypes.Membership{Nodes: make(map[t.NodeID]*trantorpbtypes.NodeIdentity)},
 		},
 	}, nil
 }
@@ -580,7 +584,7 @@ func InitialStateSnapshot(
 // startEpoch emits the events necessary for a new epoch to start operating.
 // This includes informing the application about the new epoch and initializing all the necessary external modules
 // such as availability and orderers.
-func (iss *ISS) startEpoch(epochNr tt.EpochNr) {
+func (iss *ISS) startEpoch(epochNr tt.EpochNr) error {
 
 	// Initialize the internal data structures for the new epoch.
 	epoch := newEpochInfo(epochNr, iss.newEpochSN, iss.memberships[0], iss.LeaderPolicy)
@@ -593,13 +597,13 @@ func (iss *ISS) startEpoch(epochNr tt.EpochNr) {
 	)
 
 	// Signal the new epoch to the application.
-	apppbdsl.NewEpoch(iss.m, iss.moduleConfig.App, iss.epoch.Nr())
+	apppbdsl.NewEpoch(iss.m, iss.moduleConfig.App, iss.epoch.Nr(), iss.moduleConfig.Self)
 
 	// Initialize the new availability module.
 	iss.initAvailability()
 
 	// Initialize the orderer modules for the current epoch.
-	iss.initOrderers()
+	return iss.initOrderers()
 }
 
 // initAvailability emits an event for the availability module to create a new submodule
@@ -627,7 +631,7 @@ func (iss *ISS) initAvailability() {
 }
 
 // initOrderers sends the SBInit event to all orderers in the current epoch.
-func (iss *ISS) initOrderers() {
+func (iss *ISS) initOrderers() error {
 
 	leaders := iss.epoch.leaderPolicy.Leaders()
 	for i, leader := range leaders {
@@ -635,7 +639,10 @@ func (iss *ISS) initOrderers() {
 		// Create segment.
 		// The sequence proposals are all set to nil, so that the orderer proposes new availability certificates.
 		proposals := freeProposals(iss.nextDeliveredSN+tt.SeqNr(i), tt.SeqNr(len(leaders)), iss.Params.SegmentLength)
-		seg := orderers.NewSegment(leader, iss.epoch.Membership, proposals)
+		seg, err := orderers.NewSegment(leader, iss.epoch.Membership, proposals)
+		if err != nil {
+			return fmt.Errorf("error creating new segment: %w", err)
+		}
 		iss.newEpochSN += tt.SeqNr(seg.Len())
 
 		// Instantiate a new PBFT orderer.
@@ -653,6 +660,8 @@ func (iss *ISS) initOrderers() {
 		iss.epoch.Segments = append(iss.epoch.Segments, seg)
 
 	}
+
+	return nil
 }
 
 // hasEpochCheckpoint returns true if the current epoch's checkpoint protocol has already produced a stable checkpoint.
@@ -687,27 +696,25 @@ func (iss *ISS) processCommitted() error {
 	// deliver the corresponding certificate and advance to the next sequence number.
 	for iss.commitLog[iss.nextDeliveredSN] != nil {
 
-		certData := iss.commitLog[iss.nextDeliveredSN].CertData
+		// Convenience variables.
+		logEntry := iss.commitLog[iss.nextDeliveredSN]
+		certData := logEntry.CertData
 
-		var cert availabilitypb.Cert
-		if len(certData) > 0 {
-			if err := proto.Unmarshal(certData, &cert); err != nil {
+		var cert *apbtypes.Cert
+		if logEntry.Aborted {
+			iss.LeaderPolicy.Suspect(iss.epoch.Nr(), logEntry.Suspect)
+			cert = &apbtypes.Cert{Type: &apbtypes.Cert_Mscs{Mscs: &mscpbtypes.Certs{}}}
+			// TODO: Using a dummy MSC cert here. A nil value would be more natural, as this data is not to be used,
+			//  but currently nil values are not supported in generated types. Use nil when nil support is implemented.
+		} else {
+			var certPb availabilitypb.Cert
+			if err := proto.Unmarshal(certData, &certPb); err != nil {
 				return fmt.Errorf("cannot unmarshal availability certificate: %w", err)
 			}
+			cert = apbtypes.CertFromPb(&certPb)
 		}
 
-		if iss.commitLog[iss.nextDeliveredSN].Aborted {
-			iss.LeaderPolicy.Suspect(iss.epoch.Nr(), iss.commitLog[iss.nextDeliveredSN].Suspect)
-		}
-
-		// Create a new DeliverCert event.
-		var _cert *apbtypes.Cert
-		if cert.Type == nil {
-			_cert = &apbtypes.Cert{Type: &apbtypes.Cert_Mscs{Mscs: &mscpbtypes.Certs{}}}
-		} else {
-			_cert = apbtypes.CertFromPb(&cert)
-		}
-		isspbdsl.DeliverCert(iss.m, iss.moduleConfig.App, iss.nextDeliveredSN, _cert)
+		isspbdsl.DeliverCert(iss.m, iss.moduleConfig.App, iss.nextDeliveredSN, cert, logEntry.Aborted)
 		iss.logger.Log(logging.LevelDebug, "Delivering entry.", "sn", iss.nextDeliveredSN)
 
 		// Remove just delivered certificate from the temporary
@@ -757,7 +764,9 @@ func (iss *ISS) advanceEpoch() error {
 	// must already be in the new epoch when processing the state snapshot request
 	// emitted by the checkpoint sub-protocol
 	// (startEpoch emits an event for the application making it transition to the new epoch).
-	iss.startEpoch(newEpochNr)
+	if err := iss.startEpoch(newEpochNr); err != nil {
+		return fmt.Errorf("error starting epoch %v: %w", newEpochNr, err)
+	}
 
 	// Create a new checkpoint tracker to start the checkpointing protocol.
 	// This must happen after initialization of the new epoch,
@@ -771,17 +780,21 @@ func (iss *ISS) advanceEpoch() error {
 		iss.moduleConfig.Checkpoint,
 		chkpModuleID,
 		tt.RetentionIndex(newEpochNr),
-		chkpprotos.InstanceParams(
-			oldMembership,
-			checkpoint.DefaultResendPeriod,
-			leaderPolicyData,
-			&commonpbtypes.EpochConfig{ // nolint:govet
-				iss.epoch.Nr(),
-				iss.epoch.FirstSN(),
-				uint64(iss.epoch.Len()),
-				iss.memberships,
+		&factorypbtypes.GeneratorParams{
+			Type: &factorypbtypes.GeneratorParams_Checkpoint{
+				Checkpoint: &checkpointpbtypes.InstanceParams{
+					Membership:       oldMembership,
+					ResendPeriod:     checkpoint.DefaultResendPeriod,
+					LeaderPolicyData: leaderPolicyData,
+					EpochConfig: &trantorpbtypes.EpochConfig{ // nolint:govet
+						iss.epoch.Nr(),
+						iss.epoch.FirstSN(),
+						uint64(iss.epoch.Len()),
+						iss.memberships,
+					},
+				},
 			},
-		),
+		},
 	)
 
 	// Ask the application for a state snapshot and have it send the result directly to the checkpoint module.
@@ -798,13 +811,11 @@ func (iss *ISS) advanceEpoch() error {
 func (iss *ISS) verifyCert(sn tt.SeqNr, data []uint8, aborted bool, leader t.NodeID) error {
 	cert := &availabilitypb.Cert{}
 
-	if err := proto.Unmarshal(data, cert); err != nil { // wrong certificate,
+	// If decided data is not a valid certificate, consider the proposer faulty and deliver an empty certificate.
+	if err := proto.Unmarshal(data, cert); err != nil {
 		iss.logger.Log(logging.LevelWarn, "failed to unmarshal cert", "err", err)
-		// suspect leader
-		iss.LeaderPolicy.Suspect(iss.epoch.Nr(), leader)
-		// decide empty certificate
-		data = []byte{}
-		return iss.deliverCert(sn, data, aborted, leader)
+		iss.LeaderPolicy.Suspect(iss.epoch.Nr(), leader)   // suspect leader
+		return iss.deliverCert(sn, []byte{}, true, leader) // deliver empty certificate
 	}
 
 	apbdsl.VerifyCert(iss.m, iss.moduleConfig.Availability.Then(t.ModuleID(fmt.Sprintf("%v", iss.epoch.Nr()))),

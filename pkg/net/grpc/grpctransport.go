@@ -21,12 +21,12 @@ import (
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/logging"
 	mirnet "github.com/filecoin-project/mir/pkg/net"
-	commonpbtypes "github.com/filecoin-project/mir/pkg/pb/commonpb/types"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
 	"github.com/filecoin-project/mir/pkg/pb/messagepb"
 	messagepbtypes "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
 	transportpbevents "github.com/filecoin-project/mir/pkg/pb/transportpb/events"
 	transportpbtypes "github.com/filecoin-project/mir/pkg/pb/transportpb/types"
+	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -296,7 +296,7 @@ func (gt *Transport) ServerError() error {
 	return gt.grpcServerError
 }
 
-func (gt *Transport) CloseOldConnections(newNodes *commonpbtypes.Membership) {
+func (gt *Transport) CloseOldConnections(newNodes *trantorpbtypes.Membership) {
 	for id, client := range gt.clients {
 		if client == nil {
 			continue
@@ -341,7 +341,7 @@ func (gt *Transport) CloseOldConnections(newNodes *commonpbtypes.Membership) {
 // The other nodes' GrpcTransport modules must be running.
 // Only after Connect() returns, sending messages over this GrpcTransport is possible.
 // TODO: Deal with errors, e.g. when the connection times out (make sure the RPC call in connectToNode() has a timeout).
-func (gt *Transport) Connect(membership *commonpbtypes.Membership) {
+func (gt *Transport) Connect(membership *trantorpbtypes.Membership) {
 
 	// Initialize wait group used by the connecting goroutines
 	wg := sync.WaitGroup{}
@@ -394,7 +394,8 @@ func (gt *Transport) Connect(membership *commonpbtypes.Membership) {
 	wg.Wait()
 }
 
-func (gt *Transport) WaitFor(_ int) {
+func (gt *Transport) WaitFor(_ int) error {
+	return nil
 	// TODO: We return immediately here, as the Connect() function already waits for all connections to be established.
 	//       This is not right and should be done as in the libp2p transport.
 }

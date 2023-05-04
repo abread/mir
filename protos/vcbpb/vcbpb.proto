@@ -4,7 +4,7 @@ package vcbpb;
 
 option go_package = "github.com/filecoin-project/mir/pkg/pb/vcbpb";
 
-import "requestpb/requestpb.proto";
+import "trantorpb/trantorpb.proto";
 
 import "mir/codegen_extensions.proto";
 import "net/codegen_extensions.proto";
@@ -29,15 +29,15 @@ message InputValue {
   option (mir.event) = true;
 
   // empty txs represents a request to listen for VCB (and deliver what was broadcast to us)
-  repeated requestpb.Request txs = 1;
+  repeated trantorpb.Transaction txs = 1;
 }
 
 message Deliver {
   option (mir.event) = true;
 
-  repeated requestpb.Request txs             = 1;
-  repeated bytes             tx_ids          = 2 [(mir.type) = "github.com/filecoin-project/mir/pkg/trantor/types.TxID"];
-  bytes                      signature       = 3 [(mir.type) = "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes.FullSig"];
+  repeated trantorpb.Transaction txs       = 1;
+  repeated bytes                 tx_ids    = 2 [(mir.type) = "github.com/filecoin-project/mir/pkg/trantor/types.TxID"];
+  bytes                          signature = 3 [(mir.type) = "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes.FullSig"];
 
   string src_module = 4 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.ModuleID"];
 }
@@ -61,7 +61,7 @@ message Message {
 message SendMessage {
   option (net.message) = true;
 
-  repeated requestpb.Request txs = 1;
+  repeated trantorpb.Transaction txs = 1;
 }
 
 message EchoMessage {
@@ -73,5 +73,5 @@ message EchoMessage {
 message FinalMessage {
   option (net.message) = true;
 
-  bytes                      signature = 2 [(mir.type) = "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes.FullSig"];
+  bytes signature = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes.FullSig"];
 }

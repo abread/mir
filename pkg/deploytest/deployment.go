@@ -17,7 +17,7 @@ import (
 	"time"
 
 	"github.com/filecoin-project/mir/pkg/modules"
-	commonpbtypes "github.com/filecoin-project/mir/pkg/pb/commonpb/types"
+	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 
 	"github.com/filecoin-project/mir"
@@ -33,8 +33,8 @@ const (
 	// A node with numeric ID id will listen on port (BaseListenPort + id)
 	BaseListenPort = 10000
 
-	// RequestListenPort is the port number on which nodes' RequestReceivers listen for incoming requests.
-	RequestListenPort = 20000
+	// TXListenPort is the port number on which nodes' TransactionReceivers listen for incoming transactions.
+	TXListenPort = 20000
 )
 
 // TestConfig contains the parameters of the deployment to be tested.
@@ -49,7 +49,7 @@ type TestConfig struct {
 	NodeIDs []t.NodeID
 
 	// List of nodes.
-	Membership *commonpbtypes.Membership
+	Membership *trantorpbtypes.Membership
 
 	// The modules that will be run by each replica.
 	NodeModules map[t.NodeID]modules.Modules
@@ -57,14 +57,14 @@ type TestConfig struct {
 	// Number of clients in the tested deployment.
 	NumClients int
 
-	// The number of requests each client submits during the execution of the deployment.
-	NumFakeRequests int
+	// The number of transactions each client submits during the execution of the deployment.
+	NumFakeTXs int
 
-	// The number of requests sent over the network (by a single DummyClient)
-	NumNetRequests int
+	// The number of transactions sent over the network (by a single DummyClient)
+	NumNetTXs int
 
-	// The target module for the clients' requests.
-	FakeRequestsDestModule t.ModuleID
+	// The target module for the clients' transactions.
+	FakeTXDestModule t.ModuleID
 
 	// Directory where all the test-related files will be stored.
 	// If empty, an OS-default temporary directory will be used.
@@ -90,7 +90,7 @@ type Deployment struct {
 	// The replicas of the deployment.
 	TestReplicas []*TestReplica
 
-	// Dummy clients to submit requests to replicas over the (local loopback) network.
+	// Dummy clients to submit transactions to replicas over the (local loopback) network.
 	Clients []*dummyclient.DummyClient
 }
 
@@ -116,14 +116,14 @@ func NewDeployment(conf *TestConfig) (*Deployment, error) {
 
 		// Create instance of TestReplica.
 		replicas[i] = &TestReplica{
-			ID:                     nodeID,
-			Config:                 config,
-			NodeIDs:                conf.NodeIDs,
-			Membership:             conf.Membership,
-			Dir:                    filepath.Join(conf.Directory, fmt.Sprintf("node%d", i)),
-			NumFakeRequests:        conf.NumFakeRequests,
-			Modules:                conf.NodeModules[nodeID],
-			FakeRequestsDestModule: conf.FakeRequestsDestModule,
+			ID:               nodeID,
+			Config:           config,
+			NodeIDs:          conf.NodeIDs,
+			Membership:       conf.Membership,
+			Dir:              filepath.Join(conf.Directory, fmt.Sprintf("node%d", i)),
+			NumFakeTXs:       conf.NumFakeTXs,
+			Modules:          conf.NodeModules[nodeID],
+			FakeTXDestModule: conf.FakeTXDestModule,
 		}
 
 		if conf.Simulation != nil {
@@ -137,7 +137,7 @@ func NewDeployment(conf *TestConfig) (*Deployment, error) {
 	for i := 1; i <= conf.NumClients; i++ {
 		// The loop counter i is used as client ID.
 		// We start counting at 1 (and not 0), since client ID 0 is reserved
-		// for the "fake" requests submitted directly by the TestReplicas.
+		// for the "fake" transactions submitted directly by the TestReplicas.
 
 		// Create new DummyClient
 		netClients = append(netClients, dummyclient.NewDummyClient(
@@ -219,15 +219,15 @@ func (d *Deployment) Run(ctx context.Context) (nodeErrors []error, heapObjects i
 		}
 	}
 
-	// Connect the deployment's DummyClients to all replicas and have them submit their requests in separate goroutines.
-	// Each dummy client connects to the replicas, submits the prescribed number of requests and disconnects.
+	// Connect the deployment's DummyClients to all replicas and have them submit their transactions in separate goroutines.
+	// Each dummy client connects to the replicas, submits the prescribed number of transactions and disconnects.
 	clientWg.Add(len(d.Clients))
 	for _, client := range d.Clients {
 		go func(c *dummyclient.DummyClient) {
 			defer clientWg.Done()
 
 			c.Connect(ctx2, rrAddrs)
-			submitDummyRequests(ctx2, c, d.TestConfig.NumNetRequests)
+			submitDummyTransactions(ctx2, c, d.TestConfig.NumNetTXs)
 			c.Disconnect()
 		}(client)
 	}
@@ -264,19 +264,19 @@ func (d *Deployment) EventLogFiles() map[t.NodeID]string {
 	return logFiles
 }
 
-// submitDummyRequests submits n dummy requests using client.
-// It returns when all requests have been submitted or when ctx is done.
-func submitDummyRequests(ctx context.Context, client *dummyclient.DummyClient, n int) {
+// submitDummyTransactions submits n dummy transactions using client.
+// It returns when all transactions have been submitted or when ctx is done.
+func submitDummyTransactions(ctx context.Context, client *dummyclient.DummyClient, n int) {
 	for i := 0; i < n; i++ {
-		// For each request to be submitted
+		// For each transaction to be submitted
 
 		select {
 		case <-ctx.Done():
 			// Return immediately if context finished.
 			return
 		default:
-			// Submit the request and check for error.
-			if err := client.SubmitRequest([]byte(fmt.Sprintf("Request %d", i))); err != nil {
+			// Submit the transaction and check for error.
+			if err := client.SubmitTransaction([]byte(fmt.Sprintf("Transaction %d", i))); err != nil {
 				panic(err)
 			}
 		}

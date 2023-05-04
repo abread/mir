@@ -12,8 +12,8 @@ import (
 )
 
 type LocalThreshCryptoSystem interface {
-	ThreshCrypto(id t.NodeID) threshcrypto.ThreshCrypto
-	Module(ctx context.Context, id t.NodeID) modules.Module
+	ThreshCrypto(id t.NodeID) (threshcrypto.ThreshCrypto, error)
+	Module(ctx context.Context, id t.NodeID) (modules.Module, error)
 }
 
 type localPseudoThreshCryptoSystem struct {
@@ -28,28 +28,25 @@ func NewLocalThreshCryptoSystem(cryptoType string, nodeIDs []t.NodeID, threshold
 	return &localPseudoThreshCryptoSystem{cryptoType, nodeIDs, threshold}
 }
 
-func (cs *localPseudoThreshCryptoSystem) ThreshCrypto(id t.NodeID) threshcrypto.ThreshCrypto {
-	var cryptoImpl threshcrypto.ThreshCrypto
-	var err error
-
+func (cs *localPseudoThreshCryptoSystem) ThreshCrypto(id t.NodeID) (threshcrypto.ThreshCrypto, error) {
 	if cs.cryptoType == "pseudo" {
-		cryptoImpl, err = threshcrypto.HerumiTBLSPseudo(cs.nodeIDs, cs.threshold, id, mirCrypto.DefaultPseudoSeed)
+		return threshcrypto.HerumiTBLSPseudo(cs.nodeIDs, cs.threshold, id, mirCrypto.DefaultPseudoSeed)
 	} else if cs.cryptoType == "dummy" {
-		cryptoImpl = &threshcrypto.DummyCrypto{
+		return &threshcrypto.DummyCrypto{
 			DummySigShareSuffix: []byte("sigshare"),
 			NodeID:              id,
 			DummySigFull:        []byte("fullthreshsig"),
-		}
+		}, nil
 	} else {
-		err = fmt.Errorf("unknown local crypto system type: %v (must be pseudo or dummy)", cs.cryptoType)
+		return nil, fmt.Errorf("unknown local crypto system type: %v (must be pseudo or dummy)", cs.cryptoType)
 	}
-
-	if err != nil {
-		panic(fmt.Sprintf("error creating crypto module: %v", err))
-	}
-	return cryptoImpl
 }
 
-func (cs *localPseudoThreshCryptoSystem) Module(ctx context.Context, id t.NodeID) modules.Module {
-	return threshcrypto.New(ctx, threshcrypto.DefaultModuleParams(), cs.ThreshCrypto(id))
+func (cs *localPseudoThreshCryptoSystem) Module(ctx context.Context, id t.NodeID) (modules.Module, error) {
+	c, err := cs.ThreshCrypto(id)
+	if err != nil {
+		return nil, err
+	}
+
+	return threshcrypto.New(ctx, threshcrypto.DefaultModuleParams(), c), nil
 }

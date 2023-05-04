@@ -14,17 +14,17 @@ import (
 	"time"
 
 	"github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents"
-	"github.com/filecoin-project/mir/pkg/pb/requestpb"
 	"github.com/filecoin-project/mir/pkg/pb/threshcryptopb"
+	"github.com/filecoin-project/mir/pkg/pb/trantorpb"
 )
 
 type Stats struct {
-	lock                sync.Mutex
-	reqTimestamps       map[reqKey]int64
-	avgLatency          float64
-	timestampedRequests int
-	recvdRequests       int
-	deliveredRequests   int
+	lock                    sync.Mutex
+	txTimestamps            map[txKey]int64
+	avgLatency              float64
+	timestampedTransactions int
+	recvdTxs                int
+	deliveredTxs            int
 
 	mempoolNewBatches    uint64
 	agRoundDelivers      uint64
@@ -33,38 +33,38 @@ type Stats struct {
 	threshQueueSize      int
 }
 
-type reqKey struct {
+type txKey struct {
 	ClientID string
-	ReqNo    uint64
+	TxNo     uint64
 }
 
 func NewStats() *Stats {
 	stats := &Stats{
-		reqTimestamps: make(map[reqKey]int64),
+		txTimestamps: make(map[txKey]int64),
 	}
 
 	return stats
 }
 
-func (s *Stats) NewRequest(req *requestpb.Request, ts int64) {
+func (s *Stats) NewTX(tx *trantorpb.Transaction, ts int64) {
 	s.lock.Lock()
-	k := reqKey{req.ClientId, req.ReqNo}
-	s.reqTimestamps[k] = ts
-	s.recvdRequests++
+	k := txKey{tx.ClientId, tx.TxNo}
+	s.txTimestamps[k] = ts
+	s.recvdTxs++
 	s.lock.Unlock()
 }
 
-func (s *Stats) Delivered(req *requestpb.Request, deliverTs int64) { // nolint:stylecheck
+func (s *Stats) Delivered(tx *trantorpb.Transaction, deliverTS int64) {
 	s.lock.Lock()
-	s.deliveredRequests++
-	k := reqKey{req.ClientId, req.ReqNo}
-	if startTs, ok := s.reqTimestamps[k]; ok { // nolint:stylecheck
-		delete(s.reqTimestamps, k)
-		s.timestampedRequests++
-		d := deliverTs - startTs
+	s.deliveredTxs++
+	k := txKey{tx.ClientId, tx.TxNo}
+	if startTS, ok := s.txTimestamps[k]; ok {
+		delete(s.txTimestamps, k)
+		s.timestampedTransactions++
+		d := deliverTS - startTS
 
 		// $CA_{n+1} = CA_n + {x_{n+1} - CA_n \over n + 1}$
-		s.avgLatency += (float64(d) - s.avgLatency) / float64(s.timestampedRequests)
+		s.avgLatency += (float64(d) - s.avgLatency) / float64(s.timestampedTransactions)
 	}
 	s.lock.Unlock()
 }
@@ -150,8 +150,8 @@ func (s *Stats) WriteCSVRecordAndReset(w *csv.Writer, d time.Duration) {
 	now := time.Now().UnixMilli()
 	runtime.ReadMemStats(&memStats)
 
-	deliveredReqs := s.deliveredRequests
-	recvdReqs := s.recvdRequests
+	deliveredReqs := s.deliveredTxs
+	recvdReqs := s.recvdTxs
 	avgLatency := s.avgLatency
 	newBatchCount := s.mempoolNewBatches
 	agRoundDelivers := s.agRoundDelivers
@@ -159,14 +159,14 @@ func (s *Stats) WriteCSVRecordAndReset(w *csv.Writer, d time.Duration) {
 	bcDelivers := s.bcDelivers
 	threshQueueSize := s.threshQueueSize
 
-	if s.timestampedRequests == 0 {
+	if s.timestampedTransactions == 0 {
 		avgLatency = math.NaN()
 	}
 
 	s.avgLatency = 0
-	s.timestampedRequests = 0
-	s.recvdRequests = 0
-	s.deliveredRequests = 0
+	s.timestampedTransactions = 0
+	s.recvdTxs = 0
+	s.deliveredTxs = 0
 
 	s.agRoundDelivers = 0
 	s.agRoundFalseDelivers = 0

@@ -2,9 +2,9 @@ package isspbevents
 
 import (
 	types4 "github.com/filecoin-project/mir/pkg/pb/availabilitypb/types"
-	types5 "github.com/filecoin-project/mir/pkg/pb/commonpb/types"
 	types1 "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 	types2 "github.com/filecoin-project/mir/pkg/pb/isspb/types"
+	types5 "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	types3 "github.com/filecoin-project/mir/pkg/trantor/types"
 	types "github.com/filecoin-project/mir/pkg/types"
 )
@@ -41,15 +41,16 @@ func SBDeliver(destModule types.ModuleID, sn types3.SeqNr, data []uint8, aborted
 	}
 }
 
-func DeliverCert(destModule types.ModuleID, sn types3.SeqNr, cert *types4.Cert) *types1.Event {
+func DeliverCert(destModule types.ModuleID, sn types3.SeqNr, cert *types4.Cert, empty bool) *types1.Event {
 	return &types1.Event{
 		DestModule: destModule,
 		Type: &types1.Event_Iss{
 			Iss: &types2.Event{
 				Type: &types2.Event_DeliverCert{
 					DeliverCert: &types2.DeliverCert{
-						Sn:   sn,
-						Cert: cert,
+						Sn:    sn,
+						Cert:  cert,
+						Empty: empty,
 					},
 				},
 			},

@@ -15,7 +15,7 @@ import (
 	bcdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/dsl"
 	bcqueuedsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/dsl"
 	commontypes "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
-	requestpbtypes "github.com/filecoin-project/mir/pkg/pb/requestpb/types"
+	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -152,7 +152,7 @@ func newQueueController(mc *ModuleConfig, params *ModuleParams, tunables *Module
 		return nil
 	})
 
-	bcdsl.UponStartBroadcast(m, func(queueSlot aleatypes.QueueSlot, txs []*requestpbtypes.Request) error {
+	bcdsl.UponStartBroadcast(m, func(queueSlot aleatypes.QueueSlot, txs []*trantorpbtypes.Transaction) error {
 		bcqueuedsl.InputValue(m, ownQueueModID, &commontypes.Slot{
 			QueueIdx:  aleatypes.QueueIdx(ownQueueIdx),
 			QueueSlot: queueSlot,

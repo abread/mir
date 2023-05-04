@@ -7,12 +7,12 @@ import (
 
 	"github.com/filecoin-project/mir/pkg/iss/config"
 	types2 "github.com/filecoin-project/mir/pkg/orderers/types"
-	commonpbtypes "github.com/filecoin-project/mir/pkg/pb/commonpb/types"
 	cryptopbevents "github.com/filecoin-project/mir/pkg/pb/cryptopb/events"
 	cryptopbtypes "github.com/filecoin-project/mir/pkg/pb/cryptopb/types"
 	eventpbevents "github.com/filecoin-project/mir/pkg/pb/eventpb/events"
 	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 	hasherpbevents "github.com/filecoin-project/mir/pkg/pb/hasherpb/events"
+	hasherpbtypes "github.com/filecoin-project/mir/pkg/pb/hasherpb/types"
 	pbftpbmsgs "github.com/filecoin-project/mir/pkg/pb/pbftpb/msgs"
 	pbftpbtypes "github.com/filecoin-project/mir/pkg/pb/pbftpb/types"
 	transportpbevents "github.com/filecoin-project/mir/pkg/pb/transportpb/events"
@@ -39,9 +39,9 @@ func copyPreprepareToNewView(preprepare *pbftpbtypes.Preprepare, view types2.Vie
 // ============================================================
 
 // applyViewChangeSNTimeout applies the view change SN timeout event
-// triggered some time after a certificate is committed.
+// triggered some time after a value is committed.
 // If nothing has been committed since, triggers a view change.
-func (orderer *Orderer) applyViewChangeSNTimeout(timeoutEvent *pbftpb.VCSNTimeout) *events.EventList {
+func (orderer *Orderer) applyViewChangeSNTimeout(timeoutEvent *pbftpb.VCSNTimeout) (*events.EventList, error) {
 
 	// If the view is still the same as when the timer was set up,
 	// if nothing has been committed since then, and if the segment-level checkpoint is not yet stable
@@ -56,13 +56,13 @@ func (orderer *Orderer) applyViewChangeSNTimeout(timeoutEvent *pbftpb.VCSNTimeou
 	}
 
 	// Do nothing otherwise.
-	return events.EmptyList()
+	return events.EmptyList(), nil
 }
 
 // applyViewChangeSegmentTimeout applies the view change segment timeout event
 // triggered some time after a segment is initialized.
 // If not all slots have been committed, and the view has not advanced, triggers a view change.
-func (orderer *Orderer) applyViewChangeSegmentTimeout(view types2.ViewNr) *events.EventList {
+func (orderer *Orderer) applyViewChangeSegmentTimeout(view types2.ViewNr) (*events.EventList, error) {
 
 	// TODO: All slots being committed is not sufficient to stop view changes.
 	//       An instance-local stable checkpoint must be created as well.
@@ -75,19 +75,24 @@ func (orderer *Orderer) applyViewChangeSegmentTimeout(view types2.ViewNr) *event
 	}
 
 	// Do nothing otherwise.
-	return events.EmptyList()
+	return events.EmptyList(), nil
 }
 
 // startViewChange initiates the view change subprotocol.
 // It is triggered on expiry of the SN timeout or the segment timeout.
 // It constructs the PBFT view change message and creates an event requesting signing it.
-func (orderer *Orderer) startViewChange() *events.EventList {
+func (orderer *Orderer) startViewChange() (*events.EventList, error) {
 
 	eventsOut := events.EmptyList()
 
 	// Enter the view change state and initialize a new view
 	orderer.inViewChange = true
-	eventsOut.PushBackList(orderer.initView(orderer.view + 1))
+	var initEvents *events.EventList
+	var err error
+	if initEvents, err = orderer.initView(orderer.view + 1); err != nil {
+		return nil, err
+	}
+	eventsOut.PushBackList(initEvents)
 
 	// Compute the P set and Q set to be included in the ViewChange message.
 	pSet, qSet := orderer.getPSetQSet()
@@ -105,7 +110,7 @@ func (orderer *Orderer) startViewChange() *events.EventList {
 		serializeViewChangeForSigning(&viewChange),
 		SignOrigin(orderer.moduleConfig.Self,
 			viewChangeSignOrigin(viewChange.Pb())),
-	).Pb())
+	).Pb()), nil
 }
 
 // applyViewChangeSignResult processes a newly generated signature of a ViewChange message.
@@ -209,7 +214,10 @@ func (orderer *Orderer) applyVerifiedViewChange(svc *pbftpb.SignedViewChange, fr
 	return events.EmptyList()
 }
 
-func (orderer *Orderer) applyEmptyPreprepareHashResult(digests [][]byte, view types2.ViewNr) *events.EventList {
+func (orderer *Orderer) applyEmptyPreprepareHashResult(
+	digests [][]byte,
+	view types2.ViewNr,
+) (*events.EventList, error) {
 
 	// Ignore hash result if the view has advanced in the meantime.
 	if view < orderer.view {
@@ -217,7 +225,7 @@ func (orderer *Orderer) applyEmptyPreprepareHashResult(digests [][]byte, view ty
 			"hashView", view,
 			"localView", orderer.view,
 		)
-		return events.EmptyList()
+		return events.EmptyList(), nil
 	}
 
 	// Look up the corresponding view change state.
@@ -225,19 +233,21 @@ func (orderer *Orderer) applyEmptyPreprepareHashResult(digests [][]byte, view ty
 	state := orderer.viewChangeStates[view]
 
 	// Set the digests of empty Preprepares that have just been computed.
-	state.SetEmptyPreprepareDigests(digests)
+	if err := state.SetEmptyPreprepareDigests(digests); err != nil {
+		return nil, fmt.Errorf("error setting empty preprepare digests: %w", err)
+	}
 
 	// Check if all preprepare messages that need to be re-proposed are locally present.
 	state.SetLocalPreprepares(orderer, view)
 	if state.HasAllPreprepares() {
 		orderer.logger.Log(logging.LevelDebug, "All Preprepares present, sending NewView.")
 		// If we have all preprepares, start view change.
-		return orderer.sendNewView(view, state)
+		return orderer.sendNewView(view, state), nil
 	}
 
 	// If some Preprepares for re-proposing are still missing, fetch them from other nodes.
 	orderer.logger.Log(logging.LevelDebug, "Some Preprepares missing. Asking for retransmission.")
-	return state.askForMissingPreprepares(orderer.moduleConfig)
+	return state.askForMissingPreprepares(orderer.moduleConfig), nil
 }
 
 func (orderer *Orderer) applyMsgPreprepareRequest(
@@ -276,7 +286,7 @@ func (orderer *Orderer) applyMsgMissingPreprepare(preprepare *pbftpbtypes.Prepre
 	// Request a hash of the received preprepare message.
 	return events.ListOf(hasherpbevents.Request(
 		orderer.moduleConfig.Hasher,
-		[]*commonpbtypes.HashData{serializePreprepareForHashing(preprepare)},
+		[]*hasherpbtypes.HashData{serializePreprepareForHashing(preprepare)},
 		HashOrigin(orderer.moduleConfig.Self, missingPreprepareHashOrigin(preprepare.Pb())),
 	).Pb())
 }
@@ -386,7 +396,7 @@ func (orderer *Orderer) applyMsgNewView(newView *pbftpbtypes.NewView, from t.Nod
 
 func (orderer *Orderer) applyVerifiedNewView(newView *pbftpb.NewView) *events.EventList {
 	// Serialize obtained Preprepare messages for hashing.
-	dataToHash := make([]*commonpbtypes.HashData, len(newView.Preprepares))
+	dataToHash := make([]*hasherpbtypes.HashData, len(newView.Preprepares))
 	for i, preprepare := range newView.Preprepares { // Preprepares in a NewView message are sorted by sequence number.
 		dataToHash[i] = serializePreprepareForHashing(pbftpbtypes.PreprepareFromPb(preprepare))
 	}
@@ -399,14 +409,14 @@ func (orderer *Orderer) applyVerifiedNewView(newView *pbftpb.NewView) *events.Ev
 	).Pb())
 }
 
-func (orderer *Orderer) applyNewViewHashResult(digests [][]byte, newView *pbftpbtypes.NewView) *events.EventList {
+func (orderer *Orderer) applyNewViewHashResult(digests [][]byte, newView *pbftpbtypes.NewView) (*events.EventList, error) {
 
 	// Convenience variable
 	msgView := newView.View
 
 	// Ignore message if old.
 	if msgView < orderer.view {
-		return events.EmptyList()
+		return events.EmptyList(), nil
 	}
 
 	// Create a temporary view change state object
@@ -420,7 +430,7 @@ func (orderer *Orderer) applyNewViewHashResult(digests [][]byte, newView *pbftpb
 
 	// If the obtained ViewChange messages are not sufficient to infer all re-proposals, ignore NewView message.
 	if !vcState.EnoughViewChanges() {
-		return events.EmptyList()
+		return events.EmptyList(), nil
 	}
 
 	// Verify if the re-proposed hashes match the obtained Preprepares.
@@ -443,19 +453,22 @@ func (orderer *Orderer) applyNewViewHashResult(digests [][]byte, newView *pbftpb
 	// If the NewView contains mismatching Preprepares, ignore the message.
 	if !prepreparesMatching {
 		orderer.logger.Log(logging.LevelWarn, "Hash mismatch in received NewView. Ignoring.", "view", newView.View)
-		return events.EmptyList()
+		return events.EmptyList(), nil
 	}
 
 	// If all the checks passed, (TODO: make sure all the checks of the NewView message have been performed!)
 	// enter the new view.
-	eventsOut := orderer.initView(msgView)
+	eventsOut, err := orderer.initView(msgView)
+	if err != nil {
+		return nil, err
+	}
 
 	// Apply all the Preprepares contained in the NewView
 	primary := orderer.segment.PrimaryNode(msgView)
 	for _, preprepare := range newView.Preprepares {
 		eventsOut.PushBackList(orderer.applyMsgPreprepare(preprepare, primary))
 	}
-	return eventsOut
+	return eventsOut, nil
 }
 
 // ============================================================
@@ -506,7 +519,7 @@ func (orderer *Orderer) latestPendingVCState() (*pbftViewChangeState, types2.Vie
 // ============================================================
 
 // viewChangePSet represents the P set of a PBFT view change message.
-// For each sequence number, it holds the digest of the last prepared certificate,
+// For each sequence number, it holds the digest of the last prepared value,
 // along with the view in which it was prepared.
 type viewChangePSet map[tt.SeqNr]*pbftpbtypes.PSetEntry
 
@@ -551,7 +564,7 @@ func reconstructPSet(entries []*pbftpbtypes.PSetEntry) (viewChangePSet, error) {
 
 // The Q set of a PBFT view change message.
 // For each sequence number, it holds the digests (encoded as string map keys)
-// of all certificates preprepared for that sequence number,
+// of all values preprepared for that sequence number,
 // along with the latest view in which each of them was preprepared.
 type viewChangeQSet map[tt.SeqNr]map[string]types2.ViewNr
 
@@ -669,7 +682,7 @@ func (orderer *Orderer) getPSetQSet() (pSet viewChangePSet, qSet viewChangeQSet)
 				// Get the pbftSlot of sn in view (convenience variable)
 				slot := slots[sn]
 
-				// If a certificate was prepared for sn in view, add the corresponding entry to the PSet.
+				// If a value was prepared for sn in view, add the corresponding entry to the PSet.
 				// If there was an entry corresponding to an older view, it will be overwritten.
 				if slot.Prepared {
 					pSet[sn] = &pbftpbtypes.PSetEntry{
@@ -679,8 +692,8 @@ func (orderer *Orderer) getPSetQSet() (pSet viewChangePSet, qSet viewChangeQSet)
 					}
 				}
 
-				// If a certificate was preprepared for sn in view, add the corresponding entry to the QSet.
-				// If the same certificate has been preprepared in an older view, its entry will be overwritten.
+				// If a value was preprepared for sn in view, add the corresponding entry to the QSet.
+				// If the same value has been preprepared in an older view, its entry will be overwritten.
 				if slot.Preprepared {
 					qSet[sn][string(slot.Digest)] = view
 				}

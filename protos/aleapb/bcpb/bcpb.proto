@@ -5,7 +5,7 @@ package aleapb.bcpb;
 option go_package = "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb";
 
 import "aleapb/common/common.proto";
-import "requestpb/requestpb.proto";
+import "trantorpb/trantorpb.proto";
 
 import "mir/codegen_extensions.proto";
 
@@ -32,8 +32,8 @@ message StartBroadcast {
   option (mir.event) = true;
 
   // queue_idx is the one for this node
-  uint64                     queue_slot = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/alea/aleatypes.QueueSlot"];
-  repeated requestpb.Request txs        = 2;
+  uint64                         queue_slot = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/alea/aleatypes.QueueSlot"];
+  repeated trantorpb.Transaction txs        = 2;
 }
 
 message Deliver {

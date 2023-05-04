@@ -2,8 +2,8 @@ package events
 
 import (
 	batchfetcherpbtypes "github.com/filecoin-project/mir/pkg/pb/batchfetcherpb/types"
-	commonpbtypes "github.com/filecoin-project/mir/pkg/pb/commonpb/types"
 	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
+	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -20,7 +20,7 @@ func Event(dest t.ModuleID, ev *batchfetcherpbtypes.Event) *eventpbtypes.Event {
 	}
 }
 
-func ClientProgress(dest t.ModuleID, progress *commonpbtypes.ClientProgress) *eventpbtypes.Event {
+func ClientProgress(dest t.ModuleID, progress *trantorpbtypes.ClientProgress) *eventpbtypes.Event {
 	return Event(dest, &batchfetcherpbtypes.Event{
 		Type: &batchfetcherpbtypes.Event_ClientProgress{
 			ClientProgress: progress,

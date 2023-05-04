@@ -19,7 +19,7 @@ import (
 	commontypes "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
 	batchdbdsl "github.com/filecoin-project/mir/pkg/pb/availabilitypb/batchdbpb/dsl"
 	reliablenetpbdsl "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/dsl"
-	requestpbtypes "github.com/filecoin-project/mir/pkg/pb/requestpb/types"
+	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	vcbpbdsl "github.com/filecoin-project/mir/pkg/pb/vcbpb/dsl"
 	vcbpbevents "github.com/filecoin-project/mir/pkg/pb/vcbpb/events"
 	vcbpbtypes "github.com/filecoin-project/mir/pkg/pb/vcbpb/types"
@@ -44,7 +44,7 @@ func New(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeI
 func newQueueController(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger, slots *modring.Module) modules.PassiveModule {
 	m := dsl.NewModule(mc.Self)
 
-	bcqueuedsl.UponInputValue(m, func(slot *commontypes.Slot, txs []*requestpbtypes.Request) error {
+	bcqueuedsl.UponInputValue(m, func(slot *commontypes.Slot, txs []*trantorpbtypes.Transaction) error {
 		if slot.QueueIdx != params.QueueIdx {
 			return fmt.Errorf("input value given to wrong queue")
 		}

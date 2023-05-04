@@ -15,7 +15,7 @@ import (
 	apbtypes "github.com/filecoin-project/mir/pkg/pb/availabilitypb/types"
 	bfeventstypes "github.com/filecoin-project/mir/pkg/pb/batchfetcherpb/events"
 	batchfetcherpbtypes "github.com/filecoin-project/mir/pkg/pb/batchfetcherpb/types"
-	requestpbtypes "github.com/filecoin-project/mir/pkg/pb/requestpb/types"
+	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 
 	eventpbdsl "github.com/filecoin-project/mir/pkg/pb/eventpb/dsl"
 
@@ -53,12 +53,12 @@ func NewModule(mc *ModuleConfig, epochNr tt.EpochNr, clientProgress *clientprogr
 	// It is applied to each transaction batch immediately before delivering it to the application.
 	filterDuplicates := func(newOrderedBatch *batchfetcherpbtypes.NewOrderedBatch) {
 
-		newTxs := make([]*requestpbtypes.Request, 0, len(newOrderedBatch.Txs))
+		newTxs := make([]*trantorpbtypes.Transaction, 0, len(newOrderedBatch.Txs))
 
 		for _, tx := range newOrderedBatch.Txs {
 
 			// Only keep transaction if it has not yet been delivered.
-			if clientProgress.Add(tx.ClientId, tx.ReqNo) {
+			if clientProgress.Add(tx.ClientId, tx.TxNo) {
 				newTxs = append(newTxs, tx)
 			}
 		}
@@ -68,10 +68,10 @@ func NewModule(mc *ModuleConfig, epochNr tt.EpochNr, clientProgress *clientprogr
 	}
 
 	// The NewEpoch handler updates the current epoch number and forwards the event to the output.
-	apppbdsl.UponNewEpoch(m, func(newEpochNr tt.EpochNr) error {
+	apppbdsl.UponNewEpoch(m, func(newEpochNr tt.EpochNr, protocolModule t.ModuleID) error {
 		epochNr = newEpochNr
 		output.Enqueue(&outputItem{
-			event: apppbevents.NewEpoch(mc.Destination, epochNr),
+			event: apppbevents.NewEpoch(mc.Destination, epochNr, protocolModule),
 		})
 
 		output.Flush(m)
@@ -80,7 +80,7 @@ func NewModule(mc *ModuleConfig, epochNr tt.EpochNr, clientProgress *clientprogr
 
 	// The DeliverCert handler requests the transactions referenced by the received availability certificate
 	// from the availability layer.
-	isspbdsl.UponDeliverCert(m, func(sn tt.SeqNr, cert *apbtypes.Cert) error {
+	isspbdsl.UponDeliverCert(m, func(sn tt.SeqNr, cert *apbtypes.Cert, empty bool) error {
 		// Create an empty output item and enqueue it immediately.
 		// Actual output will be delayed until the transactions have been received.
 		// This is necessary to preserve the order of incoming and outgoing events.
@@ -103,11 +103,10 @@ func NewModule(mc *ModuleConfig, epochNr tt.EpochNr, clientProgress *clientprogr
 		}
 		output.Enqueue(&item)
 
-		//TODO cleanup check for empty certificates and make consistent across modules
-		if cert.Type == nil {
+		if empty {
 			// Skip fetching transactions for padding certificates.
 			// Directly deliver an empty batch instead.
-			item.event = bfeventstypes.NewOrderedBatch(mc.Destination, []*requestpbtypes.Request{})
+			item.event = bfeventstypes.NewOrderedBatch(mc.Destination, []*trantorpbtypes.Transaction{})
 			output.Flush(m)
 		} else {
 			// If this is a proper certificate, request transactions from the availability layer.
@@ -178,7 +177,7 @@ func NewModule(mc *ModuleConfig, epochNr tt.EpochNr, clientProgress *clientprogr
 	// assigns the remaining transactions to the corresponding output item
 	// (the one created on reception of the corresponding availability certificate in DeliverCert)
 	// and flushes the output stream.
-	availabilitypbdsl.UponProvideTransactions(m, func(txs []*requestpbtypes.Request, context *txRequestContext) error {
+	availabilitypbdsl.UponProvideTransactions(m, func(txs []*trantorpbtypes.Transaction, context *txRequestContext) error {
 
 		// Note that not necessarily all transactions will be part of the final batch.
 		// When the event leaves the output buffer, duplicates will be filtered out.

@@ -5,7 +5,7 @@ package aleapb;
 option go_package = "github.com/filecoin-project/mir/pkg/pb/aleapb";
 
 import "aleapb/common/common.proto";
-import "requestpb/requestpb.proto";
+import "trantorpb/trantorpb.proto";
 
 import "mir/codegen_extensions.proto";
 import "net/codegen_extensions.proto";
@@ -34,9 +34,9 @@ message FillGapMessage {
 message FillerMessage {
   option (net.message) = true;
 
-  common.Slot                slot      = 1;
-  repeated requestpb.Request txs       = 2;
-  bytes                      signature = 3 [(mir.type) = "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes.FullSig"];
+  common.Slot                    slot      = 1;
+  repeated trantorpb.Transaction txs       = 2;
+  bytes                          signature = 3 [(mir.type) = "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes.FullSig"];
 }
 
 // Availability interface certificate

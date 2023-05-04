@@ -5,12 +5,12 @@ import (
 	types4 "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/types"
 	types1 "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
 	types3 "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
-	types2 "github.com/filecoin-project/mir/pkg/pb/requestpb/types"
+	types2 "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	tctypes "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 	types "github.com/filecoin-project/mir/pkg/types"
 )
 
-func InputValue(destModule types.ModuleID, slot *types1.Slot, txs []*types2.Request) *types3.Event {
+func InputValue(destModule types.ModuleID, slot *types1.Slot, txs []*types2.Transaction) *types3.Event {
 	return &types3.Event{
 		DestModule: destModule,
 		Type: &types3.Event_AleaBcqueue{
@@ -56,7 +56,7 @@ func FreeSlot(destModule types.ModuleID, queueSlot aleatypes.QueueSlot) *types3.
 	}
 }
 
-func PastVcbFinal(destModule types.ModuleID, queueSlot aleatypes.QueueSlot, txs []*types2.Request, signature tctypes.FullSig) *types3.Event {
+func PastVcbFinal(destModule types.ModuleID, queueSlot aleatypes.QueueSlot, txs []*types2.Transaction, signature tctypes.FullSig) *types3.Event {
 	return &types3.Event{
 		DestModule: destModule,
 		Type: &types3.Event_AleaBcqueue{

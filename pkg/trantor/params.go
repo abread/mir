@@ -7,7 +7,7 @@ import (
 	issconfig "github.com/filecoin-project/mir/pkg/iss/config"
 	"github.com/filecoin-project/mir/pkg/mempool/simplemempool"
 	"github.com/filecoin-project/mir/pkg/net/libp2p"
-	commonpbtypes "github.com/filecoin-project/mir/pkg/pb/commonpb/types"
+	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	"github.com/filecoin-project/mir/pkg/reliablenet"
 	"github.com/filecoin-project/mir/pkg/threshcrypto"
 	"github.com/filecoin-project/mir/pkg/util/maputil"
@@ -22,7 +22,7 @@ type Params struct {
 	ThreshCrypto *threshcrypto.ModuleParams
 }
 
-func DefaultParams(initialMembership *commonpbtypes.Membership) Params {
+func DefaultParams(initialMembership *trantorpbtypes.Membership) Params {
 	allNodes := maputil.GetSortedKeys(initialMembership.Nodes)
 	return Params{
 		Mempool:      simplemempool.DefaultModuleParams(),

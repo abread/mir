@@ -21,7 +21,7 @@ import (
 	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 	isspbdsl "github.com/filecoin-project/mir/pkg/pb/isspb/dsl"
 	mempooldsl "github.com/filecoin-project/mir/pkg/pb/mempoolpb/dsl"
-	requestpbtypes "github.com/filecoin-project/mir/pkg/pb/requestpb/types"
+	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	timert "github.com/filecoin-project/mir/pkg/timer/types"
 	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 	t "github.com/filecoin-project/mir/pkg/types"
@@ -132,7 +132,7 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 					Slot: slot,
 				},
 			},
-		})
+		}, false)
 
 		// pop queue
 		state.agQueueHeads[queueIdx]++
@@ -191,7 +191,7 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 		mempooldsl.RequestBatch[struct{}](m, mc.Mempool, nil)
 		return nil
 	})
-	mempooldsl.UponNewBatch(m, func(txIDs []tt.TxID, txs []*requestpbtypes.Request, ctx *struct{}) error {
+	mempooldsl.UponNewBatch(m, func(txIDs []tt.TxID, txs []*trantorpbtypes.Transaction, ctx *struct{}) error {
 		if len(txs) == 0 {
 			return fmt.Errorf("empty batch. did you misconfigure your mempool?")
 		}

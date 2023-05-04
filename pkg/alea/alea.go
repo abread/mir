@@ -10,7 +10,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/checkpoint"
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/modules"
-	commonpbtypes "github.com/filecoin-project/mir/pkg/pb/commonpb/types"
+	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 	"github.com/filecoin-project/mir/pkg/util/maputil"
 )
@@ -38,7 +38,7 @@ type Params struct {
 
 	// The identities of all nodes that execute the protocol.
 	// Must not be empty.
-	Membership *commonpbtypes.Membership
+	Membership *trantorpbtypes.Membership
 
 	// Maximum number of concurrent VCB instances per queue
 	// Must be at least 1
@@ -89,7 +89,7 @@ func DefaultConfig(consumer t.ModuleID) *Config {
 // DefaultParams is intended for use during testing and hello-world examples.
 // A proper deployment is expected to craft a custom configuration,
 // for which DefaultParams can serve as a starting point.
-func DefaultParams(membership *commonpbtypes.Membership) *Params {
+func DefaultParams(membership *trantorpbtypes.Membership) *Params {
 	aproxRTT := 220 * time.Microsecond
 	aproxBcDuration := 3*aproxRTT/2 + 20*time.Millisecond
 

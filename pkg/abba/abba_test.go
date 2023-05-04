@@ -193,7 +193,11 @@ func newDeployment(ctx context.Context, conf *TestConfig) (*deploytest.Deploymen
 		}
 		simulation = deploytest.NewSimulation(r, nodeIDs, eventDelayFn)
 	}
-	transportLayer := deploytest.NewLocalTransportLayer(simulation, conf.Transport, nodeIDs, logger)
+	transportLayer, err := deploytest.NewLocalTransportLayer(simulation, conf.Transport, nodeIDs, logger)
+	if err != nil {
+		return nil, fmt.Errorf("could not create transport: %w", err)
+	}
+
 	threshCryptoSystem := deploytest.NewLocalThreshCryptoSystem("pseudo", nodeIDs, conf.F+1, logger)
 
 	nodeModules := make(map[types.NodeID]modules.Modules)
@@ -246,10 +250,15 @@ func newDeployment(ctx context.Context, conf *TestConfig) (*deploytest.Deploymen
 			return nil, fmt.Errorf("error creating reliablenet module: %w", err)
 		}
 
+		tc, err := threshCryptoSystem.Module(ctx, nodeID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create threshcrypto module: %w", err)
+		}
+
 		modulesWithDefaults := map[types.ModuleID]modules.Module{
 			"app":                   newCountingApp(inputValue),
 			abbaConfig.Self:         abba,
-			abbaConfig.ThreshCrypto: threshCryptoSystem.Module(ctx, nodeID),
+			abbaConfig.ThreshCrypto: tc,
 			abbaConfig.Hasher:       mirCrypto.NewHasher(ctx, mirCrypto.DefaultHasherModuleParams(), crypto.SHA256),
 			abbaConfig.ReliableNet:  rnet,
 			"net":                   transport,

@@ -10,10 +10,9 @@ package isspb;
 
 option go_package = "github.com/filecoin-project/mir/pkg/pb/isspb";
 
-import "requestpb/requestpb.proto";
+import "trantorpb/trantorpb.proto";
 import "checkpointpb/checkpointpb.proto";
 import "availabilitypb/availabilitypb.proto";
-import "commonpb/commonpb.proto";
 
 import "mir/codegen_extensions.proto";
 import "net/codegen_extensions.proto";
@@ -30,12 +29,6 @@ message ISSMessage {
 
     checkpointpb.StableCheckpoint   stable_checkpoint   = 3;
   }
-}
-
-message RetransmitRequests {
-  option (net.message) = true;
-
-  repeated requestpb.Request requests = 1;
 }
 
 // ============================================================
@@ -72,14 +65,15 @@ message SBDeliver {
 message DeliverCert {
   option (mir.event) = true;
 
-  uint64              sn   = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/trantor/types.SeqNr"];
-  availabilitypb.Cert cert = 2;
+  uint64              sn    = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/trantor/types.SeqNr"];
+  availabilitypb.Cert cert  = 2;
+  bool                empty = 3;
 }
 
 message NewConfig {
   option (mir.event) = true;
 
   uint64              epoch_nr   = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/trantor/types.EpochNr"];
-  commonpb.Membership membership = 2;
+  trantorpb.Membership membership = 2;
 }
 

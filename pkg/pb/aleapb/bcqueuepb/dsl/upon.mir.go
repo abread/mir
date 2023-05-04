@@ -6,7 +6,7 @@ import (
 	types "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/types"
 	types2 "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
 	types1 "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
-	types3 "github.com/filecoin-project/mir/pkg/pb/requestpb/types"
+	types3 "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	tctypes "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 )
 
@@ -23,7 +23,7 @@ func UponEvent[W types.Event_TypeWrapper[Ev], Ev any](m dsl.Module, handler func
 	})
 }
 
-func UponInputValue(m dsl.Module, handler func(slot *types2.Slot, txs []*types3.Request) error) {
+func UponInputValue(m dsl.Module, handler func(slot *types2.Slot, txs []*types3.Transaction) error) {
 	UponEvent[*types.Event_InputValue](m, func(ev *types.InputValue) error {
 		return handler(ev.Slot, ev.Txs)
 	})
@@ -41,7 +41,7 @@ func UponFreeSlot(m dsl.Module, handler func(queueSlot aleatypes.QueueSlot) erro
 	})
 }
 
-func UponPastVcbFinal(m dsl.Module, handler func(queueSlot aleatypes.QueueSlot, txs []*types3.Request, signature tctypes.FullSig) error) {
+func UponPastVcbFinal(m dsl.Module, handler func(queueSlot aleatypes.QueueSlot, txs []*types3.Transaction, signature tctypes.FullSig) error) {
 	UponEvent[*types.Event_PastVcbFinal](m, func(ev *types.PastVcbFinal) error {
 		return handler(ev.QueueSlot, ev.Txs, ev.Signature)
 	})

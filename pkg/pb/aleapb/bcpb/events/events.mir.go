@@ -5,11 +5,11 @@ import (
 	types3 "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/types"
 	types4 "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
 	types2 "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
-	types1 "github.com/filecoin-project/mir/pkg/pb/requestpb/types"
+	types1 "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	types "github.com/filecoin-project/mir/pkg/types"
 )
 
-func StartBroadcast(destModule types.ModuleID, queueSlot aleatypes.QueueSlot, txs []*types1.Request) *types2.Event {
+func StartBroadcast(destModule types.ModuleID, queueSlot aleatypes.QueueSlot, txs []*types1.Transaction) *types2.Event {
 	return &types2.Event{
 		DestModule: destModule,
 		Type: &types2.Event_AleaBroadcast{

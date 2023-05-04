@@ -3,8 +3,8 @@ package isspbdsl
 import (
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
 	types2 "github.com/filecoin-project/mir/pkg/pb/availabilitypb/types"
-	types3 "github.com/filecoin-project/mir/pkg/pb/commonpb/types"
 	events "github.com/filecoin-project/mir/pkg/pb/isspb/events"
+	types3 "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	types1 "github.com/filecoin-project/mir/pkg/trantor/types"
 	types "github.com/filecoin-project/mir/pkg/types"
 )
@@ -19,8 +19,8 @@ func SBDeliver(m dsl.Module, destModule types.ModuleID, sn types1.SeqNr, data []
 	dsl.EmitMirEvent(m, events.SBDeliver(destModule, sn, data, aborted, leader, instanceId))
 }
 
-func DeliverCert(m dsl.Module, destModule types.ModuleID, sn types1.SeqNr, cert *types2.Cert) {
-	dsl.EmitMirEvent(m, events.DeliverCert(destModule, sn, cert))
+func DeliverCert(m dsl.Module, destModule types.ModuleID, sn types1.SeqNr, cert *types2.Cert, empty bool) {
+	dsl.EmitMirEvent(m, events.DeliverCert(destModule, sn, cert, empty))
 }
 
 func NewConfig(m dsl.Module, destModule types.ModuleID, epochNr types1.EpochNr, membership *types3.Membership) {

@@ -1,11 +1,13 @@
 package orderers
 
 import (
+	"fmt"
+
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/iss/config"
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/orderers/types"
-	commonpbtypes "github.com/filecoin-project/mir/pkg/pb/commonpb/types"
+	hasherpbtypes "github.com/filecoin-project/mir/pkg/pb/hasherpb/types"
 	pbftpbmsgs "github.com/filecoin-project/mir/pkg/pb/pbftpb/msgs"
 	pbftpbtypes "github.com/filecoin-project/mir/pkg/pb/pbftpb/types"
 	transportpbevents "github.com/filecoin-project/mir/pkg/pb/transportpb/events"
@@ -25,7 +27,9 @@ type pbftViewChangeState struct {
 	// At initialization, an explicit nil entry is created for each sequence number of the segment.
 	// Based on received ViewChange messages, each value will eventually be set to
 	// - either a non-zero-length byte slice representing a digest to be re-proposed
-	// - or a zero-length byte slice marking it safe to re-propose a special "null" certificate.
+	// - or a zero-length byte slice marking it safe to re-propose a special fresh value
+	// (in the current implementation, the fresh value is a pre-configured proposal
+	// or, if none has been specified, an empty byte slice).
 	reproposals map[tt.SeqNr][]byte
 
 	// Preprepare messages to be reproposed in the new view.
@@ -96,10 +100,10 @@ func (vcState *pbftViewChangeState) updateReproposals() {
 	}
 }
 
-func (vcState *pbftViewChangeState) SetEmptyPreprepares(view types.ViewNr, proposals map[tt.SeqNr][]byte) []*commonpbtypes.HashData {
+func (vcState *pbftViewChangeState) SetEmptyPreprepares(view types.ViewNr, proposals map[tt.SeqNr][]byte) []*hasherpbtypes.HashData {
 
 	// dataToHash will store the serialized form of newly created empty ("aborted") Preprepares.
-	dataToHash := make([]*commonpbtypes.HashData, 0, len(vcState.reproposals))
+	dataToHash := make([]*hasherpbtypes.HashData, 0, len(vcState.reproposals))
 
 	maputil.IterateSorted(vcState.reproposals, func(sn tt.SeqNr, digest []byte) (cont bool) {
 		if digest != nil && len(digest) == 0 {
@@ -125,7 +129,7 @@ func (vcState *pbftViewChangeState) SetEmptyPreprepares(view types.ViewNr, propo
 	return dataToHash
 }
 
-func (vcState *pbftViewChangeState) SetEmptyPreprepareDigests(digests [][]byte) {
+func (vcState *pbftViewChangeState) SetEmptyPreprepareDigests(digests [][]byte) error {
 	// Index of the next digest to assign.
 	i := 0
 
@@ -142,8 +146,10 @@ func (vcState *pbftViewChangeState) SetEmptyPreprepareDigests(digests [][]byte) 
 
 	// Sanity check (all digests must have been used)
 	if i != len(digests) {
-		panic("more digests than empty preprepares")
+		return fmt.Errorf("more digests than empty preprepares")
 	}
+
+	return nil
 }
 
 func (vcState *pbftViewChangeState) SetLocalPreprepares(pbft *Orderer, view types.ViewNr) {

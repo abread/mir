@@ -2,10 +2,10 @@ package vcb
 
 import (
 	"github.com/filecoin-project/mir/pkg/dsl"
-	commonpbtypes "github.com/filecoin-project/mir/pkg/pb/commonpb/types"
 	hasherpbdsl "github.com/filecoin-project/mir/pkg/pb/hasherpb/dsl"
+	hasherpbtypes "github.com/filecoin-project/mir/pkg/pb/hasherpb/types"
 	mpdsl "github.com/filecoin-project/mir/pkg/pb/mempoolpb/dsl"
-	requestpbtypes "github.com/filecoin-project/mir/pkg/pb/requestpb/types"
+	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 )
 
@@ -14,7 +14,7 @@ type vcbPayloadManager struct {
 	mc     *ModuleConfig
 	params *ModuleParams
 
-	txs       []*requestpbtypes.Request
+	txs       []*trantorpbtypes.Transaction
 	txIDs     []tt.TxID
 	txIDsHash []byte
 	sigData   [][]byte
@@ -29,7 +29,7 @@ func newVcbPayloadManager(m dsl.Module, mc *ModuleConfig, params *ModuleParams) 
 
 	mpdsl.UponTransactionIDsResponse(m, func(txIDs []tt.TxID, context *vcbPayloadMgrInputTxs) error {
 		mgr.txIDs = txIDs
-		hasherpbdsl.RequestOne(m, mc.Hasher, &commonpbtypes.HashData{
+		hasherpbdsl.RequestOne(m, mc.Hasher, &hasherpbtypes.HashData{
 			Data: txIDs,
 		}, context)
 		return nil
@@ -45,7 +45,7 @@ func newVcbPayloadManager(m dsl.Module, mc *ModuleConfig, params *ModuleParams) 
 
 type vcbPayloadMgrInputTxs struct{}
 
-func (mgr *vcbPayloadManager) Input(txs []*requestpbtypes.Request) {
+func (mgr *vcbPayloadManager) Input(txs []*trantorpbtypes.Transaction) {
 	if mgr.txs != nil {
 		return
 	}
@@ -54,7 +54,7 @@ func (mgr *vcbPayloadManager) Input(txs []*requestpbtypes.Request) {
 	mpdsl.RequestTransactionIDs(mgr.m, mgr.mc.Mempool, txs, &vcbPayloadMgrInputTxs{})
 }
 
-func (mgr *vcbPayloadManager) Txs() []*requestpbtypes.Request {
+func (mgr *vcbPayloadManager) Txs() []*trantorpbtypes.Transaction {
 	return mgr.txs
 }
 

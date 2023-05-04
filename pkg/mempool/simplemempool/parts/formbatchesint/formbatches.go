@@ -11,7 +11,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/mempool/simplemempool/common"
 	mpdsl "github.com/filecoin-project/mir/pkg/pb/mempoolpb/dsl"
 	mppbtypes "github.com/filecoin-project/mir/pkg/pb/mempoolpb/types"
-	requestpbtypes "github.com/filecoin-project/mir/pkg/pb/requestpb/types"
+	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	"github.com/filecoin-project/mir/pkg/serializing"
 	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 )
@@ -45,11 +45,11 @@ func IncludeBatchCreation(
 		clientProgress:       clientprogress.NewClientProgress(logging.NilLogger),
 	}
 
-	mpdsl.UponNewRequests(m, func(txs []*requestpbtypes.Request) error {
-		filteredTxs := make([]*requestpbtypes.Request, 0, len(txs))
+	mpdsl.UponNewTransactions(m, func(txs []*trantorpbtypes.Transaction) error {
+		filteredTxs := make([]*trantorpbtypes.Transaction, 0, len(txs))
 		for _, tx := range txs {
-			// TODO: can we use Add here? depends on whether we can trust incoming requests to be valid
-			if state.clientProgress.CanAdd(tx.ClientId, tx.ReqNo) {
+			// TODO: can we use Add here? depends on whether we can trust incoming transactions to be valid
+			if state.clientProgress.CanAdd(tx.ClientId, tx.TxNo) {
 				filteredTxs = append(filteredTxs, tx)
 			}
 		}
@@ -83,7 +83,7 @@ func IncludeBatchCreation(
 	dsl.UponStateUpdates(m, func() error {
 		for len(state.pendingBatchRequests) > 0 && state.pendingTxCount >= params.MinTransactionsInBatch {
 			var txIDs []tt.TxID
-			var txs []*requestpbtypes.Request
+			var txs []*trantorpbtypes.Transaction
 			batchTxCount := 0
 
 			startingIdx := state.bucketRng.Intn(len(state.NewTxIDsBuckets))
@@ -122,9 +122,9 @@ func IncludeBatchCreation(
 		return nil
 	})
 
-	mpdsl.UponMarkDelivered(m, func(txs []*requestpbtypes.Request) error {
+	mpdsl.UponMarkDelivered(m, func(txs []*trantorpbtypes.Transaction) error {
 		for _, tx := range txs {
-			state.clientProgress.Add(tx.ClientId, tx.ReqNo)
+			state.clientProgress.Add(tx.ClientId, tx.TxNo)
 		}
 
 		mpdsl.RequestTransactionIDs[markDeliveredContext](m, mc.Self, txs, nil)
@@ -157,7 +157,7 @@ func IncludeBatchCreation(
 // Context data structures
 
 type requestTxIDsContext struct {
-	txs []*requestpbtypes.Request
+	txs []*trantorpbtypes.Transaction
 }
 
 type markDeliveredContext struct{}

@@ -1,0 +1,81 @@
+syntax = "proto3";
+
+package trantorpb;
+
+option go_package = "github.com/filecoin-project/mir/pkg/pb/trantorpb";
+
+import "mir/codegen_extensions.proto";
+
+// ================================================================================
+// Transaction
+
+message Transaction {
+  option (mir.struct) = true;
+
+  string client_id = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/trantor/types.ClientID"];
+  uint64 tx_no     = 2 [(mir.type) = "github.com/filecoin-project/mir/pkg/trantor/types.TxNo"];
+  uint64 type      = 3; // TODO not being used at the moment? (only some boilerplate code in pkg/serializing)
+  bytes  data      = 4;
+}
+
+// ================================================================================
+// State snapshot
+
+message StateSnapshot {
+  option (mir.struct) = true;
+
+  bytes     app_data   = 1;
+  EpochData epoch_data = 2;
+}
+
+message EpochData {
+  option (mir.struct) = true;
+
+  EpochConfig    epoch_config        = 1;
+  ClientProgress client_progress     = 2;
+  bytes          leader_policy       = 3;
+  Membership     previous_membership = 4;
+}
+
+message EpochConfig {
+  option (mir.event) = true;
+
+  uint64              epoch_nr    = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/trantor/types.EpochNr"];
+  uint64              first_sn    = 2 [(mir.type) = "github.com/filecoin-project/mir/pkg/trantor/types.SeqNr"];
+  uint64              length      = 3;
+  repeated Membership memberships = 4;
+}
+
+// ================================================================================
+// Membership
+
+message Membership {
+  option (mir.struct) = true;
+
+  map<string, NodeIdentity> nodes = 1 [(mir.key_type) = "github.com/filecoin-project/mir/pkg/types.NodeID"];
+}
+
+message NodeIdentity {
+  option (mir.struct) = true;
+
+  string id     = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.NodeID"];
+  string addr   = 2; // Value type is Multiaddr, convert in code directly.
+  bytes  key    = 3;
+  uint64 weight = 4; // TODO: Make a Mir type for this.
+}
+
+// ================================================================================
+// Client Progress
+
+message ClientProgress {
+  option (mir.event) = true;
+
+  map<string, DeliveredTXs> progress = 1 [(mir.key_type) = "github.com/filecoin-project/mir/pkg/trantor/types.ClientID"];
+}
+
+message DeliveredTXs {
+  option (mir.struct) = true;
+
+  uint64          low_wm    = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/trantor/types.TxNo"];
+  repeated uint64 delivered = 2 [(mir.type) = "github.com/filecoin-project/mir/pkg/trantor/types.TxNo"];
+}

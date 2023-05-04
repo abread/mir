@@ -8,7 +8,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/net"
 	"github.com/filecoin-project/mir/pkg/net/grpc"
-	commonpbtypes "github.com/filecoin-project/mir/pkg/pb/commonpb/types"
+	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -18,28 +18,28 @@ type LocalGrpcTransport struct {
 	// Complete static membership of the system.
 	// Maps the node ID of each node in the system to a string representation of its network address.
 	// The address format "IPAddress:port"
-	membership *commonpbtypes.Membership
+	membership *trantorpbtypes.Membership
 
 	// Logger is used for all logging events of this LocalGrpcTransport
 	logger logging.Logger
 }
 
-func NewLocalGrpcTransport(nodeIDs []t.NodeID, logger logging.Logger) *LocalGrpcTransport {
+func NewLocalGrpcTransport(nodeIDs []t.NodeID, logger logging.Logger) (*LocalGrpcTransport, error) {
 	if logger == nil {
 		logger = logging.ConsoleErrorLogger
 	}
 	// Compute network addresses and ports for all test replicas.
 	// Each test replica is on the local machine - 127.0.0.1
-	membership := &commonpbtypes.Membership{make(map[t.NodeID]*commonpbtypes.NodeIdentity)} // nolint:govet
+	membership := &trantorpbtypes.Membership{make(map[t.NodeID]*trantorpbtypes.NodeIdentity)} // nolint:govet
 	for i, id := range nodeIDs {
 		maddr, err := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/127.0.0.1/tcp/%d", BaseListenPort+i))
 		if err != nil {
-			panic(err)
+			return nil, fmt.Errorf("error creating local multiaddress: %w", err)
 		}
-		membership.Nodes[id] = &commonpbtypes.NodeIdentity{id, maddr.String(), nil, 0} // nolint:govet
+		membership.Nodes[id] = &trantorpbtypes.NodeIdentity{id, maddr.String(), nil, 0} // nolint:govet
 	}
 
-	return &LocalGrpcTransport{membership, logger}
+	return &LocalGrpcTransport{membership, logger}, nil
 }
 
 func (t *LocalGrpcTransport) Link(sourceID t.NodeID) (net.Transport, error) {
@@ -50,7 +50,7 @@ func (t *LocalGrpcTransport) Link(sourceID t.NodeID) (net.Transport, error) {
 	)
 }
 
-func (t *LocalGrpcTransport) Membership() *commonpbtypes.Membership {
+func (t *LocalGrpcTransport) Membership() *trantorpbtypes.Membership {
 	return t.membership
 }
 

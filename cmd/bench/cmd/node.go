@@ -29,15 +29,15 @@ import (
 	"github.com/filecoin-project/mir/pkg/membership"
 	"github.com/filecoin-project/mir/pkg/net"
 	libp2p2 "github.com/filecoin-project/mir/pkg/net/libp2p"
-	commonpbtypes "github.com/filecoin-project/mir/pkg/pb/commonpb/types"
-	"github.com/filecoin-project/mir/pkg/requestreceiver"
+	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
+	"github.com/filecoin-project/mir/pkg/transactionreceiver"
 	"github.com/filecoin-project/mir/pkg/trantor"
 	t "github.com/filecoin-project/mir/pkg/types"
 	"github.com/filecoin-project/mir/pkg/util/libp2p"
 )
 
 const (
-	ReqReceiverBasePort = 20000
+	TxReceiverBasePort = 20000
 )
 
 var (
@@ -68,8 +68,12 @@ func init() {
 	nodeCmd.Flags().StringVarP(&cryptoImplType, "cryptoImplType", "c", "pseudo", "type of cryptography to use (acceptable values: pseudo or dummy)")
 }
 
-func issSMRFactory(ctx context.Context, ownID t.NodeID, transport net.Transport, initialMembership *commonpbtypes.Membership, smrParams trantor.Params, logger logging.Logger) (*trantor.System, error) {
-	localCrypto := deploytest.NewLocalCryptoSystem(cryptoImplType, membership.GetIDs(initialMembership), logger)
+func issSMRFactory(ctx context.Context, ownID t.NodeID, transport net.Transport, initialMembership *trantorpbtypes.Membership, smrParams trantor.Params, logger logging.Logger) (*trantor.System, error) {
+	localCS := deploytest.NewLocalCryptoSystem(cryptoImplType, membership.GetIDs(initialMembership), logger)
+	localCrypto, err := localCS.Crypto(ownID)
+	if err != nil {
+		return nil, fmt.Errorf("could not create a local crypto system: %w", err)
+	}
 
 	genesisCheckpoint, err := trantor.GenesisCheckpoint([]byte{}, smrParams)
 	if err != nil {
@@ -81,30 +85,34 @@ func issSMRFactory(ctx context.Context, ownID t.NodeID, transport net.Transport,
 		ownID,
 		transport,
 		genesisCheckpoint,
-		localCrypto.Crypto(ownID),
+		localCrypto,
 		&App{Logger: logger, Membership: initialMembership},
 		smrParams,
 		logger,
 	)
 }
 
-func aleaSMRFactory(ctx context.Context, ownID t.NodeID, transport net.Transport, initialMembership *commonpbtypes.Membership, smrParams trantor.Params, logger logging.Logger) (*trantor.System, error) {
+func aleaSMRFactory(ctx context.Context, ownID t.NodeID, transport net.Transport, initialMembership *trantorpbtypes.Membership, smrParams trantor.Params, logger logging.Logger) (*trantor.System, error) {
 	F := (len(initialMembership.Nodes) - 1) / 3
-	localCrypto := deploytest.NewLocalThreshCryptoSystem(cryptoImplType, membership.GetIDs(initialMembership), F+1, logger)
+	localCS := deploytest.NewLocalThreshCryptoSystem(cryptoImplType, membership.GetIDs(initialMembership), F+1, logger)
+	localCrypto, err := localCS.ThreshCrypto(ownID)
+	if err != nil {
+		return nil, fmt.Errorf("could not create a local threshcrypto system: %w", err)
+	}
 
 	return trantor.NewAlea(
 		ctx,
 		ownID,
 		transport,
 		nil,
-		localCrypto.ThreshCrypto(ownID),
+		localCrypto,
 		&App{Logger: logger, Membership: initialMembership},
 		smrParams,
 		logger,
 	)
 }
 
-type smrFactory func(ctx context.Context, ownID t.NodeID, transport net.Transport, initialMembership *commonpbtypes.Membership, smrParams trantor.Params, logger logging.Logger) (*trantor.System, error)
+type smrFactory func(ctx context.Context, ownID t.NodeID, transport net.Transport, initialMembership *trantorpbtypes.Membership, smrParams trantor.Params, logger logging.Logger) (*trantor.System, error)
 
 var smrFactories = map[string]smrFactory{
 	"iss":  issSMRFactory,
@@ -180,7 +188,7 @@ func runNode(ctx context.Context) error {
 			switch e := e.Type.(type) {
 			case *eventpb.Event_Mempool:
 				switch e.Mempool.Type.(type) {
-				case *mempoolpb.Event_NewRequests:
+				case *mempoolpb.Event_NewTransactions:
 					return true
 				}
 			case *eventpb.Event_BatchFetcher:
@@ -225,14 +233,14 @@ func runNode(ctx context.Context) error {
 		return fmt.Errorf("could not create node: %w", err)
 	}
 
-	reqReceiverListener, err := gonet.Listen("tcp", fmt.Sprintf(":%v", ReqReceiverBasePort+ownNumericID))
+	txReceiverListener, err := gonet.Listen("tcp", fmt.Sprintf(":%v", TxReceiverBasePort+ownNumericID))
 	if err != nil {
-		return fmt.Errorf("could not create request receiver listener: %w", err)
+		return fmt.Errorf("could not create tx receiver listener: %w", err)
 	}
 
-	reqReceiver := requestreceiver.NewRequestReceiver(node, "mempool", logger)
-	reqReceiver.Start(reqReceiverListener)
-	defer reqReceiver.Stop()
+	txReceiver := transactionreceiver.NewTransactionReceiver(node, "mempool", logger)
+	txReceiver.Start(txReceiverListener)
+	defer txReceiver.Stop()
 
 	if err := benchApp.Start(); err != nil {
 		return fmt.Errorf("could not start bench app: %w", err)

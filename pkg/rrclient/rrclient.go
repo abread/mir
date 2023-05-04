@@ -10,8 +10,8 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/filecoin-project/mir/pkg/logging"
-	requestpbtypes "github.com/filecoin-project/mir/pkg/pb/requestpb/types"
-	"github.com/filecoin-project/mir/pkg/requestreceiver"
+	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
+	"github.com/filecoin-project/mir/pkg/transactionreceiver"
 	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 	"github.com/filecoin-project/mir/pkg/util/maputil"
@@ -22,14 +22,14 @@ const (
 	maxMessageSize = 1073741824
 )
 
-// TODO: Update the comments around crypto, hasher, and request signing.
+// TODO: Update the comments around crypto, hasher, and transaction signing.
 
 type RoundRobinClient struct {
 	ownID     tt.ClientID
 	hasher    crypto.Hash
-	nextReqNo tt.ReqNo
+	nextTxNo  tt.TxNo
 	conns     map[t.NodeID]*grpc.ClientConn
-	clients   map[t.NodeID]requestreceiver.RequestReceiver_ListenClient
+	clients   map[t.NodeID]transactionreceiver.TransactionReceiver_ListenClient
 	clientIDs []t.NodeID
 	logger    logging.Logger
 
@@ -48,18 +48,18 @@ func NewRoundRobinClient(
 	}
 
 	return &RoundRobinClient{
-		ownID:     clientID,
-		hasher:    hasher,
-		nextReqNo: 0,
-		clients:   make(map[t.NodeID]requestreceiver.RequestReceiver_ListenClient),
-		conns:     make(map[t.NodeID]*grpc.ClientConn),
-		logger:    l,
+		ownID:    clientID,
+		hasher:   hasher,
+		nextTxNo: 0,
+		clients:  make(map[t.NodeID]transactionreceiver.TransactionReceiver_ListenClient),
+		conns:    make(map[t.NodeID]*grpc.ClientConn),
+		logger:   l,
 	}
 }
 
 // Connect establishes (in parallel) network connections to all nodes in the system.
-// The nodes' RequestReceivers must be running.
-// Only after Connect() returns, sending requests through this RoundRobinClient is possible.
+// The nodes' TransactionReceivers must be running.
+// Only after Connect() returns, sending transactions through this RoundRobinClient is possible.
 // TODO: Deal with errors, e.g. when the connection times out (make sure the RPC call in connectToNode() has a timeout).
 func (rrc *RoundRobinClient) Connect(ctx context.Context, membership map[t.NodeID]string) {
 	// Initialize wait group used by the connecting goroutines
@@ -99,28 +99,27 @@ func (rrc *RoundRobinClient) Connect(ctx context.Context, membership map[t.NodeI
 	rrc.clientIDs = maputil.GetSortedKeys(rrc.clients)
 }
 
-// SubmitRequest submits a request by sending it to one node, chosen in a round-robin fashion from
+// SubmitTransaction submits a transaction by sending it to one node, chosen in a round-robin fashion from
 // the full node list (as configured when creating the RoundRobinClient).
-// It automatically appends meta-info like client ID and request number.
-// SubmitRequest must not be called concurrently.
-// If an error occurs, SubmitRequest returns immediately.
-func (rrc *RoundRobinClient) SubmitRequest(data []byte) error {
-
-	// Create new request message.
-	reqMsg := &requestpbtypes.Request{
+// It automatically appends meta-info like client ID and transaction number.
+// SubmitTransaction must not be called concurrently.
+// If an error occurs, SubmitTransaction returns immediately.
+func (rrc *RoundRobinClient) SubmitTransaction(data []byte) error {
+	// Create new transaction.
+	tx := &trantorpbtypes.Transaction{
 		ClientId: rrc.ownID,
-		ReqNo:    rrc.nextReqNo,
+		TxNo:     rrc.nextTxNo,
 		Type:     0,
 		Data:     data,
 	}
-	rrc.nextReqNo++
+	rrc.nextTxNo++
 
 	nID := rrc.clientIDs[rrc.nextClientIdx]
 	client := rrc.clients[nID]
 	rrc.nextClientIdx = (rrc.nextClientIdx + 1) % len(rrc.clients)
 
-	if err := client.Send(reqMsg.Pb()); err != nil {
-		return fmt.Errorf("failed sending request to node (%v): %w", nID, err)
+	if err := client.Send(tx.Pb()); err != nil {
+		return fmt.Errorf("failed sending transaction to node (%v): %w", nID, err)
 	}
 
 	return nil
@@ -147,7 +146,7 @@ func (rrc *RoundRobinClient) Disconnect() {
 }
 
 // Establishes a connection to a single node at address addrString.
-func (rrc *RoundRobinClient) connectToNode(ctx context.Context, addrString string) (*grpc.ClientConn, requestreceiver.RequestReceiver_ListenClient, error) {
+func (rrc *RoundRobinClient) connectToNode(ctx context.Context, addrString string) (*grpc.ClientConn, transactionreceiver.TransactionReceiver_ListenClient, error) {
 
 	rrc.logger.Log(logging.LevelDebug, fmt.Sprintf("Connecting to node: %s", addrString))
 
@@ -165,10 +164,10 @@ func (rrc *RoundRobinClient) connectToNode(ctx context.Context, addrString strin
 	}
 
 	// Register client stub.
-	client := requestreceiver.NewRequestReceiverClient(conn)
+	client := transactionreceiver.NewTransactionReceiverClient(conn)
 
 	// Remotely invoke the Listen function on the other node's gRPC server.
-	// As this is "stream of requests"-type RPC, it returns a message sink.
+	// As this is "stream of transactions"-type RPC, it returns a message sink.
 	msgSink, err := client.Listen(context.Background())
 	if err != nil {
 		if cerr := conn.Close(); cerr != nil {

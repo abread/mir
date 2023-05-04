@@ -16,15 +16,15 @@ import (
 	batchdbdsl "github.com/filecoin-project/mir/pkg/pb/availabilitypb/batchdbpb/dsl"
 	adsl "github.com/filecoin-project/mir/pkg/pb/availabilitypb/dsl"
 	availabilitypbtypes "github.com/filecoin-project/mir/pkg/pb/availabilitypb/types"
-	commonpbtypes "github.com/filecoin-project/mir/pkg/pb/commonpb/types"
 	eventpbevents "github.com/filecoin-project/mir/pkg/pb/eventpb/events"
 	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 	hasherpbdsl "github.com/filecoin-project/mir/pkg/pb/hasherpb/dsl"
+	hasherpbtypes "github.com/filecoin-project/mir/pkg/pb/hasherpb/types"
 	mempooldsl "github.com/filecoin-project/mir/pkg/pb/mempoolpb/dsl"
 	rnetdsl "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/dsl"
-	requestpbtypes "github.com/filecoin-project/mir/pkg/pb/requestpb/types"
 	threshDsl "github.com/filecoin-project/mir/pkg/pb/threshcryptopb/dsl"
 	transportpbdsl "github.com/filecoin-project/mir/pkg/pb/transportpb/dsl"
+	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	"github.com/filecoin-project/mir/pkg/reliablenet/rntypes"
 	"github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 	"github.com/filecoin-project/mir/pkg/timer/types"
@@ -101,7 +101,7 @@ func IncludeBatchFetching(
 	})
 
 	// If the batch is present in the local storage, return it. Otherwise, ask other nodes.
-	batchdbdsl.UponLookupBatchResponse(m, func(found bool, txs []*requestpbtypes.Request, metadata []byte, slot *commontypes.Slot) error {
+	batchdbdsl.UponLookupBatchResponse(m, func(found bool, txs []*trantorpbtypes.Transaction, metadata []byte, slot *commontypes.Slot) error {
 		reqState, ok := state.RequestsState[*slot]
 		if !ok {
 			return nil // stale request
@@ -170,7 +170,7 @@ func IncludeBatchFetching(
 	})
 
 	// If the batch is found in the local storage, send it to the requesting node.
-	batchdbdsl.UponLookupBatchResponse(m, func(found bool, txs []*requestpbtypes.Request, signature []byte, context *lookupBatchOnRemoteRequestContext) error {
+	batchdbdsl.UponLookupBatchResponse(m, func(found bool, txs []*trantorpbtypes.Transaction, signature []byte, context *lookupBatchOnRemoteRequestContext) error {
 		if !found {
 			// Ignore invalid request.
 			return nil
@@ -184,7 +184,7 @@ func IncludeBatchFetching(
 	})
 
 	// When receive a requested batch, compute the ids of the received transactions.
-	aleadsl.UponFillerMessageReceived(m, func(from t.NodeID, slot *commontypes.Slot, txs []*requestpbtypes.Request, signature tctypes.FullSig) error {
+	aleadsl.UponFillerMessageReceived(m, func(from t.NodeID, slot *commontypes.Slot, txs []*trantorpbtypes.Transaction, signature tctypes.FullSig) error {
 		rnetdsl.MarkRecvd(m, mc.ReliableNet, mc.Self, FillGapMsgID(slot), []t.NodeID{from})
 
 		reqState, present := state.RequestsState[*slot]
@@ -210,7 +210,7 @@ func IncludeBatchFetching(
 	// Compute signature data
 	mempooldsl.UponTransactionIDsResponse(m, func(txIDs []tt.TxID, context *handleFillerContext) error {
 		context.txIDs = txIDs
-		hasherpbdsl.RequestOne(m, mc.Hasher, &commonpbtypes.HashData{
+		hasherpbdsl.RequestOne(m, mc.Hasher, &hasherpbtypes.HashData{
 			Data: txIDs,
 		}, context)
 		return nil
@@ -282,7 +282,7 @@ type lookupBatchOnRemoteRequestContext struct {
 
 type handleFillerContext struct {
 	slot      *commontypes.Slot
-	txs       []*requestpbtypes.Request
+	txs       []*trantorpbtypes.Transaction
 	signature []byte
 
 	txIDs []tt.TxID

@@ -3,8 +3,8 @@ package vcbpbtypes
 import (
 	mirreflect "github.com/filecoin-project/mir/codegen/mirreflect"
 	types1 "github.com/filecoin-project/mir/codegen/model/types"
-	requestpb "github.com/filecoin-project/mir/pkg/pb/requestpb"
-	types "github.com/filecoin-project/mir/pkg/pb/requestpb/types"
+	trantorpb "github.com/filecoin-project/mir/pkg/pb/trantorpb"
+	types "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	vcbpb "github.com/filecoin-project/mir/pkg/pb/vcbpb"
 	tctypes "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 	types2 "github.com/filecoin-project/mir/pkg/trantor/types"
@@ -90,20 +90,20 @@ func (*Event) MirReflect() mirreflect.Type {
 }
 
 type InputValue struct {
-	Txs []*types.Request
+	Txs []*types.Transaction
 }
 
 func InputValueFromPb(pb *vcbpb.InputValue) *InputValue {
 	return &InputValue{
-		Txs: types1.ConvertSlice(pb.Txs, func(t *requestpb.Request) *types.Request {
-			return types.RequestFromPb(t)
+		Txs: types1.ConvertSlice(pb.Txs, func(t *trantorpb.Transaction) *types.Transaction {
+			return types.TransactionFromPb(t)
 		}),
 	}
 }
 
 func (m *InputValue) Pb() *vcbpb.InputValue {
 	return &vcbpb.InputValue{
-		Txs: types1.ConvertSlice(m.Txs, func(t *types.Request) *requestpb.Request {
+		Txs: types1.ConvertSlice(m.Txs, func(t *types.Transaction) *trantorpb.Transaction {
 			return (t).Pb()
 		}),
 	}
@@ -114,7 +114,7 @@ func (*InputValue) MirReflect() mirreflect.Type {
 }
 
 type Deliver struct {
-	Txs       []*types.Request
+	Txs       []*types.Transaction
 	TxIds     []types2.TxID
 	Signature tctypes.FullSig
 	SrcModule types3.ModuleID
@@ -122,8 +122,8 @@ type Deliver struct {
 
 func DeliverFromPb(pb *vcbpb.Deliver) *Deliver {
 	return &Deliver{
-		Txs: types1.ConvertSlice(pb.Txs, func(t *requestpb.Request) *types.Request {
-			return types.RequestFromPb(t)
+		Txs: types1.ConvertSlice(pb.Txs, func(t *trantorpb.Transaction) *types.Transaction {
+			return types.TransactionFromPb(t)
 		}),
 		TxIds: types1.ConvertSlice(pb.TxIds, func(t []uint8) types2.TxID {
 			return (types2.TxID)(t)
@@ -135,7 +135,7 @@ func DeliverFromPb(pb *vcbpb.Deliver) *Deliver {
 
 func (m *Deliver) Pb() *vcbpb.Deliver {
 	return &vcbpb.Deliver{
-		Txs: types1.ConvertSlice(m.Txs, func(t *types.Request) *requestpb.Request {
+		Txs: types1.ConvertSlice(m.Txs, func(t *types.Transaction) *trantorpb.Transaction {
 			return (t).Pb()
 		}),
 		TxIds: types1.ConvertSlice(m.TxIds, func(t types2.TxID) []uint8 {
@@ -248,20 +248,20 @@ func (*Message) MirReflect() mirreflect.Type {
 }
 
 type SendMessage struct {
-	Txs []*types.Request
+	Txs []*types.Transaction
 }
 
 func SendMessageFromPb(pb *vcbpb.SendMessage) *SendMessage {
 	return &SendMessage{
-		Txs: types1.ConvertSlice(pb.Txs, func(t *requestpb.Request) *types.Request {
-			return types.RequestFromPb(t)
+		Txs: types1.ConvertSlice(pb.Txs, func(t *trantorpb.Transaction) *types.Transaction {
+			return types.TransactionFromPb(t)
 		}),
 	}
 }
 
 func (m *SendMessage) Pb() *vcbpb.SendMessage {
 	return &vcbpb.SendMessage{
-		Txs: types1.ConvertSlice(m.Txs, func(t *types.Request) *requestpb.Request {
+		Txs: types1.ConvertSlice(m.Txs, func(t *types.Transaction) *trantorpb.Transaction {
 			return (t).Pb()
 		}),
 	}

@@ -5,13 +5,13 @@ import (
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
 	events "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/events"
 	types2 "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
-	types1 "github.com/filecoin-project/mir/pkg/pb/requestpb/types"
+	types1 "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	types "github.com/filecoin-project/mir/pkg/types"
 )
 
 // Module-specific dsl functions for emitting events.
 
-func StartBroadcast(m dsl.Module, destModule types.ModuleID, queueSlot aleatypes.QueueSlot, txs []*types1.Request) {
+func StartBroadcast(m dsl.Module, destModule types.ModuleID, queueSlot aleatypes.QueueSlot, txs []*types1.Transaction) {
 	dsl.EmitMirEvent(m, events.StartBroadcast(destModule, queueSlot, txs))
 }
 

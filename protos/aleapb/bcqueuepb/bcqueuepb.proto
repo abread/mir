@@ -5,7 +5,7 @@ package aleapb.bcqueuepb;
 option go_package = "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb";
 
 import "aleapb/common/common.proto";
-import "requestpb/requestpb.proto";
+import "trantorpb/trantorpb.proto";
 
 import "mir/codegen_extensions.proto";
 
@@ -34,7 +34,7 @@ message InputValue {
   common.Slot slot = 1;
 
   // empty txs represents a request to listen for VCB (and deliver what was broadcast to us)
-  repeated requestpb.Request txs = 2;
+  repeated trantorpb.Transaction txs = 2;
 }
 
 
@@ -53,9 +53,9 @@ message FreeSlot {
 message PastVcbFinal {
   option (mir.event) = true;
 
-  uint64                     queue_slot      = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/alea/aleatypes.QueueSlot"];
-  repeated requestpb.Request txs             = 2;
-  bytes                      signature       = 3 [(mir.type) = "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes.FullSig"];
+  uint64                         queue_slot      = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/alea/aleatypes.QueueSlot"];
+  repeated trantorpb.Transaction txs             = 2;
+  bytes                          signature       = 3 [(mir.type) = "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes.FullSig"];
 }
 
 message BcStarted {

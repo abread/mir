@@ -9,35 +9,34 @@ package deploytest
 import (
 	"github.com/filecoin-project/mir/pkg/checkpoint"
 	"github.com/filecoin-project/mir/pkg/logging"
-	"github.com/filecoin-project/mir/pkg/pb/requestpb"
+
+	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
+
 	"github.com/filecoin-project/mir/pkg/serializing"
-	t "github.com/filecoin-project/mir/pkg/types"
 )
 
 // FakeApp represents a dummy stub application used for testing only.
 type FakeApp struct {
-	ProtocolModule t.ModuleID
-
-	// The state of the FakeApp only consists of a counter of processed requests.
-	RequestsProcessed uint64
+	// The state of the FakeApp only consists of a counter of processed transactions.
+	TransactionsProcessed uint64
 
 	Logger logging.Logger
 }
 
-func (fa *FakeApp) ApplyTXs(txs []*requestpb.Request) error {
-	for _, req := range txs {
-		fa.RequestsProcessed++
-		fa.Logger.Log(logging.LevelDebug, "Processing (already ordered) request", "requestData", string(req.Data), "totalReqsProcessedCount", fa.RequestsProcessed)
+func (fa *FakeApp) ApplyTXs(txs []*trantorpbtypes.Transaction) error {
+	for _, tx := range txs {
+		fa.TransactionsProcessed++
+		fa.Logger.Log(logging.LevelDebug, "Processing (already ordered) transaction", "txData", string(tx.Data), "totalProcessedTxsCount", fa.TransactionsProcessed)
 	}
 	return nil
 }
 
 func (fa *FakeApp) Snapshot() ([]byte, error) {
-	return serializing.Uint64ToBytes(fa.RequestsProcessed), nil
+	return serializing.Uint64ToBytes(fa.TransactionsProcessed), nil
 }
 
 func (fa *FakeApp) RestoreState(checkpoint *checkpoint.StableCheckpoint) error {
-	fa.RequestsProcessed = serializing.Uint64FromBytes(checkpoint.Snapshot.AppData)
+	fa.TransactionsProcessed = serializing.Uint64FromBytes(checkpoint.Snapshot.AppData)
 	return nil
 }
 
@@ -47,7 +46,7 @@ func (fa *FakeApp) Checkpoint(_ *checkpoint.StableCheckpoint) error {
 
 func NewFakeApp(logger logging.Logger) *FakeApp {
 	return &FakeApp{
-		RequestsProcessed: 0,
-		Logger:            logger,
+		TransactionsProcessed: 0,
+		Logger:                logger,
 	}
 }

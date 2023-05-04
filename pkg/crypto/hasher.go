@@ -8,7 +8,6 @@ import (
 
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/modules"
-	"github.com/filecoin-project/mir/pkg/pb/commonpb"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
 	"github.com/filecoin-project/mir/pkg/pb/hasherpb"
 	hasherpbevents "github.com/filecoin-project/mir/pkg/pb/hasherpb/events"
@@ -56,7 +55,7 @@ func (hasher *hasherEventProc) ApplyEvent(ctx context.Context, event *eventpb.Ev
 			// Return a single computed digests.
 			return events.ListOf(hasherpbevents.ResultOne(
 				t.ModuleID(e.RequestOne.Origin.Module),
-				hasher.computeDigests([]*commonpb.HashData{e.RequestOne.Data})[0],
+				hasher.computeDigests([]*hasherpb.HashData{e.RequestOne.Data})[0],
 				hasherpbtypes.HashOriginFromPb(e.RequestOne.Origin),
 			).Pb())
 		default:
@@ -68,7 +67,7 @@ func (hasher *hasherEventProc) ApplyEvent(ctx context.Context, event *eventpb.Ev
 	}
 }
 
-func (hasher *hasherEventProc) computeDigests(allData []*commonpb.HashData) [][]byte {
+func (hasher *hasherEventProc) computeDigests(allData []*hasherpb.HashData) [][]byte {
 	// Create a slice for the resulting digests containing one element for each data item to be hashed.
 	digests := make([][]byte, len(allData))
 

@@ -6,8 +6,8 @@ import (
 	aleatypes "github.com/filecoin-project/mir/pkg/alea/aleatypes"
 	bcpb "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb"
 	types2 "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
-	requestpb "github.com/filecoin-project/mir/pkg/pb/requestpb"
-	types "github.com/filecoin-project/mir/pkg/pb/requestpb/types"
+	trantorpb "github.com/filecoin-project/mir/pkg/pb/trantorpb"
+	types "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	reflectutil "github.com/filecoin-project/mir/pkg/util/reflectutil"
 )
 
@@ -150,14 +150,14 @@ func (*Event) MirReflect() mirreflect.Type {
 
 type StartBroadcast struct {
 	QueueSlot aleatypes.QueueSlot
-	Txs       []*types.Request
+	Txs       []*types.Transaction
 }
 
 func StartBroadcastFromPb(pb *bcpb.StartBroadcast) *StartBroadcast {
 	return &StartBroadcast{
 		QueueSlot: (aleatypes.QueueSlot)(pb.QueueSlot),
-		Txs: types1.ConvertSlice(pb.Txs, func(t *requestpb.Request) *types.Request {
-			return types.RequestFromPb(t)
+		Txs: types1.ConvertSlice(pb.Txs, func(t *trantorpb.Transaction) *types.Transaction {
+			return types.TransactionFromPb(t)
 		}),
 	}
 }
@@ -165,7 +165,7 @@ func StartBroadcastFromPb(pb *bcpb.StartBroadcast) *StartBroadcast {
 func (m *StartBroadcast) Pb() *bcpb.StartBroadcast {
 	return &bcpb.StartBroadcast{
 		QueueSlot: (uint64)(m.QueueSlot),
-		Txs: types1.ConvertSlice(m.Txs, func(t *types.Request) *requestpb.Request {
+		Txs: types1.ConvertSlice(m.Txs, func(t *types.Transaction) *trantorpb.Transaction {
 			return (t).Pb()
 		}),
 	}

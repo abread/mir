@@ -6,7 +6,7 @@ import (
 	types "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/types"
 	types3 "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
 	types1 "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
-	types2 "github.com/filecoin-project/mir/pkg/pb/requestpb/types"
+	types2 "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 )
 
 // Module-specific dsl functions for processing events.
@@ -22,7 +22,7 @@ func UponEvent[W types.Event_TypeWrapper[Ev], Ev any](m dsl.Module, handler func
 	})
 }
 
-func UponStartBroadcast(m dsl.Module, handler func(queueSlot aleatypes.QueueSlot, txs []*types2.Request) error) {
+func UponStartBroadcast(m dsl.Module, handler func(queueSlot aleatypes.QueueSlot, txs []*types2.Transaction) error) {
 	UponEvent[*types.Event_StartBroadcast](m, func(ev *types.StartBroadcast) error {
 		return handler(ev.QueueSlot, ev.Txs)
 	})

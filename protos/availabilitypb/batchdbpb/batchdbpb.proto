@@ -6,7 +6,7 @@ option go_package = "github.com/filecoin-project/mir/pkg/pb/availabilitypb/batch
 
 import "contextstorepb/contextstorepb.proto";
 import "dslpb/dslpb.proto";
-import "requestpb/requestpb.proto";
+import "trantorpb/trantorpb.proto";
 
 import "mir/codegen_extensions.proto";
 
@@ -39,11 +39,11 @@ message LookupBatch {
 message LookupBatchResponse {
   option (mir.event) = true;
 
-  bool                       found    = 1;
-  repeated requestpb.Request txs      = 2;
-  bytes                      metadata = 3;
+  bool                           found    = 1;
+  repeated trantorpb.Transaction txs      = 2;
+  bytes                          metadata = 3;
 
-  LookupBatchOrigin          origin   = 4 [(mir.origin_response) = true];
+  LookupBatchOrigin origin = 4 [(mir.origin_response) = true];
 }
 
 // StoreBatch is used to store a new batch in the local batch database.
@@ -52,8 +52,10 @@ message StoreBatch {
 
   bytes                      batch_id = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/availability/multisigcollector/types.BatchID"];
   repeated bytes             tx_ids   = 2 [(mir.type) = "github.com/filecoin-project/mir/pkg/trantor/types.TxID"];
-  repeated requestpb.Request txs      = 3;
-  bytes                      metadata = 4;
+
+  repeated trantorpb.Transaction txs      = 3;
+  bytes                          metadata = 4;
+
   StoreBatchOrigin           origin   = 5 [(mir.origin_request) = true];
 }
 

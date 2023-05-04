@@ -26,7 +26,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
 	mpdsl "github.com/filecoin-project/mir/pkg/pb/mempoolpb/dsl"
-	requestpbtypes "github.com/filecoin-project/mir/pkg/pb/requestpb/types"
+	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	vcbdsl "github.com/filecoin-project/mir/pkg/pb/vcbpb/dsl"
 	"github.com/filecoin-project/mir/pkg/reliablenet"
 	"github.com/filecoin-project/mir/pkg/testsim"
@@ -155,7 +155,11 @@ func newDeployment(ctx context.Context, conf *TestConfig) (*deploytest.Deploymen
 		}
 		simulation = deploytest.NewSimulation(r, nodeIDs, eventDelayFn)
 	}
-	transportLayer := deploytest.NewLocalTransportLayer(simulation, conf.Transport, nodeIDs, logger)
+	transportLayer, err := deploytest.NewLocalTransportLayer(simulation, conf.Transport, nodeIDs, logger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create local transport: %w", err)
+	}
+
 	threshCryptoSystem := deploytest.NewLocalThreshCryptoSystem("pseudo", nodeIDs, conf.F+1, logger)
 
 	nodeModules := make(map[types.NodeID]modules.Modules)
@@ -206,10 +210,15 @@ func newDeployment(ctx context.Context, conf *TestConfig) (*deploytest.Deploymen
 			return nil, fmt.Errorf("error creating reliablenet module: %w", err)
 		}
 
+		tc, err := threshCryptoSystem.Module(ctx, nodeID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to build threshcrypto: %w", err)
+		}
+
 		modulesWithDefaults := map[types.ModuleID]modules.Module{
 			vcbConfig.Consumer:     newCountingApp(nodeID == leader),
 			vcbConfig.Self:         vcb,
-			vcbConfig.ThreshCrypto: threshCryptoSystem.Module(ctx, nodeID),
+			vcbConfig.ThreshCrypto: tc,
 			vcbConfig.Mempool:      mempool,
 			vcbConfig.Hasher:       mirCrypto.NewHasher(ctx, mirCrypto.DefaultHasherModuleParams(), crypto.SHA256),
 			vcbConfig.ReliableNet:  rnet,
@@ -239,7 +248,7 @@ type countingApp struct {
 
 	deliveredCount int
 	firstSrcModule types.ModuleID
-	firstData      []*requestpbtypes.Request
+	firstData      []*trantorpbtypes.Transaction
 	firstTxIDs     []tt.TxID
 	firstSignature tctypes.FullSig
 }
@@ -252,16 +261,16 @@ func newCountingApp(isLeader bool) *countingApp {
 	}
 
 	if isLeader {
-		txs := []*requestpbtypes.Request{
+		txs := []*trantorpbtypes.Transaction{
 			{
 				ClientId: "asd",
-				ReqNo:    42,
+				TxNo:     42,
 				Type:     0,
 				Data:     []byte{4, 2},
 			},
 			{
 				ClientId: "asd",
-				ReqNo:    4242,
+				TxNo:     4242,
 				Type:     0,
 				Data:     []byte{2, 4, 2, 4},
 			},
@@ -278,7 +287,7 @@ func newCountingApp(isLeader bool) *countingApp {
 		})
 	}
 
-	vcbdsl.UponDeliver(m, func(data []*requestpbtypes.Request, txIDs []tt.TxID, signature tctypes.FullSig, srcModule types.ModuleID) error {
+	vcbdsl.UponDeliver(m, func(data []*trantorpbtypes.Transaction, txIDs []tt.TxID, signature tctypes.FullSig, srcModule types.ModuleID) error {
 		if app.deliveredCount == 0 {
 			app.firstSrcModule = srcModule
 			app.firstData = data
