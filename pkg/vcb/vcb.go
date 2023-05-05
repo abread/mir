@@ -212,7 +212,7 @@ func setupVcbLeader(m dsl.Module, mc *ModuleConfig, params *ModuleParams, nodeID
 
 		sigAgg: tsagg.New(m, &tsagg.Params{
 			TCModuleID:              mc.ThreshCrypto,
-			Threshold:               params.GetF() + 1,
+			Threshold:               2*params.GetF() + 1,
 			MaxVerifyShareBatchSize: runtime.NumCPU(),
 			SigData:                 state.payload.SigData,
 			InitialNodeCount:        len(params.AllNodes),

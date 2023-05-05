@@ -63,7 +63,7 @@ func New(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging
 		confRecvd: make(abbat.RecvTracker, len(params.AllNodes)),
 		coinSig: tsagg.New(m, &tsagg.Params{
 			TCModuleID:              mc.ThreshCrypto,
-			Threshold:               params.weakSupportThresh(),
+			Threshold:               params.strongSupportThresh(),
 			MaxVerifyShareBatchSize: runtime.NumCPU(),
 			SigData: func() [][]byte {
 				return coinData

@@ -160,7 +160,7 @@ func newDeployment(ctx context.Context, conf *TestConfig) (*deploytest.Deploymen
 		return nil, fmt.Errorf("failed to create local transport: %w", err)
 	}
 
-	threshCryptoSystem := deploytest.NewLocalThreshCryptoSystem("pseudo", nodeIDs, conf.F+1, logger)
+	threshCryptoSystem := deploytest.NewLocalThreshCryptoSystem("pseudo", nodeIDs, 2*conf.F+1, logger)
 
 	nodeModules := make(map[types.NodeID]modules.Modules)
 
