@@ -27,7 +27,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
 	mpdsl "github.com/filecoin-project/mir/pkg/pb/mempoolpb/dsl"
 	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
-	vcbdsl "github.com/filecoin-project/mir/pkg/pb/vcbpb/dsl"
+	vcbpbdsl "github.com/filecoin-project/mir/pkg/pb/vcbpb/dsl"
 	"github.com/filecoin-project/mir/pkg/reliablenet"
 	"github.com/filecoin-project/mir/pkg/testsim"
 	"github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
@@ -282,12 +282,12 @@ func newCountingApp(isLeader bool) *countingApp {
 		})
 
 		mpdsl.UponTransactionIDsResponse(m, func(txIDs []tt.TxID, _ctx *struct{}) error {
-			vcbdsl.InputValue(m, "vcb", txs)
+			vcbpbdsl.InputValue(m, "vcb", txs)
 			return nil
 		})
 	}
 
-	vcbdsl.UponDeliver(m, func(data []*trantorpbtypes.Transaction, txIDs []tt.TxID, signature tctypes.FullSig, srcModule types.ModuleID) error {
+	vcbpbdsl.UponDeliver(m, func(data []*trantorpbtypes.Transaction, txIDs []tt.TxID, signature tctypes.FullSig, srcModule types.ModuleID) error {
 		if app.deliveredCount == 0 {
 			app.firstSrcModule = srcModule
 			app.firstData = data

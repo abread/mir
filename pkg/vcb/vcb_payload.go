@@ -10,10 +10,6 @@ import (
 )
 
 type vcbPayloadManager struct {
-	m      dsl.Module
-	mc     *ModuleConfig
-	params *ModuleParams
-
 	txs       []*trantorpbtypes.Transaction
 	txIDs     []tt.TxID
 	txIDsHash []byte
@@ -21,11 +17,7 @@ type vcbPayloadManager struct {
 }
 
 func newVcbPayloadManager(m dsl.Module, mc *ModuleConfig, params *ModuleParams) *vcbPayloadManager {
-	mgr := &vcbPayloadManager{
-		m:      m,
-		mc:     mc,
-		params: params,
-	}
+	mgr := &vcbPayloadManager{}
 
 	mpdsl.UponTransactionIDsResponse(m, func(txIDs []tt.TxID, context *vcbPayloadMgrInputTxs) error {
 		mgr.txIDs = txIDs
@@ -36,7 +28,7 @@ func newVcbPayloadManager(m dsl.Module, mc *ModuleConfig, params *ModuleParams) 
 	})
 	hasherpbdsl.UponResultOne(m, func(txIDsHash []byte, context *vcbPayloadMgrInputTxs) error {
 		mgr.txIDsHash = txIDsHash
-		mgr.sigData = SigData(mgr.params.InstanceUID, txIDsHash)
+		mgr.sigData = SigData(params.InstanceUID, txIDsHash)
 		return nil
 	})
 
@@ -45,13 +37,13 @@ func newVcbPayloadManager(m dsl.Module, mc *ModuleConfig, params *ModuleParams) 
 
 type vcbPayloadMgrInputTxs struct{}
 
-func (mgr *vcbPayloadManager) Input(txs []*trantorpbtypes.Transaction) {
+func (mgr *vcbPayloadManager) Input(m dsl.Module, mc *ModuleConfig, txs []*trantorpbtypes.Transaction) {
 	if mgr.txs != nil {
 		return
 	}
 
 	mgr.txs = txs
-	mpdsl.RequestTransactionIDs(mgr.m, mgr.mc.Mempool, txs, &vcbPayloadMgrInputTxs{})
+	mpdsl.RequestTransactionIDs(m, mc.Mempool, txs, &vcbPayloadMgrInputTxs{})
 }
 
 func (mgr *vcbPayloadManager) Txs() []*trantorpbtypes.Transaction {

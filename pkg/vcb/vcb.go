@@ -180,7 +180,7 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 		}
 
 		// logger.Log(logging.LevelDebug, "recvd SEND", "txs", txs)
-		state.payload.Input(txs)
+		state.payload.Input(m, mc, txs)
 		state.phase = VcbPhaseAwaitingSigData
 		return nil
 	})
@@ -252,14 +252,12 @@ func setupVcbLeader(m dsl.Module, mc *ModuleConfig, params *ModuleParams, nodeID
 	})
 
 	vcbdsl.UponInputValue(m, func(txs []*trantorpbtypes.Transaction) error {
-		if nodeID == params.Leader {
-			// logger.Log(logging.LevelDebug, "inputting value", "txs", txs)
-			state.payload.Input(txs)
-		}
+		// logger.Log(logging.LevelDebug, "inputting value", "txs", txs)
+		state.payload.Input(m, mc, txs)
 		return nil
 	})
 	dsl.UponStateUpdates(m, func() error {
-		if leaderState.phase == VcbLeaderPhaseAwaitingInput && state.payload.SigData() != nil {
+		if leaderState.phase == VcbLeaderPhaseAwaitingInput && state.payload.Txs() != nil {
 			// to make things easier, we only broadcast SEND when we are ready to validate the replies (ECHO messages)
 			// logger.Log(logging.LevelDebug, "sending SEND", "txs", state.payload.Txs())
 			rnetdsl.SendMessage(m, mc.ReliableNet, SendMsgID(), vcbmsgs.SendMessage(
