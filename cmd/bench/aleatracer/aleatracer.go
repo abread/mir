@@ -20,6 +20,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/pb/availabilitypb/batchdbpb"
 	"github.com/filecoin-project/mir/pkg/pb/batchfetcherpb"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
+	"github.com/filecoin-project/mir/pkg/pb/hasherpb"
 	"github.com/filecoin-project/mir/pkg/pb/messagepb"
 	"github.com/filecoin-project/mir/pkg/pb/threshcryptopb"
 	"github.com/filecoin-project/mir/pkg/pb/transportpb"
@@ -32,17 +33,18 @@ type AleaTracer struct {
 	ownQueueIdx aleatypes.QueueIdx
 	nodeCount   int
 
-	wipBcSpan           map[commontypes.Slot]*span
-	wipBcAwaitEchoSpan  map[commontypes.Slot]*span
-	wipBcAwaitFinalSpan map[commontypes.Slot]*span
-	wipBcModSpan        map[commontypes.Slot]*span
-	wipAgSpan           map[uint64]*span
-	wipAgModSpan        map[uint64]*span
-	wipAbbaRoundSpan    map[abbaRoundID]*span
-	wipAbbaRoundModSpan map[abbaRoundID]*span
-	wipBfSpan           map[commontypes.Slot]*span
-	wipBfStalledSpan    map[commontypes.Slot]*span
-	wipThreshCryptoSpan map[string]*span
+	wipBcSpan               map[commontypes.Slot]*span
+	wipBcAwaitEchoSpan      map[commontypes.Slot]*span
+	wipBcAwaitFinalSpan     map[commontypes.Slot]*span
+	wipBcComputeSigDataSpan map[commontypes.Slot]*span
+	wipBcModSpan            map[commontypes.Slot]*span
+	wipAgSpan               map[uint64]*span
+	wipAgModSpan            map[uint64]*span
+	wipAbbaRoundSpan        map[abbaRoundID]*span
+	wipAbbaRoundModSpan     map[abbaRoundID]*span
+	wipBfSpan               map[commontypes.Slot]*span
+	wipBfStalledSpan        map[commontypes.Slot]*span
+	wipThreshCryptoSpan     map[string]*span
 
 	bfWipSlotsCtxID map[uint64]commontypes.Slot
 	bfDeliverQueue  []commontypes.Slot
@@ -79,17 +81,18 @@ func NewAleaTracer(ctx context.Context, ownQueueIdx aleatypes.QueueIdx, nodeCoun
 		ownQueueIdx: ownQueueIdx,
 		nodeCount:   nodeCount,
 
-		wipBcSpan:           make(map[commontypes.Slot]*span, nodeCount*N),
-		wipBcAwaitEchoSpan:  make(map[commontypes.Slot]*span, nodeCount*N),
-		wipBcAwaitFinalSpan: make(map[commontypes.Slot]*span, nodeCount*N),
-		wipBcModSpan:        make(map[commontypes.Slot]*span, nodeCount*N),
-		wipAgSpan:           make(map[uint64]*span, nodeCount*N),
-		wipAgModSpan:        make(map[uint64]*span, nodeCount*N),
-		wipAbbaRoundSpan:    make(map[abbaRoundID]*span, nodeCount*N),
-		wipAbbaRoundModSpan: make(map[abbaRoundID]*span, nodeCount*N),
-		wipBfSpan:           make(map[commontypes.Slot]*span, nodeCount*N),
-		wipBfStalledSpan:    make(map[commontypes.Slot]*span, nodeCount*N),
-		wipThreshCryptoSpan: make(map[string]*span, nodeCount*N),
+		wipBcSpan:               make(map[commontypes.Slot]*span, nodeCount*N),
+		wipBcAwaitEchoSpan:      make(map[commontypes.Slot]*span, nodeCount*N),
+		wipBcAwaitFinalSpan:     make(map[commontypes.Slot]*span, nodeCount*N),
+		wipBcComputeSigDataSpan: make(map[commontypes.Slot]*span, nodeCount*N),
+		wipBcModSpan:            make(map[commontypes.Slot]*span, nodeCount*N),
+		wipAgSpan:               make(map[uint64]*span, nodeCount*N),
+		wipAgModSpan:            make(map[uint64]*span, nodeCount*N),
+		wipAbbaRoundSpan:        make(map[abbaRoundID]*span, nodeCount*N),
+		wipAbbaRoundModSpan:     make(map[abbaRoundID]*span, nodeCount*N),
+		wipBfSpan:               make(map[commontypes.Slot]*span, nodeCount*N),
+		wipBfStalledSpan:        make(map[commontypes.Slot]*span, nodeCount*N),
+		wipThreshCryptoSpan:     make(map[string]*span, nodeCount*N),
 
 		bfWipSlotsCtxID: make(map[uint64]commontypes.Slot, nodeCount),
 		bfDeliverQueue:  nil,
@@ -206,6 +209,7 @@ func (at *AleaTracer) interceptOne(event *eventpb.Event) error {
 		case *vcbpb.Event_InputValue:
 			slot := parseSlotFromModuleID(event.DestModule)
 			at.startBcSpan(ts, slot)
+			at.startBcComputeSigDataSpan(ts, slot)
 		}
 	case *eventpb.Event_Transport:
 		switch e := ev.Transport.Type.(type) {
@@ -225,6 +229,9 @@ func (at *AleaTracer) interceptOne(event *eventpb.Event) error {
 			switch msg := e.MessageReceived.Msg.Type.(type) {
 			case *messagepb.Message_Vcb:
 				switch msg.Vcb.Type.(type) {
+				case *vcbpb.Message_SendMessage:
+					slot := parseSlotFromModuleID(event.DestModule)
+					at.startBcComputeSigDataSpan(ts, slot)
 				case *vcbpb.Message_FinalMessage:
 					slot := parseSlotFromModuleID(event.DestModule)
 					at.endBcAwaitFinalSpan(ts, slot)
@@ -283,6 +290,14 @@ func (at *AleaTracer) interceptOne(event *eventpb.Event) error {
 			at.bfDeliverQueue = at.bfDeliverQueue[1:]
 
 			at.endDeliveryStalledSpan(ts, slot)
+		}
+	case *eventpb.Event_Hasher:
+		switch ev.Hasher.Type.(type) {
+		case *hasherpb.Event_ResultOne:
+			if t.ModuleID(event.DestModule).IsSubOf("alea_bc") {
+				slot := parseSlotFromModuleID(event.DestModule)
+				at.endBcComputeSigDataSpan(ts, slot)
+			}
 		}
 	case *eventpb.Event_ThreshCrypto:
 		switch e := ev.ThreshCrypto.Type.(type) {
@@ -500,6 +515,29 @@ func (at *AleaTracer) startBcAwaitFinalSpan(ts time.Duration, slot commontypes.S
 }
 func (at *AleaTracer) endBcAwaitFinalSpan(ts time.Duration, slot commontypes.Slot) {
 	s := at._bcAwaitFinalSpan(ts, slot)
+	if s.end == 0 {
+		s.end = ts
+		at.writeSpan(s)
+	}
+}
+
+func (at *AleaTracer) _bcComputeSigDataSpan(ts time.Duration, slot commontypes.Slot) *span {
+	s, ok := at.wipBcComputeSigDataSpan[slot]
+	if !ok {
+		at.wipBcComputeSigDataSpan[slot] = &span{
+			class: "bc:cSigData",
+			id:    fmt.Sprintf("%d/%d", slot.QueueIdx, slot.QueueSlot),
+			start: ts,
+		}
+		s = at.wipBcComputeSigDataSpan[slot]
+	}
+	return s
+}
+func (at *AleaTracer) startBcComputeSigDataSpan(ts time.Duration, slot commontypes.Slot) {
+	at._bcComputeSigDataSpan(ts, slot)
+}
+func (at *AleaTracer) endBcComputeSigDataSpan(ts time.Duration, slot commontypes.Slot) {
+	s := at._bcComputeSigDataSpan(ts, slot)
 	if s.end == 0 {
 		s.end = ts
 		at.writeSpan(s)
