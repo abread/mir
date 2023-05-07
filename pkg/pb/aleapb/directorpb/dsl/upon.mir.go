@@ -2,6 +2,7 @@ package directorpbdsl
 
 import (
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
+	types2 "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
 	types "github.com/filecoin-project/mir/pkg/pb/aleapb/directorpb/types"
 	types1 "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 )
@@ -22,5 +23,11 @@ func UponEvent[W types.Event_TypeWrapper[Ev], Ev any](m dsl.Module, handler func
 func UponHeartbeat(m dsl.Module, handler func() error) {
 	UponEvent[*types.Event_Heartbeat](m, func(ev *types.Heartbeat) error {
 		return handler()
+	})
+}
+
+func UponDoFillGap(m dsl.Module, handler func(slot *types2.Slot) error) {
+	UponEvent[*types.Event_FillGap](m, func(ev *types.DoFillGap) error {
+		return handler(ev.Slot)
 	})
 }

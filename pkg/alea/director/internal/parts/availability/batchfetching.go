@@ -8,9 +8,10 @@ import (
 	director "github.com/filecoin-project/mir/pkg/alea/director/internal/common"
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/logging"
-	abcdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/dsl"
-	bcpbevents "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/events"
+	bcqueuepbdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/dsl"
 	commontypes "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
+	directorpbdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/directorpb/dsl"
+	directorpbevents "github.com/filecoin-project/mir/pkg/pb/aleapb/directorpb/events"
 	aleadsl "github.com/filecoin-project/mir/pkg/pb/aleapb/dsl"
 	aleamsgs "github.com/filecoin-project/mir/pkg/pb/aleapb/msgs"
 	batchdbdsl "github.com/filecoin-project/mir/pkg/pb/availabilitypb/batchdbpb/dsl"
@@ -88,7 +89,7 @@ func IncludeBatchFetching(
 	})
 
 	// if broadcast delivers for a batch being requested, we can *now* resolve it locally
-	abcdsl.UponDeliver(m, func(slot *commontypes.Slot) error {
+	bcqueuepbdsl.UponDeliver(m, func(slot *commontypes.Slot) error {
 		if _, present := state.RequestsState[*slot]; present {
 			// TODO: avoid concurrent lookups of the same batch?
 			// if bc delivers right after the transaction starts, two lookups will be performed.
@@ -131,14 +132,13 @@ func IncludeBatchFetching(
 		// this way bc has more chances of completing before even trying to send a fill-gap message
 		// TODO: adjust delay according to bc estimate. don't delay when bc slot was already freed
 		dsl.EmitMirEvent(m, eventpbevents.TimerDelay(mc.Timer, []*eventpbtypes.Event{
-			bcpbevents.DoFillGap(mc.Self, slot),
+			directorpbevents.DoFillGap(mc.Self, slot),
 		}, types.Duration(tunables.FillGapDelay)))
 
 		return nil
 	})
 
-	// TODO: move this event to the right component
-	abcdsl.UponDoFillGap(m, func(slot *commontypes.Slot) error {
+	directorpbdsl.UponDoFillGap(m, func(slot *commontypes.Slot) error {
 		reqState, present := state.RequestsState[*slot]
 		if !present {
 			return nil // already handled
@@ -254,7 +254,7 @@ func IncludeBatchFetching(
 	})
 
 	batchdbdsl.UponBatchStored(m, func(context *handleFillerContext) error {
-		abcdsl.FreeSlot(m, mc.AleaBroadcast, context.slot)
+		bcqueuepbdsl.FreeSlot(m, bcutil.BcQueueModuleID(mc.BcQueuePrefix, context.slot.QueueIdx), context.slot.QueueSlot)
 		return nil
 	})
 }

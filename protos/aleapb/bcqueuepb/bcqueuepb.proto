@@ -31,7 +31,7 @@ message Event {
 message InputValue {
   option (mir.event) = true;
 
-  common.Slot slot = 1;
+  uint64 queue_slot = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/alea/aleatypes.QueueSlot"];
 
   // empty txs represents a request to listen for VCB (and deliver what was broadcast to us)
   repeated trantorpb.Transaction txs = 2;

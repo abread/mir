@@ -2,12 +2,12 @@ package bcqueuepbtypes
 
 import (
 	mirreflect "github.com/filecoin-project/mir/codegen/mirreflect"
-	types2 "github.com/filecoin-project/mir/codegen/model/types"
+	types1 "github.com/filecoin-project/mir/codegen/model/types"
 	aleatypes "github.com/filecoin-project/mir/pkg/alea/aleatypes"
 	bcqueuepb "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb"
-	types "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
+	types2 "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
 	trantorpb "github.com/filecoin-project/mir/pkg/pb/trantorpb"
-	types1 "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
+	types "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	tctypes "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 	reflectutil "github.com/filecoin-project/mir/pkg/util/reflectutil"
 )
@@ -150,23 +150,23 @@ func (*Event) MirReflect() mirreflect.Type {
 }
 
 type InputValue struct {
-	Slot *types.Slot
-	Txs  []*types1.Transaction
+	QueueSlot aleatypes.QueueSlot
+	Txs       []*types.Transaction
 }
 
 func InputValueFromPb(pb *bcqueuepb.InputValue) *InputValue {
 	return &InputValue{
-		Slot: types.SlotFromPb(pb.Slot),
-		Txs: types2.ConvertSlice(pb.Txs, func(t *trantorpb.Transaction) *types1.Transaction {
-			return types1.TransactionFromPb(t)
+		QueueSlot: (aleatypes.QueueSlot)(pb.QueueSlot),
+		Txs: types1.ConvertSlice(pb.Txs, func(t *trantorpb.Transaction) *types.Transaction {
+			return types.TransactionFromPb(t)
 		}),
 	}
 }
 
 func (m *InputValue) Pb() *bcqueuepb.InputValue {
 	return &bcqueuepb.InputValue{
-		Slot: (m.Slot).Pb(),
-		Txs: types2.ConvertSlice(m.Txs, func(t *types1.Transaction) *trantorpb.Transaction {
+		QueueSlot: (uint64)(m.QueueSlot),
+		Txs: types1.ConvertSlice(m.Txs, func(t *types.Transaction) *trantorpb.Transaction {
 			return (t).Pb()
 		}),
 	}
@@ -177,12 +177,12 @@ func (*InputValue) MirReflect() mirreflect.Type {
 }
 
 type Deliver struct {
-	Slot *types.Slot
+	Slot *types2.Slot
 }
 
 func DeliverFromPb(pb *bcqueuepb.Deliver) *Deliver {
 	return &Deliver{
-		Slot: types.SlotFromPb(pb.Slot),
+		Slot: types2.SlotFromPb(pb.Slot),
 	}
 }
 
@@ -218,15 +218,15 @@ func (*FreeSlot) MirReflect() mirreflect.Type {
 
 type PastVcbFinal struct {
 	QueueSlot aleatypes.QueueSlot
-	Txs       []*types1.Transaction
+	Txs       []*types.Transaction
 	Signature tctypes.FullSig
 }
 
 func PastVcbFinalFromPb(pb *bcqueuepb.PastVcbFinal) *PastVcbFinal {
 	return &PastVcbFinal{
 		QueueSlot: (aleatypes.QueueSlot)(pb.QueueSlot),
-		Txs: types2.ConvertSlice(pb.Txs, func(t *trantorpb.Transaction) *types1.Transaction {
-			return types1.TransactionFromPb(t)
+		Txs: types1.ConvertSlice(pb.Txs, func(t *trantorpb.Transaction) *types.Transaction {
+			return types.TransactionFromPb(t)
 		}),
 		Signature: (tctypes.FullSig)(pb.Signature),
 	}
@@ -235,7 +235,7 @@ func PastVcbFinalFromPb(pb *bcqueuepb.PastVcbFinal) *PastVcbFinal {
 func (m *PastVcbFinal) Pb() *bcqueuepb.PastVcbFinal {
 	return &bcqueuepb.PastVcbFinal{
 		QueueSlot: (uint64)(m.QueueSlot),
-		Txs: types2.ConvertSlice(m.Txs, func(t *types1.Transaction) *trantorpb.Transaction {
+		Txs: types1.ConvertSlice(m.Txs, func(t *types.Transaction) *trantorpb.Transaction {
 			return (t).Pb()
 		}),
 		Signature: ([]uint8)(m.Signature),
@@ -247,12 +247,12 @@ func (*PastVcbFinal) MirReflect() mirreflect.Type {
 }
 
 type BcStarted struct {
-	Slot *types.Slot
+	Slot *types2.Slot
 }
 
 func BcStartedFromPb(pb *bcqueuepb.BcStarted) *BcStarted {
 	return &BcStarted{
-		Slot: types.SlotFromPb(pb.Slot),
+		Slot: types2.SlotFromPb(pb.Slot),
 	}
 }
 

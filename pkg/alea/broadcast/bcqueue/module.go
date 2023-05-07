@@ -44,18 +44,14 @@ func New(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeI
 func newQueueController(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger, slots *modring.Module) modules.PassiveModule {
 	m := dsl.NewModule(mc.Self)
 
-	bcqueuedsl.UponInputValue(m, func(slot *commontypes.Slot, txs []*trantorpbtypes.Transaction) error {
-		if slot.QueueIdx != params.QueueIdx {
-			return fmt.Errorf("input value given to wrong queue")
-		}
-
+	bcqueuedsl.UponInputValue(m, func(queueSlot aleatypes.QueueSlot, txs []*trantorpbtypes.Transaction) error {
 		if len(txs) == 0 {
 			return fmt.Errorf("cannot broadcast an empty batch")
 		}
 
 		// logger.Log(logging.LevelDebug, "starting broadcast", "queueSlot", slot.QueueSlot, "txs", txs)
 		dsl.EmitMirEvent(m, vcbpbevents.InputValue(
-			mc.Self.Then(t.NewModuleIDFromInt(slot.QueueSlot)),
+			mc.Self.Then(t.NewModuleIDFromInt(queueSlot)),
 			txs,
 		))
 		return nil

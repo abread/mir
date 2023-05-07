@@ -22,7 +22,6 @@ import "cryptopb/cryptopb.proto";
 import "transportpb/transportpb.proto";
 import "vcbpb/vcbpb.proto";
 import "abbapb/abbapb.proto";
-import "aleapb/bcpb/bcpb.proto";
 import "aleapb/agreementpb/agevents/agevents.proto";
 import "aleapb/bcqueuepb/bcqueuepb.proto";
 import "aleapb/directorpb/directorpb.proto";
@@ -64,10 +63,9 @@ message Event {
              vcbpb.Event vcb           = 25;
             abbapb.Event abba          = 26;
 
-           aleapb.bcpb.Event alea_broadcast = 27;
-    aleapb.agreementpb.Event alea_agreement = 28;
-      aleapb.bcqueuepb.Event alea_bcqueue   = 29;
-     aleapb.directorpb.Event alea_director  = 30;
+    aleapb.agreementpb.Event alea_agreement = 27;
+      aleapb.bcqueuepb.Event alea_bcqueue   = 28;
+     aleapb.directorpb.Event alea_director  = 29;
 
     // Events for code samples
     pingpongpb.Event ping_pong = 200;

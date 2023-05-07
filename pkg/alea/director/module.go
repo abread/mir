@@ -17,7 +17,7 @@ type ModuleTunables = common.ModuleTunables
 func DefaultModuleConfig(consumer t.ModuleID) *ModuleConfig {
 	return &ModuleConfig{
 		Self:          "alea_dir",
-		AleaBroadcast: "alea_bc",
+		BcQueuePrefix: "alea_bc",
 		AleaAgreement: "alea_ag",
 		BatchDB:       "batchdb",
 		Mempool:       "mempool",

@@ -10,7 +10,7 @@ import (
 type ModuleConfig struct {
 	Self          t.ModuleID // id of this module
 	Consumer      t.ModuleID
-	AleaBroadcast t.ModuleID
+	BcQueuePrefix string
 	AleaAgreement t.ModuleID
 	BatchDB       t.ModuleID
 	Mempool       t.ModuleID

@@ -4,9 +4,9 @@ import (
 	aleatypes "github.com/filecoin-project/mir/pkg/alea/aleatypes"
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
 	types "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/types"
-	types2 "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
+	types3 "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
 	types1 "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
-	types3 "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
+	types2 "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	tctypes "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 )
 
@@ -23,13 +23,13 @@ func UponEvent[W types.Event_TypeWrapper[Ev], Ev any](m dsl.Module, handler func
 	})
 }
 
-func UponInputValue(m dsl.Module, handler func(slot *types2.Slot, txs []*types3.Transaction) error) {
+func UponInputValue(m dsl.Module, handler func(queueSlot aleatypes.QueueSlot, txs []*types2.Transaction) error) {
 	UponEvent[*types.Event_InputValue](m, func(ev *types.InputValue) error {
-		return handler(ev.Slot, ev.Txs)
+		return handler(ev.QueueSlot, ev.Txs)
 	})
 }
 
-func UponDeliver(m dsl.Module, handler func(slot *types2.Slot) error) {
+func UponDeliver(m dsl.Module, handler func(slot *types3.Slot) error) {
 	UponEvent[*types.Event_Deliver](m, func(ev *types.Deliver) error {
 		return handler(ev.Slot)
 	})
@@ -41,13 +41,13 @@ func UponFreeSlot(m dsl.Module, handler func(queueSlot aleatypes.QueueSlot) erro
 	})
 }
 
-func UponPastVcbFinal(m dsl.Module, handler func(queueSlot aleatypes.QueueSlot, txs []*types3.Transaction, signature tctypes.FullSig) error) {
+func UponPastVcbFinal(m dsl.Module, handler func(queueSlot aleatypes.QueueSlot, txs []*types2.Transaction, signature tctypes.FullSig) error) {
 	UponEvent[*types.Event_PastVcbFinal](m, func(ev *types.PastVcbFinal) error {
 		return handler(ev.QueueSlot, ev.Txs, ev.Signature)
 	})
 }
 
-func UponBcStarted(m dsl.Module, handler func(slot *types2.Slot) error) {
+func UponBcStarted(m dsl.Module, handler func(slot *types3.Slot) error) {
 	UponEvent[*types.Event_BcStarted](m, func(ev *types.BcStarted) error {
 		return handler(ev.Slot)
 	})

@@ -14,7 +14,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/pb/abbapb"
 	"github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents"
-	"github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb"
+	"github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb"
 	commontypes "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
 	"github.com/filecoin-project/mir/pkg/pb/availabilitypb"
 	"github.com/filecoin-project/mir/pkg/pb/availabilitypb/batchdbpb"
@@ -158,13 +158,22 @@ func (at *AleaTracer) interceptOne(event *eventpb.Event) error {
 	}
 
 	switch ev := event.Type.(type) {
-	case *eventpb.Event_AleaBroadcast:
-		switch e := ev.AleaBroadcast.Type.(type) {
-		case *bcpb.Event_StartBroadcast:
-			slot := commontypes.Slot{QueueIdx: at.ownQueueIdx, QueueSlot: aleatypes.QueueSlot(e.StartBroadcast.QueueSlot)}
+	case *eventpb.Event_AleaBcqueue:
+		switch e := ev.AleaBcqueue.Type.(type) {
+		case *bcqueuepb.Event_InputValue:
+			queueIdx := parseQueueIdxFromModuleID(event.DestModule)
+			slot := commontypes.Slot{
+				QueueIdx:  queueIdx,
+				QueueSlot: aleatypes.QueueSlot(e.InputValue.QueueSlot),
+			}
 			at.startBcSpan(ts, slot)
-		case *bcpb.Event_FreeSlot:
-			at.endBcModSpan(ts, *commontypes.SlotFromPb(e.FreeSlot.Slot))
+		case *bcqueuepb.Event_FreeSlot:
+			queueIdx := parseQueueIdxFromModuleID(event.DestModule)
+			slot := commontypes.Slot{
+				QueueIdx:  queueIdx,
+				QueueSlot: aleatypes.QueueSlot(e.FreeSlot.QueueSlot),
+			}
+			at.endBcModSpan(ts, slot)
 		}
 	case *eventpb.Event_BatchDb:
 		switch e := ev.BatchDb.Type.(type) {
@@ -769,4 +778,16 @@ func parseSlotFromModuleID(moduleIDStr string) commontypes.Slot {
 		QueueIdx:  aleatypes.QueueIdx(queueIdx),
 		QueueSlot: aleatypes.QueueSlot(queueSlot),
 	}
+}
+
+func parseQueueIdxFromModuleID(moduleIDStr string) aleatypes.QueueIdx {
+	modID := t.ModuleID(moduleIDStr)
+	modID = modID.StripParent("alea_bc")
+	queueIdxStr := string(modID.Top())
+
+	queueIdx, err := strconv.ParseUint(queueIdxStr, 10, 32)
+	if err != nil {
+		panic(fmt.Errorf("failed to parse queueIdx from %s: %w", queueIdxStr, err))
+	}
+	return aleatypes.QueueIdx(queueIdx)
 }

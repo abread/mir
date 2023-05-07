@@ -7,11 +7,12 @@ import (
 	"golang.org/x/exp/slices"
 
 	"github.com/filecoin-project/mir/pkg/alea/aleatypes"
+	"github.com/filecoin-project/mir/pkg/alea/broadcast/bcutil"
 	"github.com/filecoin-project/mir/pkg/alea/director/internal/common"
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/logging"
 	aagdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents/dsl"
-	abcdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/dsl"
+	bcqueuepbdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/dsl"
 	commontypes "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
 	directordsl "github.com/filecoin-project/mir/pkg/pb/aleapb/directorpb/dsl"
 	directorpbevents "github.com/filecoin-project/mir/pkg/pb/aleapb/directorpb/events"
@@ -70,12 +71,12 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 	// =============================================================================================
 	// Broadcast duration estimation
 	// =============================================================================================
-	abcdsl.UponBcStarted(m, func(slot *commontypes.Slot) error {
+	bcqueuepbdsl.UponBcStarted(m, func(slot *commontypes.Slot) error {
 		state.bcStartTimes[*slot] = time.Now()
 
 		return nil
 	})
-	abcdsl.UponDeliver(m, func(slotRef *commontypes.Slot) error {
+	bcqueuepbdsl.UponDeliver(m, func(slotRef *commontypes.Slot) error {
 		slot := *slotRef
 
 		startTime, ok := state.bcStartTimes[slot]
@@ -101,7 +102,7 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 	// Delivery
 	// =============================================================================================
 
-	abcdsl.UponDeliver(m, func(slot *commontypes.Slot) error {
+	bcqueuepbdsl.UponDeliver(m, func(slot *commontypes.Slot) error {
 		if slot.QueueSlot >= state.agQueueHeads[slot.QueueIdx] {
 			// slot wasn't delivered yet by agreement component
 			// logger.Log(logging.LevelDebug, "marking slot as ready for delivery", "queueIdx", slot.QueueIdx, "queueSlot", slot.QueueSlot)
@@ -140,7 +141,7 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 		// remove tracked slot readyness (don't want to run out of memory)
 		// also free broadcast slot to allow broadcast component to make progress
 		delete(state.slotsReadyToDeliver[slot.QueueIdx], slot.QueueSlot)
-		abcdsl.FreeSlot(m, mc.AleaBroadcast, slot)
+		bcqueuepbdsl.FreeSlot(m, bcutil.BcQueueModuleID(mc.BcQueuePrefix, slot.QueueIdx), slot.QueueSlot)
 
 		return nil
 	})
@@ -198,11 +199,11 @@ func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams,
 
 		// logger.Log(logging.LevelDebug, "new batch", "nTransactions", len(txs))
 
-		abcdsl.StartBroadcast(m, mc.AleaBroadcast, state.bcOwnQueueHead, txs)
+		bcqueuepbdsl.InputValue(m, bcutil.BcQueueModuleID(mc.BcQueuePrefix, ownQueueIdx), state.bcOwnQueueHead, txs)
 		state.bcOwnQueueHead++
 		return nil
 	})
-	abcdsl.UponDeliver(m, func(slot *commontypes.Slot) error {
+	bcqueuepbdsl.UponDeliver(m, func(slot *commontypes.Slot) error {
 		if slot.QueueIdx == ownQueueIdx && slot.QueueSlot == state.bcOwnQueueHead-1 {
 			// new batch was delivered
 			state.stalledBatchCut = true
