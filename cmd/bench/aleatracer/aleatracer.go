@@ -96,6 +96,7 @@ func NewAleaTracer(ctx context.Context, ownQueueIdx aleatypes.QueueIdx, nodeCoun
 		bfWipSlotsCtxID: make(map[uint64]commontypes.Slot, nodeCount),
 		bfDeliverQueue:  nil,
 
+		agQueueHeads:            make([]aleatypes.QueueSlot, nodeCount),
 		agUndeliveredAbbaRounds: make(map[uint64]map[uint64]struct{}, nodeCount*N),
 
 		inChan: make(chan *events.EventList, nodeCount*16),
