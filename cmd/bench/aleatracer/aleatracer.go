@@ -398,8 +398,8 @@ func (at *AleaTracer) registerModStart(ts time.Duration, event *eventpb.Event) {
 
 			at.startAbbaRoundModSpan(ts, abbaRoundID{agRound, abbaRound})
 		}
-	} else if id.IsSubOf("alea_bc") {
-		id = id.Sub()
+	} else if strings.HasPrefix(string(id), "alea_bc-") {
+		id = t.ModuleID(strings.TrimPrefix(string(id), "alea_bc-"))
 
 		queueIdx, err := strconv.ParseUint(string(id.Top()), 10, 64)
 		if err != nil {
@@ -759,8 +759,11 @@ func (at *AleaTracer) writeSpan(s *span) {
 }
 
 func parseSlotFromModuleID(moduleIDStr string) commontypes.Slot {
-	modID := t.ModuleID(moduleIDStr)
-	modID = modID.StripParent("alea_bc")
+	if !strings.HasPrefix(moduleIDStr, "alea_bc-") {
+		panic(fmt.Errorf("id is not from a bcqueue: %s", moduleIDStr))
+	}
+
+	modID := t.ModuleID(strings.TrimPrefix(moduleIDStr, "alea_bc-"))
 	queueIdxStr := string(modID.Top())
 	queueSlotStr := string(modID.Sub().Top())
 
@@ -781,8 +784,11 @@ func parseSlotFromModuleID(moduleIDStr string) commontypes.Slot {
 }
 
 func parseQueueIdxFromModuleID(moduleIDStr string) aleatypes.QueueIdx {
-	modID := t.ModuleID(moduleIDStr)
-	modID = modID.StripParent("alea_bc")
+	if !strings.HasPrefix(moduleIDStr, "alea_bc-") {
+		panic(fmt.Errorf("id is not from a bcqueue: %s", moduleIDStr))
+	}
+
+	modID := t.ModuleID(strings.TrimPrefix(moduleIDStr, "alea_bc-"))
 	queueIdxStr := string(modID.Top())
 
 	queueIdx, err := strconv.ParseUint(queueIdxStr, 10, 32)
