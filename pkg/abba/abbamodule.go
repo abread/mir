@@ -153,7 +153,10 @@ func newController(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunab
 	})
 
 	abbadsl.UponInputValue(m, func(input bool) error {
-		if state.phase != phaseAwaitingInput {
+		if state.phase == phaseDelivered {
+			// this may be a duplicate input, but we're ignoring that sanity check.
+			return nil
+		} else if state.phase != phaseAwaitingInput {
 			return fmt.Errorf("input value provided twice to abba")
 		}
 
