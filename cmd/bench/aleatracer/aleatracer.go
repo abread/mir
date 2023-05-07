@@ -50,7 +50,6 @@ type AleaTracer struct {
 	bfDeliverQueue  []commontypes.Slot
 
 	agQueueHeads            []aleatypes.QueueSlot
-	agWipForQueue           map[aleatypes.QueueIdx]uint64
 	agUndeliveredAbbaRounds map[uint64]map[uint64]struct{}
 
 	inChan chan *events.EventList
@@ -97,8 +96,6 @@ func NewAleaTracer(ctx context.Context, ownQueueIdx aleatypes.QueueIdx, nodeCoun
 		bfWipSlotsCtxID: make(map[uint64]commontypes.Slot, nodeCount),
 		bfDeliverQueue:  nil,
 
-		agQueueHeads:            make([]aleatypes.QueueSlot, nodeCount),
-		agWipForQueue:           make(map[aleatypes.QueueIdx]uint64, nodeCount),
 		agUndeliveredAbbaRounds: make(map[uint64]map[uint64]struct{}, nodeCount*N),
 
 		inChan: make(chan *events.EventList, nodeCount*16),
@@ -198,17 +195,14 @@ func (at *AleaTracer) interceptOne(event *eventpb.Event) error {
 	case *eventpb.Event_AleaAgreement:
 		switch e := ev.AleaAgreement.Type.(type) {
 		case *agevents.Event_InputValue:
-			slot := at.slotForAgRound(e.InputValue.Round)
-			at.agWipForQueue[slot.QueueIdx] = e.InputValue.Round
 
 			at.startAgSpan(ts, e.InputValue.Round)
 		case *agevents.Event_Deliver:
 			at.endAgSpan(ts, e.Deliver.Round)
 			at.endAgModSpan(ts, e.Deliver.Round)
 
-			slot := at.slotForAgRound(e.Deliver.Round)
-			delete(at.agWipForQueue, slot.QueueIdx)
 			if e.Deliver.Decision {
+				slot := at.slotForAgRound(e.Deliver.Round)
 				at.agQueueHeads[slot.QueueIdx]++
 				at.bfDeliverQueue = append(at.bfDeliverQueue, slot)
 			}
@@ -451,10 +445,6 @@ func (at *AleaTracer) slotForAgRound(round uint64) commontypes.Slot {
 	queueIdx := round % uint64(at.nodeCount)
 	queueSlot := at.agQueueHeads[queueIdx]
 
-	if wipRound, ok := at.agWipForQueue[aleatypes.QueueIdx(queueIdx)]; ok && wipRound != round {
-		panic("concurrent ag rounds for same queue")
-	}
-
 	return commontypes.Slot{
 		QueueIdx:  aleatypes.QueueIdx(queueIdx),
 		QueueSlot: queueSlot,
@@ -577,13 +567,11 @@ func (at *AleaTracer) endBcModSpan(ts time.Duration, slot commontypes.Slot) {
 }
 
 func (at *AleaTracer) _agSpan(ts time.Duration, round uint64) *span {
-	slot := at.slotForAgRound(round)
-
 	s, ok := at.wipAgSpan[round]
 	if !ok {
 		at.wipAgSpan[round] = &span{
 			class: "ag",
-			id:    fmt.Sprintf("%d/%d", slot.QueueIdx, slot.QueueSlot),
+			id:    fmt.Sprintf("%d", round),
 			start: ts,
 		}
 		s = at.wipAgSpan[round]
