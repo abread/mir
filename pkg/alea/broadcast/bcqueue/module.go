@@ -49,7 +49,7 @@ func newQueueController(mc *ModuleConfig, params *ModuleParams, tunables *Module
 			return fmt.Errorf("cannot broadcast an empty batch")
 		}
 
-		// logger.Log(logging.LevelDebug, "starting broadcast", "queueSlot", slot.QueueSlot, "txs", txs)
+		// logger.Log(logging.LevelDebug, "starting broadcast", "queueSlot", queueSlot, "txs", txs)
 		dsl.EmitMirEvent(m, vcbpbevents.InputValue(
 			mc.Self.Then(t.NewModuleIDFromInt(queueSlot)),
 			txs,

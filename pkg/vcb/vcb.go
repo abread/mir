@@ -61,7 +61,7 @@ func (params *ModuleParams) GetF() int {
 type state struct {
 	phase vcbPhase
 
-	payload *vcbPayloadManager
+	payload vcbPayloadManager
 	sig     []byte
 }
 
@@ -79,28 +79,13 @@ const (
 	VcbPhaseDelivered
 )
 
-type leaderState struct {
-	phase vcbLeaderPhase
-
-	sigAgg *tsagg.ThreshSigAggregator
-}
-
-type vcbLeaderPhase uint8
-
-const (
-	VcbLeaderPhaseAwaitingInput vcbLeaderPhase = iota
-	VcbLeaderPhaseAwaitingEchoes
-	VcbLeaderPhaseDone
-)
-
 func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging.Logger) modules.PassiveModule {
 	m := dsl.NewModule(mc.Self)
 
 	state := &state{
-		payload: newVcbPayloadManager(m, mc, params),
-
 		phase: VcbPhaseAwaitingSend,
 	}
+	state.payload.init(m, mc, params)
 
 	if nodeID == params.Leader {
 		setupVcbLeader(m, mc, params, nodeID, logger, state)
@@ -206,6 +191,20 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 	return m
 }
 
+type leaderState struct {
+	phase vcbLeaderPhase
+
+	sigAgg *tsagg.ThreshSigAggregator
+}
+
+type vcbLeaderPhase uint8
+
+const (
+	VcbLeaderPhaseAwaitingInput vcbLeaderPhase = iota
+	VcbLeaderPhaseAwaitingEchoes
+	VcbLeaderPhaseDone
+)
+
 func setupVcbLeader(m dsl.Module, mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging.Logger, state *state) {
 	leaderState := &leaderState{
 		phase: VcbLeaderPhaseAwaitingInput,
@@ -215,7 +214,7 @@ func setupVcbLeader(m dsl.Module, mc *ModuleConfig, params *ModuleParams, nodeID
 			Threshold:               2*params.GetF() + 1,
 			MaxVerifyShareBatchSize: runtime.NumCPU(),
 			SigData:                 state.payload.SigData,
-			InitialNodeCount:        len(params.AllNodes),
+			InitialNodeCount:        params.GetN(),
 		}, logging.Decorate(logger, "ThresholdSigAggregator: ")),
 	}
 

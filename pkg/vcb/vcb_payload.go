@@ -16,9 +16,7 @@ type vcbPayloadManager struct {
 	sigData   [][]byte
 }
 
-func newVcbPayloadManager(m dsl.Module, mc *ModuleConfig, params *ModuleParams) *vcbPayloadManager {
-	mgr := &vcbPayloadManager{}
-
+func (mgr *vcbPayloadManager) init(m dsl.Module, mc *ModuleConfig, params *ModuleParams) {
 	mpdsl.UponTransactionIDsResponse(m, func(txIDs []tt.TxID, context *vcbPayloadMgrInputTxs) error {
 		mgr.txIDs = txIDs
 		hasherpbdsl.RequestOne(m, mc.Hasher, &hasherpbtypes.HashData{
@@ -31,8 +29,6 @@ func newVcbPayloadManager(m dsl.Module, mc *ModuleConfig, params *ModuleParams) 
 		mgr.sigData = SigData(params.InstanceUID, txIDsHash)
 		return nil
 	})
-
-	return mgr
 }
 
 type vcbPayloadMgrInputTxs struct{}
