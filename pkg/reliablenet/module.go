@@ -38,14 +38,6 @@ type ModuleParams struct {
 	AllNodes []t.NodeID
 }
 
-func DefaultModuleConfig() *ModuleConfig {
-	return &ModuleConfig{
-		Self:  "reliablenet",
-		Net:   "net",
-		Timer: "timer",
-	}
-}
-
 func DefaultModuleParams(allNodes []t.NodeID) *ModuleParams {
 	return &ModuleParams{
 		RetransmissionLoopInterval: 5000 * time.Millisecond,
@@ -57,7 +49,7 @@ func DefaultModuleParams(allNodes []t.NodeID) *ModuleParams {
 type queuesMap map[t.ModuleID]map[rntypes.MsgID]*transportpb.SendMessage
 
 type Module struct {
-	config *ModuleConfig
+	config ModuleConfig
 	params *ModuleParams
 	ownID  t.NodeID
 	logger logging.Logger
@@ -68,7 +60,7 @@ type Module struct {
 	stalerQueues  queuesMap
 }
 
-func New(ownID t.NodeID, mc *ModuleConfig, params *ModuleParams, logger logging.Logger) (*Module, error) {
+func New(ownID t.NodeID, mc ModuleConfig, params *ModuleParams, logger logging.Logger) (*Module, error) {
 	return &Module{
 		config: mc,
 		params: params,

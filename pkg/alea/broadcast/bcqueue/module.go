@@ -27,7 +27,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/vcb"
 )
 
-func New(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
+func New(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
 	if slices.Index(params.AllNodes, params.QueueOwner) != int(params.QueueIdx) {
 		return nil, fmt.Errorf("invalid queue index/owner combination: %v - %v", params.QueueIdx, params.QueueOwner)
 	}
@@ -41,7 +41,7 @@ func New(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeI
 	return modules.RoutedModule(mc.Self, controller, slots), nil
 }
 
-func newQueueController(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger, slots *modring.Module) modules.PassiveModule {
+func newQueueController(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, nodeID t.NodeID, logger logging.Logger, slots *modring.Module) modules.PassiveModule {
 	m := dsl.NewModule(mc.Self)
 
 	bcqueuedsl.UponInputValue(m, func(queueSlot aleatypes.QueueSlot, txs []*trantorpbtypes.Transaction) error {
@@ -99,8 +99,8 @@ func newQueueController(mc *ModuleConfig, params *ModuleParams, tunables *Module
 	return m
 }
 
-func newVcbGenerator(queueMc *ModuleConfig, queueParams *ModuleParams, nodeID t.NodeID, logger logging.Logger) func(id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
-	baseConfig := &vcb.ModuleConfig{
+func newVcbGenerator(queueMc ModuleConfig, queueParams ModuleParams, nodeID t.NodeID, logger logging.Logger) func(id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
+	baseConfig := vcb.ModuleConfig{
 		Self:         "INVALID",
 		Consumer:     queueMc.Self,
 		ReliableNet:  queueMc.ReliableNet,
@@ -109,22 +109,22 @@ func newVcbGenerator(queueMc *ModuleConfig, queueParams *ModuleParams, nodeID t.
 		Mempool:      queueMc.Mempool,
 	}
 
-	baseParams := &vcb.ModuleParams{
+	baseParams := vcb.ModuleParams{
 		InstanceUID: nil,
 		AllNodes:    queueParams.AllNodes,
 		Leader:      queueParams.QueueOwner,
 	}
 
 	return func(id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
-		mc := *baseConfig
+		mc := baseConfig
 		mc.Self = id
 
 		queueSlot := aleatypes.QueueSlot(idx)
 
-		params := *baseParams
+		params := baseParams
 		params.InstanceUID = bcutil.VCBInstanceUID(queueParams.BcInstanceUID, queueParams.QueueIdx, queueSlot)
 
-		mod := vcb.NewModule(&mc, &params, nodeID, logging.Decorate(logger, "Vcb: ", "slot", idx))
+		mod := vcb.NewModule(mc, &params, nodeID, logging.Decorate(logger, "Vcb: ", "slot", idx))
 
 		return mod, events.ListOf(
 			bcqueuepbevents.BcStarted(queueMc.Consumer, &commontypes.Slot{

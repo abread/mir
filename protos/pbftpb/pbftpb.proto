@@ -154,44 +154,24 @@ message Event {
 
   oneof type {
     option (mir.event_type) = true;
-
-    uint64             propose_timeout         = 1;
-    pbftpb.VCSNTimeout view_change_sn_timeout  = 2;
-    uint64             view_change_seg_timeout = 3;
+    ProposeTimeout             propose_timeout         = 1;
+    pbftpb.ViewChangeSNTimeout view_change_sn_timeout  = 2;
+    ViewChangeSegTimeout       view_change_seg_timeout = 3;
   }
 }
 
-message VCSNTimeout {
+message ProposeTimeout{
   option (mir.event) = true;
+  uint64 propose_timeout = 1;
+}
 
+message ViewChangeSNTimeout {
+  option (mir.event) = true;
   uint64 view         = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/orderers/types.ViewNr"];
   uint64 numCommitted = 2;
 }
 
-// TODO: Get rid of the `Origin` types when new DSL is used for this module.
-
-message HashOrigin {
-  option (mir.struct) = true;
-
-  oneof type {
-    Preprepare preprepare         = 1;
-    Preprepare missing_preprepare = 2;
-    NewView    new_view           = 3;
-    uint64     empty_preprepares  = 4;
-    Preprepare catch_up_response  = 5;
-  }
+message ViewChangeSegTimeout {
+  option (mir.event) = true;
+  uint64 ViewChangeSegTimeout = 1;
 }
-
-message SignOrigin {
-  oneof type {
-    ViewChange view_change = 1;
-  }
-}
-
-message SigVerOrigin {
-  oneof type {
-    SignedViewChange signed_view_change = 1;
-    NewView          new_view           = 2;
-  }
-}
-

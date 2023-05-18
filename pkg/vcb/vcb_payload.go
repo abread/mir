@@ -7,6 +7,7 @@ import (
 	mpdsl "github.com/filecoin-project/mir/pkg/pb/mempoolpb/dsl"
 	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	tt "github.com/filecoin-project/mir/pkg/trantor/types"
+	"github.com/filecoin-project/mir/pkg/util/sliceutil"
 )
 
 type vcbPayloadManager struct {
@@ -16,12 +17,21 @@ type vcbPayloadManager struct {
 	sigData   [][]byte
 }
 
-func (mgr *vcbPayloadManager) init(m dsl.Module, mc *ModuleConfig, params *ModuleParams) {
+func (mgr *vcbPayloadManager) init(m dsl.Module, mc ModuleConfig, params *ModuleParams) {
 	mpdsl.UponTransactionIDsResponse(m, func(txIDs []tt.TxID, context *vcbPayloadMgrInputTxs) error {
 		mgr.txIDs = txIDs
-		hasherpbdsl.RequestOne(m, mc.Hasher, &hasherpbtypes.HashData{
-			Data: txIDs,
-		}, context)
+
+		idsBytes := make([][]byte, len(txIDs))
+		for i, x := range txIDs {
+			idsBytes[i] = []byte(x)
+		}
+
+		hasherpbdsl.RequestOne(m, mc.Hasher,
+			&hasherpbtypes.HashData{Data: sliceutil.Transform(txIDs, func(_ int, txID tt.TxID) []byte {
+				return []byte(txID)
+			})},
+			context,
+		)
 		return nil
 	})
 	hasherpbdsl.UponResultOne(m, func(txIDsHash []byte, context *vcbPayloadMgrInputTxs) error {

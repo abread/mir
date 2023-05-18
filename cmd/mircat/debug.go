@@ -10,6 +10,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/filecoin-project/mir/pkg/timer"
+
 	"google.golang.org/protobuf/encoding/protojson"
 	"gopkg.in/alecthomas/kingpin.v2"
 
@@ -36,7 +38,7 @@ import (
 func debug(args *arguments) error {
 
 	// TODO: Empty addresses might not work here, as they will probably produce wrong snapshots.
-	membership := &trantorpbtypes.Membership{make(map[t.NodeID]*trantorpbtypes.NodeIdentity)} // nolint:govet
+	membership := &trantorpbtypes.Membership{Nodes: make(map[t.NodeID]*trantorpbtypes.NodeIdentity)} // nolint:govet
 	for _, nID := range args.membership {
 		membership.Nodes[nID] = &trantorpbtypes.NodeIdentity{
 			Id:     nID,
@@ -164,7 +166,15 @@ func debuggerNode(id t.NodeID, membership *trantorpbtypes.Membership) (*mir.Node
 	}
 	protocol, err := iss.New(
 		id,
-		iss.DefaultModuleConfig(),
+		iss.ModuleConfig{
+			Self:         "iss",
+			App:          "batchfetcher",
+			Availability: "availability",
+			Checkpoint:   "checkpointing",
+			Net:          "net",
+			Ordering:     "ordering",
+			Timer:        "timer",
+		},
 		issConfig,
 		checkpoint.Genesis(stateSnapshotpb),
 		crypto.SHA256,
@@ -178,7 +188,7 @@ func debuggerNode(id t.NodeID, membership *trantorpbtypes.Membership) (*mir.Node
 	nullTransport := &NullTransport{}
 
 	// Instantiate and return a minimal Mir Node.
-	modulesWithDefaults, err := iss.DefaultModules(map[t.ModuleID]modules.Module{
+	nodeModules := map[t.ModuleID]modules.Module{
 		"net":    nullTransport,
 		"crypto": mirCrypto.New(cryptoImpl),
 		"app": appmodule.NewAppModule(
@@ -191,13 +201,14 @@ func debuggerNode(id t.NodeID, membership *trantorpbtypes.Membership) (*mir.Node
 			nullTransport,
 			"iss",
 		),
-		"iss": protocol,
-	}, iss.DefaultModuleConfig())
+		"iss":   protocol,
+		"timer": timer.New(),
+	}
 	if err != nil {
 		panic(fmt.Errorf("error initializing the Mir modules: %w", err))
 	}
 
-	node, err := mir.NewNode(id, mir.DefaultNodeConfig().WithLogger(logger), modulesWithDefaults, nil)
+	node, err := mir.NewNode(id, mir.DefaultNodeConfig().WithLogger(logger), nodeModules, nil)
 	if err != nil {
 		return nil, fmt.Errorf("could not instantiate mir node: %w", err)
 	}

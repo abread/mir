@@ -48,7 +48,7 @@ type state struct {
 	avgBcTime    *estimator
 }
 
-func Include(m dsl.Module, mc *common.ModuleConfig, params *common.ModuleParams, tunables *common.ModuleTunables, nodeID t.NodeID, logger logging.Logger) {
+func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, tunables common.ModuleTunables, nodeID t.NodeID, logger logging.Logger) {
 	state := newState(params, tunables, nodeID)
 	ownQueueIdx := aleatypes.QueueIdx(slices.Index(params.AllNodes, nodeID))
 
@@ -284,7 +284,7 @@ func (state *state) agCanDeliver() bool {
 	return agCanDeliver
 }
 
-func newState(params *common.ModuleParams, tunables *common.ModuleTunables, nodeID t.NodeID) *state {
+func newState(params common.ModuleParams, tunables common.ModuleTunables, nodeID t.NodeID) *state {
 	N := len(params.AllNodes)
 
 	state := &state{

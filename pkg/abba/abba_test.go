@@ -152,16 +152,16 @@ func runTest(t *testing.T, conf *TestConfig) (result bool, heapObjects int64, he
 		}
 	}
 
-	app0 := deployment.TestReplicas[0].Modules["app"].(*countingApp)
+	app0 := deployment.TestReplicas[0].Modules[abbaConfig.Consumer].(*countingApp)
 	for _, replica := range deployment.TestReplicas {
 		// Check if all requests were delivered exactly once in all replicas.
-		app := replica.Modules["app"].(*countingApp)
+		app := replica.Modules[abbaConfig.Consumer].(*countingApp)
 		assert.Equal(t, 1, app.deliveredCount)
-		assert.Equal(t, types.ModuleID("abba"), app.firstSrcModule)
+		assert.Equal(t, abbaConfig.Self, app.firstSrcModule)
 		assert.Equal(t, app0.firstDelivered, app.firstDelivered)
 
 		// Check if all messages were ACKed
-		rnet := replica.Modules["reliablenet"].(*reliablenet.Module)
+		rnet := replica.Modules[abbaConfig.ReliableNet].(*reliablenet.Module)
 		assert.Empty(t, rnet.GetPendingMessages())
 	}
 
@@ -178,6 +178,19 @@ func runTest(t *testing.T, conf *TestConfig) (result bool, heapObjects int64, he
 	}
 
 	return app0.firstDelivered, heapObjects, heapAlloc
+}
+
+var abbaConfig = ModuleConfig{
+	Self:         "abba",
+	Consumer:     "app",
+	ReliableNet:  "rnet",
+	ThreshCrypto: "tc",
+	Hasher:       "hasher",
+}
+var rnetConfig = reliablenet.ModuleConfig{
+	Self:  abbaConfig.ReliableNet,
+	Net:   "net",
+	Timer: "timer",
 }
 
 func newDeployment(ctx context.Context, conf *TestConfig) (*deploytest.Deployment, error) {
@@ -210,14 +223,13 @@ func newDeployment(ctx context.Context, conf *TestConfig) (*deploytest.Deploymen
 			return nil, fmt.Errorf("error initializing Mir transport: %w", err)
 		}
 
-		abbaConfig := DefaultModuleConfig("app")
 		abba, err := NewModule(
 			abbaConfig,
-			&ModuleParams{
+			ModuleParams{
 				InstanceUID: []byte{0},
 				AllNodes:    nodeIDs,
 			},
-			&ModuleTunables{
+			ModuleTunables{
 				MaxRoundLookahead: 1,
 			},
 			nodeID,
@@ -236,16 +248,7 @@ func newDeployment(ctx context.Context, conf *TestConfig) (*deploytest.Deploymen
 		rnetParams := reliablenet.DefaultModuleParams(nodeIDs)
 		rnetParams.RetransmissionLoopInterval = 20 * time.Millisecond
 
-		rnet, err := reliablenet.New(
-			nodeID,
-			&reliablenet.ModuleConfig{
-				Self:  abbaConfig.ReliableNet,
-				Net:   "net",
-				Timer: "timer",
-			},
-			rnetParams,
-			logging.Decorate(nodeLogger, "ReliableNet: "),
-		)
+		rnet, err := reliablenet.New(nodeID, rnetConfig, rnetParams, logging.Decorate(nodeLogger, "ReliableNet: "))
 		if err != nil {
 			return nil, fmt.Errorf("error creating reliablenet module: %w", err)
 		}
@@ -256,13 +259,13 @@ func newDeployment(ctx context.Context, conf *TestConfig) (*deploytest.Deploymen
 		}
 
 		modulesWithDefaults := map[types.ModuleID]modules.Module{
-			"app":                   newCountingApp(inputValue),
+			abbaConfig.Consumer:     newCountingApp(abbaConfig, inputValue),
 			abbaConfig.Self:         abba,
 			abbaConfig.ThreshCrypto: tc,
 			abbaConfig.Hasher:       mirCrypto.NewHasher(ctx, mirCrypto.DefaultHasherModuleParams(), crypto.SHA256),
 			abbaConfig.ReliableNet:  rnet,
-			"net":                   transport,
-			"timer":                 timer.New(),
+			rnetConfig.Net:          transport,
+			rnetConfig.Timer:        timer.New(),
 		}
 
 		nodeModules[nodeID] = modulesWithDefaults
@@ -290,15 +293,15 @@ type countingApp struct {
 	firstDelivered bool
 }
 
-func newCountingApp(inputValue bool) *countingApp {
-	m := dsl.NewModule("app")
+func newCountingApp(abbaMc ModuleConfig, inputValue bool) *countingApp {
+	m := dsl.NewModule(abbaMc.Consumer)
 
 	app := &countingApp{
 		module: m,
 	}
 
 	dsl.UponInit(m, func() error {
-		abbadsl.InputValue(m, "abba", inputValue)
+		abbadsl.InputValue(m, abbaMc.Self, inputValue)
 
 		return nil
 	})

@@ -18,11 +18,12 @@ func (uid InstanceUID) Bytes() []byte {
 
 // ModuleConfig sets the module ids. All replicas are expected to use identical module configurations.
 type ModuleConfig struct {
-	Self    t.ModuleID // id of this module
-	Mempool t.ModuleID
+	Self t.ModuleID // id of this module
+
 	BatchDB t.ModuleID
-	Net     t.ModuleID
 	Crypto  t.ModuleID
+	Mempool t.ModuleID
+	Net     t.ModuleID
 }
 
 // ModuleParams sets the values for the parameters of an instance of the protocol.
@@ -38,5 +39,5 @@ type ModuleParams struct {
 
 // SigData is the binary data that should be signed for forming a certificate.
 func SigData(instanceUID InstanceUID, batchID msctypes.BatchID) *cryptopbtypes.SignedData {
-	return &cryptopbtypes.SignedData{Data: [][]byte{instanceUID.Bytes(), []byte("BATCH_STORED"), batchID}}
+	return &cryptopbtypes.SignedData{Data: [][]byte{instanceUID.Bytes(), []byte("BATCH_STORED"), []byte(batchID)}}
 }

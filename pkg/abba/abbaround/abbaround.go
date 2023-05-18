@@ -53,10 +53,10 @@ type state struct {
 }
 
 // nolint: gocognit
-func New(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging.Logger) modules.PassiveModule {
+func New(mc ModuleConfig, params ModuleParams, nodeID t.NodeID, logger logging.Logger) modules.PassiveModule {
 	m := dsl.NewModule(mc.Self)
 
-	coinData := genCoinData(mc, params)
+	coinData := genCoinData(mc.Self, params.InstanceUID)
 	state := state{
 		initRecvd: abbat.NewBoolRecvTrackers(len(params.AllNodes)),
 		auxRecvd:  make(abbat.RecvTracker, len(params.AllNodes)),
@@ -167,7 +167,7 @@ func New(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging
 			return nil
 		}
 
-		if state.isNiceAuxValueCount(params) {
+		if state.isNiceAuxValueCount(&params) {
 			// logger.Log(logging.LevelDebug, "received enough support for AUX(v in values)", "values", state.values)
 			rnetdsl.SendMessage(m, mc.ReliableNet,
 				ConfMsgID(),
@@ -202,7 +202,7 @@ func New(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging
 			return nil
 		}
 
-		if state.isNiceConfValuesCount(params) && state.ownCoinShare != nil {
+		if state.isNiceConfValuesCount(&params) && state.ownCoinShare != nil {
 			// logger.Log(logging.LevelDebug, "received enough support for CONF(C subset of values)", "values", state.values)
 
 			// 9. sample coin
@@ -317,10 +317,10 @@ func (rs *state) isNiceConfValuesCount(params *ModuleParams) bool {
 	return total >= params.strongSupportThresh()
 }
 
-func genCoinData(mc *ModuleConfig, params *ModuleParams) [][]byte {
+func genCoinData(ownModID t.ModuleID, instanceUID []byte) [][]byte {
 	return [][]byte{
-		params.InstanceUID,
-		[]byte(mc.Self),
+		instanceUID,
+		[]byte(ownModID),
 		[]byte("coin"),
 	}
 }

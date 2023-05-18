@@ -3,10 +3,10 @@ package simplemempool
 import (
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/mempool/simplemempool/common"
-	"github.com/filecoin-project/mir/pkg/mempool/simplemempool/parts/computeids"
-	"github.com/filecoin-project/mir/pkg/mempool/simplemempool/parts/formbatchesext"
-	"github.com/filecoin-project/mir/pkg/mempool/simplemempool/parts/formbatchesint"
-	"github.com/filecoin-project/mir/pkg/mempool/simplemempool/parts/lookuptxs"
+	"github.com/filecoin-project/mir/pkg/mempool/simplemempool/internal/parts/computeids"
+	"github.com/filecoin-project/mir/pkg/mempool/simplemempool/internal/parts/formbatchesext"
+	"github.com/filecoin-project/mir/pkg/mempool/simplemempool/internal/parts/formbatchesint"
+	"github.com/filecoin-project/mir/pkg/mempool/simplemempool/internal/parts/lookuptxs"
 	"github.com/filecoin-project/mir/pkg/modules"
 	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 )
@@ -17,14 +17,6 @@ type ModuleConfig = common.ModuleConfig
 // ModuleParams sets the values for the parameters of an instance of the protocol.
 // All replicas are expected to use identical module parameters.
 type ModuleParams = common.ModuleParams
-
-// DefaultModuleConfig returns a valid module config with default names for all modules.
-func DefaultModuleConfig() *ModuleConfig {
-	return &ModuleConfig{
-		Self:   "availability",
-		Hasher: "hasher",
-	}
-}
 
 func DefaultModuleParams() *ModuleParams {
 	return &ModuleParams{
@@ -42,7 +34,7 @@ func DefaultModuleParams() *ModuleParams {
 // previous batch request as possible with respect to params.MaxTransactionsInBatch.
 //
 // This implementation uses the hash function provided by the mc.Hasher module to compute transaction IDs and batch IDs.
-func NewModule(mc *ModuleConfig, params *ModuleParams) modules.Module {
+func NewModule(mc ModuleConfig, params *ModuleParams) modules.Module {
 	m := dsl.NewModule(mc.Self)
 
 	commonState := &common.State{

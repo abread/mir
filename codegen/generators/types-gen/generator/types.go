@@ -1,12 +1,13 @@
 package generator
 
 import (
+	"reflect"
+
 	"github.com/dave/jennifer/jen"
 
 	"github.com/filecoin-project/mir/codegen"
 	"github.com/filecoin-project/mir/codegen/mirreflect"
 	"github.com/filecoin-project/mir/codegen/model/types"
-
 	"github.com/filecoin-project/mir/codegen/util/jenutil"
 	"github.com/filecoin-project/mir/pkg/util/reflectutil"
 )
@@ -54,6 +55,9 @@ func generateMirType(g *jen.File, msg *types.Message, parser *types.Parser) erro
 
 			// Generate the FromPb function.
 			g.Func().Id(oneof.MirInterfaceName()+"FromPb").Params(jen.Id("pb").Add(oneof.PbType())).Add(oneof.MirType()).Block(
+				jen.If(jen.Id("pb").Op("==").Nil()).Block(
+					jen.Return(jen.Nil()),
+				),
 				jen.Switch(jen.Id("pb").Op(":=").Id("pb").Dot("(type)")).BlockFunc(func(group *jen.Group) {
 					for _, opt := range oneof.Options {
 						group.Case(opt.PbWrapperType()).Block(
@@ -81,6 +85,12 @@ func generateMirType(g *jen.File, msg *types.Message, parser *types.Parser) erro
 
 				// Generate the Pb method.
 				g.Func().Params(jen.Id("w").Add(opt.MirWrapperType())).Id("Pb").Params().Add(oneof.PbType()).Block(
+					jen.If(jen.Id("w").Op("==").Nil()).Block(
+						jen.Return(jen.Nil()),
+					),
+					jen.If(jen.Id("w").Dot(opt.Field.Name).Op("==").Nil()).Block(
+						jen.Return(jen.Add(opt.NewPbWrapperType().Values(jen.Empty()))),
+					),
 					jen.Return(jen.Add(opt.NewPbWrapperType()).Values(
 						jen.Id(opt.Field.Name).Op(":").Add(opt.Field.Type.ToPb(jen.Id("w").Dot(opt.Field.Name))),
 					)),
@@ -98,7 +108,10 @@ func generateMirType(g *jen.File, msg *types.Message, parser *types.Parser) erro
 
 	// Generate [Name]FromPb function.
 	// NB: it would be nicer to generate .ToMir() methods for pb types, but this would cause a cyclic dependency.
-	g.Func().Id(msg.Name() + "FromPb").Params(jen.Id("pb").Add(msg.PbType())).Add(msg.MirType()).Block(
+	g.Func().Id(msg.Name()+"FromPb").Params(jen.Id("pb").Add(msg.PbType())).Add(msg.MirType()).Block(
+		jen.If(jen.Id("pb").Op("==").Nil()).Block(
+			jen.Return(jen.Nil()),
+		),
 		jen.Return().Add(msg.NewMirType()).ValuesFunc(func(group *jen.Group) {
 			for _, field := range fields {
 				group.Line().Id(field.Name).Op(":").Add(field.Type.ToMir(jen.Id("pb").Dot(field.Name)))
@@ -109,12 +122,25 @@ func generateMirType(g *jen.File, msg *types.Message, parser *types.Parser) erro
 
 	// Generate the Pb method.
 	g.Func().Params(jen.Id("m").Add(msg.MirType())).Id("Pb").Params().Add(msg.PbType()).Block(
-		jen.Return().Add(msg.NewPbType()).ValuesFunc(func(group *jen.Group) {
+		jen.If(jen.Id("m").Op("==").Nil()).Block(
+			jen.Return(jen.Nil()),
+		),
+		jen.Id("pbMessage").Op(":=").Add(msg.NewPbType()).Values(jen.Empty()),
+
+		// Iterate over struct fields and set values for non-nil fields.
+		jen.BlockFunc(func(g *jen.Group) {
 			for _, field := range fields {
-				group.Line().Id(field.Name).Op(":").Add(field.Type.ToPb(jen.Id("m").Dot(field.Name)))
+				if !canBeNil(field) {
+					g.Add(jen.Id("pbMessage").Dot(field.Name).Op("=").Add(field.Type.ToPb(jen.Id("m").Dot(field.Name))))
+				} else {
+					g.If(jen.Id("m").Dot(field.Name).Op("!=").Nil()).Block(
+						jen.Id("pbMessage").Dot(field.Name).Op("=").Add(field.Type.ToPb(jen.Id("m").Dot(field.Name))),
+					)
+				}
 			}
-			group.Line()
 		}),
+		jen.Empty(),
+		jen.Return(jen.Id("pbMessage")),
 	).Line()
 
 	// Generate the MirReflect method.
@@ -144,4 +170,15 @@ func GenerateMirTypes(inputDir, sourcePackagePath string, msgs []*types.Message,
 	}
 
 	return codegen.RenderJenFile(jenFile, types.OutputDir(inputDir), "types.mir.go")
+}
+
+// canBeNil returns true if the field can be nil.
+// at the moment, Maps and Slices cannot be nil by this check, as we use an internal conversion to our types.Slice and types.Map
+// the check for Maps and Slices is in their respective converSlice and convertMap functions
+func canBeNil(field *types.Field) bool {
+	switch reflect.TypeOf(field.Type).Kind() {
+	case reflect.Interface, reflect.Ptr, reflect.Map, reflect.Slice, reflect.Func, reflect.UnsafePointer:
+		return true
+	}
+	return false
 }

@@ -17,7 +17,7 @@ type Params struct {
 	Mempool      *simplemempool.ModuleParams
 	Iss          *issconfig.ModuleParams
 	Net          libp2p.Params
-	Alea         *alea.Params // TODO: extract protocol parameters away or figure out a better way to handle this
+	Alea         alea.Params // TODO: extract protocol parameters away or figure out a better way to handle this
 	ReliableNet  *reliablenet.ModuleParams
 	ThreshCrypto *threshcrypto.ModuleParams
 }

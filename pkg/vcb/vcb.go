@@ -28,18 +28,6 @@ type ModuleConfig struct {
 	Mempool      t.ModuleID
 }
 
-// DefaultModuleConfig returns a valid module config with default names for all modules.
-func DefaultModuleConfig(consumer t.ModuleID) *ModuleConfig {
-	return &ModuleConfig{
-		Self:         "vcb",
-		Consumer:     consumer,
-		ReliableNet:  "reliablenet",
-		Hasher:       "hasher",
-		ThreshCrypto: "threshcrypto",
-		Mempool:      "mempool",
-	}
-}
-
 // ModuleParams sets the values for the parameters of an instance of the protocol.
 // All replicas are expected to use identical module parameters, apart from the Origin.
 type ModuleParams struct {
@@ -79,7 +67,7 @@ const (
 	VcbPhaseDelivered
 )
 
-func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging.Logger) modules.PassiveModule {
+func NewModule(mc ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging.Logger) modules.PassiveModule {
 	m := dsl.NewModule(mc.Self)
 
 	state := &state{
@@ -165,7 +153,7 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger l
 		}
 
 		// logger.Log(logging.LevelDebug, "recvd SEND", "txs", txs)
-		state.payload.Input(m, mc, txs)
+		state.payload.Input(m, &mc, txs)
 		state.phase = VcbPhaseAwaitingSigData
 		return nil
 	})
@@ -205,7 +193,7 @@ const (
 	VcbLeaderPhaseDone
 )
 
-func setupVcbLeader(m dsl.Module, mc *ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging.Logger, state *state) {
+func setupVcbLeader(m dsl.Module, mc ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging.Logger, state *state) {
 	leaderState := &leaderState{
 		phase: VcbLeaderPhaseAwaitingInput,
 
@@ -252,7 +240,7 @@ func setupVcbLeader(m dsl.Module, mc *ModuleConfig, params *ModuleParams, nodeID
 
 	vcbdsl.UponInputValue(m, func(txs []*trantorpbtypes.Transaction) error {
 		// logger.Log(logging.LevelDebug, "inputting value", "txs", txs)
-		state.payload.Input(m, mc, txs)
+		state.payload.Input(m, &mc, txs)
 		return nil
 	})
 	dsl.UponStateUpdates(m, func() error {

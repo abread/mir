@@ -238,7 +238,7 @@ func runIntegrationWithAleaConfig(tb testing.TB, conf *TestConfig) (heapObjects 
 		assert.Equal(tb, conf.NumNetTXs*conf.NumClients+conf.NumFakeTXs, int(app.TransactionsProcessed))
 
 		// Check if there are no un-acked messages
-		rnet := replica.Modules["reliablenet"].(*reliablenet.Module)
+		rnet := replica.Modules["rnet"].(*reliablenet.Module)
 		pendingMsgs := rnet.GetPendingMessages()
 		assert.Emptyf(tb, pendingMsgs, "replica %v has pending messages", replica.ID)
 	}
@@ -315,7 +315,6 @@ func newDeploymentAlea(ctx context.Context, conf *TestConfig) (*deploytest.Deplo
 	for i, nodeID := range nodeIDs {
 		smrParams := trantor.DefaultParams(transportLayer.Membership())
 		smrParams.Mempool.MaxTransactionsInBatch = 16
-		smrParams.AdjustSpeed(100 * time.Millisecond)
 		smrParams.ReliableNet.RetransmissionLoopInterval = 100 * time.Millisecond
 		smrParams.Alea.MaxConcurrentVcbPerQueue = 2
 		smrParams.Alea.MaxOwnUnagreedBatchCount = 2

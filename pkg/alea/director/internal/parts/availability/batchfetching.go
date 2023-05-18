@@ -31,6 +31,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/timer/types"
 	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 	t "github.com/filecoin-project/mir/pkg/types"
+	"github.com/filecoin-project/mir/pkg/util/sliceutil"
 	"github.com/filecoin-project/mir/pkg/vcb"
 )
 
@@ -50,9 +51,9 @@ type RequestsState struct {
 // IncludeBatchFetching registers event handlers for processing availabilitypb.RequestTransactions events.
 func IncludeBatchFetching(
 	m dsl.Module,
-	mc *director.ModuleConfig,
-	params *director.ModuleParams,
-	tunables *director.ModuleTunables,
+	mc director.ModuleConfig,
+	params director.ModuleParams,
+	tunables director.ModuleTunables,
 	nodeID t.NodeID,
 	logger logging.Logger,
 ) {
@@ -211,12 +212,14 @@ func IncludeBatchFetching(
 	mempooldsl.UponTransactionIDsResponse(m, func(txIDs []tt.TxID, context *handleFillerContext) error {
 		context.txIDs = txIDs
 		hasherpbdsl.RequestOne(m, mc.Hasher, &hasherpbtypes.HashData{
-			Data: txIDs,
+			Data: sliceutil.Transform(txIDs, func(i int, txID tt.TxID) []byte {
+				return []byte(txID)
+			}),
 		}, context)
 		return nil
 	})
 	hasherpbdsl.UponResultOne(m, func(txIDsHash []byte, context *handleFillerContext) error {
-		sigData := certSigData(params, context.slot, txIDsHash)
+		sigData := certSigData(params.InstanceUID, context.slot, txIDsHash)
 		threshDsl.VerifyFull(m, mc.ThreshCrypto, sigData, context.signature, context)
 
 		return nil
@@ -259,8 +262,8 @@ func IncludeBatchFetching(
 	})
 }
 
-func certSigData(params *director.ModuleParams, slot *commontypes.Slot, txIDsHash []byte) [][]byte {
-	aleaUID := params.InstanceUID[:len(params.InstanceUID)-1]
+func certSigData(instanceUID []byte, slot *commontypes.Slot, txIDsHash []byte) [][]byte {
+	aleaUID := instanceUID[:len(instanceUID)-1]
 	aleaBcInstanceUID := append(aleaUID, 'b')
 	return vcb.SigData(bcutil.VCBInstanceUID(aleaBcInstanceUID, slot.QueueIdx, slot.QueueSlot), txIDsHash)
 }

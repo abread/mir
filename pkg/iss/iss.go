@@ -17,6 +17,8 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"github.com/filecoin-project/mir/pkg/orderers/common"
+
 	"github.com/filecoin-project/mir/pkg/checkpoint"
 	"github.com/filecoin-project/mir/pkg/clientprogress"
 	"github.com/filecoin-project/mir/pkg/crypto"
@@ -58,7 +60,7 @@ type ISS struct {
 	ownID t.NodeID
 
 	// IDs of modules ISS interacts with.
-	moduleConfig *ModuleConfig
+	moduleConfig ModuleConfig
 
 	// The ISS configuration parameters (e.g. Segment length, proposal frequency etc...)
 	// passed to New() when creating an ISS protocol instance.
@@ -138,7 +140,7 @@ func New(
 	ownID t.NodeID,
 
 	// IDs of the modules ISS interacts with.
-	moduleConfig *ModuleConfig,
+	moduleConfig ModuleConfig,
 
 	// ISS protocol-specific configuration (e.g. segment length, proposal frequency etc...).
 	// See the documentation of the issutil.ModuleParams type for details.
@@ -167,10 +169,15 @@ func New(
 		return nil, fmt.Errorf("invalid ISS configuration: %w", err)
 	}
 
-	// TODO: Make sure that startingChkp is consistent with params.
+	//TODO: Make sure that startingChkp is consistent with params.
 	leaderPolicy, err := lsp.LeaderPolicyFromBytes(startingChkp.Snapshot.EpochData.LeaderPolicy)
 	if err != nil {
 		return nil, fmt.Errorf("invalid leader policy in starting checkpoint: %w", err)
+	}
+
+	err = startingChkp.Verify(params, hashImpl, chkpVerifier, logger)
+	if err != nil {
+		return nil, err
 	}
 
 	// Initialize a new ISS object.
@@ -345,7 +352,7 @@ func New(
 			return fmt.Errorf("failed serializing stable checkpoint: %w", err)
 		}
 
-		seg, err := orderers.NewSegment(leader, membership, map[tt.SeqNr][]byte{0: chkpData})
+		seg, err := common.NewSegment(leader, membership, map[tt.SeqNr][]byte{0: chkpData})
 		if err != nil {
 			return fmt.Errorf("error creating new segment: %w", err)
 		}
@@ -639,7 +646,7 @@ func (iss *ISS) initOrderers() error {
 		// Create segment.
 		// The sequence proposals are all set to nil, so that the orderer proposes new availability certificates.
 		proposals := freeProposals(iss.nextDeliveredSN+tt.SeqNr(i), tt.SeqNr(len(leaders)), iss.Params.SegmentLength)
-		seg, err := orderers.NewSegment(leader, iss.epoch.Membership, proposals)
+		seg, err := common.NewSegment(leader, iss.epoch.Membership, proposals)
 		if err != nil {
 			return fmt.Errorf("error creating new segment: %w", err)
 		}
@@ -666,7 +673,7 @@ func (iss *ISS) initOrderers() error {
 
 // hasEpochCheckpoint returns true if the current epoch's checkpoint protocol has already produced a stable checkpoint.
 func (iss *ISS) hasEpochCheckpoint() bool {
-	return iss.lastStableCheckpoint.Sn == iss.epoch.FirstSN()
+	return iss.lastStableCheckpoint.SeqNr() == iss.epoch.FirstSN()
 }
 
 // epochFinished returns true when all the sequence numbers of the current epochs have been committed,

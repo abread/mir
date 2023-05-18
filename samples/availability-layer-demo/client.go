@@ -102,7 +102,7 @@ func run() error {
 	transport.Connect(membership)
 
 	mempool := simplemempool.NewModule(
-		&simplemempool.ModuleConfig{
+		simplemempool.ModuleConfig{
 			Self:   "mempool",
 			Hasher: "hasher",
 		},
@@ -111,12 +111,12 @@ func run() error {
 		},
 	)
 
-	batchdb := fakebatchdb.NewModule(&fakebatchdb.ModuleConfig{
+	batchdb := fakebatchdb.NewModule(fakebatchdb.ModuleConfig{
 		Self: "batchdb",
 	})
 
 	availability, err := multisigcollector.NewModule(
-		&multisigcollector.ModuleConfig{
+		multisigcollector.ModuleConfig{
 			Self:    "availability",
 			Mempool: "mempool",
 			BatchDB: "batchdb",

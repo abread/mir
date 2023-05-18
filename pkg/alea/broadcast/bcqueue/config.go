@@ -16,19 +16,6 @@ type ModuleConfig struct {
 	ThreshCrypto t.ModuleID
 }
 
-// DefaultModuleConfig returns a valid module config with default names for all modules.
-func DefaultModuleConfig(self t.ModuleID, consumer t.ModuleID) *ModuleConfig {
-	return &ModuleConfig{
-		Self:         self,
-		Consumer:     consumer,
-		BatchDB:      "batchdb",
-		Mempool:      "mempool",
-		ReliableNet:  "reliablenet",
-		Hasher:       "hasher",
-		ThreshCrypto: "threshcrypto",
-	}
-}
-
 // ModuleParams sets the values for the parameters of an instance of the protocol.
 // All replicas are expected to use identical module parameters.
 type ModuleParams struct {

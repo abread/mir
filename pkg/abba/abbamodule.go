@@ -25,17 +25,6 @@ type ModuleConfig struct {
 	Hasher       t.ModuleID
 }
 
-// DefaultModuleConfig returns a valid module config with default names for all modules.
-func DefaultModuleConfig(consumer t.ModuleID) *ModuleConfig {
-	return &ModuleConfig{
-		Self:         "abba",
-		Consumer:     consumer,
-		ReliableNet:  "reliablenet",
-		ThreshCrypto: "threshcrypto",
-		Hasher:       "hasher",
-	}
-}
-
 // ModuleParams sets the values for the parameters of an instance of the protocol.
 // All replicas are expected to use identical module parameters.
 type ModuleParams struct {
@@ -70,7 +59,7 @@ type state struct {
 
 const modringSubName t.ModuleID = t.ModuleID("r")
 
-func NewModule(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
+func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
 	if tunables.MaxRoundLookahead <= 0 {
 		return nil, fmt.Errorf("MaxRoundLookahead must be at least 1")
 	}
@@ -85,7 +74,7 @@ func NewModule(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables,
 	return modules.RoutedModule(mc.Self, controller, rounds), nil
 }
 
-func newController(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger, rounds *modring.Module) modules.PassiveModule {
+func newController(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, nodeID t.NodeID, logger logging.Logger, rounds *modring.Module) modules.PassiveModule {
 	m := dsl.NewModule(mc.Self)
 
 	state := &state{
@@ -187,10 +176,10 @@ func newController(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunab
 	return m
 }
 
-func newRoundGenerator(controllerMc *ModuleConfig, controllerParams *ModuleParams, nodeID t.NodeID, logger logging.Logger) func(id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
+func newRoundGenerator(controllerMc ModuleConfig, controllerParams ModuleParams, nodeID t.NodeID, logger logging.Logger) func(id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
 
 	return func(id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
-		mc := &abbaround.ModuleConfig{
+		mc := abbaround.ModuleConfig{
 			Self:         id,
 			Consumer:     controllerMc.Self,
 			ReliableNet:  controllerMc.ReliableNet,
@@ -198,7 +187,7 @@ func newRoundGenerator(controllerMc *ModuleConfig, controllerParams *ModuleParam
 			Hasher:       controllerMc.Hasher,
 		}
 
-		params := &abbaround.ModuleParams{
+		params := abbaround.ModuleParams{
 			InstanceUID: controllerParams.InstanceUID, // TODO: review
 			AllNodes:    controllerParams.AllNodes,
 			RoundNumber: idx,

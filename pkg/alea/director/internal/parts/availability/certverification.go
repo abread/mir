@@ -13,8 +13,8 @@ import (
 // IncludeVerificationOfCertificates registers event handlers for processing availabilitypb.VerifyCert events.
 func IncludeVerificationOfCertificates(
 	m dsl.Module,
-	mc *common.ModuleConfig,
-	params *common.ModuleParams,
+	mc common.ModuleConfig,
+	params common.ModuleParams,
 	nodeID t.NodeID,
 ) {
 	// When receive a request to verify a certificate, check that it is structurally correct and verify the signatures.

@@ -2,6 +2,7 @@ package common
 
 import (
 	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
+	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -36,5 +37,5 @@ type ModuleParams struct {
 
 // State represents the common state accessible to all parts of the module implementation.
 type State struct {
-	TxByID map[string]*trantorpbtypes.Transaction
+	TxByID map[tt.TxID]*trantorpbtypes.Transaction
 }

@@ -13,8 +13,8 @@ import (
 // IncludeCreatingCertificates registers event handlers for processing availabilitypb.RequestCert events.
 func IncludeCreatingCertificates(
 	m dsl.Module,
-	mc *common.ModuleConfig,
-	params *common.ModuleParams,
+	mc common.ModuleConfig,
+	params common.ModuleParams,
 	nodeID t.NodeID,
 ) {
 	// When a batch is requested by the consensus layer, request a batch of transactions from the mempool.

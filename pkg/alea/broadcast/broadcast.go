@@ -22,19 +22,6 @@ type ConfigTemplate struct {
 	ThreshCrypto t.ModuleID
 }
 
-// DefaultModuleConfig returns a valid module config with default names for all modules.
-func DefaultModuleConfig(consumer t.ModuleID) *ConfigTemplate {
-	return &ConfigTemplate{
-		SelfPrefix:   "alea_bc",
-		Consumer:     "alea_dir",
-		BatchDB:      "batchdb",
-		Mempool:      "mempool",
-		ReliableNet:  "reliablenet",
-		Hasher:       "hasher",
-		ThreshCrypto: "threshcrypto",
-	}
-}
-
 // ParamsTemplate sets the values for the parameters of an instance of the protocol.
 // All replicas are expected to use identical module parameters.
 type ParamsTemplate struct {
@@ -42,7 +29,7 @@ type ParamsTemplate struct {
 	AllNodes    []t.NodeID // the list of participating nodes, which must be the same as the set of nodes in the threshcrypto module
 }
 
-func CreateQueues(mcTemplate *ConfigTemplate, paramsTemplate *ParamsTemplate, tunables *bcqueue.ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.Modules, error) {
+func CreateQueues(mcTemplate ConfigTemplate, paramsTemplate ParamsTemplate, tunables bcqueue.ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.Modules, error) {
 	queues := make(map[t.ModuleID]modules.Module, len(paramsTemplate.AllNodes))
 
 	for idx := range paramsTemplate.AllNodes {
@@ -50,7 +37,7 @@ func CreateQueues(mcTemplate *ConfigTemplate, paramsTemplate *ParamsTemplate, tu
 			return nil, fmt.Errorf("queue idx %v is not representable", idx)
 		}
 
-		mc := &bcqueue.ModuleConfig{
+		mc := bcqueue.ModuleConfig{
 			Self:         bcutil.BcQueueModuleID(mcTemplate.SelfPrefix, aleatypes.QueueIdx(idx)),
 			Consumer:     mcTemplate.Consumer,
 			BatchDB:      mcTemplate.BatchDB,
@@ -60,7 +47,7 @@ func CreateQueues(mcTemplate *ConfigTemplate, paramsTemplate *ParamsTemplate, tu
 			ThreshCrypto: mcTemplate.ThreshCrypto,
 		}
 
-		params := &bcqueue.ModuleParams{
+		params := bcqueue.ModuleParams{
 			BcInstanceUID: paramsTemplate.InstanceUID, // TODO: review
 			AllNodes:      paramsTemplate.AllNodes,
 

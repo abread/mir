@@ -65,7 +65,7 @@ type ModuleTunables struct {
 	MaxAbbaRoundLookahead int
 }
 
-func NewModule(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
+func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
 	if tunables.MaxRoundLookahead <= 0 {
 		return nil, fmt.Errorf("MaxRoundLookahead must be at least 1")
 	} else if tunables.MaxAbbaRoundLookahead <= 0 {
@@ -99,7 +99,7 @@ type state struct {
 	undeliveredRounds map[uint64]bool
 }
 
-func newAgController(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger, agRounds *modring.Module) modules.PassiveModule {
+func newAgController(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, nodeID t.NodeID, logger logging.Logger, agRounds *modring.Module) modules.PassiveModule {
 	m := dsl.NewModule(mc.Self)
 	state := state{
 		undeliveredRounds: make(map[uint64]bool, tunables.MaxRoundLookahead),
@@ -199,7 +199,7 @@ func newAgController(mc *ModuleConfig, params *ModuleParams, tunables *ModuleTun
 	return m
 }
 
-func newPastMessageHandler(mc *ModuleConfig) func(pastMessages []*modringpbtypes.PastMessage) (*events.EventList, error) {
+func newPastMessageHandler(mc ModuleConfig) func(pastMessages []*modringpbtypes.PastMessage) (*events.EventList, error) {
 	return func(pastMessages []*modringpbtypes.PastMessage) (*events.EventList, error) {
 		return events.ListOf(
 			agreementpbevents.StaleMsgsRecvd(mc.Self, pastMessages).Pb(),
@@ -207,17 +207,17 @@ func newPastMessageHandler(mc *ModuleConfig) func(pastMessages []*modringpbtypes
 	}
 }
 
-func newAbbaGenerator(agMc *ModuleConfig, agParams *ModuleParams, agTunables *ModuleTunables, nodeID t.NodeID, logger logging.Logger) func(id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
-	params := &abba.ModuleParams{
+func newAbbaGenerator(agMc ModuleConfig, agParams ModuleParams, agTunables ModuleTunables, nodeID t.NodeID, logger logging.Logger) func(id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
+	params := abba.ModuleParams{
 		InstanceUID: agParams.InstanceUID, // TODO: review
 		AllNodes:    agParams.AllNodes,
 	}
-	tunables := &abba.ModuleTunables{
+	tunables := abba.ModuleTunables{
 		MaxRoundLookahead: agTunables.MaxAbbaRoundLookahead,
 	}
 
 	return func(id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
-		mc := &abba.ModuleConfig{
+		mc := abba.ModuleConfig{
 			Self:         id,
 			Consumer:     agMc.Self,
 			ReliableNet:  agMc.ReliableNet,

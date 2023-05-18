@@ -67,34 +67,17 @@ type Params struct {
 	MaxAgreementDelay time.Duration
 }
 
-// DefaultConfig returns a valid module config with default names for all modules.
-func DefaultConfig(consumer t.ModuleID) *Config {
-	return &Config{
-		AleaDirector:  "alea_dir",
-		BcQueuePrefix: "alea_bc",
-		AleaAgreement: "alea_ag",
-		Consumer:      consumer,
-		BatchDB:       "batchdb",
-		Hasher:        "hasher",
-		Mempool:       "mempool",
-		ReliableNet:   "reliablenet",
-		Net:           "net",
-		ThreshCrypto:  "threshcrypto",
-		Timer:         "timer",
-	}
-}
-
 // DefaultParams returns the default configuration for a given membership.
 // There is no guarantee that this configuration ensures good performance or security,
 // but it will pass the CheckParams test.
 // DefaultParams is intended for use during testing and hello-world examples.
 // A proper deployment is expected to craft a custom configuration,
 // for which DefaultParams can serve as a starting point.
-func DefaultParams(membership *trantorpbtypes.Membership) *Params {
+func DefaultParams(membership *trantorpbtypes.Membership) Params {
 	aproxRTT := 220 * time.Microsecond
 	aproxBcDuration := 3*aproxRTT/2 + 20*time.Millisecond
 
-	return &Params{
+	return Params{
 		InstanceUID:              []byte{42},
 		Membership:               membership,
 		MaxConcurrentVcbPerQueue: 32,
@@ -115,7 +98,7 @@ func DefaultParams(membership *trantorpbtypes.Membership) *Params {
 //     see the documentation of the ModuleParams type for details.
 //   - startingChkp: the stable checkpoint defining the initial state of the protocol.
 //   - logger:       Logger the Alea implementation uses to output log messages.
-func New(ownID t.NodeID, config *Config, params *Params, startingChkp *checkpoint.StableCheckpoint, logger logging.Logger) (modules.Modules, error) {
+func New(ownID t.NodeID, config Config, params Params, startingChkp *checkpoint.StableCheckpoint, logger logging.Logger) (modules.Modules, error) {
 	if logger == nil {
 		logger = logging.ConsoleErrorLogger
 	}
@@ -133,7 +116,7 @@ func New(ownID t.NodeID, config *Config, params *Params, startingChkp *checkpoin
 	allNodes := params.AllNodes()
 
 	aleaDir := director.NewModule(
-		&director.ModuleConfig{
+		director.ModuleConfig{
 			Self:          config.AleaDirector,
 			Consumer:      config.Consumer,
 			BcQueuePrefix: config.BcQueuePrefix,
@@ -146,11 +129,11 @@ func New(ownID t.NodeID, config *Config, params *Params, startingChkp *checkpoin
 			ThreshCrypto:  config.ThreshCrypto,
 			Timer:         config.Timer,
 		},
-		&director.ModuleParams{
+		director.ModuleParams{
 			InstanceUID: append(params.InstanceUID, 'd'),
 			AllNodes:    allNodes,
 		},
-		&director.ModuleTunables{
+		director.ModuleTunables{
 			MaxConcurrentVcbPerQueue: params.MaxConcurrentVcbPerQueue,
 			MaxOwnUnagreedBatchCount: params.MaxOwnUnagreedBatchCount,
 			BcEstimateMargin:         params.BcEstimateMargin,
@@ -162,7 +145,7 @@ func New(ownID t.NodeID, config *Config, params *Params, startingChkp *checkpoin
 	)
 
 	aleaBcModules, errAleaBc := broadcast.CreateQueues(
-		&broadcast.ConfigTemplate{
+		broadcast.ConfigTemplate{
 			SelfPrefix:   config.BcQueuePrefix,
 			Consumer:     config.AleaDirector,
 			BatchDB:      config.BatchDB,
@@ -171,11 +154,11 @@ func New(ownID t.NodeID, config *Config, params *Params, startingChkp *checkpoin
 			Hasher:       config.Hasher,
 			ThreshCrypto: config.ThreshCrypto,
 		},
-		&broadcast.ParamsTemplate{
+		broadcast.ParamsTemplate{
 			InstanceUID: append(params.InstanceUID, 'b'),
 			AllNodes:    allNodes,
 		},
-		&bcqueue.ModuleTunables{
+		bcqueue.ModuleTunables{
 			MaxConcurrentVcb: params.MaxConcurrentVcbPerQueue,
 		},
 		ownID,
@@ -186,7 +169,7 @@ func New(ownID t.NodeID, config *Config, params *Params, startingChkp *checkpoin
 	}
 
 	aleaAg, errAleaAg := agreement.NewModule(
-		&agreement.ModuleConfig{
+		agreement.ModuleConfig{
 			Self:         config.AleaAgreement,
 			Consumer:     config.AleaDirector,
 			Hasher:       config.Hasher,
@@ -194,11 +177,11 @@ func New(ownID t.NodeID, config *Config, params *Params, startingChkp *checkpoin
 			Net:          config.Net,
 			ThreshCrypto: config.ThreshCrypto,
 		},
-		&agreement.ModuleParams{
+		agreement.ModuleParams{
 			InstanceUID: append(params.InstanceUID, 'a'),
 			AllNodes:    allNodes,
 		},
-		&agreement.ModuleTunables{
+		agreement.ModuleTunables{
 			MaxRoundLookahead:     params.MaxAgRoundLookahead,
 			MaxAbbaRoundLookahead: params.MaxAbbaRoundLookahead,
 		},

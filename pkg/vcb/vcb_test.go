@@ -173,12 +173,19 @@ func newDeployment(ctx context.Context, conf *TestConfig) (*deploytest.Deploymen
 		if err != nil {
 			return nil, fmt.Errorf("error initializing Mir transport: %w", err)
 		}
-		vcbConfig := DefaultModuleConfig("app")
+		vcbConfig := ModuleConfig{
+			Self:         "vcb",
+			Consumer:     "app",
+			ReliableNet:  "reliablenet",
+			Hasher:       "hasher",
+			ThreshCrypto: "threshcrypto",
+			Mempool:      "mempool",
+		}
 
 		// Use a simple mempool for incoming requests.
 		mempool := simplemempool.NewModule(
-			&simplemempool.ModuleConfig{
-				Self:   "mempool",
+			simplemempool.ModuleConfig{
+				Self:   vcbConfig.Mempool,
 				Hasher: vcbConfig.Hasher,
 			},
 			&simplemempool.ModuleParams{
@@ -198,7 +205,7 @@ func newDeployment(ctx context.Context, conf *TestConfig) (*deploytest.Deploymen
 
 		rnet, err := reliablenet.New(
 			nodeID,
-			&reliablenet.ModuleConfig{
+			reliablenet.ModuleConfig{
 				Self:  vcbConfig.ReliableNet,
 				Net:   "net",
 				Timer: "timer",
