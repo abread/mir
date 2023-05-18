@@ -406,6 +406,7 @@ func newDeployment(ctx context.Context, conf *TestConfig) (*deploytest.Deploymen
 			trantor.Params{
 				Mempool: &simplemempool.ModuleParams{
 					MaxTransactionsInBatch: 10,
+					IncomingTxBucketCount:  1,
 				},
 				Iss: issConfig,
 				Net: libp2p.Params{},
