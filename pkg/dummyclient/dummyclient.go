@@ -86,7 +86,7 @@ func (dc *DummyClient) Connect(ctx context.Context, membership map[t.NodeID]stri
 
 			// Print debug info.
 			if err != nil {
-				dc.logger.Log(logging.LevelDebug, "Failed to connect to node.", "id", id, "addr", addr)
+				dc.logger.Log(logging.LevelWarn, "Failed to connect to node.", "id", id, "addr", addr, "err", err)
 			} else {
 				dc.logger.Log(logging.LevelDebug, "Node connected.", "id", id, "addr", addr)
 			}
@@ -111,23 +111,34 @@ func (dc *DummyClient) SubmitRequest(data []byte) error {
 
 	// Declare variables keeping track of failed send attempts.
 	sendFailures := make([]t.NodeID, 0) // List of nodes to which sending the request failed.
+	lock := sync.Mutex{}
 	var firstSndErr error               // The error produced by the first sending failure.
 
-	// Send the request to all nodes.
+	wg := sync.WaitGroup{}
+	wg.Add(len(dc.clients))
+
+	// Send the transaction to all nodes.
 	for nID, client := range dc.clients {
-		if err := client.Send(reqMsg); err != nil {
+		go func(nID t.NodeID, client requestreceiver.RequestReceiver_ListenClient) {
+			if err := client.Send(reqMsg); err != nil {
+				lock.Lock()
+				// If sending the transaction to a node fails, record that node's ID.
+				sendFailures = append(sendFailures, nID)
 
-			// If sending the request to a node fails, record that node's ID.
-			sendFailures = append(sendFailures, nID)
-
-			// If this is the first failure, save it for later reporting.
-			if firstSndErr == nil {
-				firstSndErr = err
+				// If this is the first failure, save it for later reporting.
+				if firstSndErr == nil {
+					firstSndErr = err
+				}
+				lock.Unlock()
 			}
-		}
+
+			wg.Done()
+		}(nID, client)
 	}
 
-	// Return an error summarizing the failed send attempts or nil if the request was successfully sent to all nodes.
+	wg.Wait()
+
+	// Return an error summarizing the failed send attempts or nil if the transaction was successfully sent to all nodes.
 	if firstSndErr != nil {
 		return fmt.Errorf("failed sending request to nodes: %v first error: %w", sendFailures, firstSndErr)
 	}
