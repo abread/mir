@@ -69,7 +69,6 @@ func testIntegrationWithAlea(t *testing.T) {
 		5: {"Submit 10 fake requests with 4 nodes and libp2p networking",
 			&TestConfig{
 				NumReplicas: 4,
-				NumClients:  1,
 				Transport:   "libp2p",
 				NumFakeTXs:  10,
 				Duration:    20 * time.Second,

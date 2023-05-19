@@ -13,6 +13,7 @@ import (
 	eventpbevents "github.com/filecoin-project/mir/pkg/pb/eventpb/events"
 	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 	"github.com/filecoin-project/mir/pkg/pb/messagepb"
+	messagepbtypes "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
 	"github.com/filecoin-project/mir/pkg/pb/reliablenetpb"
 	rnEvents "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/events"
 	rnpbmsg "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/messages"
@@ -46,7 +47,13 @@ func DefaultModuleParams(allNodes []t.NodeID) *ModuleParams {
 	}
 }
 
-type queuesMap map[t.ModuleID]map[rntypes.MsgID]*transportpb.SendMessage
+type QueuedMessage struct {
+	Msg          *messagepb.Message
+	Destinations []t.NodeID
+	Ts           uint64
+}
+
+type queuesMap map[t.ModuleID]map[rntypes.MsgID]QueuedMessage
 
 type Module struct {
 	config ModuleConfig
@@ -55,6 +62,7 @@ type Module struct {
 	logger logging.Logger
 
 	retransmitLoopScheduled bool
+	iterationCount          uint64
 
 	fresherQueues queuesMap
 	stalerQueues  queuesMap
@@ -74,8 +82,8 @@ func New(ownID t.NodeID, mc ModuleConfig, params *ModuleParams, logger logging.L
 	}, nil
 }
 
-func (m *Module) GetPendingMessages() []*transportpb.SendMessage {
-	pendingMsgs := make([]*transportpb.SendMessage, 0, len(m.fresherQueues)+len(m.stalerQueues))
+func (m *Module) GetPendingMessages() []QueuedMessage {
+	pendingMsgs := make([]QueuedMessage, 0, len(m.fresherQueues)+len(m.stalerQueues))
 	for _, queue := range m.fresherQueues {
 		for _, qmsg := range queue {
 			pendingMsgs = append(pendingMsgs, qmsg)
@@ -174,7 +182,7 @@ func (m *Module) SendAck(msgDestModule t.ModuleID, msgID rntypes.MsgID, msgSourc
 }
 
 func (m *Module) retransmitAll() (*events.EventList, error) {
-	evsOut := &events.EventList{}
+	evsOut := events.EmptyList()
 
 	if len(m.stalerQueues) == 0 {
 		// try to switch queues
@@ -193,19 +201,13 @@ func (m *Module) retransmitAll() (*events.EventList, error) {
 	for moduleID, queue := range m.stalerQueues {
 		if len(queue) == 0 {
 			return evsOut, fmt.Errorf("queue for module %v has no messages", moduleID)
-		} else if len(queue) <= nRemaining {
-			nRemaining -= len(queue)
+		}
 
-			if err := m.retransmitWholeQueue(moduleID, evsOut); err != nil {
-				return nil, err
-			}
-		} else if nRemaining != m.params.MaxRetransmissionBurst {
-			continue // skip this one for now, we'll do it if we have no other choice
-		} else {
-			if err := m.retransmitQueuePartial(moduleID, evsOut, nRemaining); err != nil {
-				return nil, err
-			}
+		if err := m.retransmitQueue(moduleID, evsOut, &nRemaining); err != nil {
+			return nil, err
+		}
 
+		if nRemaining == 0 {
 			break // by definition, we cannot process more messages
 		}
 	}
@@ -216,95 +218,54 @@ func (m *Module) retransmitAll() (*events.EventList, error) {
 		timert.Duration(m.params.RetransmissionLoopInterval),
 	).Pb())
 
+	m.iterationCount++
 	return evsOut, nil
 }
 
-func (m *Module) retransmitQueuePartial(moduleID t.ModuleID, evsOut *events.EventList, nRemaining int) error {
+func (m *Module) retransmitQueue(moduleID t.ModuleID, evsOut *events.EventList, nRemaining *int) error {
 	queue := m.stalerQueues[moduleID]
-	m.ensureQueueExists(m.fresherQueues, moduleID)
-	fresherQueue := m.fresherQueues[moduleID]
 
 	for msgID, qmsg := range queue {
-		if nRemaining == 0 {
+		if *nRemaining == 0 {
 			return nil
 		}
+		if qmsg.Ts <= m.iterationCount {
+			continue
+		}
 
 		if len(qmsg.Destinations) > 0 {
 			// m.logger.Log(logging.LevelDebug, "Retransmitting message", "msg", qmsg)
 			evsOut.PushBack(
-				&eventpb.Event{
-					DestModule: m.config.Net.Pb(),
-					Type: &eventpb.Event_Transport{
-						Transport: &transportpb.Event{
-							Type: &transportpb.Event_SendMessage{
-								SendMessage: qmsg,
-							},
-						},
-					},
-				})
+				transportpbevents.SendMessage(m.config.Net, messagepbtypes.MessageFromPb(qmsg.Msg), qmsg.Destinations).Pb(),
+			)
 		} else {
 			return fmt.Errorf("queued message for module %v has no destinations", moduleID)
 		}
 
-		fresherQueue[msgID] = qmsg
+		m.ensureQueueExists(m.fresherQueues, moduleID)
+		m.fresherQueues[moduleID][msgID] = qmsg
 		delete(queue, msgID)
 
-		nRemaining--
+		*nRemaining--
 	}
 
-	return nil
-}
-
-func (m *Module) retransmitWholeQueue(moduleID t.ModuleID, evsOut *events.EventList) error {
-	queue := m.stalerQueues[moduleID]
-
-	for _, qmsg := range queue {
-		if len(qmsg.Destinations) > 0 {
-			// m.logger.Log(logging.LevelDebug, "Retransmitting message", "msg", qmsg)
-			evsOut.PushBack(
-				&eventpb.Event{
-					DestModule: m.config.Net.Pb(),
-					Type: &eventpb.Event_Transport{
-						Transport: &transportpb.Event{
-							Type: &transportpb.Event_SendMessage{
-								SendMessage: qmsg,
-							},
-						},
-					},
-				})
-
-		} else {
-			return fmt.Errorf("queued message for module %v has no destinations", moduleID)
-		}
+	if len(queue) == 0 {
+		delete(m.stalerQueues, moduleID)
 	}
-
-	m.fresherQueues[moduleID] = queue
-	delete(m.stalerQueues, moduleID)
 
 	return nil
 }
 
 func (m *Module) SendMessage(id rntypes.MsgID, msg *messagepb.Message, destinations []t.NodeID) (*events.EventList, error) {
 	m.ensureQueueExists(m.fresherQueues, t.ModuleID(msg.DestModule))
-	m.fresherQueues[t.ModuleID(msg.DestModule)][id] = &transportpb.SendMessage{
+	m.fresherQueues[t.ModuleID(msg.DestModule)][id] = QueuedMessage{
 		Msg:          msg,
-		Destinations: t.NodeIDSlicePb(destinations),
+		Destinations: destinations,
+		Ts:           m.iterationCount,
 	}
 
 	evsOut := events.ListOf(
-		&eventpb.Event{
-			DestModule: m.config.Net.Pb(),
-			Type: &eventpb.Event_Transport{
-				Transport: &transportpb.Event{
-					Type: &transportpb.Event_SendMessage{
-						SendMessage: &transportpb.SendMessage{
-							Msg:          msg,
-							Destinations: t.NodeIDSlicePb(destinations),
-						},
-					},
-				},
-			},
-		},
+		transportpbevents.SendMessage(m.config.Net, messagepbtypes.MessageFromPb(msg), destinations).Pb(),
 	)
 
 	if !m.retransmitLoopScheduled {
@@ -328,16 +289,18 @@ const initialQueueCapacity = 4
 
 func (m *Module) ensureQueueExists(qm queuesMap, destModule t.ModuleID) {
 	if _, present := qm[destModule]; !present {
-		qm[destModule] = make(map[rntypes.MsgID]*transportpb.SendMessage, initialQueueCapacity)
+		qm[destModule] = make(map[rntypes.MsgID]QueuedMessage, initialQueueCapacity)
 	}
 }
 
 func (m *Module) MarkModuleMsgsRecvd(destModule t.ModuleID, destinations []t.NodeID) (*events.EventList, error) {
 	// optimization for all destinations
 	if len(destinations) == len(m.params.AllNodes) {
-		for id := range m.fresherQueues {
-			if id.IsSubOf(destModule) || id == destModule {
-				delete(m.fresherQueues, id)
+		for _, queues := range []queuesMap{m.fresherQueues, m.stalerQueues} {
+			for id := range queues {
+				if id.IsSubOf(destModule) || id == destModule {
+					delete(m.fresherQueues, id)
+				}
 			}
 		}
 
@@ -351,18 +314,13 @@ func (m *Module) MarkModuleMsgsRecvd(destModule t.ModuleID, destinations []t.Nod
 			}
 
 			for msgID, qmsg := range queue {
-				newDests := sliceutil.Filter(qmsg.Destinations, func(_ int, d string) bool {
-					return !slices.Contains(destinations, t.NodeID(d))
+				qmsg.Destinations = sliceutil.Filter(qmsg.Destinations, func(_ int, d t.NodeID) bool {
+					return !slices.Contains(destinations, d)
 				})
+				queue[msgID] = qmsg
 
-				if len(newDests) == 0 {
+				if len(qmsg.Destinations) == 0 {
 					delete(queue, msgID)
-				} else {
-					// don't modify the underlying message to avoid data races
-					queue[msgID] = &transportpb.SendMessage{
-						Msg:          qmsg.Msg,
-						Destinations: newDests,
-					}
 				}
 			}
 
@@ -379,23 +337,17 @@ func (m *Module) MarkRecvd(destModule t.ModuleID, messageID rntypes.MsgID, desti
 	for _, queues := range []queuesMap{m.fresherQueues, m.stalerQueues} {
 		queue, queueExists := queues[destModule]
 		if !queueExists {
-			// queue doesn't event exist anymore, no pending messages to clean up
-			return &events.EventList{}, nil
+			continue
 		}
 
 		if qmsg, present := queue[messageID]; present {
-			newDests := sliceutil.Filter(qmsg.Destinations, func(_ int, d string) bool {
-				return !slices.Contains(destinations, t.NodeID(d))
+			qmsg.Destinations = sliceutil.Filter(qmsg.Destinations, func(_ int, d t.NodeID) bool {
+				return !slices.Contains(destinations, d)
 			})
+			queue[messageID] = qmsg
 
-			if len(newDests) == 0 {
+			if len(qmsg.Destinations) == 0 {
 				delete(queue, messageID)
-			} else {
-				// don't modify the underlying message to avoid data races
-				queue[messageID] = &transportpb.SendMessage{
-					Msg:          qmsg.Msg,
-					Destinations: newDests,
-				}
 			}
 		}
 

@@ -23,6 +23,12 @@ func EmptyList() *EventList {
 	return &EventList{}
 }
 
+func EmptyListWithCapacity(cap int) *EventList {
+	return &EventList{
+		evs: make([]*eventpb.Event, 0, cap),
+	}
+}
+
 // ListOf returns EventList containing the given elements.
 func ListOf(events ...*eventpb.Event) *EventList {
 	return &EventList{
