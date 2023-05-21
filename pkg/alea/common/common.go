@@ -8,5 +8,5 @@ import (
 )
 
 func FormatAleaBatchID(slot *commontypes.Slot) msct.BatchID {
-	return msct.BatchID(fmt.Sprintf("alea-%d:%d", slot.QueueIdx, slot.QueueSlot))
+	return fmt.Sprintf("alea-%d:%d", slot.QueueIdx, slot.QueueSlot)
 }

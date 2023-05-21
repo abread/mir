@@ -51,7 +51,7 @@ func DefaultModuleParams(allNodes []t.NodeID) *ModuleParams {
 type QueuedMessage struct {
 	Msg          *messagepb.Message
 	Destinations []t.NodeID
-	Ts           uint64
+	Ts           uint64 // nolint:stylecheck
 }
 
 type Module struct {

@@ -104,7 +104,7 @@ func IncludeBatchCreation(
 				}
 
 				for _, txID := range (*bucket)[:txCount] {
-					delete(state.TxByID, string(txID))
+					delete(state.TxByID, txID)
 				}
 
 				*bucket = (*bucket)[txCount:]
