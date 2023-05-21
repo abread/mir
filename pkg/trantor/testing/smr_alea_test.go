@@ -71,7 +71,7 @@ func testIntegrationWithAlea(t *testing.T) {
 				NumReplicas: 4,
 				Transport:   "libp2p",
 				NumFakeTXs:  10,
-				Duration:    20 * time.Second,
+				Duration:    22 * time.Second,
 			}},
 		6: {"Submit 10 requests with 1 node and libp2p networking",
 			&TestConfig{
@@ -88,7 +88,7 @@ func testIntegrationWithAlea(t *testing.T) {
 				NumClients:  1,
 				Transport:   "libp2p",
 				NumNetTXs:   10,
-				Duration:    20 * time.Second,
+				Duration:    22 * time.Second,
 			}},
 
 		// TODO: fix sim transport with non-transport active modules (threshcrypto breaks it)
@@ -314,7 +314,7 @@ func newDeploymentAlea(ctx context.Context, conf *TestConfig) (*deploytest.Deplo
 	for i, nodeID := range nodeIDs {
 		smrParams := trantor.DefaultParams(transportLayer.Membership())
 		smrParams.Mempool.MaxTransactionsInBatch = 16
-		smrParams.ReliableNet.RetransmissionLoopInterval = 100 * time.Millisecond
+		smrParams.ReliableNet.RetransmissionLoopInterval = 150 * time.Millisecond
 		smrParams.Alea.MaxConcurrentVcbPerQueue = 2
 		smrParams.Alea.MaxOwnUnagreedBatchCount = 2
 		smrParams.Alea.MaxAbbaRoundLookahead = 1

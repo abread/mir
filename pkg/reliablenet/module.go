@@ -1,6 +1,7 @@
 package reliablenet
 
 import (
+	"container/list"
 	"fmt"
 	"time"
 
@@ -48,7 +49,6 @@ func DefaultModuleParams(allNodes []t.NodeID) *ModuleParams {
 }
 
 type QueuedMessage struct {
-	ID           rntypes.MsgID
 	Msg          *messagepb.Message
 	Destinations []t.NodeID
 	Ts           uint64
@@ -63,13 +63,13 @@ type Module struct {
 	retransmitLoopScheduled bool
 	iterationCount          uint64
 
-	queue      []*QueuedMessage
-	queueHead  int
-	queueIndex map[t.ModuleID]map[rntypes.MsgID]*QueuedMessage
+	queue          list.List
+	retransmitHead *list.Element
+	queueIndex     map[t.ModuleID]map[rntypes.MsgID]*list.Element
 }
 
 func New(ownID t.NodeID, mc ModuleConfig, params *ModuleParams, logger logging.Logger) (*Module, error) {
-	return &Module{
+	m := &Module{
 		config: mc,
 		params: params,
 		ownID:  ownID,
@@ -77,13 +77,17 @@ func New(ownID t.NodeID, mc ModuleConfig, params *ModuleParams, logger logging.L
 
 		retransmitLoopScheduled: false,
 
-		queueIndex: make(map[t.ModuleID]map[rntypes.MsgID]*QueuedMessage),
-	}, nil
+		queueIndex: make(map[t.ModuleID]map[rntypes.MsgID]*list.Element),
+	}
+
+	m.queue.Init()
+	return m, nil
 }
 
 func (m *Module) GetPendingMessages() []*QueuedMessage {
-	pending := make([]*QueuedMessage, 0, len(m.queue))
-	for _, qmsg := range m.queue {
+	pending := make([]*QueuedMessage, 0, m.queue.Len())
+	for it := m.queue.Front(); it != nil; it = it.Next() {
+		qmsg := it.Value.(*QueuedMessage)
 		if len(qmsg.Destinations) > 0 {
 			pending = append(pending, qmsg)
 		}
@@ -93,7 +97,7 @@ func (m *Module) GetPendingMessages() []*QueuedMessage {
 }
 
 func (m *Module) CountPendingMessages() int {
-	return len(m.GetPendingMessages())
+	return m.queue.Len()
 }
 
 func (m *Module) ApplyEvents(evs *events.EventList) (*events.EventList, error) {
@@ -169,48 +173,37 @@ func (m *Module) SendAck(msgDestModule t.ModuleID, msgID rntypes.MsgID, msgSourc
 func (m *Module) retransmitAll() (*events.EventList, error) {
 	evsOut := events.EmptyList()
 
-	// clean up ack-ed msgs
-	for len(m.queue) > 0 && len(m.queue[0].Destinations) > 0 {
-		m.queue = m.queue[1:]
-		if m.queueHead > 0 {
-			m.queueHead--
-		}
-	}
-
-	if len(m.queue) == 0 {
+	if m.queue.Len() == 0 {
 		m.retransmitLoopScheduled = false
 		return evsOut, nil
 	}
 
 	nRemaining := m.params.MaxRetransmissionBurst
-	if nRemaining > len(m.queue) {
-		nRemaining = len(m.queue)
+	if nRemaining > m.queue.Len() {
+		nRemaining = m.queue.Len()
 	}
 
-	restarted := m.queueHead == 0
-	origQueueHead := m.queueHead
+	restarted := false
 
-	for !restarted && nRemaining > 0 {
-		if m.queue[0].Ts < m.iterationCount {
-			// messages are too recent, bring back queue head
-			m.queueHead = 0
-			nRemaining = origQueueHead // don't retransmit twice
+	for nRemaining > 0 && !restarted {
+		if m.retransmitHead == nil || m.retransmitHead.Value.(*QueuedMessage).Ts < m.iterationCount {
+			// restart queue iteration when end is reached/messages are too recent
+			m.retransmitHead = m.queue.Front()
 			restarted = true
 		}
 
-		for nRemaining > 0 && m.queue[m.queueHead].Ts < m.iterationCount {
-			qmsg := m.queue[m.queueHead]
-			if len(qmsg.Destinations) == 0 {
-				continue
+		for ; m.retransmitHead != nil && nRemaining > 0; m.retransmitHead = m.retransmitHead.Next() {
+			qmsg := m.retransmitHead.Value.(*QueuedMessage)
+
+			if qmsg.Ts < m.iterationCount {
+				break
 			}
 
 			evsOut.PushBack(
 				transportpbevents.SendMessage(m.config.Net, messagepbtypes.MessageFromPb(qmsg.Msg), qmsg.Destinations).Pb(),
 			)
-
-			m.queueHead++
+			nRemaining--
 		}
-
 	}
 
 	evsOut.PushBack(eventpbevents.TimerDelay(
@@ -225,15 +218,14 @@ func (m *Module) retransmitAll() (*events.EventList, error) {
 
 func (m *Module) SendMessage(id rntypes.MsgID, msg *messagepb.Message, destinations []t.NodeID) (*events.EventList, error) {
 	qmsg := &QueuedMessage{
-		ID:           id,
 		Msg:          msg,
 		Destinations: destinations,
 		Ts:           m.iterationCount,
 	}
 
+	listEl := m.queue.PushBack(qmsg)
 	m.ensureSubqueueIndexExists(t.ModuleID(msg.DestModule))
-	m.queueIndex[t.ModuleID(msg.DestModule)][id] = qmsg
-	m.queue = append(m.queue, qmsg)
+	m.queueIndex[t.ModuleID(msg.DestModule)][id] = listEl
 
 	evsOut := events.ListOf(
 		transportpbevents.SendMessage(m.config.Net, messagepbtypes.MessageFromPb(msg), destinations).Pb(),
@@ -260,7 +252,7 @@ const initialSubqueueIndexCapacity = 4
 
 func (m *Module) ensureSubqueueIndexExists(destModule t.ModuleID) {
 	if _, present := m.queueIndex[destModule]; !present {
-		m.queueIndex[destModule] = make(map[rntypes.MsgID]*QueuedMessage, initialSubqueueIndexCapacity)
+		m.queueIndex[destModule] = make(map[rntypes.MsgID]*list.Element, initialSubqueueIndexCapacity)
 	}
 }
 
@@ -272,8 +264,8 @@ func (m *Module) MarkModuleMsgsRecvd(destModule t.ModuleID, destinations []t.Nod
 				continue
 			}
 
-			for _, qmsg := range subqueueIndex {
-				qmsg.Destinations = nil
+			for _, listEl := range subqueueIndex {
+				m.queue.Remove(listEl)
 			}
 			delete(m.queueIndex, id)
 		}
@@ -286,13 +278,14 @@ func (m *Module) MarkModuleMsgsRecvd(destModule t.ModuleID, destinations []t.Nod
 			continue
 		}
 
-		for msgID, qmsg := range subqueueIndex {
+		for msgID, listEl := range subqueueIndex {
+			qmsg := listEl.Value.(*QueuedMessage)
 			qmsg.Destinations = sliceutil.Filter(qmsg.Destinations, func(_ int, d t.NodeID) bool {
 				return !slices.Contains(destinations, d)
 			})
-			subqueueIndex[msgID] = qmsg
 
 			if len(qmsg.Destinations) == 0 {
+				m.queue.Remove(listEl)
 				delete(subqueueIndex, msgID)
 			}
 		}
@@ -307,13 +300,14 @@ func (m *Module) MarkModuleMsgsRecvd(destModule t.ModuleID, destinations []t.Nod
 
 func (m *Module) MarkRecvd(destModule t.ModuleID, messageID rntypes.MsgID, destinations []t.NodeID) (*events.EventList, error) {
 	if subqueueIndex, present := m.queueIndex[destModule]; present {
-		if qmsg, present := subqueueIndex[messageID]; present {
+		if listEl, present := subqueueIndex[messageID]; present {
+			qmsg := listEl.Value.(*QueuedMessage)
 			qmsg.Destinations = sliceutil.Filter(qmsg.Destinations, func(_ int, d t.NodeID) bool {
 				return !slices.Contains(destinations, d)
 			})
-			subqueueIndex[messageID] = qmsg
 
 			if len(qmsg.Destinations) == 0 {
+				m.queue.Remove(listEl)
 				delete(subqueueIndex, messageID)
 			}
 		}
