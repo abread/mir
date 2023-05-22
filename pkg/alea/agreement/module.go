@@ -128,21 +128,23 @@ func newAgController(mc ModuleConfig, params ModuleParams, tunables ModuleTunabl
 
 	dsl.UponStateUpdates(m, func() error {
 		decision, ok := state.undeliveredRounds[state.currentRound]
+		if !ok {
+			return nil
+		}
+
 		for ok {
 			// logger.Log(logging.LevelDebug, "delivering round", "agRound", state.currentRound, "decision", decision)
 
 			agreementpbdsl.Deliver(m, mc.Consumer, state.currentRound, decision)
-
 			state.roundDecisionHistory.Push(decision)
+			delete(state.undeliveredRounds, state.currentRound)
 
 			state.currentRound++
 			decision, ok = state.undeliveredRounds[state.currentRound]
 		}
 
-		if state.currentRound > 0 {
-			if err := agRounds.MarkSubmodulePast(state.currentRound - 1); err != nil {
-				return fmt.Errorf("failed to clean up finished agreement round: %w", err)
-			}
+		if err := agRounds.MarkSubmodulePast(state.currentRound - 1); err != nil {
+			return fmt.Errorf("failed to clean up finished agreement round: %w", err)
 		}
 
 		return nil
