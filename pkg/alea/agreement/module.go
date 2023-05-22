@@ -96,13 +96,49 @@ type state struct {
 
 	currentRound uint64
 
-	undeliveredRounds map[uint64]bool
+	undeliveredRounds []abbaRoundState
 }
+
+func (s *state) storeUndeliveredRound(round uint64, decision bool) {
+	val := AbbaRoundDeliveredTrue
+	if !decision {
+		val = AbbaRoundDeliveredFalse
+	}
+
+	idx := int(round % uint64(len(s.undeliveredRounds)))
+	s.undeliveredRounds[idx] = val
+}
+
+func (s *state) loadUndeliveredRound(round uint64) (bool, bool) {
+	idx := int(round % uint64(len(s.undeliveredRounds)))
+
+	switch s.undeliveredRounds[idx] {
+	case AbbaRoundDeliveredTrue:
+		return true, true
+	case AbbaRoundDeliveredFalse:
+		return false, true
+	default:
+		return false, false
+	}
+}
+
+func (s *state) clearUndeliveredRound(round uint64) {
+	idx := int(round % uint64(len(s.undeliveredRounds)))
+	s.undeliveredRounds[idx] = AbbaRoundUndelivered
+}
+
+type abbaRoundState uint8
+
+const (
+	AbbaRoundUndelivered abbaRoundState = iota
+	AbbaRoundDeliveredFalse
+	AbbaRoundDeliveredTrue
+)
 
 func newAgController(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, nodeID t.NodeID, logger logging.Logger, agRounds *modring.Module) modules.PassiveModule {
 	m := dsl.NewModule(mc.Self)
 	state := state{
-		undeliveredRounds: make(map[uint64]bool, tunables.MaxRoundLookahead),
+		undeliveredRounds: make([]abbaRoundState, tunables.MaxRoundLookahead),
 	}
 
 	agreementpbdsl.UponInputValue(m, func(round uint64, input bool) error {
@@ -122,12 +158,12 @@ func newAgController(mc ModuleConfig, params ModuleParams, tunables ModuleTunabl
 		}
 
 		// queue result for delivery (when ready)
-		state.undeliveredRounds[round] = decision
+		state.storeUndeliveredRound(round, decision)
 		return nil
 	})
 
 	dsl.UponStateUpdates(m, func() error {
-		decision, ok := state.undeliveredRounds[state.currentRound]
+		decision, ok := state.loadUndeliveredRound(state.currentRound)
 		if !ok {
 			return nil
 		}
@@ -137,10 +173,10 @@ func newAgController(mc ModuleConfig, params ModuleParams, tunables ModuleTunabl
 
 			agreementpbdsl.Deliver(m, mc.Consumer, state.currentRound, decision)
 			state.roundDecisionHistory.Push(decision)
-			delete(state.undeliveredRounds, state.currentRound)
+			state.clearUndeliveredRound(state.currentRound)
 
 			state.currentRound++
-			decision, ok = state.undeliveredRounds[state.currentRound]
+			decision, ok = state.loadUndeliveredRound(state.currentRound)
 		}
 
 		if err := agRounds.MarkSubmodulePast(state.currentRound - 1); err != nil {
