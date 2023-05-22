@@ -2,6 +2,7 @@ package eventlog
 
 import (
 	"github.com/filecoin-project/mir/pkg/events"
+	"github.com/filecoin-project/mir/pkg/util/sliceutil"
 )
 
 type repeater struct {
@@ -27,5 +28,13 @@ func (r *repeater) Intercept(events *events.EventList) error {
 }
 
 func MultiInterceptor(interceptors ...Interceptor) Interceptor {
+	interceptors = sliceutil.Filter(interceptors, func(i int, interceptor Interceptor) bool {
+		return interceptor != NilInterceptor
+	})
+
+	if len(interceptors) == 0 {
+		return NilInterceptor
+	}
+
 	return &repeater{interceptors: interceptors}
 }

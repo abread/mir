@@ -17,13 +17,15 @@ type App struct {
 	logging.Logger
 
 	Membership *trantorpbtypes.Membership
+
+	DeliverHook func([]*trantorpbtypes.Transaction) error
 }
 
 func (a *App) ApplyTXs(txs []*trantorpbtypes.Transaction) error {
 	for _, tx := range txs {
 		a.Log(logging.LevelDebug, fmt.Sprintf("Delivered transaction %v from client %v", tx.TxNo, tx.ClientId))
 	}
-	return nil
+	return a.DeliverHook(txs)
 }
 
 func (a *App) NewEpoch(_ tt.EpochNr) (*trantorpbtypes.Membership, error) {

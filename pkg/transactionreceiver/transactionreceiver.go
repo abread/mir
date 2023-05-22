@@ -44,6 +44,9 @@ type TransactionReceiver struct {
 
 	// Logger use for all logging events of this TransactionReceiver
 	logger logging.Logger
+
+	// output listeners set
+	outputListeners sync.Map
 }
 
 // NewTransactionReceiver returns a new initialized transaction receiver.
@@ -108,6 +111,34 @@ func (rr *TransactionReceiver) Listen(srv TransactionReceiver_ListenServer) erro
 
 	// Send gRPC response message and close connection.
 	return srv.SendAndClose(&ByeBye{})
+}
+
+func (rr *TransactionReceiver) NotifyBatchDeliver(deliveredBatch []*trantorpb.Transaction) {
+	rr.outputListeners.Range(func(key, value any) bool {
+		listenerChan := key.(chan []*trantorpb.Transaction)
+		listenerChan <- deliveredBatch
+
+		return true
+	})
+}
+
+func (rr *TransactionReceiver) Output(_ *Empty, srv TransactionReceiver_OutputServer) error {
+	input := make(chan []*trantorpb.Transaction, 16)
+	rr.outputListeners.Store(input, struct{}{})
+	defer rr.outputListeners.Delete(input)
+
+	for {
+		select {
+		case <-srv.Context().Done():
+			return nil
+		case batch := <-input:
+			if err := srv.Send(&DeliveredBatch{
+				Txs: batch,
+			}); err != nil {
+				return err
+			}
+		}
+	}
 }
 
 // Start starts the TransactionReceiver by initializing and starting the internal gRPC server,

@@ -26,6 +26,7 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type TransactionReceiverClient interface {
 	Listen(ctx context.Context, opts ...grpc.CallOption) (TransactionReceiver_ListenClient, error)
+	Output(ctx context.Context, in *Empty, opts ...grpc.CallOption) (TransactionReceiver_OutputClient, error)
 }
 
 type transactionReceiverClient struct {
@@ -70,11 +71,44 @@ func (x *transactionReceiverListenClient) CloseAndRecv() (*ByeBye, error) {
 	return m, nil
 }
 
+func (c *transactionReceiverClient) Output(ctx context.Context, in *Empty, opts ...grpc.CallOption) (TransactionReceiver_OutputClient, error) {
+	stream, err := c.cc.NewStream(ctx, &TransactionReceiver_ServiceDesc.Streams[1], "/receiver.TransactionReceiver/Output", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &transactionReceiverOutputClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type TransactionReceiver_OutputClient interface {
+	Recv() (*DeliveredBatch, error)
+	grpc.ClientStream
+}
+
+type transactionReceiverOutputClient struct {
+	grpc.ClientStream
+}
+
+func (x *transactionReceiverOutputClient) Recv() (*DeliveredBatch, error) {
+	m := new(DeliveredBatch)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // TransactionReceiverServer is the server API for TransactionReceiver service.
 // All implementations must embed UnimplementedTransactionReceiverServer
 // for forward compatibility
 type TransactionReceiverServer interface {
 	Listen(TransactionReceiver_ListenServer) error
+	Output(*Empty, TransactionReceiver_OutputServer) error
 	mustEmbedUnimplementedTransactionReceiverServer()
 }
 
@@ -84,6 +118,9 @@ type UnimplementedTransactionReceiverServer struct {
 
 func (UnimplementedTransactionReceiverServer) Listen(TransactionReceiver_ListenServer) error {
 	return status.Errorf(codes.Unimplemented, "method Listen not implemented")
+}
+func (UnimplementedTransactionReceiverServer) Output(*Empty, TransactionReceiver_OutputServer) error {
+	return status.Errorf(codes.Unimplemented, "method Output not implemented")
 }
 func (UnimplementedTransactionReceiverServer) mustEmbedUnimplementedTransactionReceiverServer() {}
 
@@ -124,6 +161,27 @@ func (x *transactionReceiverListenServer) Recv() (*trantorpb.Transaction, error)
 	return m, nil
 }
 
+func _TransactionReceiver_Output_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(Empty)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(TransactionReceiverServer).Output(m, &transactionReceiverOutputServer{stream})
+}
+
+type TransactionReceiver_OutputServer interface {
+	Send(*DeliveredBatch) error
+	grpc.ServerStream
+}
+
+type transactionReceiverOutputServer struct {
+	grpc.ServerStream
+}
+
+func (x *transactionReceiverOutputServer) Send(m *DeliveredBatch) error {
+	return x.ServerStream.SendMsg(m)
+}
+
 // TransactionReceiver_ServiceDesc is the grpc.ServiceDesc for TransactionReceiver service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -136,6 +194,11 @@ var TransactionReceiver_ServiceDesc = grpc.ServiceDesc{
 			StreamName:    "Listen",
 			Handler:       _TransactionReceiver_Listen_Handler,
 			ClientStreams: true,
+		},
+		{
+			StreamName:    "Output",
+			Handler:       _TransactionReceiver_Output_Handler,
+			ServerStreams: true,
 		},
 	},
 	Metadata: "transactionreceiver/transactionreceiver.proto",

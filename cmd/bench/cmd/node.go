@@ -29,6 +29,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/membership"
 	"github.com/filecoin-project/mir/pkg/net"
 	libp2p2 "github.com/filecoin-project/mir/pkg/net/libp2p"
+	"github.com/filecoin-project/mir/pkg/pb/trantorpb"
 	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	"github.com/filecoin-project/mir/pkg/transactionreceiver"
 	"github.com/filecoin-project/mir/pkg/trantor"
@@ -68,7 +69,7 @@ func init() {
 	nodeCmd.Flags().StringVarP(&cryptoImplType, "cryptoImplType", "c", "pseudo", "type of cryptography to use (acceptable values: pseudo or dummy)")
 }
 
-func issSMRFactory(ctx context.Context, ownID t.NodeID, transport net.Transport, initialMembership *trantorpbtypes.Membership, smrParams trantor.Params, logger logging.Logger) (*trantor.System, error) {
+func issSMRFactory(ctx context.Context, app *App, ownID t.NodeID, transport net.Transport, initialMembership *trantorpbtypes.Membership, smrParams trantor.Params, logger logging.Logger) (*trantor.System, error) {
 	localCS := deploytest.NewLocalCryptoSystem(cryptoImplType, membership.GetIDs(initialMembership), logger)
 	localCrypto, err := localCS.Crypto(ownID)
 	if err != nil {
@@ -86,13 +87,13 @@ func issSMRFactory(ctx context.Context, ownID t.NodeID, transport net.Transport,
 		transport,
 		genesisCheckpoint,
 		localCrypto,
-		&App{Logger: logger, Membership: initialMembership},
+		app,
 		smrParams,
 		logger,
 	)
 }
 
-func aleaSMRFactory(ctx context.Context, ownID t.NodeID, transport net.Transport, initialMembership *trantorpbtypes.Membership, smrParams trantor.Params, logger logging.Logger) (*trantor.System, error) {
+func aleaSMRFactory(ctx context.Context, app *App, ownID t.NodeID, transport net.Transport, initialMembership *trantorpbtypes.Membership, smrParams trantor.Params, logger logging.Logger) (*trantor.System, error) {
 	F := (len(initialMembership.Nodes) - 1) / 3
 	localCS := deploytest.NewLocalThreshCryptoSystem(cryptoImplType, membership.GetIDs(initialMembership), 2*F+1, logger)
 	localCrypto, err := localCS.ThreshCrypto(ownID)
@@ -106,13 +107,13 @@ func aleaSMRFactory(ctx context.Context, ownID t.NodeID, transport net.Transport
 		transport,
 		nil,
 		localCrypto,
-		&App{Logger: logger, Membership: initialMembership},
+		app,
 		smrParams,
 		logger,
 	)
 }
 
-type smrFactory func(ctx context.Context, ownID t.NodeID, transport net.Transport, initialMembership *trantorpbtypes.Membership, smrParams trantor.Params, logger logging.Logger) (*trantor.System, error)
+type smrFactory func(ctx context.Context, app *App, ownID t.NodeID, transport net.Transport, initialMembership *trantorpbtypes.Membership, smrParams trantor.Params, logger logging.Logger) (*trantor.System, error)
 
 var smrFactories = map[string]smrFactory{
 	"iss":  issSMRFactory,
@@ -151,7 +152,7 @@ func runNode(ctx context.Context) error {
 	smrParams.Mempool.MaxTransactionsInBatch = batchSize
 
 	// derived to match mean alea latency with 1tx/s load (directed at the next leader replica) - 2ms
-	smrParams.AdjustSpeed(time.Duration(10879+1467*len(initialMembership.Nodes)) * time.Microsecond)
+	//smrParams.AdjustSpeed(time.Duration(10879+1467*len(initialMembership.Nodes)) * time.Microsecond)
 
 	// Assemble listening address.
 	// In this benchmark code, we always listen on tha address 0.0.0.0.
@@ -175,7 +176,9 @@ func runNode(ctx context.Context) error {
 	// Initialize the libp2p transport subsystem.
 	transport := libp2p2.NewTransport(smrParams.Net, ownID, h, logger)
 
-	benchApp, err := smrFactories[protocol](ctx, ownID, transport, initialMembership, smrParams, logger)
+	app := &App{Logger: logger, Membership: initialMembership}
+
+	benchApp, err := smrFactories[protocol](ctx, app, ownID, transport, initialMembership, smrParams, logger)
 	if err != nil {
 		return fmt.Errorf("could not create bench app: %w", err)
 	}
@@ -220,10 +223,46 @@ func runNode(ctx context.Context) error {
 		tracer = aleaTracer
 	}
 
-	stat := stats.NewStats()
+	var statTracer eventlog.Interceptor = eventlog.NilInterceptor
+	if statFileName != "/dev/null" {
+		stat := stats.NewStats()
+		statTracer = stats.NewStatInterceptor(stat, "app")
+
+		var statFile *os.File
+		if statFileName != "" {
+			statFile, err = os.Create(statFileName)
+			if err != nil {
+				return fmt.Errorf("could not open output file for statistics: %w", err)
+			}
+		} else {
+			statFile = os.Stdout
+		}
+
+		statCSV := csv.NewWriter(statFile)
+		stat.WriteCSVHeader(statCSV)
+
+		go func() {
+			timestamp := time.Now()
+			for {
+				ticker := time.NewTicker(statPeriod)
+				defer ticker.Stop()
+
+				select {
+				case <-ctx.Done():
+					return
+				case ts := <-ticker.C:
+					d := ts.Sub(timestamp)
+					stat.WriteCSVRecordAndReset(statCSV, d)
+					statCSV.Flush()
+					timestamp = ts
+				}
+			}
+		}()
+	}
+
 	interceptor := eventlog.MultiInterceptor(
-		stats.NewStatInterceptor(stat, "app"),
 		//recorder,
+		statTracer,
 		tracer,
 	)
 
@@ -239,6 +278,14 @@ func runNode(ctx context.Context) error {
 	}
 
 	txReceiver := transactionreceiver.NewTransactionReceiver(node, "mempool", logger)
+	app.DeliverHook = func(txs []*trantorpbtypes.Transaction) error {
+		txsPb := make([]*trantorpb.Transaction, len(txs))
+		for i, tx := range txs {
+			txsPb[i] = tx.Pb()
+		}
+		txReceiver.NotifyBatchDeliver(txsPb)
+		return nil
+	}
 	txReceiver.Start(txReceiverListener)
 	defer txReceiver.Stop()
 
@@ -246,37 +293,6 @@ func runNode(ctx context.Context) error {
 		return fmt.Errorf("could not start bench app: %w", err)
 	}
 	defer benchApp.Stop()
-
-	var statFile *os.File
-	if statFileName != "" {
-		statFile, err = os.Create(statFileName)
-		if err != nil {
-			return fmt.Errorf("could not open output file for statistics: %w", err)
-		}
-	} else {
-		statFile = os.Stdout
-	}
-
-	statCSV := csv.NewWriter(statFile)
-	stat.WriteCSVHeader(statCSV)
-
-	go func() {
-		timestamp := time.Now()
-		for {
-			ticker := time.NewTicker(statPeriod)
-			defer ticker.Stop()
-
-			select {
-			case <-ctx.Done():
-				return
-			case ts := <-ticker.C:
-				d := ts.Sub(timestamp)
-				stat.WriteCSVRecordAndReset(statCSV, d)
-				statCSV.Flush()
-				timestamp = ts
-			}
-		}
-	}()
 
 	defer node.Stop()
 	nodeErr := node.Run(ctx)

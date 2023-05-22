@@ -7,20 +7,27 @@ package cmd
 import (
 	"context"
 	"crypto"
+	"encoding/csv"
 	"errors"
 	"fmt"
+	"io"
 	"math/rand"
 	"net"
+	"os"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/spf13/cobra"
 	rateLimiter "golang.org/x/time/rate"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/filecoin-project/mir/pkg/dummyclient"
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/membership"
 	"github.com/filecoin-project/mir/pkg/rrclient"
+	"github.com/filecoin-project/mir/pkg/transactionreceiver"
 	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
@@ -31,6 +38,8 @@ var (
 	burst      int
 	duration   time.Duration
 	clientType string
+	//statFileName string
+	//statPeriod   time.Duration
 
 	clientCmd = &cobra.Command{
 		Use:   "client",
@@ -49,6 +58,8 @@ func init() {
 	clientCmd.Flags().IntVarP(&burst, "burst", "b", 1, "maximum number of transactions in a burst")
 	clientCmd.Flags().DurationVarP(&duration, "duration", "T", 10*time.Second, "benchmarking duration")
 	clientCmd.Flags().StringVarP(&clientType, "type", "t", "dummy", "client type (one of: dummy, rr)")
+	clientCmd.Flags().StringVarP(&statFileName, "statFile", "o", "", "output file for statistics")
+	clientCmd.Flags().DurationVar(&statPeriod, "statPeriod", time.Second, "statistic record period")
 }
 
 type mirClient interface {
@@ -102,6 +113,7 @@ func runClient(ctx context.Context) error {
 		// break // sending to all nodes is more reproducible
 	}
 
+	ctxStats, stopStats := context.WithCancel(ctx)
 	ctx, stop := context.WithCancel(ctx)
 
 	client := clientFactories[clientType](
@@ -112,9 +124,19 @@ func runClient(ctx context.Context) error {
 	client.Connect(ctx, txReceiverAddrs)
 	defer client.Disconnect()
 
+	clock := time.Now()
+	txs := make(map[tt.TxNo]time.Duration, int(rate*statPeriod.Seconds()))
+	txsMutex := &sync.Mutex{}
+	nextTxNo := tt.TxNo(0)
+	if statFileName != "" {
+		go clientStats(ctxStats, txReceiverAddrs, clock, txs, txsMutex)
+	}
+
 	go func() {
 		time.Sleep(duration)
 		stop()
+		time.Sleep(10 * time.Second)
+		stopStats()
 	}()
 
 	limiter := rateLimiter.NewLimiter(rateLimiter.Limit(rate), 1)
@@ -128,8 +150,123 @@ func runClient(ctx context.Context) error {
 		}
 		rand.Read(txBytes) //nolint:gosec
 		logger.Log(logging.LevelDebug, fmt.Sprintf("Submitting transaction #%d", i))
+		if statFileName != "" {
+			txsMutex.Lock()
+			txs[nextTxNo] = time.Since(clock)
+			txsMutex.Unlock()
+			nextTxNo++
+		}
 		if err := client.SubmitTransaction(txBytes); err != nil {
 			return err
 		}
 	}
+}
+
+func clientStats(ctx context.Context, txReceiverAddrs map[t.NodeID]string, clock time.Time, txs map[tt.TxNo]time.Duration, txsMutex *sync.Mutex) {
+	confirmations := make(chan time.Duration, int(rate*statPeriod.Seconds()))
+
+	for _, addr := range txReceiverAddrs {
+		go populateClientStats(ctx, addr, clock, txs, txsMutex, confirmations)
+	}
+
+	ticker := time.NewTicker(statPeriod)
+	defer ticker.Stop()
+
+	latencySum := time.Duration(0)
+	txCount := int64(0)
+
+	var outputFile *os.File
+	if statFileName == "" {
+		outputFile = os.Stdout
+	} else {
+		var err error
+		outputFile, err = os.Create(statFileName)
+		if err != nil {
+			panic(fmt.Errorf("could not open output file for statistics: %w", err))
+		}
+		defer outputFile.Close()
+	}
+
+	writer := csv.NewWriter(outputFile)
+	defer writer.Flush()
+
+	if err := writer.Write([]string{"ts", "nrDelivered", "tps", "avgLatency"}); err != nil {
+		panic(err)
+	}
+	writer.Flush()
+
+	lastWrite := time.Since(clock)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			now := time.Since(clock)
+
+			ts := fmt.Sprintf("%.4f", now.Seconds())
+			nrDelivered := fmt.Sprintf("%v", txCount)
+			tps := fmt.Sprintf("%.5f", float64(txCount)/(float64(now-lastWrite)/float64(time.Second)))
+			avgLatency := fmt.Sprintf("%.5f", float64(latencySum)/float64(txCount)/float64(time.Second))
+
+			if err := writer.Write([]string{ts, nrDelivered, tps, avgLatency}); err != nil {
+				panic(err)
+			}
+			writer.Flush()
+
+			lastWrite = now
+			txCount = 0
+			latencySum = 0
+		case ts := <-confirmations:
+			latencySum += ts
+			txCount++
+		}
+	}
+}
+
+func populateClientStats(ctx context.Context, txReceiverAddr string, clock time.Time, txs map[tt.TxNo]time.Duration, txsMutex *sync.Mutex, confirmations chan<- time.Duration) {
+	maxMessageSize := 1073741824
+	dialOpts := []grpc.DialOption{
+		grpc.WithBlock(),
+		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxMessageSize), grpc.MaxCallSendMsgSize(maxMessageSize)),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	}
+
+	// Set up a gRPC connection.
+	conn, err := grpc.DialContext(ctx, txReceiverAddr, dialOpts...)
+	if err != nil {
+		panic(err)
+	}
+
+	// Register client stub.
+	client := transactionreceiver.NewTransactionReceiverClient(conn)
+
+	outputStream, err := client.Output(ctx, &transactionreceiver.Empty{})
+	if err != nil {
+		panic(err)
+	}
+
+	for {
+		batch, err := outputStream.Recv()
+		if errors.Is(err, io.EOF) {
+			return
+		} else if err != nil {
+			fmt.Printf("error reading replica: %v", err)
+			return
+		}
+
+		txsMutex.Lock()
+		for _, tx := range batch.Txs {
+			if tx.ClientId != id {
+				continue
+			}
+
+			if ts, ok := txs[tt.TxNo(tx.TxNo)]; ok {
+				confirmations <- time.Since(clock) - ts
+			} else {
+				panic(fmt.Errorf("double-deliver for %v", tx))
+			}
+		}
+		txsMutex.Unlock()
+	}
+
 }
