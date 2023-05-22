@@ -4,6 +4,7 @@ package testing
 import (
 	"context"
 	"fmt"
+	"math"
 	"math/rand"
 	"os"
 	"path"
@@ -23,10 +24,12 @@ import (
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
+	"github.com/filecoin-project/mir/pkg/pb/messagepb"
 	"github.com/filecoin-project/mir/pkg/reliablenet"
 	"github.com/filecoin-project/mir/pkg/testsim"
 	"github.com/filecoin-project/mir/pkg/trantor"
 	"github.com/filecoin-project/mir/pkg/trantor/appmodule"
+	"github.com/filecoin-project/mir/pkg/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -114,6 +117,35 @@ func testIntegrationWithAlea(t *testing.T) {
 				NumFakeTXs: 100,
 				Duration:        20 * time.Second,
 			}},*/
+
+		100: {"Submit 10 requests with 4 nodes and libp2p networking, with 1 replica not receiving broadcasts",
+			&TestConfig{
+				Info:        "libp2p 10 requests and 4 nodes, force FILL-GAP/FILLER",
+				NumReplicas: 4,
+				Transport:   "libp2p",
+				NumNetTXs:   10,
+				NumClients:  1,
+				Duration:    7 * time.Second,
+				TransportFilter: func(msg *messagepb.Message, from, to types.NodeID) bool {
+					node0 := types.NewNodeIDFromInt(0)
+					_, isVcb := msg.Type.(*messagepb.Message_Vcb)
+
+					// drop all broadcast messages involving node 0
+					// node 0 will not receive broadcasts, but should be able to deliver
+					if isVcb && to == node0 && from != to && !types.ModuleID(msg.DestModule).IsSubOf("abc-0") {
+						return false
+					}
+					return true
+				},
+				ParamsModifier: func(params *trantor.Params) {
+					// disable retransmissions
+					params.ReliableNet.RetransmissionLoopInterval = math.MaxInt64
+
+					// bring all abba instances into view
+					params.Alea.MaxAbbaRoundLookahead = 10
+					params.Alea.MaxAgRoundLookahead = 10
+				},
+			}},
 	}
 
 	for i, test := range tests {
@@ -311,14 +343,16 @@ func newDeploymentAlea(ctx context.Context, conf *TestConfig) (*deploytest.Deplo
 	nodeModules := make(map[t.NodeID]modules.Modules)
 	fakeApps := make(map[t.NodeID]*deploytest.FakeApp)
 
+	smrParams := trantor.DefaultParams(transportLayer.Membership())
+	smrParams.Mempool.MaxTransactionsInBatch = 16
+	smrParams.ReliableNet.RetransmissionLoopInterval = 150 * time.Millisecond
+	smrParams.Alea.MaxConcurrentVcbPerQueue = 2
+	smrParams.Alea.MaxOwnUnagreedBatchCount = 2
+	smrParams.Alea.MaxAbbaRoundLookahead = 1
+	smrParams.Alea.MaxAgRoundLookahead = 1
+	conf.ParamsModifier(&smrParams)
+
 	for i, nodeID := range nodeIDs {
-		smrParams := trantor.DefaultParams(transportLayer.Membership())
-		smrParams.Mempool.MaxTransactionsInBatch = 16
-		smrParams.ReliableNet.RetransmissionLoopInterval = 150 * time.Millisecond
-		smrParams.Alea.MaxConcurrentVcbPerQueue = 2
-		smrParams.Alea.MaxOwnUnagreedBatchCount = 2
-		smrParams.Alea.MaxAbbaRoundLookahead = 1
-		smrParams.Alea.MaxAgRoundLookahead = 1
 
 		nodeLogger := logging.NewMultiLogger(append(
 			[]logging.Logger{nodeFileLoggers[i]},
@@ -331,6 +365,7 @@ func newDeploymentAlea(ctx context.Context, conf *TestConfig) (*deploytest.Deplo
 		if err != nil {
 			return nil, fmt.Errorf("error initializing Mir transport: %w", err)
 		}
+		transport = deploytest.NewFilteredTransport(transport, nodeID, conf.TransportFilter)
 
 		tc, err := cryptoSystem.ThreshCrypto(nodeID)
 		if err != nil {

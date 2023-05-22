@@ -29,6 +29,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/net/libp2p"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
+	"github.com/filecoin-project/mir/pkg/pb/messagepb"
 	"github.com/filecoin-project/mir/pkg/testsim"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
@@ -64,6 +65,9 @@ type TestConfig struct {
 	Directory           string
 	SlowProposeReplicas map[int]bool
 	Logger              logging.Logger
+
+	TransportFilter func(msg *messagepb.Message, from t.NodeID, to t.NodeID) bool
+	ParamsModifier  func(params *trantor.Params)
 }
 
 func testIntegrationWithISS(t *testing.T) {
