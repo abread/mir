@@ -30,7 +30,6 @@ import (
 	"github.com/filecoin-project/mir/pkg/trantor"
 	"github.com/filecoin-project/mir/pkg/trantor/appmodule"
 	"github.com/filecoin-project/mir/pkg/types"
-	t "github.com/filecoin-project/mir/pkg/types"
 )
 
 // TODO: try to unify with smr_test
@@ -74,7 +73,7 @@ func testIntegrationWithAlea(t *testing.T) {
 				NumReplicas: 4,
 				Transport:   "libp2p",
 				NumFakeTXs:  10,
-				Duration:    22 * time.Second,
+				Duration:    24 * time.Second,
 			}},
 		6: {"Submit 10 requests with 1 node and libp2p networking",
 			&TestConfig{
@@ -91,7 +90,7 @@ func testIntegrationWithAlea(t *testing.T) {
 				NumClients:  1,
 				Transport:   "libp2p",
 				NumNetTXs:   10,
-				Duration:    22 * time.Second,
+				Duration:    24 * time.Second,
 			}},
 
 		// TODO: fix sim transport with non-transport active modules (threshcrypto breaks it)
@@ -125,7 +124,7 @@ func testIntegrationWithAlea(t *testing.T) {
 				Transport:   "libp2p",
 				NumNetTXs:   10,
 				NumClients:  1,
-				Duration:    7 * time.Second,
+				Duration:    10 * time.Second,
 				TransportFilter: func(msg *messagepb.Message, from, to types.NodeID) bool {
 					node0 := types.NewNodeIDFromInt(0)
 					_, isVcb := msg.Type.(*messagepb.Message_Vcb)
@@ -340,8 +339,8 @@ func newDeploymentAlea(ctx context.Context, conf *TestConfig) (*deploytest.Deplo
 	F := (conf.NumReplicas - 1) / 3
 	cryptoSystem := deploytest.NewLocalThreshCryptoSystem("pseudo", nodeIDs, 2*F+1, logging.Decorate(everythingLogger, "ThreshCrypto: "))
 
-	nodeModules := make(map[t.NodeID]modules.Modules)
-	fakeApps := make(map[t.NodeID]*deploytest.FakeApp)
+	nodeModules := make(map[types.NodeID]modules.Modules)
+	fakeApps := make(map[types.NodeID]*deploytest.FakeApp)
 
 	smrParams := trantor.DefaultParams(transportLayer.Membership())
 	smrParams.Mempool.MaxTransactionsInBatch = 16
@@ -350,7 +349,10 @@ func newDeploymentAlea(ctx context.Context, conf *TestConfig) (*deploytest.Deplo
 	smrParams.Alea.MaxOwnUnagreedBatchCount = 2
 	smrParams.Alea.MaxAbbaRoundLookahead = 1
 	smrParams.Alea.MaxAgRoundLookahead = 1
-	conf.ParamsModifier(&smrParams)
+
+	if conf.ParamsModifier != nil {
+		conf.ParamsModifier(&smrParams)
+	}
 
 	for i, nodeID := range nodeIDs {
 
@@ -400,7 +402,7 @@ func newDeploymentAlea(ctx context.Context, conf *TestConfig) (*deploytest.Deplo
 		NumClients:       conf.NumClients,
 		NumFakeTXs:       conf.NumFakeTXs,
 		NumNetTXs:        conf.NumNetTXs,
-		FakeTXDestModule: t.ModuleID("mempool"),
+		FakeTXDestModule: types.ModuleID("mempool"),
 		Directory:        conf.Directory,
 		Logger:           everythingLogger,
 		FakeApps:         fakeApps,
