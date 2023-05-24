@@ -32,6 +32,7 @@ import (
 var (
 	//txSize     int
 	latclientTxCount int
+	cooldown         time.Duration
 	//clientType string
 	//statFileName string
 	//statPeriod   time.Duration
@@ -50,6 +51,7 @@ func init() {
 	rootCmd.AddCommand(latclientCmd)
 	latclientCmd.Flags().IntVarP(&txSize, "txSize", "s", 256, "size of each transaction in bytes")
 	latclientCmd.Flags().IntVarP(&latclientTxCount, "count", "c", 128, "number of txs to send and wait for reply")
+	latclientCmd.Flags().DurationVarP(&cooldown, "cooldown", "C", 200*time.Millisecond, "cooldown between transactions")
 	latclientCmd.Flags().StringVarP(&clientType, "type", "t", "dummy", "client type (one of: dummy, rr)")
 	latclientCmd.Flags().StringVarP(&statFileName, "statFile", "o", "", "output file for statistics")
 	latclientCmd.Flags().DurationVar(&statPeriod, "statPeriod", time.Second, "statistic record period")
@@ -175,6 +177,7 @@ func runLatClient(ctx context.Context) error {
 		}
 		writer.Flush()
 
+		time.Sleep(cooldown)
 		atomic.AddUint64(&currentTxNo, 1)
 	}
 
