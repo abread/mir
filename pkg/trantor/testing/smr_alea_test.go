@@ -73,7 +73,7 @@ func testIntegrationWithAlea(t *testing.T) {
 				NumReplicas: 4,
 				Transport:   "libp2p",
 				NumFakeTXs:  10,
-				Duration:    24 * time.Second,
+				Duration:    25 * time.Second,
 			}},
 		6: {"Submit 10 requests with 1 node and libp2p networking",
 			&TestConfig{
@@ -90,7 +90,7 @@ func testIntegrationWithAlea(t *testing.T) {
 				NumClients:  1,
 				Transport:   "libp2p",
 				NumNetTXs:   10,
-				Duration:    24 * time.Second,
+				Duration:    25 * time.Second,
 			}},
 
 		// TODO: fix sim transport with non-transport active modules (threshcrypto breaks it)
