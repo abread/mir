@@ -113,7 +113,7 @@ func New(mc ModuleConfig, params ModuleParams, nodeID t.NodeID, logger logging.L
 			return nil // did not perform the initial INIT broadcast or has already terminated
 		}
 
-		for _, est := range []bool{false, true} {
+		for _, est := range []bool{true, false} {
 			// 5. upon receiving weak support for INIT(r, v), add v to values and broadcast INIT(r, v)
 			if !state.initWeakSupportReachedForValue.Get(est) && state.initRecvdEstimateCounts.Get(est) >= params.weakSupportThresh() {
 				// logger.Log(logging.LevelDebug, "received weak support for INIT(est)", "est", est)
