@@ -39,3 +39,8 @@ issues:
   exclude-rules:
     - path: .*\.mir\.go
       linters: [revive, stylecheck, goimports, gocyclo]
+
+    # SA1019 is applicable to aggregate signatures (which are not used here), not threshold signatures 
+    - path: pkg/threshcrypto/tbls.go
+      linters: [staticcheck]
+      text: SA1019

@@ -48,7 +48,7 @@ func (c *threshEventProcessor) ApplyEvent(ctx context.Context, event *eventpb.Ev
 }
 
 // apply a thresholdcryptopb.Event
-func (c *threshEventProcessor) applyTCEvent(ctx context.Context, event *threshcryptopb.Event) *events.EventList {
+func (c *threshEventProcessor) applyTCEvent(_ context.Context, event *threshcryptopb.Event) *events.EventList {
 	switch e := event.Type.(type) {
 	case *threshcryptopb.Event_SignShare:
 		// Compute signature share

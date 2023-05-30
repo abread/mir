@@ -17,7 +17,7 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 	m := dsl.NewModule(mc.Self)
 
 	general.Include(m, mc, params, tunables, nodeID, logger)
-	availability.Include(m, mc, params, tunables, nodeID, logger)
+	availability.Include(m, mc, params, tunables, logger)
 
 	return m
 }

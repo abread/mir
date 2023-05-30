@@ -69,13 +69,14 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 		Generator: newRoundGenerator(mc, params, nodeID, logger),
 	}, logging.Decorate(logger, "Modring controller: "))
 
-	controller := newController(mc, params, tunables, nodeID, logger, rounds)
+	controller := newController(mc, params, logger, rounds)
 
 	return modules.RoutedModule(mc.Self, controller, rounds), nil
 }
 
-func newController(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, nodeID t.NodeID, logger logging.Logger, rounds *modring.Module) modules.PassiveModule {
+func newController(mc ModuleConfig, params ModuleParams, logger logging.Logger, rounds *modring.Module) modules.PassiveModule {
 	m := dsl.NewModule(mc.Self)
+	_ = logger // silence warnings about unused variables
 
 	state := &state{
 		phase:       phaseAwaitingInput,

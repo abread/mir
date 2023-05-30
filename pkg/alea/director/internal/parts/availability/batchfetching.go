@@ -54,9 +54,10 @@ func IncludeBatchFetching(
 	mc director.ModuleConfig,
 	params director.ModuleParams,
 	tunables director.ModuleTunables,
-	nodeID t.NodeID,
 	logger logging.Logger,
 ) {
+	_ = logger // silence warnings
+
 	state := batchFetchingState{
 		RequestsState: make(map[commontypes.Slot]*RequestsState),
 	}

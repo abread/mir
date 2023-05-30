@@ -143,7 +143,7 @@ func (at *AleaTracer) Intercept(evs *events.EventList) error {
 	return nil
 }
 
-func (at *AleaTracer) interceptOne(event *eventpb.Event) error {
+func (at *AleaTracer) interceptOne(event *eventpb.Event) error { // nolint: gocognit,gocyclo
 	ts := time.Duration(event.LocalTs)
 
 	// consider all non-messagereceived events as module initialization

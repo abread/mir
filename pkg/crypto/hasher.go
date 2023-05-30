@@ -37,7 +37,7 @@ type hasherEventProc struct {
 	hashImpl HashImpl
 }
 
-func (hasher *hasherEventProc) ApplyEvent(ctx context.Context, event *eventpb.Event) *events.EventList {
+func (hasher *hasherEventProc) ApplyEvent(_ context.Context, event *eventpb.Event) *events.EventList {
 	switch e := event.Type.(type) {
 	case *eventpb.Event_Init:
 		// no actions on init

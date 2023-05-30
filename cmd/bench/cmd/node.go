@@ -95,7 +95,7 @@ func issSMRFactory(ctx context.Context, app *App, ownID t.NodeID, transport net.
 
 func aleaSMRFactory(ctx context.Context, app *App, ownID t.NodeID, transport net.Transport, initialMembership *trantorpbtypes.Membership, smrParams trantor.Params, logger logging.Logger) (*trantor.System, error) {
 	F := (len(initialMembership.Nodes) - 1) / 3
-	localCS := deploytest.NewLocalThreshCryptoSystem(cryptoImplType, membership.GetIDs(initialMembership), 2*F+1, logger)
+	localCS := deploytest.NewLocalThreshCryptoSystem(cryptoImplType, membership.GetIDs(initialMembership), 2*F+1)
 	localCrypto, err := localCS.ThreshCrypto(ownID)
 	if err != nil {
 		return nil, fmt.Errorf("could not create a local threshcrypto system: %w", err)

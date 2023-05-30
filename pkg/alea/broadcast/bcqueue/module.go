@@ -36,12 +36,12 @@ func New(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, nodeID t
 		Generator: newVcbGenerator(mc, params, nodeID, logger),
 	}, logging.Decorate(logger, "Modring controller: "))
 
-	controller := newQueueController(mc, params, tunables, nodeID, logger, slots)
+	controller := newQueueController(mc, params, logger, slots)
 
 	return modules.RoutedModule(mc.Self, controller, slots), nil
 }
 
-func newQueueController(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, nodeID t.NodeID, logger logging.Logger, slots *modring.Module) modules.PassiveModule {
+func newQueueController(mc ModuleConfig, params ModuleParams, logger logging.Logger, slots *modring.Module) modules.PassiveModule {
 	m := dsl.NewModule(mc.Self)
 
 	bcqueuedsl.UponInputValue(m, func(queueSlot aleatypes.QueueSlot, txs []*trantorpbtypes.Transaction) error {
@@ -76,7 +76,7 @@ func newQueueController(mc ModuleConfig, params ModuleParams, tunables ModuleTun
 	})
 
 	batchdbdsl.UponBatchStored(m, func(slot *commontypes.Slot) error {
-		// logger.Log(logging.LevelDebug, "delivering broadcast", "queueSlot", slot.QueueSlot)
+		logger.Log(logging.LevelDebug, "delivering broadcast", "queueSlot", slot.QueueSlot)
 		bcqueuedsl.Deliver(m, mc.Consumer, slot)
 		return nil
 	})

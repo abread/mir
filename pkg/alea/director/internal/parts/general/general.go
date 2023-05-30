@@ -126,7 +126,7 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 		}
 
 		// next round won't start until we say so, and previous rounds already delivered, so we can deliver immediately
-		// logger.Log(logging.LevelDebug, "delivering cert", "agreementRound", round, "queueIdx", slot.QueueIdx, "queueSlot", slot.QueueSlot)
+		logger.Log(logging.LevelDebug, "delivering cert", "agreementRound", round, "queueIdx", slot.QueueIdx, "queueSlot", slot.QueueSlot)
 		isspbdsl.DeliverCert(m, mc.Consumer, tt.SeqNr(round), &availabilitypbtypes.Cert{
 			Type: &availabilitypbtypes.Cert_Alea{
 				Alea: &aleapbtypes.Cert{

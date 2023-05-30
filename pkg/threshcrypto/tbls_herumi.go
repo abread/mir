@@ -153,7 +153,7 @@ func (inst *HerumiTBLSInst) VerifyFull(msg [][]byte, sigFull []byte) error {
 
 // Recover recovers a full signature from a set of (previously validated) shares, that are known to be from
 // distinct nodes.
-func (inst *HerumiTBLSInst) Recover(msg [][]byte, sigShares [][]byte) ([]byte, error) {
+func (inst *HerumiTBLSInst) Recover(_ [][]byte, sigShares [][]byte) ([]byte, error) {
 	fullSig := bls.Sign{}
 
 	if len(sigShares) < inst.T {

@@ -337,7 +337,7 @@ func newDeploymentAlea(ctx context.Context, conf *TestConfig) (*deploytest.Deplo
 	}
 
 	F := (conf.NumReplicas - 1) / 3
-	cryptoSystem := deploytest.NewLocalThreshCryptoSystem("pseudo", nodeIDs, 2*F+1, logging.Decorate(everythingLogger, "ThreshCrypto: "))
+	cryptoSystem := deploytest.NewLocalThreshCryptoSystem("pseudo", nodeIDs, 2*F+1)
 
 	nodeModules := make(map[types.NodeID]modules.Modules)
 	fakeApps := make(map[types.NodeID]*deploytest.FakeApp)

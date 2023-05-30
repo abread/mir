@@ -36,7 +36,7 @@ type ModuleConfig struct {
 }
 
 // DefaultModuleConfig returns a valid module config with default names for all modules.
-func DefaultModuleConfig(consumer t.ModuleID) *ModuleConfig {
+func DefaultModuleConfig() *ModuleConfig {
 	return &ModuleConfig{
 		Self:         "alea_ag",
 		Consumer:     "alea_dir",
@@ -82,7 +82,7 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 		logging.Decorate(logger, "Modring controller: "),
 	)
 
-	controller := newAgController(mc, params, tunables, nodeID, logger, agRounds)
+	controller := newAgController(mc, tunables, logger, agRounds)
 
 	return modules.RoutedModule(mc.Self, controller, agRounds), nil
 }
@@ -135,8 +135,11 @@ const (
 	AbbaRoundDeliveredTrue
 )
 
-func newAgController(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, nodeID t.NodeID, logger logging.Logger, agRounds *modring.Module) modules.PassiveModule {
+func newAgController(mc ModuleConfig, tunables ModuleTunables, logger logging.Logger, agRounds *modring.Module) modules.PassiveModule {
+	_ = logger // silence warnings
+
 	m := dsl.NewModule(mc.Self)
+
 	state := state{
 		undeliveredRounds: make([]abbaRoundState, tunables.MaxRoundLookahead),
 	}

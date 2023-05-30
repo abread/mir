@@ -76,7 +76,7 @@ func NewModule(mc ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger lo
 	state.payload.init(m, mc, params)
 
 	if nodeID == params.Leader {
-		setupVcbLeader(m, mc, params, nodeID, logger, state)
+		setupVcbLeader(m, mc, params, logger, state)
 	} else {
 		vcbdsl.UponInputValue(m, func(txs []*trantorpbtypes.Transaction) error {
 			return fmt.Errorf("vcb input provided for non-leader")
@@ -193,7 +193,7 @@ const (
 	VcbLeaderPhaseDone
 )
 
-func setupVcbLeader(m dsl.Module, mc ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging.Logger, state *state) {
+func setupVcbLeader(m dsl.Module, mc ModuleConfig, params *ModuleParams, logger logging.Logger, state *state) {
 	leaderState := &leaderState{
 		phase: VcbLeaderPhaseAwaitingInput,
 

@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	mirCrypto "github.com/filecoin-project/mir/pkg/crypto"
-	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/threshcrypto"
 	t "github.com/filecoin-project/mir/pkg/types"
@@ -24,7 +23,7 @@ type localPseudoThreshCryptoSystem struct {
 
 // NewLocalCryptoSystem creates an instance of LocalCryptoSystem suitable for tests.
 // In the current implementation, cryptoType can only be "pseudo".
-func NewLocalThreshCryptoSystem(cryptoType string, nodeIDs []t.NodeID, threshold int, logger logging.Logger) LocalThreshCryptoSystem {
+func NewLocalThreshCryptoSystem(cryptoType string, nodeIDs []t.NodeID, threshold int) LocalThreshCryptoSystem {
 	return &localPseudoThreshCryptoSystem{cryptoType, nodeIDs, threshold}
 }
 

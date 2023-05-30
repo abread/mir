@@ -6,6 +6,6 @@ var NilInterceptor = &nilInterceptor{}
 
 type nilInterceptor struct{}
 
-func (i *nilInterceptor) Intercept(evs *events.EventList) error {
+func (i *nilInterceptor) Intercept(_ *events.EventList) error {
 	return nil
 }
