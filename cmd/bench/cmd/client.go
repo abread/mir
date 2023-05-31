@@ -200,6 +200,9 @@ func clientStats(ctx context.Context, txReceiverAddrs map[t.NodeID]string, clock
 		select {
 		case <-ctx.Done():
 			return
+		case ts := <-confirmations:
+			latencySum += ts
+			txCount++
 		case <-ticker.C:
 			now := time.Since(clock)
 
@@ -216,9 +219,6 @@ func clientStats(ctx context.Context, txReceiverAddrs map[t.NodeID]string, clock
 			lastWrite = now
 			txCount = 0
 			latencySum = 0
-		case ts := <-confirmations:
-			latencySum += ts
-			txCount++
 		}
 	}
 }
@@ -262,8 +262,7 @@ func populateClientStats(ctx context.Context, txReceiverAddr string, clock time.
 
 			if ts, ok := txs[tt.TxNo(tx.TxNo)]; ok {
 				confirmations <- time.Since(clock) - ts
-			} else {
-				panic(fmt.Errorf("double-deliver for %v", tx))
+				delete(txs, tt.TxNo(tx.TxNo))
 			}
 		}
 		txsMutex.Unlock()
