@@ -15,32 +15,6 @@ func init() {
 	if err := bls.Init(bls.BLS12_381); err != nil {
 		panic(fmt.Errorf("failed to init herumi bls lib: %w", err))
 	}
-
-	sk := new(bls.SecretKey)
-	sk.SetByCSPRNG()
-
-	pk, err := sk.GetSafePublicKey()
-	if err != nil {
-		panic(err)
-	}
-
-	msg := []byte{1, 2, 3, 42}
-
-	sig := sk.SignByte(msg)
-
-	if !sig.VerifyByte(pk, msg) {
-		panic("herumi broken")
-	}
-
-	ser := sig.Serialize()
-	sig2 := new(bls.Sign)
-	if err := sig2.Deserialize(ser); err != nil {
-		panic(err)
-	}
-
-	if !sig2.VerifyByte(pk, msg) {
-		panic("herumi broken")
-	}
 }
 
 // HerumiTBLSInst an instance of a BLS-based (t, len(members))-threshold signature scheme
