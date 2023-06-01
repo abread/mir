@@ -60,9 +60,11 @@ func (conn *selfConnection) Send(msg *messagepb.Message) error {
 	case conn.msgBuffer <- msg:
 		return nil
 	default:
+		go func() {
+			conn.msgBuffer <- msg
+		}()
 		return fmt.Errorf("send buffer full")
 	}
-
 }
 
 // Close makes the connection stop processing messages. No messages will be delivered by it after Close returns.

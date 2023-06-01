@@ -73,7 +73,11 @@ func (conn *remoteConnection) Send(msg *messagepb.Message) error {
 	case conn.msgBuffer <- msg:
 		return nil
 	default:
-		return fmt.Errorf("send buffer full")
+		// send in background
+		go func() {
+			conn.msgBuffer <- msg
+		}()
+		return fmt.Errorf("warning: send buffer full")
 	}
 }
 
