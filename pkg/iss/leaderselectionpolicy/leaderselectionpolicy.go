@@ -1,11 +1,12 @@
 package leaderselectionpolicy
 
 import (
-	"fmt"
 	"sync"
 
 	"github.com/fxamacker/cbor/v2"
+	es "github.com/go-errors/errors"
 
+	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	"github.com/filecoin-project/mir/pkg/serializing"
 	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 	t "github.com/filecoin-project/mir/pkg/types"
@@ -43,9 +44,8 @@ type LeaderSelectionPolicy interface {
 	Suspect(e tt.EpochNr, node t.NodeID)
 
 	// Reconfigure returns a new LeaderSelectionPolicy based on the state of the current one,
-	// but using a new configuration.
-	// TODO: Use the whole configuration, not just the node IDs.
-	Reconfigure(nodeIDs []t.NodeID) LeaderSelectionPolicy
+	// but using a new membership.
+	Reconfigure(membership *trantorpbtypes.Membership) LeaderSelectionPolicy
 
 	Bytes() ([]byte, error)
 }
@@ -59,7 +59,7 @@ func LeaderPolicyFromBytes(bytes []byte) (LeaderSelectionPolicy, error) {
 	case Blacklist:
 		return BlacklistLeaderPolicyFromBytes(bytes[8:])
 	default:
-		return nil, fmt.Errorf("invalid LeaderSelectionPolicy type: %v", leaderPolicyType)
+		return nil, es.Errorf("invalid LeaderSelectionPolicy type: %v", leaderPolicyType)
 	}
 
 }

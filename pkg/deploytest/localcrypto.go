@@ -1,7 +1,7 @@
 package deploytest
 
 import (
-	"fmt"
+	es "github.com/go-errors/errors"
 
 	mirCrypto "github.com/filecoin-project/mir/pkg/crypto"
 	"github.com/filecoin-project/mir/pkg/logging"
@@ -33,7 +33,7 @@ func (cs *localPseudoCryptoSystem) Crypto(id t.NodeID) (mirCrypto.Crypto, error)
 			DummySig: []byte("a valid signature"),
 		}, nil
 	} else {
-		return nil, fmt.Errorf("unknown local crypto system type: %v (must be pseudo or dummy)", cs.cryptoType)
+		return nil, es.Errorf("unknown local crypto system type: %v (must be pseudo or dummy)", cs.cryptoType)
 	}
 }
 

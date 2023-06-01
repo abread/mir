@@ -1,10 +1,11 @@
 package general
 
 import (
-	"fmt"
 	"time"
 
 	"golang.org/x/exp/slices"
+
+	es "github.com/go-errors/errors"
 
 	"github.com/filecoin-project/mir/pkg/alea/aleatypes"
 	"github.com/filecoin-project/mir/pkg/alea/broadcast/bcutil"
@@ -194,7 +195,7 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 	})
 	mempooldsl.UponNewBatch(m, func(txIDs []tt.TxID, txs []*trantorpbtypes.Transaction, ctx *struct{}) error {
 		if len(txs) == 0 {
-			return fmt.Errorf("empty batch. did you misconfigure your mempool?")
+			return es.Errorf("empty batch. did you misconfigure your mempool?")
 		}
 
 		// logger.Log(logging.LevelDebug, "new batch", "nTransactions", len(txs))

@@ -19,6 +19,7 @@ import (
 	"os"
 	"strings"
 
+	es "github.com/go-errors/errors"
 	"github.com/multiformats/go-multiaddr"
 
 	"github.com/filecoin-project/mir/pkg/checkpoint"
@@ -118,7 +119,7 @@ func (chat *ChatApp) applyConfigTX(configMsg string) {
 			fmt.Printf("Adding node failed. Invalid address: %v\n", err)
 		}
 		tmpMembership, err := membership.DummyMultiAddrs(&trantorpbtypes.Membership{ // nolint:govet
-			map[t.NodeID]*trantorpbtypes.NodeIdentity{nodeID: {nodeID, netAddr.String(), nil, 0}}, // nolint:govet
+			map[t.NodeID]*trantorpbtypes.NodeIdentity{nodeID: {nodeID, netAddr.String(), nil, 1}}, // nolint:govet
 		})
 		if err != nil {
 			fmt.Printf("Adding node failed. Could not construct dummy multiaddress: %v\n", err)
@@ -130,7 +131,7 @@ func (chat *ChatApp) applyConfigTX(configMsg string) {
 		if _, ok := chat.newMembership.Nodes[nodeID]; ok {
 			fmt.Printf("Adding node failed. Node already present in membership: %v\n", nodeID)
 		} else {
-			chat.newMembership.Nodes[nodeID] = &trantorpbtypes.NodeIdentity{nodeID, nodeAddr, nil, 0} // nolint:govet
+			chat.newMembership.Nodes[nodeID] = &trantorpbtypes.NodeIdentity{nodeID, nodeAddr, nil, 1} // nolint:govet
 		}
 	case "remove-node":
 		// Parse out the node ID and remove it from the next membership.
@@ -213,7 +214,7 @@ func (chat *ChatApp) Checkpoint(chkp *checkpoint.StableCheckpoint) (retErr error
 
 	// Create checkpoint directory if it does not exist.
 	if err := os.MkdirAll(chat.chkpDir, 0700); err != nil {
-		return fmt.Errorf("failed to create checkpoint directory: %w", err)
+		return es.Errorf("failed to create checkpoint directory: %w", err)
 	}
 
 	// Name the file according to the epoch number and sequence number.
@@ -222,7 +223,7 @@ func (chat *ChatApp) Checkpoint(chkp *checkpoint.StableCheckpoint) (retErr error
 	// Create checkpoint file.
 	f, err := os.Create(fileName)
 	if err != nil {
-		return fmt.Errorf("failed to create checkpoint file: %w", err)
+		return es.Errorf("failed to create checkpoint file: %w", err)
 	}
 
 	// Defer closing file.
@@ -233,12 +234,12 @@ func (chat *ChatApp) Checkpoint(chkp *checkpoint.StableCheckpoint) (retErr error
 	// Serialize checkpoint data.
 	data, err := chkp.Serialize()
 	if err != nil {
-		return fmt.Errorf("failed to serialize checkpoint: %w", err)
+		return es.Errorf("failed to serialize checkpoint: %w", err)
 	}
 
 	// Write checkpoint data to file.
 	if _, err := f.Write(data); err != nil {
-		return fmt.Errorf("failed to write checkpoint data to file: %w", err)
+		return es.Errorf("failed to write checkpoint data to file: %w", err)
 	}
 
 	fmt.Printf("Wrote checkpoint to file: %s\n", fileName)

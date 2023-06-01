@@ -28,6 +28,8 @@ require (
 	github.com/drand/kyber-bls12381 v0.2.3
 	github.com/fxamacker/cbor/v2 v2.4.0
 	github.com/herumi/bls-eth-go-binary v1.29.1
+	github.com/go-errors/errors v1.4.2
+	github.com/golang/protobuf v1.5.2
 	github.com/ipfs/go-cid v0.2.0
 	github.com/libp2p/go-yamux/v3 v3.1.2
 	github.com/mattn/go-sqlite3 v1.14.16

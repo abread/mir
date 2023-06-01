@@ -7,10 +7,12 @@ import (
 	"strconv"
 	"strings"
 
+	es "github.com/go-errors/errors"
 	"github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
 
 	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
+	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 	libp2ptools "github.com/filecoin-project/mir/pkg/util/libp2p"
 	"github.com/filecoin-project/mir/pkg/util/maputil"
@@ -21,7 +23,7 @@ func FromFileName(fileName string) (*trantorpbtypes.Membership, error) {
 	// Open file.
 	f, err := os.Open(fileName)
 	if err != nil {
-		return nil, fmt.Errorf("could not open file: %w", err)
+		return nil, es.Errorf("could not open file: %w", err)
 	}
 
 	// Schedule closing file.
@@ -46,22 +48,22 @@ func FromFile(f *os.File) (*trantorpbtypes.Membership, error) {
 	//         {
 	//             "addr": "t1dgw4345grpw53zdhu75dc6jj4qhrh4zoyrtq6di",
 	//             "net_addr": "/ip4/172.31.39.78/tcp/43077/p2p/12D3KooWNzTunrQtcoo4SLWNdQ4EdFWSZtah6mgU44Q5XWM61aan",
-	//             "weight": "0"
+	//             "weight": "1"
 	//         },
 	//         {
 	//             "addr": "t1a5gxsoogaofa5nzfdh66l6uynx4m6m4fiqvcx6y",
 	//             "net_addr": "/ip4/172.31.33.169/tcp/38257/p2p/12D3KooWABvxn3CHjz9r5TYGXGDqm8549VEuAyFpbkH8xWkNLSmr",
-	//             "weight": "0"
+	//             "weight": "1"
 	//         },
 	//         {
 	//             "addr": "t1q4j6esoqvfckm7zgqfjynuytjanbhirnbwfrsty",
 	//             "net_addr": "/ip4/172.31.42.15/tcp/44407/p2p/12D3KooWGdQGu1utYP6KD1Cq4iXTLV6hbZa8yQN34zwuHNP5YbCi",
-	//             "weight": "0"
+	//             "weight": "1"
 	//         },
 	//         {
 	//             "addr": "t16biatgyushsfcidabfy2lm5wo22ppe6r7ddir6y",
 	//             "net_addr": "/ip4/172.31.47.117/tcp/34355/p2p/12D3KooWEtfTyoWW7pFLsErAb6jPiQQCC3y3junHtLn9jYnFHei8",
-	//             "weight": "0"
+	//             "weight": "1"
 	//         }
 	//     ]
 	// }
@@ -89,7 +91,7 @@ func FromFile(f *os.File) (*trantorpbtypes.Membership, error) {
 			t.NodeID(identity.ID),
 			identity.Addr,
 			nil,
-			identity.Weight,
+			tt.VoteWeight(identity.Weight),
 		}
 	}
 
@@ -126,7 +128,7 @@ func DummyMultiAddrs(membershipIn *trantorpbtypes.Membership) (*trantorpbtypes.M
 	for nodeID, identity := range membershipIn.Nodes {
 		numericID, err := strconv.Atoi(string(nodeID))
 		if err != nil {
-			return nil, fmt.Errorf("node IDs must be numeric in the sample app: %w", err)
+			return nil, es.Errorf("node IDs must be numeric in the sample app: %w", err)
 		}
 
 		newAddr, err := multiaddr.NewMultiaddr(identity.Addr)
@@ -138,7 +140,7 @@ func DummyMultiAddrs(membershipIn *trantorpbtypes.Membership) (*trantorpbtypes.M
 			identity.Id,
 			libp2ptools.NewDummyMultiaddr(numericID, newAddr).String(),
 			nil,
-			0,
+			1,
 		}
 	}
 

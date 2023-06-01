@@ -6,7 +6,7 @@ import (
 	"bytes"
 	"time"
 
-	"github.com/filecoin-project/mir/pkg/iss/config"
+	es "github.com/go-errors/errors"
 
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/logging"
@@ -26,6 +26,7 @@ import (
 	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 	"github.com/filecoin-project/mir/pkg/util/maputil"
+	"github.com/filecoin-project/mir/pkg/util/membutil"
 )
 
 const (
@@ -39,10 +40,11 @@ type State struct {
 	// Hash of the state snapshot data associated with this checkpoint.
 	StateSnapshotHash []byte
 
-	// Set of (potentially invalid) nodes' Signatures.
+	// Set of nodes' valid checkpoint Signatures (these will make up a checkpoint certificate).
 	Signatures map[t.NodeID][]byte
 
-	// Set of nodes from which a valid Checkpoint messages has been received.
+	// Set of nodes from which a (potentially invalid) Checkpoint messages has been received
+	// (used to ignore duplicate messages).
 	SigReceived map[t.NodeID]struct{}
 
 	// Set of Checkpoint messages that were received ahead of time.
@@ -88,7 +90,9 @@ func NewModule(
 		if state.StateSnapshot.AppData == nil {
 			state.StateSnapshot.AppData = appData
 			if state.SnapshotReady() {
-				processStateSnapshot(m, state, moduleConfig)
+				if err := processStateSnapshot(m, state, moduleConfig); err != nil {
+					return err
+				}
 			}
 		}
 		return nil
@@ -118,7 +122,7 @@ func NewModule(
 			announceStable(m, params, state, moduleConfig)
 		}
 
-		// Send a checkpoint message to all nodes after persisting checkpoint to the WAL.
+		// Send a checkpoint message to all nodes.
 		chkpMessage := checkpointpbmsgs.Checkpoint(moduleConfig.Self, params.EpochConfig.EpochNr, params.EpochConfig.FirstSn, state.StateSnapshotHash, sig)
 		sortedMembership := maputil.GetSortedKeys(params.Membership.Nodes)
 		eventpbdsl.TimerRepeat(m,
@@ -171,7 +175,9 @@ func NewModule(
 				Progress: progress,
 			}
 			if state.SnapshotReady() {
-				processStateSnapshot(m, state, moduleConfig)
+				if err := processStateSnapshot(m, state, moduleConfig); err != nil {
+					return err
+				}
 			}
 		}
 		return nil
@@ -184,14 +190,22 @@ func NewModule(
 	return m
 }
 
-func processStateSnapshot(m dsl.Module, state *State, mc ModuleConfig) {
+func processStateSnapshot(m dsl.Module, state *State, mc ModuleConfig) error {
+
+	// Serialize the snapshot.
+	snapshotData, err := serializeSnapshotForHash(state.StateSnapshot)
+	if err != nil {
+		return es.Errorf("failed serializing state snapshot: %w", err)
+	}
 
 	// Initiate computing the hash of the snapshot.
 	hasherpbdsl.RequestOne(m,
 		mc.Hasher,
-		serializeSnapshotForHash(state.StateSnapshot),
+		snapshotData,
 		&struct{}{},
 	)
+
+	return nil
 }
 
 func announceStable(m dsl.Module, p *ModuleParams, state *State, mc ModuleConfig) {
@@ -202,7 +216,7 @@ func announceStable(m dsl.Module, p *ModuleParams, state *State, mc ModuleConfig
 	}
 	state.Announced = true
 
-	// Assemble a multisig certificate from the received signatures.
+	// Assemble a multisig certificate from the received valid signatures.
 	cert := make(map[t.NodeID][]byte)
 	for node, sig := range state.Signatures {
 		cert[node] = sig
@@ -279,7 +293,7 @@ func (state *State) SnapshotReady() bool {
 }
 
 func (state *State) Stable(p *ModuleParams) bool {
-	return state.SnapshotReady() && len(state.Signatures) >= config.StrongQuorum(len(p.Membership.Nodes))
+	return state.SnapshotReady() && membutil.HaveStrongQuorum(p.Membership, maputil.GetKeys(state.Signatures))
 }
 
 type verificationContext struct {

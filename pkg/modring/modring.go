@@ -1,10 +1,11 @@
 package modring
 
 import (
-	"fmt"
 	"math"
 	"runtime/debug"
 	"strconv"
+
+	es "github.com/go-errors/errors"
 
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/logging"
@@ -94,7 +95,7 @@ func (m *Module) ApplyEvents(eventsIn *events.EventList) (*events.EventList, err
 			if err == nil {
 				resultChan <- res
 			} else {
-				errorChan <- fmt.Errorf("failed to process submodule #%d events: %w", j, err)
+				errorChan <- es.Errorf("failed to process submodule #%d events: %w", j, err)
 			}
 		}(m, &subEventsIn[i], i)
 		nSubs++
@@ -187,7 +188,7 @@ func (m *Module) getSubByRingIdx(ringIdx int) (modules.PassiveModule, *eventpb.E
 		return nil, nil, nil
 	case RingSlotCurrent:
 		if m.ring[ringIdx] == nil {
-			return nil, nil, fmt.Errorf("module %v disappeared", subID)
+			return nil, nil, es.Errorf("module %v disappeared", subID)
 		}
 
 		return m.ring[ringIdx], nil, nil
@@ -211,7 +212,7 @@ func (m *Module) getSubByRingIdx(ringIdx int) (modules.PassiveModule, *eventpb.E
 
 		return m.ring[ringIdx], initEvent, err
 	default:
-		return nil, nil, fmt.Errorf("unknown slot status: %v", m.ringController.GetSlotStatus(subID))
+		return nil, nil, es.Errorf("unknown slot status: %v", m.ringController.GetSlotStatus(subID))
 	}
 }
 
@@ -225,13 +226,13 @@ func (m *Module) AdvanceViewToAtLeastSubmodule(id uint64) error {
 	for slot := minSlot; slot <= endSlot; slot++ {
 		if m.ringController.IsCurrentSlot(slot) {
 			if err := m.MarkSubmodulePast(slot); err != nil {
-				return fmt.Errorf("cannot advance view: %w", err)
+				return es.Errorf("cannot advance view: %w", err)
 			}
 		}
 	}
 
 	if err := m.ringController.AdvanceViewToSlot(id); err != nil {
-		return fmt.Errorf("cannot advance view: %w", err)
+		return es.Errorf("cannot advance view: %w", err)
 	}
 
 	// m.logger.Log(logging.LevelDebug, "fast-forwarded view", "id", id, "newMinSlot", m.ringController.minSlot)
@@ -250,7 +251,7 @@ func (m *Module) MarkSubmodulePast(id uint64) error {
 	}
 
 	if err := m.ringController.MarkPast(id); err != nil {
-		return fmt.Errorf("cannot mark submodule as past: %w", err)
+		return es.Errorf("cannot mark submodule as past: %w", err)
 	}
 
 	// zero slot just in case (and to let the GC do its job)
@@ -271,9 +272,9 @@ func multiApplySafely(
 	defer func() {
 		if r := recover(); r != nil {
 			if rErr, ok := r.(error); ok {
-				err = fmt.Errorf("event application panicked: %w\nStack trace:\n%s", rErr, string(debug.Stack()))
+				err = es.Errorf("event application panicked: %w\nStack trace:\n%s", rErr, string(debug.Stack()))
 			} else {
-				err = fmt.Errorf("event application panicked: %v\nStack trace:\n%s", r, string(debug.Stack()))
+				err = es.Errorf("event application panicked: %v\nStack trace:\n%s", r, string(debug.Stack()))
 			}
 		}
 	}()

@@ -2,9 +2,10 @@ package crypto
 
 import (
 	"context"
-	"fmt"
 	"hash"
 	"runtime"
+
+	es "github.com/go-errors/errors"
 
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/modules"
@@ -59,11 +60,11 @@ func (hasher *hasherEventProc) ApplyEvent(_ context.Context, event *eventpb.Even
 				hasherpbtypes.HashOriginFromPb(e.RequestOne.Origin),
 			).Pb())
 		default:
-			panic(fmt.Errorf("unexpected hasher event type: %T", e))
+			panic(es.Errorf("unexpected hasher event type: %T", e))
 		}
 	default:
 		// Complain about all other incoming event types.
-		panic(fmt.Errorf("unexpected type of Hash event: %T", event.Type))
+		panic(es.Errorf("unexpected type of Hash event: %T", event.Type))
 	}
 }
 

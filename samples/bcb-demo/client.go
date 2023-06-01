@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	es "github.com/go-errors/errors"
 	"gopkg.in/alecthomas/kingpin.v2"
 
 	"github.com/filecoin-project/mir"
@@ -87,16 +88,16 @@ func run() error {
 			Id:     id,
 			Addr:   addr.String(),
 			Key:    nil,
-			Weight: 0,
+			Weight: 1,
 		}
 	}
 
 	transportModule, err := grpc.NewTransport(args.OwnID, ownAddr.String(), logger)
 	if err != nil {
-		return fmt.Errorf("failed to get network transport %w", err)
+		return es.Errorf("failed to get network transport %w", err)
 	}
 	if err := transportModule.Start(); err != nil {
-		return fmt.Errorf("could not start network transport: %w", err)
+		return es.Errorf("could not start network transport: %w", err)
 	}
 	transportModule.Connect(membership)
 
@@ -128,13 +129,13 @@ func run() error {
 	// create a Mir node
 	node, err := mir.NewNode("client", mir.DefaultNodeConfig().WithLogger(logger), m, nil)
 	if err != nil {
-		return fmt.Errorf("error creating a Mir node: %w", err)
+		return es.Errorf("error creating a Mir node: %w", err)
 	}
 
 	// run the node
 	err = node.Run(context.Background())
 	if err != nil {
-		return fmt.Errorf("error running node: %w", err)
+		return es.Errorf("error running node: %w", err)
 	}
 
 	return nil

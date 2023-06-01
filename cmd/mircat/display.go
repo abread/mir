@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 
+	es "github.com/go-errors/errors"
+
 	"github.com/ttacon/chalk"
 	"google.golang.org/protobuf/encoding/protojson"
 	"gopkg.in/alecthomas/kingpin.v2"
@@ -81,7 +83,7 @@ func displayEvents(args *arguments) error { //nolint:gocognit
 
 					if args.dbgModule {
 						if _, err := module.ApplyEvents(events.ListOf(event)); err != nil {
-							return fmt.Errorf("error replaying event to module: %w", err)
+							return es.Errorf("error replaying event to module: %w", err)
 						}
 					}
 				}

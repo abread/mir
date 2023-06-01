@@ -3,7 +3,8 @@ package trantor
 import (
 	"context"
 	"crypto"
-	"fmt"
+
+	es "github.com/go-errors/errors"
 
 	"github.com/filecoin-project/mir/pkg/availability/batchdb/fakebatchdb"
 	"github.com/filecoin-project/mir/pkg/availability/multisigcollector"
@@ -285,7 +286,7 @@ func NewAlea(
 		logging.Decorate(logger, "Alea: "),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("error creating Alea protocol modules: %w", err)
+		return nil, es.Errorf("error creating Alea protocol modules: %w", err)
 	}
 
 	aleaProtocolModules[aleaConfig.Net] = transport
@@ -300,7 +301,7 @@ func NewAlea(
 		logging.Decorate(logger, "ReliableNet: "),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("error creating reliablenet: %w", err)
+		return nil, es.Errorf("error creating reliablenet: %w", err)
 	}
 
 	aleaProtocolModules[aleaConfig.ThreshCrypto] = threshcrypto.New(ctx, params.ThreshCrypto, threshCrypto)

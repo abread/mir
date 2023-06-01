@@ -1,8 +1,9 @@
 package agreement
 
 import (
-	"fmt"
 	"strconv"
+
+	es "github.com/go-errors/errors"
 
 	"github.com/filecoin-project/mir/pkg/abba"
 	"github.com/filecoin-project/mir/pkg/dsl"
@@ -67,9 +68,9 @@ type ModuleTunables struct {
 
 func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
 	if tunables.MaxRoundLookahead <= 0 {
-		return nil, fmt.Errorf("MaxRoundLookahead must be at least 1")
+		return nil, es.Errorf("MaxRoundLookahead must be at least 1")
 	} else if tunables.MaxAbbaRoundLookahead <= 0 {
-		return nil, fmt.Errorf("MaxAbbaRoundLookahead must be at least 1")
+		return nil, es.Errorf("MaxAbbaRoundLookahead must be at least 1")
 	}
 
 	agRounds := modring.New(
@@ -157,7 +158,7 @@ func newAgController(mc ModuleConfig, tunables ModuleTunables, logger logging.Lo
 		roundStr := srcModule.StripParent(mc.Self).Top()
 		round, err := strconv.ParseUint(string(roundStr), 10, 64)
 		if err != nil {
-			return fmt.Errorf("deliver event for invalid round: %w", err)
+			return es.Errorf("deliver event for invalid round: %w", err)
 		}
 
 		// queue result for delivery (when ready)
@@ -183,7 +184,7 @@ func newAgController(mc ModuleConfig, tunables ModuleTunables, logger logging.Lo
 		}
 
 		if err := agRounds.MarkSubmodulePast(state.currentRound - 1); err != nil {
-			return fmt.Errorf("failed to clean up finished agreement round: %w", err)
+			return es.Errorf("failed to clean up finished agreement round: %w", err)
 		}
 
 		return nil

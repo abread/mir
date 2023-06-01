@@ -1,7 +1,7 @@
 package availability
 
 import (
-	"fmt"
+	es "github.com/go-errors/errors"
 
 	"github.com/filecoin-project/mir/pkg/dsl"
 	adsl "github.com/filecoin-project/mir/pkg/pb/availabilitypb/dsl"
@@ -14,6 +14,6 @@ func IncludeCreatingCertificates(
 ) {
 	// When a batch is requested by the consensus layer, request a batch of transactions from the mempool.
 	adsl.UponRequestCert(m, func(origin *availabilitypbtypes.RequestCertOrigin) error {
-		return fmt.Errorf("operation not supported")
+		return es.Errorf("operation not supported")
 	})
 }

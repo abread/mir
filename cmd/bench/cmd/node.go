@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"time"
 
+	es "github.com/go-errors/errors"
 	"github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
 	"github.com/spf13/cobra"
@@ -73,12 +74,12 @@ func issSMRFactory(ctx context.Context, app *App, ownID t.NodeID, transport net.
 	localCS := deploytest.NewLocalCryptoSystem(cryptoImplType, membership.GetIDs(initialMembership), logger)
 	localCrypto, err := localCS.Crypto(ownID)
 	if err != nil {
-		return nil, fmt.Errorf("could not create a local crypto system: %w", err)
+		return nil, es.Errorf("could not create a local crypto system: %w", err)
 	}
 
 	genesisCheckpoint, err := trantor.GenesisCheckpoint([]byte{}, smrParams)
 	if err != nil {
-		return nil, fmt.Errorf("could not create genesis checkpoint: %w", err)
+		return nil, es.Errorf("could not create genesis checkpoint: %w", err)
 	}
 
 	return trantor.NewISS(
@@ -98,7 +99,7 @@ func aleaSMRFactory(ctx context.Context, app *App, ownID t.NodeID, transport net
 	localCS := deploytest.NewLocalThreshCryptoSystem(cryptoImplType, membership.GetIDs(initialMembership), 2*F+1)
 	localCrypto, err := localCS.ThreshCrypto(ownID)
 	if err != nil {
-		return nil, fmt.Errorf("could not create a local threshcrypto system: %w", err)
+		return nil, es.Errorf("could not create a local threshcrypto system: %w", err)
 	}
 
 	return trantor.NewAlea(
@@ -131,19 +132,19 @@ func runNode(ctx context.Context) error {
 	// Load system membership.
 	nodeAddrs, err := membership.FromFileName(membershipFile)
 	if err != nil {
-		return fmt.Errorf("could not load membership: %w", err)
+		return es.Errorf("could not load membership: %w", err)
 	}
 	initialMembership, err := membership.DummyMultiAddrs(nodeAddrs)
 	if err != nil {
-		return fmt.Errorf("could not create dummy multiaddrs: %w", err)
+		return es.Errorf("could not create dummy multiaddrs: %w", err)
 	}
 
 	// Parse own ID.
 	ownNumericID, err := strconv.Atoi(id)
 	if err != nil {
-		return fmt.Errorf("unable to convert node ID: %w", err)
+		return es.Errorf("unable to convert node ID: %w", err)
 	} else if ownNumericID < 0 || ownNumericID >= len(initialMembership.Nodes) {
-		return fmt.Errorf("ID must be in [0, %d]", len(initialMembership.Nodes)-1)
+		return es.Errorf("ID must be in [0, %d]", len(initialMembership.Nodes)-1)
 	}
 	ownID := t.NodeID(id)
 
@@ -158,19 +159,19 @@ func runNode(ctx context.Context) error {
 	// In this benchmark code, we always listen on tha address 0.0.0.0.
 	portStr, err := getPortStr(initialMembership.Nodes[ownID].Addr)
 	if err != nil {
-		return fmt.Errorf("could not parse port from own address: %w", err)
+		return es.Errorf("could not parse port from own address: %w", err)
 	}
 	addrStr := fmt.Sprintf("/ip4/0.0.0.0/tcp/%s", portStr)
 	listenAddr, err := multiaddr.NewMultiaddr(addrStr)
 	if err != nil {
-		return fmt.Errorf("could not create listen address: %w", err)
+		return es.Errorf("could not create listen address: %w", err)
 	}
 	h, err := libp2p.NewDummyHostWithPrivKey(
 		t.NodeAddress(libp2p.NewDummyMultiaddr(ownNumericID, listenAddr)),
 		libp2p.NewDummyHostKey(ownNumericID),
 	)
 	if err != nil {
-		return fmt.Errorf("failed to create libp2p host: %w", err)
+		return es.Errorf("failed to create libp2p host: %w", err)
 	}
 
 	// Initialize the libp2p transport subsystem.
@@ -180,7 +181,7 @@ func runNode(ctx context.Context) error {
 
 	benchApp, err := smrFactories[protocol](ctx, app, ownID, transport, initialMembership, smrParams, logger)
 	if err != nil {
-		return fmt.Errorf("could not create bench app: %w", err)
+		return es.Errorf("could not create bench app: %w", err)
 	}
 
 	/*recorder, err := eventlog.NewRecorder(
@@ -204,14 +205,14 @@ func runNode(ctx context.Context) error {
 		}),
 	)
 	if err != nil {
-		return fmt.Errorf("cannot create event recorder: %w", err)
+		return es.Errorf("cannot create event recorder: %w", err)
 	}*/
 
 	var tracer eventlog.Interceptor = eventlog.NilInterceptor
 	if traceFileName != "" {
 		traceFile, err := os.Create(traceFileName)
 		if err != nil {
-			return fmt.Errorf("error creating trace output file: %w", err)
+			return es.Errorf("error creating trace output file: %w", err)
 		}
 		defer func() {
 			_ = traceFile.Close()
@@ -232,7 +233,7 @@ func runNode(ctx context.Context) error {
 		if statFileName != "" {
 			statFile, err = os.Create(statFileName)
 			if err != nil {
-				return fmt.Errorf("could not open output file for statistics: %w", err)
+				return es.Errorf("could not open output file for statistics: %w", err)
 			}
 		} else {
 			statFile = os.Stdout
@@ -269,12 +270,12 @@ func runNode(ctx context.Context) error {
 	nodeConfig := mir.DefaultNodeConfig().WithLogger(logger)
 	node, err := mir.NewNode(t.NodeID(id), nodeConfig, benchApp.Modules(), interceptor)
 	if err != nil {
-		return fmt.Errorf("could not create node: %w", err)
+		return es.Errorf("could not create node: %w", err)
 	}
 
 	txReceiverListener, err := gonet.Listen("tcp", fmt.Sprintf(":%v", TxReceiverBasePort+ownNumericID))
 	if err != nil {
-		return fmt.Errorf("could not create tx receiver listener: %w", err)
+		return es.Errorf("could not create tx receiver listener: %w", err)
 	}
 
 	txReceiver := transactionreceiver.NewTransactionReceiver(node, "mempool", logger)
@@ -290,7 +291,7 @@ func runNode(ctx context.Context) error {
 	defer txReceiver.Stop()
 
 	if err := benchApp.Start(); err != nil {
-		return fmt.Errorf("could not start bench app: %w", err)
+		return es.Errorf("could not start bench app: %w", err)
 	}
 	defer benchApp.Stop()
 

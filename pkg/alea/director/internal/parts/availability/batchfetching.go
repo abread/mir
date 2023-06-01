@@ -3,6 +3,8 @@ package availability
 import (
 	"fmt"
 
+	es "github.com/go-errors/errors"
+
 	"github.com/filecoin-project/mir/pkg/alea/broadcast/bcutil"
 	"github.com/filecoin-project/mir/pkg/alea/common"
 	director "github.com/filecoin-project/mir/pkg/alea/director/internal/common"
@@ -66,7 +68,7 @@ func IncludeBatchFetching(
 	adsl.UponRequestTransactions(m, func(anyCert *availabilitypbtypes.Cert, origin *availabilitypbtypes.RequestTransactionsOrigin) error {
 		certWrapper, present := anyCert.Type.(*availabilitypbtypes.Cert_Alea)
 		if !present {
-			return fmt.Errorf("unexpected certificate type. Expected: %T, got %T", certWrapper, anyCert.Type)
+			return es.Errorf("unexpected certificate type. Expected: %T, got %T", certWrapper, anyCert.Type)
 		}
 		// NOTE: it is assumed that cert is valid.
 		cert := certWrapper.Alea
@@ -126,7 +128,7 @@ func IncludeBatchFetching(
 		}
 
 		if reqState.SentFillGap {
-			return fmt.Errorf("tried to send FILL-GAP twice")
+			return es.Errorf("tried to send FILL-GAP twice")
 		}
 		reqState.SentFillGap = true
 

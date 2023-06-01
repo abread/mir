@@ -10,6 +10,8 @@ import (
 	"os"
 	"strings"
 
+	es "github.com/go-errors/errors"
+
 	"github.com/filecoin-project/mir/pkg/timer"
 
 	"google.golang.org/protobuf/encoding/protojson"
@@ -44,7 +46,7 @@ func debug(args *arguments) error {
 			Id:     nID,
 			Addr:   libp2p.NewDummyHostAddr(0, 0).String(),
 			Key:    nil,
-			Weight: 0,
+			Weight: 1,
 		}
 	}
 
@@ -182,7 +184,7 @@ func debuggerNode(id t.NodeID, membership *trantorpbtypes.Membership) (*mir.Node
 		logging.Decorate(logger, "ISS: "),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("could not instantiate protocol module: %w", err)
+		return nil, es.Errorf("could not instantiate protocol module: %w", err)
 	}
 
 	nullTransport := &NullTransport{}
@@ -205,12 +207,12 @@ func debuggerNode(id t.NodeID, membership *trantorpbtypes.Membership) (*mir.Node
 		"timer": timer.New(),
 	}
 	if err != nil {
-		panic(fmt.Errorf("error initializing the Mir modules: %w", err))
+		panic(es.Errorf("error initializing the Mir modules: %w", err))
 	}
 
 	node, err := mir.NewNode(id, mir.DefaultNodeConfig().WithLogger(logger), nodeModules, nil)
 	if err != nil {
-		return nil, fmt.Errorf("could not instantiate mir node: %w", err)
+		return nil, es.Errorf("could not instantiate mir node: %w", err)
 	}
 
 	return node, nil

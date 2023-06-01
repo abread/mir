@@ -1,7 +1,7 @@
 package broadcast
 
 import (
-	"fmt"
+	es "github.com/go-errors/errors"
 
 	"github.com/filecoin-project/mir/pkg/alea/aleatypes"
 	"github.com/filecoin-project/mir/pkg/alea/broadcast/bcqueue"
@@ -34,7 +34,7 @@ func CreateQueues(mcTemplate ConfigTemplate, paramsTemplate ParamsTemplate, tuna
 
 	for idx := range paramsTemplate.AllNodes {
 		if int(aleatypes.QueueIdx(idx)) != idx {
-			return nil, fmt.Errorf("queue idx %v is not representable", idx)
+			return nil, es.Errorf("queue idx %v is not representable", idx)
 		}
 
 		mc := bcqueue.ModuleConfig{

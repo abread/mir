@@ -13,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	es "github.com/go-errors/errors"
+
 	"github.com/otiai10/copy"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -333,7 +335,7 @@ func newDeploymentAlea(ctx context.Context, conf *TestConfig) (*deploytest.Deplo
 	}
 	transportLayer, err := deploytest.NewLocalTransportLayer(simulation, conf.Transport, nodeIDs, logging.Decorate(everythingLogger, "LocalTransport: "))
 	if err != nil {
-		return nil, fmt.Errorf("error creating transport: %w", err)
+		return nil, es.Errorf("error creating transport: %w", err)
 	}
 
 	F := (conf.NumReplicas - 1) / 3
@@ -365,13 +367,13 @@ func newDeploymentAlea(ctx context.Context, conf *TestConfig) (*deploytest.Deplo
 
 		transport, err := transportLayer.Link(nodeID)
 		if err != nil {
-			return nil, fmt.Errorf("error initializing Mir transport: %w", err)
+			return nil, es.Errorf("error initializing Mir transport: %w", err)
 		}
 		transport = deploytest.NewFilteredTransport(transport, nodeID, conf.TransportFilter)
 
 		tc, err := cryptoSystem.ThreshCrypto(nodeID)
 		if err != nil {
-			return nil, fmt.Errorf("failed to initialize threshcrypto: %w", err)
+			return nil, es.Errorf("failed to initialize threshcrypto: %w", err)
 		}
 
 		system, err := trantor.NewAlea(
@@ -385,7 +387,7 @@ func newDeploymentAlea(ctx context.Context, conf *TestConfig) (*deploytest.Deplo
 			nodeLogger,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("error initializing Alea: %w", err)
+			return nil, es.Errorf("error initializing Alea: %w", err)
 		}
 
 		nodeModules[nodeID] = system.Modules()

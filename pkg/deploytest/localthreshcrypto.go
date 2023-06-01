@@ -2,7 +2,8 @@ package deploytest
 
 import (
 	"context"
-	"fmt"
+
+	es "github.com/go-errors/errors"
 
 	mirCrypto "github.com/filecoin-project/mir/pkg/crypto"
 	"github.com/filecoin-project/mir/pkg/modules"
@@ -37,7 +38,7 @@ func (cs *localPseudoThreshCryptoSystem) ThreshCrypto(id t.NodeID) (threshcrypto
 			DummySigFull:        []byte("fullthreshsig"),
 		}, nil
 	} else {
-		return nil, fmt.Errorf("unknown local crypto system type: %v (must be pseudo or dummy)", cs.cryptoType)
+		return nil, es.Errorf("unknown local crypto system type: %v (must be pseudo or dummy)", cs.cryptoType)
 	}
 }
 

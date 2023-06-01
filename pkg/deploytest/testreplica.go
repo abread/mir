@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"sync"
 
+	es "github.com/go-errors/errors"
+
 	"github.com/filecoin-project/mir"
 	"github.com/filecoin-project/mir/pkg/eventlog"
 	"github.com/filecoin-project/mir/pkg/events"
@@ -70,7 +72,7 @@ func (tr *TestReplica) Run(ctx context.Context, txReceiverListener gonet.Listene
 	// Initialize recording of events.
 	interceptor, err := eventlog.NewRecorder(tr.ID, tr.Dir, logging.Decorate(tr.Config.Logger, "Interceptor: "))
 	if err != nil {
-		return fmt.Errorf("error creating interceptor: %w", err)
+		return es.Errorf("error creating interceptor: %w", err)
 	}
 	defer func() {
 		if err := interceptor.Stop(); err != nil {
@@ -92,7 +94,7 @@ func (tr *TestReplica) Run(ctx context.Context, txReceiverListener gonet.Listene
 		interceptor,
 	)
 	if err != nil {
-		return fmt.Errorf("error creating Mir node: %w", err)
+		return es.Errorf("error creating Mir node: %w", err)
 	}
 
 	// Create a Transactionreceiver for transactions coming over the network.
@@ -118,7 +120,7 @@ func (tr *TestReplica) Run(ctx context.Context, txReceiverListener gonet.Listene
 
 		err = transport.Start()
 		if err != nil {
-			return fmt.Errorf("error starting the network link: %w", err)
+			return es.Errorf("error starting the network link: %w", err)
 		}
 		transport.Connect(tr.Membership)
 		defer transport.Stop()
@@ -131,7 +133,7 @@ func (tr *TestReplica) Run(ctx context.Context, txReceiverListener gonet.Listene
 	// Stop the transaction receiver.
 	txreceiver.Stop()
 	if err := txreceiver.ServerError(); err != nil {
-		return fmt.Errorf("transaction receiver returned server error: %w", err)
+		return es.Errorf("transaction receiver returned server error: %w", err)
 	}
 
 	// Wait for the local transaction submission thread.

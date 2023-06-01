@@ -1,8 +1,9 @@
 package modring
 
 import (
-	"fmt"
 	"math"
+
+	es "github.com/go-errors/errors"
 )
 
 type RingSlotStatus uint8
@@ -89,7 +90,7 @@ func (s *RingController) MarkPast(slot uint64) error {
 	}
 
 	if !s.IsSlotInView(slot) {
-		return fmt.Errorf("cannot mark slot %d as past", slot)
+		return es.Errorf("cannot mark slot %d as past", slot)
 	}
 
 	*s.uncheckedSlotStatusRingPtr(slot) = RingSlotPast
@@ -107,14 +108,14 @@ func (s *RingController) MarkPast(slot uint64) error {
 func (s *RingController) AdvanceViewToSlot(slot uint64) error {
 	beginSlot, endSlot := s.GetCurrentView()
 	if slot < beginSlot {
-		return fmt.Errorf("cannot advance view: view already advanced past slot %d", slot)
+		return es.Errorf("cannot advance view: view already advanced past slot %d", slot)
 	} else if slot <= endSlot {
 		return nil // slot already in view
 	}
 
 	for slot := beginSlot; slot <= endSlot; slot++ {
 		if *s.uncheckedSlotStatusRingPtr(slot) == RingSlotCurrent {
-			return fmt.Errorf("cannot advance view: slot %d still in use", slot)
+			return es.Errorf("cannot advance view: slot %d still in use", slot)
 		}
 	}
 

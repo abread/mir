@@ -3,6 +3,8 @@ package goodcase
 import (
 	"fmt"
 
+	es "github.com/go-errors/errors"
+
 	common2 "github.com/filecoin-project/mir/pkg/orderers/common"
 	"github.com/filecoin-project/mir/pkg/orderers/internal/parts/catchup"
 	isspbdsl "github.com/filecoin-project/mir/pkg/pb/isspb/dsl"
@@ -75,12 +77,12 @@ func IncludeGoodCase(
 
 			certBytes, err := proto.Marshal(cert.Pb())
 			if err != nil {
-				return fmt.Errorf("error marshalling certificate: %w", err)
+				return es.Errorf("error marshalling certificate: %w", err)
 			}
 
 			err = propose(m, state, params, moduleConfig, certBytes, logger)
 			if err != nil {
-				return fmt.Errorf("failed to propose: %w", err)
+				return es.Errorf("failed to propose: %w", err)
 			}
 		} else { // nolint:staticcheck,revive
 			// If the PBFT view advanced since the certificate was requested,
@@ -511,7 +513,7 @@ func advanceSlotState(
 		// The timeout event contains the current view and the number of committed slots.
 		// It will be ignored if any of those values change by the time the timer fires
 		// or if a quorum of nodes confirms having committed all certificates.
-		if !state.SegmentCheckpoint.Stable(len(state.Segment.Membership.Nodes)) {
+		if !state.SegmentCheckpoint.Stable(state.Segment.Membership) {
 			eventpbdsl.TimerDelay(
 				m,
 				moduleConfig.Timer,

@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"runtime/pprof"
 
+	es "github.com/go-errors/errors"
 	"github.com/spf13/cobra"
 )
 
@@ -39,12 +40,12 @@ var (
 
 				cpuprofileFile, err = os.Create(cpuprofile)
 				if err != nil {
-					return fmt.Errorf("could not create CPU profile: %w", err)
+					return es.Errorf("could not create CPU profile: %w", err)
 				}
 
 				err = pprof.StartCPUProfile(cpuprofileFile)
 				if err != nil {
-					return fmt.Errorf("could not start CPU profile: %w", err)
+					return es.Errorf("could not start CPU profile: %w", err)
 				}
 			}
 			if memprofile != "" {
@@ -52,7 +53,7 @@ var (
 
 				memprofileFile, err = os.Create(memprofile)
 				if err != nil {
-					return fmt.Errorf("could not create memory profile: %w", err)
+					return es.Errorf("could not create memory profile: %w", err)
 				}
 			}
 
@@ -62,16 +63,16 @@ var (
 			if cpuprofileFile != nil {
 				pprof.StopCPUProfile()
 				if err := cpuprofileFile.Close(); err != nil {
-					return fmt.Errorf("could not close CPU profile file: %w", err)
+					return es.Errorf("could not close CPU profile file: %w", err)
 				}
 			}
 			if memprofileFile != nil {
 				runtime.GC() // get up-to-date statistics
 				if err := pprof.WriteHeapProfile(memprofileFile); err != nil {
-					return fmt.Errorf("could not write memory profile: %w", err)
+					return es.Errorf("could not write memory profile: %w", err)
 				}
 				if err := memprofileFile.Close(); err != nil {
-					return fmt.Errorf("could not close memory profile file: %w", err)
+					return es.Errorf("could not close memory profile file: %w", err)
 				}
 			}
 

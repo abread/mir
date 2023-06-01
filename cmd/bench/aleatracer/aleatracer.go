@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	es "github.com/go-errors/errors"
+
 	"github.com/filecoin-project/mir/pkg/alea/aleatypes"
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/events"
@@ -183,11 +185,11 @@ func (at *AleaTracer) interceptOne(event *eventpb.Event) error { // nolint: goco
 
 			queueIdx, err := strconv.ParseUint(idParts[0], 10, 64)
 			if err != nil {
-				return fmt.Errorf("bad queue index in batch id (%s): %w", id, err)
+				return es.Errorf("bad queue index in batch id (%s): %w", id, err)
 			}
 			queueSlot, err := strconv.ParseUint(idParts[1], 10, 64)
 			if err != nil {
-				return fmt.Errorf("bad queue slot in batch id (%s): %w", id, err)
+				return es.Errorf("bad queue slot in batch id (%s): %w", id, err)
 			}
 
 			slot := commontypes.Slot{QueueIdx: aleatypes.QueueIdx(queueIdx), QueueSlot: aleatypes.QueueSlot(queueSlot)}
@@ -249,14 +251,14 @@ func (at *AleaTracer) interceptOne(event *eventpb.Event) error { // nolint: goco
 			case *abbapb.RoundEvent_InputValue:
 				abbaRoundID, err := at.parseAbbaRoundID(t.ModuleID(event.DestModule))
 				if err != nil {
-					return fmt.Errorf("invalid abba round id: %w", err)
+					return es.Errorf("invalid abba round id: %w", err)
 				}
 				at.startAbbaRoundSpan(ts, abbaRoundID)
 			case *abbapb.RoundEvent_Deliver:
 				agRoundStr := t.ModuleID(event.DestModule).StripParent("alea_ag")
 				agRound, err := strconv.ParseUint(string(agRoundStr), 10, 64)
 				if err != nil {
-					return fmt.Errorf("invalid ag round number: %w", err)
+					return es.Errorf("invalid ag round number: %w", err)
 				}
 
 				abbaRoundID := abbaRoundID{
@@ -419,24 +421,24 @@ func (at *AleaTracer) registerModStart(ts time.Duration, event *eventpb.Event) {
 
 func (at *AleaTracer) parseAbbaRoundID(id t.ModuleID) (abbaRoundID, error) {
 	if !id.IsSubOf("alea_ag") {
-		return abbaRoundID{}, fmt.Errorf("not alea_ag/*")
+		return abbaRoundID{}, es.Errorf("not alea_ag/*")
 	}
 	id = id.Sub()
 
 	agRound, err := strconv.ParseUint(string(id.Top()), 10, 64)
 	if err != nil {
-		return abbaRoundID{}, fmt.Errorf("expected <ag round no.>, got %s", id.Top())
+		return abbaRoundID{}, es.Errorf("expected <ag round no.>, got %s", id.Top())
 	}
 	id = id.Sub()
 
 	if id.Top() != "r" {
-		return abbaRoundID{}, fmt.Errorf("expected r, got %s", id.Top())
+		return abbaRoundID{}, es.Errorf("expected r, got %s", id.Top())
 	}
 
 	id = id.Sub()
 	abbaRound, err := strconv.ParseUint(string(id.Top()), 10, 64)
 	if err != nil {
-		return abbaRoundID{}, fmt.Errorf("expected <abba round number>, got %s", id.Top())
+		return abbaRoundID{}, es.Errorf("expected <abba round number>, got %s", id.Top())
 	}
 
 	return abbaRoundID{agRound, abbaRound}, nil
@@ -743,13 +745,13 @@ func (at *AleaTracer) endThreshCryptoSpan(ts time.Duration, class string, destMo
 func (at *AleaTracer) writeSpan(s *span) {
 	_, err := at.out.Write([]byte(fmt.Sprintf("%s,%s,%d,%d\n", s.class, s.id, s.start, s.end)))
 	if err != nil {
-		panic(fmt.Errorf("failed to write trace span: %w", err))
+		panic(es.Errorf("failed to write trace span: %w", err))
 	}
 }
 
 func parseSlotFromModuleID(moduleIDStr string) commontypes.Slot {
 	if !strings.HasPrefix(moduleIDStr, "alea_bc-") {
-		panic(fmt.Errorf("id is not from a bcqueue: %s", moduleIDStr))
+		panic(es.Errorf("id is not from a bcqueue: %s", moduleIDStr))
 	}
 
 	modID := t.ModuleID(strings.TrimPrefix(moduleIDStr, "alea_bc-"))
@@ -758,12 +760,12 @@ func parseSlotFromModuleID(moduleIDStr string) commontypes.Slot {
 
 	queueIdx, err := strconv.ParseUint(queueIdxStr, 10, 32)
 	if err != nil {
-		panic(fmt.Errorf("failed to parse queueIdx from %s: %w", queueIdxStr, err))
+		panic(es.Errorf("failed to parse queueIdx from %s: %w", queueIdxStr, err))
 	}
 
 	queueSlot, err := strconv.ParseUint(queueSlotStr, 10, 32)
 	if err != nil {
-		panic(fmt.Errorf("failed to parse queueSlot from %s: %w", queueSlotStr, err))
+		panic(es.Errorf("failed to parse queueSlot from %s: %w", queueSlotStr, err))
 	}
 
 	return commontypes.Slot{
@@ -774,7 +776,7 @@ func parseSlotFromModuleID(moduleIDStr string) commontypes.Slot {
 
 func parseQueueIdxFromModuleID(moduleIDStr string) aleatypes.QueueIdx {
 	if !strings.HasPrefix(moduleIDStr, "alea_bc-") {
-		panic(fmt.Errorf("id is not from a bcqueue: %s", moduleIDStr))
+		panic(es.Errorf("id is not from a bcqueue: %s", moduleIDStr))
 	}
 
 	modID := t.ModuleID(strings.TrimPrefix(moduleIDStr, "alea_bc-"))
@@ -782,7 +784,7 @@ func parseQueueIdxFromModuleID(moduleIDStr string) aleatypes.QueueIdx {
 
 	queueIdx, err := strconv.ParseUint(queueIdxStr, 10, 32)
 	if err != nil {
-		panic(fmt.Errorf("failed to parse queueIdx from %s: %w", queueIdxStr, err))
+		panic(es.Errorf("failed to parse queueIdx from %s: %w", queueIdxStr, err))
 	}
 	return aleatypes.QueueIdx(queueIdx)
 }

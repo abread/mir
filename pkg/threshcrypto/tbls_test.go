@@ -1,9 +1,10 @@
 package threshcrypto
 
 import (
-	"fmt"
 	"io"
 	"testing"
+
+	es "github.com/go-errors/errors"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -304,7 +305,7 @@ func keygenHerumiTBLS(T, N int) []ThreshCrypto {
 
 	insts, err := HerumiTBLSKeygen(T, members, randSource)
 	if err != nil {
-		panic(fmt.Errorf("error generating keys: %w", err))
+		panic(es.Errorf("error generating keys: %w", err))
 	}
 
 	return castInsts(insts)

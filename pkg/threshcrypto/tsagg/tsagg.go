@@ -1,7 +1,7 @@
 package tsagg
 
 import (
-	"fmt"
+	es "github.com/go-errors/errors"
 
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/logging"
@@ -184,7 +184,7 @@ func New(m dsl.Module, params *Params, logger logging.Logger) *ThreshSigAggregat
 			agg.unknownShareSources = nil
 			agg.okShares = nil
 		} else {
-			return fmt.Errorf("enough valid shares from different sources but could not recover signatures. isn't this impossible?")
+			return es.Errorf("enough valid shares from different sources but could not recover signatures. isn't this impossible?")
 		}
 
 		agg.recoveryInProgress = false

@@ -14,6 +14,8 @@ import (
 	"fmt"
 	"sync"
 
+	es "github.com/go-errors/errors"
+
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/net"
@@ -71,10 +73,10 @@ func (fl *FakeLink) ApplyEvents(
 					}
 				}
 			default:
-				return fmt.Errorf("unexpected transport event type: %T", e)
+				return es.Errorf("unexpected transport event type: %T", e)
 			}
 		default:
-			return fmt.Errorf("unexpected type of Net event: %T", event.Type)
+			return es.Errorf("unexpected type of Net event: %T", event.Type)
 		}
 	}
 
@@ -151,7 +153,7 @@ func (ft *FakeTransport) Membership() *trantorpbtypes.Membership {
 			libp2p.NewDummyHostAddr(0,
 				0).String(),
 			nil,
-			0,
+			1,
 		}
 	}
 

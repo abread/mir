@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	es "github.com/go-errors/errors"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -208,7 +210,7 @@ func newDeployment(ctx context.Context, conf *TestConfig) (*deploytest.Deploymen
 	}
 	transportLayer, err := deploytest.NewLocalTransportLayer(simulation, conf.Transport, nodeIDs, logger)
 	if err != nil {
-		return nil, fmt.Errorf("could not create transport: %w", err)
+		return nil, es.Errorf("could not create transport: %w", err)
 	}
 
 	threshCryptoSystem := deploytest.NewLocalThreshCryptoSystem("pseudo", nodeIDs, 2*conf.F+1)
@@ -220,7 +222,7 @@ func newDeployment(ctx context.Context, conf *TestConfig) (*deploytest.Deploymen
 
 		transport, err := transportLayer.Link(nodeID)
 		if err != nil {
-			return nil, fmt.Errorf("error initializing Mir transport: %w", err)
+			return nil, es.Errorf("error initializing Mir transport: %w", err)
 		}
 
 		abba, err := NewModule(
@@ -250,12 +252,12 @@ func newDeployment(ctx context.Context, conf *TestConfig) (*deploytest.Deploymen
 
 		rnet, err := reliablenet.New(nodeID, rnetConfig, rnetParams, logging.Decorate(nodeLogger, "ReliableNet: "))
 		if err != nil {
-			return nil, fmt.Errorf("error creating reliablenet module: %w", err)
+			return nil, es.Errorf("error creating reliablenet module: %w", err)
 		}
 
 		tc, err := threshCryptoSystem.Module(ctx, nodeID)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create threshcrypto module: %w", err)
+			return nil, es.Errorf("failed to create threshcrypto module: %w", err)
 		}
 
 		modulesWithDefaults := map[types.ModuleID]modules.Module{

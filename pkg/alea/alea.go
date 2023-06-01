@@ -1,8 +1,9 @@
 package alea
 
 import (
-	"fmt"
 	"time"
+
+	es "github.com/go-errors/errors"
 
 	"github.com/filecoin-project/mir/pkg/alea/agreement"
 	"github.com/filecoin-project/mir/pkg/alea/broadcast"
@@ -105,12 +106,12 @@ func New(ownID t.NodeID, config Config, params Params, startingChkp *checkpoint.
 
 	// Check whether the passed configuration is valid.
 	if err := params.Check(); err != nil {
-		return nil, fmt.Errorf("invalid Alea parameters: %w", err)
+		return nil, es.Errorf("invalid Alea parameters: %w", err)
 	}
 
 	if startingChkp != nil {
 		// TODO: checkpointing
-		return nil, fmt.Errorf("alea checkpointing not implemented")
+		return nil, es.Errorf("alea checkpointing not implemented")
 	}
 
 	allNodes := params.AllNodes()
@@ -165,7 +166,7 @@ func New(ownID t.NodeID, config Config, params Params, startingChkp *checkpoint.
 		logging.Decorate(logger, "AleaBroadcast: "),
 	)
 	if errAleaBc != nil {
-		return nil, fmt.Errorf("error creating alea broadcast: %w", errAleaBc)
+		return nil, es.Errorf("error creating alea broadcast: %w", errAleaBc)
 	}
 
 	aleaAg, errAleaAg := agreement.NewModule(
@@ -189,7 +190,7 @@ func New(ownID t.NodeID, config Config, params Params, startingChkp *checkpoint.
 		logging.Decorate(logger, "AleaAgreement: "),
 	)
 	if errAleaAg != nil {
-		return nil, fmt.Errorf("error creating alea agreement: %w", errAleaAg)
+		return nil, es.Errorf("error creating alea agreement: %w", errAleaAg)
 	}
 
 	moduleSet := aleaBcModules
@@ -202,15 +203,15 @@ func New(ownID t.NodeID, config Config, params Params, startingChkp *checkpoint.
 
 func (p *Params) Check() error {
 	if len(p.Membership.Nodes) == 0 {
-		return fmt.Errorf("cannot start Alea with an empty membership")
+		return es.Errorf("cannot start Alea with an empty membership")
 	}
 
 	if p.MaxConcurrentVcbPerQueue < 1 {
-		return fmt.Errorf("this implementation requires MaxConcurrentVcbPerQueue >= 1")
+		return es.Errorf("this implementation requires MaxConcurrentVcbPerQueue >= 1")
 	}
 
 	if p.MaxOwnUnagreedBatchCount < 1 {
-		return fmt.Errorf("alea requires TargetOwnUnagreedBatchCount >= 1")
+		return es.Errorf("alea requires TargetOwnUnagreedBatchCount >= 1")
 	}
 
 	return nil

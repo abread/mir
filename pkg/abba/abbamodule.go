@@ -1,7 +1,7 @@
 package abba
 
 import (
-	"fmt"
+	es "github.com/go-errors/errors"
 
 	"github.com/filecoin-project/mir/pkg/abba/abbaround"
 	abbat "github.com/filecoin-project/mir/pkg/abba/abbatypes"
@@ -61,7 +61,7 @@ const modringSubName t.ModuleID = t.ModuleID("r")
 
 func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
 	if tunables.MaxRoundLookahead <= 0 {
-		return nil, fmt.Errorf("MaxRoundLookahead must be at least 1")
+		return nil, es.Errorf("MaxRoundLookahead must be at least 1")
 	}
 
 	// rounds use a submodule namespace to allow us to mark all round messages as received at once
@@ -131,7 +131,7 @@ func newController(mc ModuleConfig, params ModuleParams, logger logging.Logger, 
 				state.phase = phaseDelivered
 
 				if err := rounds.MarkAllPast(); err != nil {
-					return fmt.Errorf("could not stop abba rounds: %w", err)
+					return es.Errorf("could not stop abba rounds: %w", err)
 				}
 
 				// only care about finish messages from now on
@@ -147,7 +147,7 @@ func newController(mc ModuleConfig, params ModuleParams, logger logging.Logger, 
 			// this may be a duplicate input, but we're ignoring that sanity check.
 			return nil
 		} else if state.phase != phaseAwaitingInput {
-			return fmt.Errorf("input value provided twice to abba")
+			return es.Errorf("input value provided twice to abba")
 		}
 
 		abbadsl.RoundInputValue(m, mc.RoundID(0), input)
@@ -160,12 +160,12 @@ func newController(mc ModuleConfig, params ModuleParams, logger logging.Logger, 
 			return nil // already done
 		}
 		if prevRoundNum != state.currentRound {
-			return fmt.Errorf("round number mismatch: expected %v, but round %v delivered", state.currentRound, prevRoundNum)
+			return es.Errorf("round number mismatch: expected %v, but round %v delivered", state.currentRound, prevRoundNum)
 		}
 
 		// clean up old round
 		if err := rounds.MarkSubmodulePast(state.currentRound); err != nil {
-			return fmt.Errorf("failed to clean up previous round: %w", err)
+			return es.Errorf("failed to clean up previous round: %w", err)
 		}
 
 		state.currentRound++

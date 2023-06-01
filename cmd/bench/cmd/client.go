@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	es "github.com/go-errors/errors"
 	"github.com/spf13/cobra"
 	rateLimiter "golang.org/x/time/rate"
 	"google.golang.org/grpc"
@@ -89,11 +90,11 @@ func runClient(ctx context.Context) error {
 
 	initialMembership, err := membership.FromFileName(membershipFile)
 	if err != nil {
-		return fmt.Errorf("could not load membership: %w", err)
+		return es.Errorf("could not load membership: %w", err)
 	}
 	addresses, err := membership.GetIPs(initialMembership)
 	if err != nil {
-		return fmt.Errorf("could not load node IPs: %w", err)
+		return es.Errorf("could not load node IPs: %w", err)
 	}
 
 	// Generate addresses and ports for transaction receivers.
@@ -103,7 +104,7 @@ func runClient(ctx context.Context) error {
 	for nodeID, nodeIP := range addresses {
 		numericID, err := strconv.Atoi(string(nodeID))
 		if err != nil {
-			return fmt.Errorf("node IDs must be numeric in the sample app: %w", err)
+			return es.Errorf("node IDs must be numeric in the sample app: %w", err)
 		}
 		txReceiverAddrs[nodeID] = net.JoinHostPort(nodeIP, fmt.Sprintf("%d", TxReceiverBasePort+numericID))
 
@@ -182,7 +183,7 @@ func clientStats(ctx context.Context, txReceiverAddrs map[t.NodeID]string, clock
 		var err error
 		outputFile, err = os.Create(statFileName)
 		if err != nil {
-			panic(fmt.Errorf("could not open output file for statistics: %w", err))
+			panic(es.Errorf("could not open output file for statistics: %w", err))
 		}
 		defer outputFile.Close()
 	}

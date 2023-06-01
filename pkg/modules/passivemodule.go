@@ -1,8 +1,9 @@
 package modules
 
 import (
-	"fmt"
 	"runtime/debug"
+
+	es "github.com/go-errors/errors"
 
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/types"
@@ -60,9 +61,9 @@ func applyAllSafely(m PassiveModule, evs *events.EventList) (result *events.Even
 	defer func() {
 		if r := recover(); r != nil {
 			if rErr, ok := r.(error); ok {
-				err = fmt.Errorf("event application panicked: %w\nStack trace:\n%s", rErr, string(debug.Stack()))
+				err = es.Errorf("event application panicked: %w\nStack trace:\n%s", rErr, string(debug.Stack()))
 			} else {
-				err = fmt.Errorf("event application panicked: %v\nStack trace:\n%s", r, string(debug.Stack()))
+				err = es.Errorf("event application panicked: %v\nStack trace:\n%s", r, string(debug.Stack()))
 			}
 		}
 	}()

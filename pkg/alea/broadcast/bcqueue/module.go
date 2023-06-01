@@ -1,8 +1,9 @@
 package bcqueue
 
 import (
-	"fmt"
 	"strconv"
+
+	es "github.com/go-errors/errors"
 
 	"golang.org/x/exp/slices"
 
@@ -29,7 +30,7 @@ import (
 
 func New(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
 	if slices.Index(params.AllNodes, params.QueueOwner) != int(params.QueueIdx) {
-		return nil, fmt.Errorf("invalid queue index/owner combination: %v - %v", params.QueueIdx, params.QueueOwner)
+		return nil, es.Errorf("invalid queue index/owner combination: %v - %v", params.QueueIdx, params.QueueOwner)
 	}
 
 	slots := modring.New(mc.Self, tunables.MaxConcurrentVcb, modring.ModuleParams{
@@ -46,7 +47,7 @@ func newQueueController(mc ModuleConfig, params ModuleParams, logger logging.Log
 
 	bcqueuedsl.UponInputValue(m, func(queueSlot aleatypes.QueueSlot, txs []*trantorpbtypes.Transaction) error {
 		if len(txs) == 0 {
-			return fmt.Errorf("cannot broadcast an empty batch")
+			return es.Errorf("cannot broadcast an empty batch")
 		}
 
 		// logger.Log(logging.LevelDebug, "starting broadcast", "queueSlot", queueSlot, "txs", txs)
@@ -63,7 +64,7 @@ func newQueueController(mc ModuleConfig, params ModuleParams, logger logging.Log
 		queueSlotStr := ev.SrcModule.StripParent(mc.Self).Top()
 		queueSlot, err := strconv.ParseUint(string(queueSlotStr), 10, 64)
 		if err != nil {
-			return fmt.Errorf("deliver event for invalid round: %w", err)
+			return es.Errorf("deliver event for invalid round: %w", err)
 		}
 
 		slot := &commontypes.Slot{
@@ -83,11 +84,11 @@ func newQueueController(mc ModuleConfig, params ModuleParams, logger logging.Log
 
 	bcqueuedsl.UponFreeSlot(m, func(queueSlot aleatypes.QueueSlot) error {
 		if err := slots.AdvanceViewToAtLeastSubmodule(uint64(queueSlot)); err != nil {
-			return fmt.Errorf("could not advance view to free queue slot: %w", err)
+			return es.Errorf("could not advance view to free queue slot: %w", err)
 		}
 
 		if err := slots.MarkSubmodulePast(uint64(queueSlot)); err != nil {
-			return fmt.Errorf("failed to free queue slot: %w", err)
+			return es.Errorf("failed to free queue slot: %w", err)
 		}
 
 		// clean up old messages

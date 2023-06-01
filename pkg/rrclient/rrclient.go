@@ -9,6 +9,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
+	es "github.com/go-errors/errors"
+
 	"github.com/filecoin-project/mir/pkg/logging"
 	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	"github.com/filecoin-project/mir/pkg/transactionreceiver"
@@ -119,7 +121,7 @@ func (rrc *RoundRobinClient) SubmitTransaction(data []byte) error {
 	rrc.nextClientIdx = (rrc.nextClientIdx + 1) % len(rrc.clients)
 
 	if err := client.Send(tx.Pb()); err != nil {
-		return fmt.Errorf("failed sending transaction to node (%v): %w", nID, err)
+		return es.Errorf("failed sending transaction to node (%v): %w", nID, err)
 	}
 
 	return nil

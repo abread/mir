@@ -12,7 +12,7 @@ import (
 	"reflect"
 	"sync"
 
-	"github.com/pkg/errors"
+	es "github.com/go-errors/errors"
 
 	"github.com/filecoin-project/mir/pkg/eventlog"
 	"github.com/filecoin-project/mir/pkg/events"
@@ -91,7 +91,7 @@ func NewNode(
 
 	// Check that a valid configuration has been provided.
 	if err := config.Validate(); err != nil {
-		return nil, errors.Wrap(err, "invalid node configuration")
+		return nil, es.Errorf("invalid node configuration: %w", err)
 	}
 
 	// Make sure that the logger can be accessed concurrently (if there is any logger).
@@ -176,7 +176,7 @@ func (n *Node) Run(ctx context.Context) error {
 	// Submit the Init event to the modules.
 	if err := n.workItems.AddEvents(createInitEvents(n.modules)); err != nil {
 		n.workErrNotifier.Fail(err)
-		return fmt.Errorf("failed to add init event: %w", err)
+		return es.Errorf("failed to add init event: %w", err)
 	}
 
 	// Start processing of events.
@@ -342,7 +342,7 @@ func (n *Node) startModules(ctx context.Context, wg *sync.WaitGroup) {
 					continueProcessing, err = n.processModuleEvents(processingCtx, m, workChan, n.eventsIn)
 				}
 				if err != nil {
-					n.workErrNotifier.Fail(fmt.Errorf("could not process module (%v) events: %w", mID, err))
+					n.workErrNotifier.Fail(es.Errorf("could not process PassiveModule (%v) events: %w", mID, err))
 					return
 				}
 			}
@@ -368,7 +368,7 @@ func (n *Node) startModules(ctx context.Context, wg *sync.WaitGroup) {
 				}
 			}()
 		default:
-			n.workErrNotifier.Fail(fmt.Errorf("unknown module type: %T", m))
+			n.workErrNotifier.Fail(es.Errorf("unknown module type: %T", m))
 		}
 	}
 }

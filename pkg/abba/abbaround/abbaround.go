@@ -1,8 +1,9 @@
 package abbaround
 
 import (
-	"fmt"
 	"runtime"
+
+	es "github.com/go-errors/errors"
 
 	abbat "github.com/filecoin-project/mir/pkg/abba/abbatypes"
 	"github.com/filecoin-project/mir/pkg/dsl"
@@ -252,7 +253,7 @@ func New(mc ModuleConfig, params ModuleParams, nodeID t.NodeID, logger logging.L
 	// still in 9. sample coin
 	hasherpbdsl.UponResultOne(m, func(hash []byte, _ctx *struct{}) error {
 		if state.phase != phaseTossingCoin {
-			return fmt.Errorf("impossible state reached: coin being tossed but round is already over")
+			return es.Errorf("impossible state reached: coin being tossed but round is already over")
 		}
 
 		// finishing step 9

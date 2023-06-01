@@ -2,10 +2,11 @@ package reliablenet
 
 import (
 	"container/list"
-	"fmt"
 	"time"
 
 	"golang.org/x/exp/slices"
+
+	es "github.com/go-errors/errors"
 
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/logging"
@@ -117,10 +118,10 @@ func (m *Module) applyEvent(event *eventpb.Event) (*events.EventList, error) {
 		case *transportpb.Event_MessageReceived:
 			return m.applyMessage(e.MessageReceived.Msg, t.NodeID(e.MessageReceived.From))
 		default:
-			return nil, fmt.Errorf("unsupported transport event type: %T", e)
+			return nil, es.Errorf("unsupported transport event type: %T", e)
 		}
 	default:
-		return nil, fmt.Errorf("unsupported event type: %T", ev)
+		return nil, es.Errorf("unsupported event type: %T", ev)
 	}
 }
 
@@ -137,7 +138,7 @@ func (m *Module) applyRNEvent(event *reliablenetpb.Event) (*events.EventList, er
 	case *reliablenetpb.Event_Ack:
 		return m.SendAck(t.ModuleID(ev.Ack.DestModule), rntypes.MsgID(ev.Ack.MsgId), t.NodeID(ev.Ack.Source))
 	default:
-		return nil, fmt.Errorf("unsupported reliablenet event type: %T", ev)
+		return nil, es.Errorf("unsupported reliablenet event type: %T", ev)
 	}
 }
 

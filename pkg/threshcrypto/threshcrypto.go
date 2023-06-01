@@ -4,8 +4,9 @@ package threshcrypto
 
 import (
 	"context"
-	"fmt"
 	"runtime"
+
+	es "github.com/go-errors/errors"
 
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/modules"
@@ -43,7 +44,7 @@ func (c *threshEventProcessor) ApplyEvent(ctx context.Context, event *eventpb.Ev
 		return c.applyTCEvent(ctx, e.ThreshCrypto)
 	default:
 		// Complain about all other incoming event types.
-		panic(fmt.Errorf("unexpected type of event in threshcrypto MirModule: %T", event.Type))
+		panic(es.Errorf("unexpected type of event in threshcrypto MirModule: %T", event.Type))
 	}
 }
 
@@ -55,7 +56,7 @@ func (c *threshEventProcessor) applyTCEvent(_ context.Context, event *threshcryp
 
 		sigShare, err := c.threshCrypto.SignShare(e.SignShare.Data)
 		if err != nil {
-			panic(fmt.Errorf("could not sign share: %w", err))
+			panic(es.Errorf("could not sign share: %w", err))
 		}
 
 		origin := threshcryptopbtypes.SignShareOriginFromPb(e.SignShare.Origin)
@@ -112,6 +113,6 @@ func (c *threshEventProcessor) applyTCEvent(_ context.Context, event *threshcryp
 		)
 	default:
 		// Complain about all other incoming event types.
-		panic(fmt.Errorf("unexpected type of threshcrypto event in threshcrypto MirModule: %T", event.Type))
+		panic(es.Errorf("unexpected type of threshcrypto event in threshcrypto MirModule: %T", event.Type))
 	}
 }

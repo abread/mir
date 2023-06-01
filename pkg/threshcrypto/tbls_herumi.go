@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io"
 
+	es "github.com/go-errors/errors"
+
 	"github.com/herumi/bls-eth-go-binary/bls"
 	"golang.org/x/exp/slices"
 
@@ -13,7 +15,7 @@ import (
 
 func init() {
 	if err := bls.Init(bls.BLS12_381); err != nil {
-		panic(fmt.Errorf("failed to init herumi bls lib: %w", err))
+		panic(es.Errorf("failed to init herumi bls lib: %w", err))
 	}
 }
 
@@ -44,7 +46,7 @@ func HerumiTBLSKeygen(T int, members []t.NodeID, randSource io.Reader) ([]*Herum
 	skComponents := masterSk.GetMasterSecretKey(T)
 	pk, err := skComponents[0].GetSafePublicKey()
 	if err != nil {
-		return nil, fmt.Errorf("failed to compute group public key: %w", err)
+		return nil, es.Errorf("failed to compute group public key: %w", err)
 	}
 
 	for i := range instances {
@@ -56,17 +58,17 @@ func HerumiTBLSKeygen(T int, members []t.NodeID, randSource io.Reader) ([]*Herum
 
 		id, err := herumiID(uint64(i))
 		if err != nil {
-			return nil, fmt.Errorf("failed to generate herumi ID: %w", err)
+			return nil, es.Errorf("failed to generate herumi ID: %w", err)
 		}
 
 		skShare := new(bls.SecretKey)
 		if err := skShare.Set(skComponents, &id); err != nil {
-			return nil, fmt.Errorf("failed to create secret key share #%d: %w", i, err)
+			return nil, es.Errorf("failed to create secret key share #%d: %w", i, err)
 		}
 
 		pkShare, err := skShare.GetSafePublicKey()
 		if err != nil {
-			return nil, fmt.Errorf("failed to compute group public key: %w", err)
+			return nil, es.Errorf("failed to compute group public key: %w", err)
 		}
 
 		instances[i].skShare = skShare
@@ -92,37 +94,37 @@ func (inst *HerumiTBLSInst) SignShare(msg [][]byte) ([]byte, error) {
 func (inst *HerumiTBLSInst) VerifyShare(msg [][]byte, sigShare []byte, nodeID t.NodeID) error {
 	presumedID := slices.Index(inst.members, nodeID)
 	if presumedID == -1 {
-		return fmt.Errorf("invalid signer: %v", nodeID)
+		return es.Errorf("invalid signer: %v", nodeID)
 	}
 
 	sig, id, err := deserializeHerumiSigShare(sigShare)
 	if err != nil {
-		return fmt.Errorf("failed to parse share: %w", err)
+		return es.Errorf("failed to parse share: %w", err)
 	}
 
 	if id.GetDecString() != fmt.Sprintf("%d", presumedID+1) {
-		return fmt.Errorf("sig owner mismatch")
+		return es.Errorf("sig owner mismatch")
 	}
 
 	if sig.VerifyByte(inst.pkShares[presumedID], flatten(msg)) {
 		return nil
 	}
 
-	return fmt.Errorf("verification failed")
+	return es.Errorf("verification failed")
 }
 
 // VerifyFull verifies that a (full) signature is valid for a given message.
 func (inst *HerumiTBLSInst) VerifyFull(msg [][]byte, sigFull []byte) error {
 	sig := bls.Sign{}
 	if err := sig.Deserialize(sigFull); err != nil {
-		return fmt.Errorf("error deserializing sig: %w", err)
+		return es.Errorf("error deserializing sig: %w", err)
 	}
 
 	if sig.VerifyByte(inst.pk, flatten(msg)) {
 		return nil
 	}
 
-	return fmt.Errorf("verification failed")
+	return es.Errorf("verification failed")
 }
 
 // Recover recovers a full signature from a set of (previously validated) shares, that are known to be from
@@ -132,7 +134,7 @@ func (inst *HerumiTBLSInst) Recover(_ [][]byte, sigShares [][]byte) ([]byte, err
 
 	if len(sigShares) < inst.T {
 		// herumi BLS recover operation will succeed, but yield a bad signature
-		return nil, fmt.Errorf("not enough sig shares")
+		return nil, es.Errorf("not enough sig shares")
 	}
 
 	parsedShares := make([]bls.Sign, len(sigShares))
@@ -140,7 +142,7 @@ func (inst *HerumiTBLSInst) Recover(_ [][]byte, sigShares [][]byte) ([]byte, err
 	for i, share := range sigShares {
 		parsedShare, parsedID, err := deserializeHerumiSigShare(share)
 		if err != nil {
-			return nil, fmt.Errorf("failed to deserialize share #%d: %w", i, err)
+			return nil, es.Errorf("failed to deserialize share #%d: %w", i, err)
 		}
 
 		parsedShares[i] = *parsedShare
@@ -148,7 +150,7 @@ func (inst *HerumiTBLSInst) Recover(_ [][]byte, sigShares [][]byte) ([]byte, err
 	}
 
 	if err := fullSig.Recover(parsedShares, parsedIDs); err != nil {
-		return nil, fmt.Errorf("failed to recover full sig: %w", err)
+		return nil, es.Errorf("failed to recover full sig: %w", err)
 	}
 
 	return fullSig.Serialize(), nil
@@ -188,7 +190,7 @@ func herumiID(idNum uint64) (bls.ID, error) {
 	id := bls.ID{}
 
 	if err := id.SetDecString(fmt.Sprintf("%d", idNum+1)); err != nil {
-		return id, fmt.Errorf("failed to create key ID: %w", err)
+		return id, es.Errorf("failed to create key ID: %w", err)
 	}
 
 	return id, nil

@@ -1,8 +1,9 @@
 package vcb
 
 import (
-	"fmt"
 	"runtime"
+
+	es "github.com/go-errors/errors"
 
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/logging"
@@ -79,7 +80,7 @@ func NewModule(mc ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger lo
 		setupVcbLeader(m, mc, params, logger, state)
 	} else {
 		vcbdsl.UponInputValue(m, func(txs []*trantorpbtypes.Transaction) error {
-			return fmt.Errorf("vcb input provided for non-leader")
+			return es.Errorf("vcb input provided for non-leader")
 		})
 	}
 

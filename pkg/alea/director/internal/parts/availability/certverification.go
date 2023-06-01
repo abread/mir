@@ -1,7 +1,7 @@
 package availability
 
 import (
-	"fmt"
+	es "github.com/go-errors/errors"
 
 	"github.com/filecoin-project/mir/pkg/dsl"
 	adsl "github.com/filecoin-project/mir/pkg/pb/availabilitypb/dsl"
@@ -14,6 +14,6 @@ func IncludeVerificationOfCertificates(
 ) {
 	// When receive a request to verify a certificate, check that it is structurally correct and verify the signatures.
 	adsl.UponVerifyCert(m, func(genericCert *availabilitypbtypes.Cert, origin *availabilitypbtypes.VerifyCertOrigin) error {
-		return fmt.Errorf("operation not supported")
+		return es.Errorf("operation not supported")
 	})
 }
