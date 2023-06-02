@@ -196,30 +196,49 @@ func clientStats(ctx context.Context, txReceiverAddrs map[t.NodeID]string, clock
 	}
 	writer.Flush()
 
+	defer func() {
+		txsMutex.Lock()
+		defer txsMutex.Unlock()
+
+		if len(txs) == 0 {
+			return
+		}
+
+		now := time.Since(clock)
+		ts := fmt.Sprintf("%.4f", now.Seconds())
+
+		writer.Write([]string{ts, fmt.Sprintf("%v", len(txs)), "0", "inf"})
+	}()
+
 	lastWrite := time.Since(clock)
+	writeStats := func() {
+		now := time.Since(clock)
+
+		ts := fmt.Sprintf("%.4f", now.Seconds())
+		nrDelivered := fmt.Sprintf("%v", txCount)
+		tps := fmt.Sprintf("%.5f", float64(txCount)/(float64(now-lastWrite)/float64(time.Second)))
+		avgLatency := fmt.Sprintf("%.5f", float64(latencySum)/float64(txCount)/float64(time.Second))
+
+		if err := writer.Write([]string{ts, nrDelivered, tps, avgLatency}); err != nil {
+			panic(err)
+		}
+		writer.Flush()
+
+		lastWrite = now
+		txCount = 0
+		latencySum = 0
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
+			writeStats()
 			return
+		case <-ticker.C:
+			writeStats()
 		case ts := <-confirmations:
 			latencySum += ts
 			txCount++
-		case <-ticker.C:
-			now := time.Since(clock)
-
-			ts := fmt.Sprintf("%.4f", now.Seconds())
-			nrDelivered := fmt.Sprintf("%v", txCount)
-			tps := fmt.Sprintf("%.5f", float64(txCount)/(float64(now-lastWrite)/float64(time.Second)))
-			avgLatency := fmt.Sprintf("%.5f", float64(latencySum)/float64(txCount)/float64(time.Second))
-
-			if err := writer.Write([]string{ts, nrDelivered, tps, avgLatency}); err != nil {
-				panic(err)
-			}
-			writer.Flush()
-
-			lastWrite = now
-			txCount = 0
-			latencySum = 0
 		}
 	}
 }
