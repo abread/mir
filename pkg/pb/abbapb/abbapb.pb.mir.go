@@ -11,6 +11,7 @@ func (*Event) ReflectTypeOptions() []reflect.Type {
 		reflect.TypeOf((*Event_InputValue)(nil)),
 		reflect.TypeOf((*Event_Deliver)(nil)),
 		reflect.TypeOf((*Event_Round)(nil)),
+		reflect.TypeOf((*Event_Done)(nil)),
 	}
 }
 

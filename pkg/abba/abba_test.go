@@ -162,6 +162,9 @@ func runTest(t *testing.T, conf *TestConfig) (result bool, heapObjects int64, he
 		assert.Equal(t, abbaConfig.Self, app.firstSrcModule)
 		assert.Equal(t, app0.firstDelivered, app.firstDelivered)
 
+		// Check if ABBA reported protocol termination
+		assert.Equal(t, 1, app.doneCount)
+
 		// Check if all messages were ACKed
 		rnet := replica.Modules[abbaConfig.ReliableNet].(*reliablenet.Module)
 		assert.Empty(t, rnet.GetPendingMessages())
@@ -291,6 +294,7 @@ type countingApp struct {
 	module dsl.Module
 
 	deliveredCount int
+	doneCount      int
 	firstSrcModule types.ModuleID
 	firstDelivered bool
 }
@@ -316,6 +320,11 @@ func newCountingApp(abbaMc ModuleConfig, inputValue bool) *countingApp {
 
 		app.deliveredCount++
 
+		return nil
+	})
+
+	abbadsl.UponDone(m, func(srcModule types.ModuleID) error {
+		app.doneCount++
 		return nil
 	})
 

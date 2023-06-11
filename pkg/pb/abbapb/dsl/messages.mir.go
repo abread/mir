@@ -42,9 +42,9 @@ func UponRoundMessageReceived[W types.RoundMessage_TypeWrapper[M], M any](m dsl.
 	})
 }
 
-func UponRoundInitMessageReceived(m dsl.Module, handler func(from types1.NodeID, estimate bool) error) {
+func UponRoundInitMessageReceived(m dsl.Module, handler func(from types1.NodeID, estimate bool, isInput bool) error) {
 	UponRoundMessageReceived[*types.RoundMessage_Init](m, func(from types1.NodeID, msg *types.RoundInitMessage) error {
-		return handler(from, msg.Estimate)
+		return handler(from, msg.Estimate, msg.IsInput)
 	})
 }
 

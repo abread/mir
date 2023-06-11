@@ -57,8 +57,14 @@ func UponRoundDeliver(m dsl.Module, handler func(nextEstimate bool, roundNumber 
 	})
 }
 
-func UponRoundFinishAll(m dsl.Module, handler func(decision bool) error) {
+func UponRoundFinishAll(m dsl.Module, handler func(decision bool, unanimous bool) error) {
 	UponRoundEvent[*types.RoundEvent_Finish](m, func(ev *types.RoundFinishAll) error {
-		return handler(ev.Decision)
+		return handler(ev.Decision, ev.Unanimous)
+	})
+}
+
+func UponDone(m dsl.Module, handler func(srcModule types2.ModuleID) error) {
+	UponEvent[*types.Event_Done](m, func(ev *types.Done) error {
+		return handler(ev.SrcModule)
 	})
 }

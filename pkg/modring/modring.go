@@ -258,10 +258,12 @@ func (m *Module) MarkSubmodulePast(id uint64) error {
 	ringIdx := int(id % uint64(len(m.ring)))
 	m.ring[ringIdx] = nil
 
-	m.ring[ringIdx] = nil
-
 	// m.logger.Log(logging.LevelDebug, "module freed", "id", id, "newMinSlot", m.ringController.minSlot)
 	return nil
+}
+
+func (m *Module) IsInView(id uint64) bool {
+	return m.ringController.IsSlotInView(id)
 }
 
 // multiApplySafely is a wrapper around an event processing function that catches its panic and returns it as an error.

@@ -45,6 +45,7 @@ const (
 	phaseAwaitingInput abbaPhase = iota
 	phaseRunning
 	phaseDelivered
+	phaseDone
 )
 
 type state struct {
@@ -84,10 +85,22 @@ func newController(mc ModuleConfig, params ModuleParams, logger logging.Logger, 
 		finishSent:  false,
 	}
 
-	abbadsl.UponRoundFinishAll(m, func(decision bool) error {
-		if !state.finishSent && state.phase == phaseRunning {
+	abbadsl.UponRoundFinishAll(m, func(decision bool, unanimous bool) error {
+		if state.phase < phaseRunning {
+			return es.Errorf("abba round cannot deliver before input")
+		} else if state.phase > phaseRunning {
+			return nil // no need
+		}
+
+		if !state.finishSent {
 			rnetdsl.SendMessage(m, mc.ReliableNet, FinishMsgID(), abbapbmsgs.FinishMessage(mc.Self, decision), params.AllNodes)
 			state.finishSent = true
+		}
+
+		if unanimous {
+			logger.Log(logging.LevelDebug, "delivering with unanimous fast path", "decision", decision)
+			abbadsl.Deliver(m, mc.Consumer, decision, mc.Self)
+			state.phase = phaseDelivered
 		}
 
 		return nil
@@ -107,7 +120,7 @@ func newController(mc ModuleConfig, params ModuleParams, logger logging.Logger, 
 	})
 
 	dsl.UponStateUpdates(m, func() error {
-		if state.phase == phaseDelivered {
+		if state.phase == phaseDone {
 			return nil
 		}
 
@@ -127,8 +140,11 @@ func newController(mc ModuleConfig, params ModuleParams, logger logging.Logger, 
 			if state.finishRecvdValueCounts.Get(value) >= params.strongSupportThresh() {
 				// logger.Log(logging.LevelDebug, "received strong support for FINISH(v)", "v", value)
 
-				abbadsl.Deliver(m, mc.Consumer, value, mc.Self)
-				state.phase = phaseDelivered
+				if state.phase < phaseDelivered {
+					abbadsl.Deliver(m, mc.Consumer, value, mc.Self)
+				}
+				abbadsl.Done(m, mc.Consumer, mc.Self)
+				state.phase = phaseDone
 
 				if err := rounds.MarkAllPast(); err != nil {
 					return es.Errorf("could not stop abba rounds: %w", err)
@@ -143,7 +159,7 @@ func newController(mc ModuleConfig, params ModuleParams, logger logging.Logger, 
 	})
 
 	abbadsl.UponInputValue(m, func(input bool) error {
-		if state.phase == phaseDelivered {
+		if state.phase == phaseDone {
 			// this may be a duplicate input, but we're ignoring that sanity check.
 			return nil
 		} else if state.phase != phaseAwaitingInput {
@@ -156,7 +172,9 @@ func newController(mc ModuleConfig, params ModuleParams, logger logging.Logger, 
 	})
 
 	abbadsl.UponRoundDeliver(m, func(nextEstimate bool, prevRoundNum uint64) error {
-		if state.phase != phaseRunning {
+		if state.phase == phaseAwaitingInput {
+			return es.Errorf("round delivered before input")
+		} else if state.phase == phaseDone {
 			return nil // already done
 		}
 		if prevRoundNum != state.currentRound {

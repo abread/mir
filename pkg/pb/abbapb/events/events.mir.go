@@ -78,7 +78,7 @@ func RoundDeliver(destModule types.ModuleID, nextEstimate bool, roundNumber uint
 	}
 }
 
-func RoundFinishAll(destModule types.ModuleID, decision bool) *types1.Event {
+func RoundFinishAll(destModule types.ModuleID, decision bool, unanimous bool) *types1.Event {
 	return &types1.Event{
 		DestModule: destModule,
 		Type: &types1.Event_Abba{
@@ -87,9 +87,25 @@ func RoundFinishAll(destModule types.ModuleID, decision bool) *types1.Event {
 					Round: &types2.RoundEvent{
 						Type: &types2.RoundEvent_Finish{
 							Finish: &types2.RoundFinishAll{
-								Decision: decision,
+								Decision:  decision,
+								Unanimous: unanimous,
 							},
 						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func Done(destModule types.ModuleID, srcModule types.ModuleID) *types1.Event {
+	return &types1.Event{
+		DestModule: destModule,
+		Type: &types1.Event_Abba{
+			Abba: &types2.Event{
+				Type: &types2.Event_Done{
+					Done: &types2.Done{
+						SrcModule: srcModule,
 					},
 				},
 			},

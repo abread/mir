@@ -26,6 +26,10 @@ func RoundDeliver(m dsl.Module, destModule types.ModuleID, nextEstimate bool, ro
 	dsl.EmitMirEvent(m, events.RoundDeliver(destModule, nextEstimate, roundNumber))
 }
 
-func RoundFinishAll(m dsl.Module, destModule types.ModuleID, decision bool) {
-	dsl.EmitMirEvent(m, events.RoundFinishAll(destModule, decision))
+func RoundFinishAll(m dsl.Module, destModule types.ModuleID, decision bool, unanimous bool) {
+	dsl.EmitMirEvent(m, events.RoundFinishAll(destModule, decision, unanimous))
+}
+
+func Done(m dsl.Module, destModule types.ModuleID, srcModule types.ModuleID) {
+	dsl.EmitMirEvent(m, events.Done(destModule, srcModule))
 }

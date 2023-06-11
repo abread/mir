@@ -81,6 +81,7 @@ func New(mc ModuleConfig, params ModuleParams, nodeID t.NodeID, logger logging.L
 		rnetdsl.SendMessage(m, mc.ReliableNet, InitMsgID(state.estimate), abbapbmsgs.RoundInitMessage(
 			mc.Self,
 			state.estimate,
+			params.RoundNumber == 0, // first round means abba input
 		), params.AllNodes)
 
 		state.phase = phaseAwaitingNiceAux
@@ -96,7 +97,7 @@ func New(mc ModuleConfig, params ModuleParams, nodeID t.NodeID, logger logging.L
 		return nil
 	})
 
-	abbadsl.UponRoundInitMessageReceived(m, func(from t.NodeID, est bool) error {
+	abbadsl.UponRoundInitMessageReceived(m, func(from t.NodeID, est bool, _ bool) error {
 		rnetdsl.Ack(m, mc.ReliableNet, mc.Self, InitMsgID(est), from)
 
 		if !state.initRecvd.Register(est, from) {
@@ -125,7 +126,7 @@ func New(mc ModuleConfig, params ModuleParams, nodeID t.NodeID, logger logging.L
 				if state.estimate != est {
 					rnetdsl.SendMessage(m, mc.ReliableNet,
 						InitMsgID(est),
-						abbapbmsgs.RoundInitMessage(mc.Self, est),
+						abbapbmsgs.RoundInitMessage(mc.Self, est, false),
 						params.AllNodes,
 					)
 				}
@@ -269,7 +270,7 @@ func New(mc ModuleConfig, params ModuleParams, nodeID t.NodeID, logger logging.L
 			// If in fact values = { s_r }, broadcast FINISH(s_r) if we haven't broadcast FINISH(_) already
 			// request ABBA controller to broadcast FINISH (if not done already)
 			if v == sR {
-				abbadsl.RoundFinishAll(m, mc.Consumer, sR)
+				abbadsl.RoundFinishAll(m, mc.Consumer, sR, false)
 			}
 		}
 
@@ -284,6 +285,41 @@ func New(mc ModuleConfig, params ModuleParams, nodeID t.NodeID, logger logging.L
 
 		return nil
 	})
+
+	// unanimity optimization
+	// when *all nodes input the same value* to abba, it is guaranteed that they will output that value
+	// inform abba module of that condition
+	if params.RoundNumber == 0 {
+		inputRecvTracker := make(abbat.RecvTracker, len(params.AllNodes))
+		trueCount := 0
+		falseCount := 0
+
+		abbadsl.UponRoundInitMessageReceived(m, func(from t.NodeID, estimate bool, isInput bool) error {
+			if !isInput || !inputRecvTracker.Register(from) {
+				return nil
+			}
+
+			if estimate {
+				trueCount++
+			} else {
+				falseCount++
+			}
+
+			return nil
+		})
+
+		dsl.UponStateUpdates(m, func() error {
+			if trueCount == len(params.AllNodes) {
+				abbadsl.RoundFinishAll(m, mc.Consumer, true, true)
+				trueCount = 0 // set to 0 to avoid duplicate events
+			} else if falseCount == len(params.AllNodes) {
+				abbadsl.RoundFinishAll(m, mc.Consumer, false, true)
+				falseCount = 0 // set to 0 to avoid duplicate events
+			}
+
+			return nil
+		})
+	}
 
 	return m
 }

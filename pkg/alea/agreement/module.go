@@ -98,6 +98,8 @@ type state struct {
 	currentRound uint64
 
 	undeliveredRounds []abbaRoundState
+
+	pendingInput map[uint64]bool
 }
 
 func (s *state) storeUndeliveredRound(round uint64, decision bool) {
@@ -123,7 +125,7 @@ func (s *state) loadUndeliveredRound(round uint64) (bool, bool) {
 	}
 }
 
-func (s *state) clearUndeliveredRound(round uint64) {
+func (s *state) clearDeliveredRound(round uint64) {
 	idx := int(round % uint64(len(s.undeliveredRounds)))
 	s.undeliveredRounds[idx] = AbbaRoundUndelivered
 }
@@ -143,22 +145,22 @@ func newAgController(mc ModuleConfig, tunables ModuleTunables, logger logging.Lo
 
 	state := state{
 		undeliveredRounds: make([]abbaRoundState, tunables.MaxRoundLookahead),
+
+		// stalled inputs count can never go beyond the number of concurrent agreement rounds
+		pendingInput: make(map[uint64]bool, tunables.MaxRoundLookahead),
 	}
 
 	agreementpbdsl.UponInputValue(m, func(round uint64, input bool) error {
-		// logger.Log(logging.LevelDebug, "inputting value to agreement round", "agRound", round, "value", input)
-		dsl.EmitMirEvent(m, abbapbevents.InputValue(
-			mc.agRoundModuleID(round),
-			input,
-		))
+		// queue input for later
+		state.pendingInput[round] = input
+		logger.Log(logging.LevelDebug, "queued input to agreement round", "agRound", round, "value", input)
 		return nil
 	})
 
 	abbapbdsl.UponDeliver(m, func(decision bool, srcModule t.ModuleID) error {
-		roundStr := srcModule.StripParent(mc.Self).Top()
-		round, err := strconv.ParseUint(string(roundStr), 10, 64)
+		round, err := mc.abbaRoundNumber(srcModule)
 		if err != nil {
-			return es.Errorf("deliver event for invalid round: %w", err)
+			return err
 		}
 
 		// queue result for delivery (when ready)
@@ -166,6 +168,7 @@ func newAgController(mc ModuleConfig, tunables ModuleTunables, logger logging.Lo
 		return nil
 	})
 
+	// deliver undelivered rounds
 	dsl.UponStateUpdates(m, func() error {
 		decision, ok := state.loadUndeliveredRound(state.currentRound)
 		if !ok {
@@ -173,18 +176,48 @@ func newAgController(mc ModuleConfig, tunables ModuleTunables, logger logging.Lo
 		}
 
 		for ok {
-			// logger.Log(logging.LevelDebug, "delivering round", "agRound", state.currentRound, "decision", decision)
+			logger.Log(logging.LevelDebug, "delivering round", "agRound", state.currentRound, "decision", decision)
 
 			agreementpbdsl.Deliver(m, mc.Consumer, state.currentRound, decision)
 			state.roundDecisionHistory.Push(decision)
-			state.clearUndeliveredRound(state.currentRound)
+			state.clearDeliveredRound(state.currentRound)
 
 			state.currentRound++
 			decision, ok = state.loadUndeliveredRound(state.currentRound)
 		}
 
-		if err := agRounds.MarkSubmodulePast(state.currentRound - 1); err != nil {
+		return nil
+	})
+
+	abbapbdsl.UponDone(m, func(srcModule t.ModuleID) error {
+		// when abba terminates, clean it up
+		round, err := mc.abbaRoundNumber(srcModule)
+		if err != nil {
+			return err
+		}
+
+		logger.Log(logging.LevelDebug, "garbage-collecting round", "agRound", round)
+		if err := agRounds.MarkSubmodulePast(round); err != nil {
 			return es.Errorf("failed to clean up finished agreement round: %w", err)
+		}
+
+		return nil
+	})
+
+	// give input to new rounds
+	dsl.UponStateUpdates(m, func() error {
+		for round, input := range state.pendingInput {
+			if agRounds.IsInView(round) {
+				logger.Log(logging.LevelDebug, "inputting value to agreement round", "agRound", round, "value", input)
+				dsl.EmitMirEvent(m, abbapbevents.InputValue(
+					mc.agRoundModuleID(round),
+					input,
+				))
+
+				delete(state.pendingInput, round)
+			}
+
+			// else: not enough rounds have terminated/been freed yet
 		}
 
 		return nil
@@ -239,6 +272,16 @@ func newAgController(mc ModuleConfig, tunables ModuleTunables, logger logging.Lo
 	})
 
 	return m
+}
+
+func (mc *ModuleConfig) abbaRoundNumber(id t.ModuleID) (uint64, error) {
+	roundStr := id.StripParent(mc.Self).Top()
+	round, err := strconv.ParseUint(string(roundStr), 10, 64)
+	if err != nil {
+		return 0, es.Errorf("deliver event for invalid round: %w", err)
+	}
+
+	return round, nil
 }
 
 func newPastMessageHandler(mc ModuleConfig) func(pastMessages []*modringpbtypes.PastMessage) (*events.EventList, error) {
