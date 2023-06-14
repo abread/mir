@@ -41,8 +41,7 @@ type state struct {
 	agRound             uint64
 	stalledAgRound      bool
 
-	avgAgTime   *estimator
-	agStartTime time.Time
+	avgAgTime *estimator
 
 	bcStartTimes map[commontypes.Slot]time.Time
 	avgOwnBcTime *estimator
@@ -264,7 +263,6 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 
 			aagdsl.InputValue(m, mc.AleaAgreement, state.agRound, bcDone)
 			state.stalledAgRound = false
-			state.agStartTime = time.Now()
 		}
 
 		return nil
