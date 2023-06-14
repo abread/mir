@@ -6,7 +6,7 @@ import (
 	es "github.com/go-errors/errors"
 
 	"github.com/filecoin-project/mir/pkg/events"
-	"github.com/filecoin-project/mir/pkg/types"
+	t "github.com/filecoin-project/mir/pkg/types"
 )
 
 type PassiveModule interface {
@@ -17,7 +17,7 @@ type PassiveModule interface {
 	ApplyEvents(events *events.EventList) (*events.EventList, error)
 }
 
-func RoutedModule(rootID types.ModuleID, root PassiveModule, subRouter PassiveModule) PassiveModule {
+func RoutedModule(rootID t.ModuleID, root PassiveModule, subRouter PassiveModule) PassiveModule {
 	return &routedModule{
 		rootID:    string(rootID),
 		root:      root,
@@ -55,6 +55,32 @@ func (m *routedModule) ApplyEvents(evs *events.EventList) (*events.EventList, er
 	}
 
 	return rootEvsOut.PushBackList(subRouterEvsOut), nil
+}
+
+func MultiApplyModule(subs []PassiveModule) PassiveModule {
+	return &multiApplyModule{
+		subs: subs,
+	}
+}
+
+type multiApplyModule struct {
+	subs []PassiveModule
+}
+
+func (m *multiApplyModule) ImplementsModule() {}
+func (m *multiApplyModule) ApplyEvents(evs *events.EventList) (*events.EventList, error) {
+	allEvsOut := &events.EventList{}
+
+	for _, sub := range m.subs {
+		evsOut, err := applyAllSafely(sub, evs)
+		if err != nil {
+			return nil, err
+		}
+
+		allEvsOut = allEvsOut.PushBackList(evsOut)
+	}
+
+	return allEvsOut, nil
 }
 
 func applyAllSafely(m PassiveModule, evs *events.EventList) (result *events.EventList, err error) {

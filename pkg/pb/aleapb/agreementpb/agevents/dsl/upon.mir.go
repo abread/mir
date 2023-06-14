@@ -3,6 +3,8 @@
 package ageventsdsl
 
 import (
+	"time"
+
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
 	types "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents/types"
 	types1 "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
@@ -28,9 +30,9 @@ func UponInputValue(m dsl.Module, handler func(round uint64, input bool) error) 
 	})
 }
 
-func UponDeliver(m dsl.Module, handler func(round uint64, decision bool) error) {
+func UponDeliver(m dsl.Module, handler func(round uint64, decision bool, duration time.Duration) error) {
 	UponEvent[*types.Event_Deliver](m, func(ev *types.Deliver) error {
-		return handler(ev.Round, ev.Decision)
+		return handler(ev.Round, ev.Decision, ev.Duration)
 	})
 }
 

@@ -114,7 +114,7 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 	})
 
 	// upon agreement round completion, deliver if it was decided to do so
-	aagdsl.UponDeliver(m, func(round uint64, decision bool) error {
+	aagdsl.UponDeliver(m, func(round uint64, decision bool, _duration time.Duration) error {
 		if !decision {
 			// nothing to deliver
 			return nil
@@ -223,9 +223,9 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 	})
 
 	// upon agreement round completion, prepare next round
-	aagdsl.UponDeliver(m, func(round uint64, decision bool) error {
+	aagdsl.UponDeliver(m, func(round uint64, decision bool, duration time.Duration) error {
 		state.agRound++
-		state.avgAgTime.AddSample(time.Since(state.agStartTime))
+		state.avgAgTime.AddSample(duration)
 
 		state.stalledAgRound = true
 		return nil

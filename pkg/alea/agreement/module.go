@@ -2,10 +2,12 @@ package agreement
 
 import (
 	"strconv"
+	"time"
 
 	es "github.com/go-errors/errors"
 
 	"github.com/filecoin-project/mir/pkg/abba"
+	"github.com/filecoin-project/mir/pkg/abba/abbatypes"
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/logging"
@@ -18,6 +20,7 @@ import (
 	agreementpbevents "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents/events"
 	agreementpbmsgdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/dsl"
 	agreementpbmsgs "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/msgs"
+	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 	messagepbtypes "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
 	modringpbtypes "github.com/filecoin-project/mir/pkg/pb/modringpb/types"
 	reliablenetpbdsl "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/dsl"
@@ -83,13 +86,39 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 		logging.Decorate(logger, "Modring controller: "),
 	)
 
-	controller := newAgController(mc, tunables, logger, agRounds)
+	state := &state{
+		rounds: make([]round, tunables.MaxRoundLookahead),
 
-	return modules.RoutedModule(mc.Self, controller, agRounds), nil
+		// stalled inputs count can never go beyond the number of concurrent agreement rounds
+		pendingInput: make(map[uint64]bool, tunables.MaxRoundLookahead),
+	}
+	for i := range state.rounds {
+		state.rounds[i].participants = make(abbatypes.RecvTracker, (len(params.AllNodes)-1)/3*2+1)
+	}
+
+	controller := newAgController(mc, params, logger, state, agRounds)
+
+	perfSniffer := newAgRoundSniffer(mc, params, agRounds, state)
+
+	agRounds2 := modules.MultiApplyModule([]modules.PassiveModule{
+		perfSniffer,
+		agRounds,
+	})
+
+	return modules.RoutedModule(mc.Self, controller, agRounds2), nil
 }
 
 func (mc *ModuleConfig) agRoundModuleID(id uint64) t.ModuleID {
 	return mc.Self.Then(t.NewModuleIDFromInt(id))
+}
+
+type round struct {
+	participants abbatypes.RecvTracker // TODO: move recvtracker to another package?
+	startTime    time.Time
+
+	delivered bool
+	decision  bool
+	duration  time.Duration
 }
 
 type state struct {
@@ -97,63 +126,57 @@ type state struct {
 
 	currentRound uint64
 
-	undeliveredRounds []abbaRoundState
+	rounds []round
 
 	pendingInput map[uint64]bool
 }
 
-func (s *state) storeUndeliveredRound(round uint64, decision bool) {
-	val := AbbaRoundDeliveredTrue
-	if !decision {
-		val = AbbaRoundDeliveredFalse
+func (s *state) storeRoundDecision(rounds *modring.Module, roundNum uint64, decision bool) error {
+	if !rounds.IsInView(roundNum) {
+		return es.Errorf("round out of view: %v", rounds)
 	}
 
-	idx := int(round % uint64(len(s.undeliveredRounds)))
-	s.undeliveredRounds[idx] = val
+	idx := int(roundNum % uint64(len(s.rounds)))
+	s.rounds[idx].decision = decision
+	s.rounds[idx].delivered = true
+
+	startTime := s.rounds[idx].startTime
+	s.rounds[idx].duration = time.Since(startTime)
+
+	return nil
 }
 
-func (s *state) loadUndeliveredRound(round uint64) (bool, bool) {
-	idx := int(round % uint64(len(s.undeliveredRounds)))
-
-	switch s.undeliveredRounds[idx] {
-	case AbbaRoundDeliveredTrue:
-		return true, true
-	case AbbaRoundDeliveredFalse:
-		return false, true
-	default:
-		return false, false
+func (s *state) loadRound(rounds *modring.Module, roundNum uint64) *round {
+	if !rounds.IsInView(roundNum) {
+		return nil
 	}
+
+	idx := int(roundNum % uint64(len(s.rounds)))
+	return &s.rounds[idx]
 }
 
-func (s *state) clearDeliveredRound(round uint64) {
-	idx := int(round % uint64(len(s.undeliveredRounds)))
-	s.undeliveredRounds[idx] = AbbaRoundUndelivered
+func (s *state) clearRoundData(rounds *modring.Module, roundNum uint64, n int) error {
+	if !rounds.IsInView(roundNum) {
+		return es.Errorf("round out of view: %v", rounds)
+	}
+
+	idx := int(roundNum % uint64(len(s.rounds)))
+	s.rounds[idx] = round{
+		participants: make(abbatypes.RecvTracker, (n-1)/3*2+1),
+	}
+
+	return nil
 }
 
-type abbaRoundState uint8
-
-const (
-	AbbaRoundUndelivered abbaRoundState = iota
-	AbbaRoundDeliveredFalse
-	AbbaRoundDeliveredTrue
-)
-
-func newAgController(mc ModuleConfig, tunables ModuleTunables, logger logging.Logger, agRounds *modring.Module) modules.PassiveModule {
+func newAgController(mc ModuleConfig, params ModuleParams, logger logging.Logger, state *state, agRounds *modring.Module) modules.PassiveModule {
 	_ = logger // silence warnings
 
 	m := dsl.NewModule(mc.Self)
 
-	state := state{
-		undeliveredRounds: make([]abbaRoundState, tunables.MaxRoundLookahead),
-
-		// stalled inputs count can never go beyond the number of concurrent agreement rounds
-		pendingInput: make(map[uint64]bool, tunables.MaxRoundLookahead),
-	}
-
-	agreementpbdsl.UponInputValue(m, func(round uint64, input bool) error {
+	agreementpbdsl.UponInputValue(m, func(roundNum uint64, input bool) error {
 		// queue input for later
-		state.pendingInput[round] = input
-		logger.Log(logging.LevelDebug, "queued input to agreement round", "agRound", round, "value", input)
+		state.pendingInput[roundNum] = input
+		logger.Log(logging.LevelDebug, "queued input to agreement round", "agRound", roundNum, "value", input)
 		return nil
 	})
 
@@ -164,26 +187,30 @@ func newAgController(mc ModuleConfig, tunables ModuleTunables, logger logging.Lo
 		}
 
 		// queue result for delivery (when ready)
-		state.storeUndeliveredRound(round, decision)
-		return nil
+		logger.Log(logging.LevelDebug, "round delivered", "agRound", round, "decision", decision)
+		return state.storeRoundDecision(agRounds, round, decision)
 	})
 
 	// deliver undelivered rounds
-	dsl.UponStateUpdates(m, func() error {
-		decision, ok := state.loadUndeliveredRound(state.currentRound)
-		if !ok {
+	// TODO: currently clashes with round clearing in UponDone. change them to allow batching state updates
+	dsl.UponStateUpdate(m, func() error {
+		currentRound := state.loadRound(agRounds, state.currentRound)
+		if currentRound == nil || !currentRound.delivered {
 			return nil
 		}
 
-		for ok {
-			logger.Log(logging.LevelDebug, "delivering round", "agRound", state.currentRound, "decision", decision)
+		for currentRound != nil && currentRound.delivered {
+			logger.Log(logging.LevelDebug, "delivering round", "agRound", state.currentRound, "decision", currentRound.decision)
 
-			agreementpbdsl.Deliver(m, mc.Consumer, state.currentRound, decision)
-			state.roundDecisionHistory.Push(decision)
-			state.clearDeliveredRound(state.currentRound)
+			agreementpbdsl.Deliver(m, mc.Consumer, state.currentRound, currentRound.decision, currentRound.duration)
+			state.roundDecisionHistory.Push(currentRound.decision)
+			if err := state.clearRoundData(agRounds, state.currentRound, len(params.AllNodes)); err != nil {
+				return err
+			}
 
 			state.currentRound++
-			decision, ok = state.loadUndeliveredRound(state.currentRound)
+
+			currentRound = state.loadRound(agRounds, state.currentRound)
 		}
 
 		return nil
@@ -274,16 +301,6 @@ func newAgController(mc ModuleConfig, tunables ModuleTunables, logger logging.Lo
 	return m
 }
 
-func (mc *ModuleConfig) abbaRoundNumber(id t.ModuleID) (uint64, error) {
-	roundStr := id.StripParent(mc.Self).Top()
-	round, err := strconv.ParseUint(string(roundStr), 10, 64)
-	if err != nil {
-		return 0, es.Errorf("deliver event for invalid round: %w", err)
-	}
-
-	return round, nil
-}
-
 func newPastMessageHandler(mc ModuleConfig) func(pastMessages []*modringpbtypes.PastMessage) (*events.EventList, error) {
 	return func(pastMessages []*modringpbtypes.PastMessage) (*events.EventList, error) {
 		return events.ListOf(
@@ -318,4 +335,50 @@ func newAbbaGenerator(agMc ModuleConfig, agParams ModuleParams, agTunables Modul
 		initialEvs := &events.EventList{}
 		return mod, initialEvs, nil
 	}
+}
+
+func newAgRoundSniffer(mc ModuleConfig, params ModuleParams, agRounds *modring.Module, state *state) modules.PassiveModule {
+	m := dsl.NewModule("__invalid__") // this module shall not emit events
+
+	N := len(params.AllNodes)
+	thresh := (N-1)/3*2 + 1
+
+	transportpbdsl.UponMessageReceived(m, func(from t.NodeID, msg *messagepbtypes.Message) error {
+		roundNum, err := mc.abbaRoundNumber(msg.DestModule)
+		if err != nil {
+			return err
+		}
+
+		if !agRounds.IsInView(roundNum) {
+			return nil // round not being processed yet
+		}
+
+		idx := int(roundNum % uint64(len(state.rounds)))
+		var zeroTime time.Time
+		if state.rounds[idx].startTime == zeroTime {
+			state.rounds[idx].participants.Register(from)
+
+			if state.rounds[idx].participants.Len() >= thresh {
+				state.rounds[idx].startTime = time.Now()
+			}
+		}
+
+		return nil
+	})
+
+	dsl.UponOtherMirEvent(m, func(_ *eventpbtypes.Event) error {
+		return nil
+	})
+
+	return m
+}
+
+func (mc *ModuleConfig) abbaRoundNumber(id t.ModuleID) (uint64, error) {
+	roundStr := id.StripParent(mc.Self).Top()
+	round, err := strconv.ParseUint(string(roundStr), 10, 64)
+	if err != nil {
+		return 0, es.Errorf("deliver event for invalid round: %w", err)
+	}
+
+	return round, nil
 }

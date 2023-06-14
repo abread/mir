@@ -3,6 +3,8 @@
 package ageventstypes
 
 import (
+	"time"
+
 	mirreflect "github.com/filecoin-project/mir/codegen/mirreflect"
 	types1 "github.com/filecoin-project/mir/codegen/model/types"
 	agevents "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents"
@@ -175,6 +177,7 @@ func (*InputValue) MirReflect() mirreflect.Type {
 type Deliver struct {
 	Round    uint64
 	Decision bool
+	Duration time.Duration
 }
 
 func DeliverFromPb(pb *agevents.Deliver) *Deliver {
@@ -184,6 +187,7 @@ func DeliverFromPb(pb *agevents.Deliver) *Deliver {
 	return &Deliver{
 		Round:    pb.Round,
 		Decision: pb.Decision,
+		Duration: (time.Duration)(pb.Duration),
 	}
 }
 
@@ -195,6 +199,7 @@ func (m *Deliver) Pb() *agevents.Deliver {
 	{
 		pbMessage.Round = m.Round
 		pbMessage.Decision = m.Decision
+		pbMessage.Duration = (int64)(m.Duration)
 	}
 
 	return pbMessage

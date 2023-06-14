@@ -138,9 +138,9 @@ func newController(mc ModuleConfig, params ModuleParams, logger logging.Logger, 
 
 			// 2. upon receiving strong support for FINISH(v), output v and terminate
 			if state.finishRecvdValueCounts.Get(value) >= params.strongSupportThresh() {
-				// logger.Log(logging.LevelDebug, "received strong support for FINISH(v)", "v", value)
+				logger.Log(logging.LevelDebug, "received strong support for FINISH(v)", "v", value)
 
-				if state.phase < phaseDelivered {
+				if state.phase != phaseDelivered {
 					abbadsl.Deliver(m, mc.Consumer, value, mc.Self)
 				}
 				abbadsl.Done(m, mc.Consumer, mc.Self)

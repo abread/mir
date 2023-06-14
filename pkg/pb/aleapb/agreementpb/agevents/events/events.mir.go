@@ -3,6 +3,8 @@
 package ageventsevents
 
 import (
+	"time"
+
 	types2 "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents/types"
 	types1 "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 	types3 "github.com/filecoin-project/mir/pkg/pb/modringpb/types"
@@ -25,7 +27,7 @@ func InputValue(destModule types.ModuleID, round uint64, input bool) *types1.Eve
 	}
 }
 
-func Deliver(destModule types.ModuleID, round uint64, decision bool) *types1.Event {
+func Deliver(destModule types.ModuleID, round uint64, decision bool, duration time.Duration) *types1.Event {
 	return &types1.Event{
 		DestModule: destModule,
 		Type: &types1.Event_AleaAgreement{
@@ -34,6 +36,7 @@ func Deliver(destModule types.ModuleID, round uint64, decision bool) *types1.Eve
 					Deliver: &types2.Deliver{
 						Round:    round,
 						Decision: decision,
+						Duration: duration,
 					},
 				},
 			},

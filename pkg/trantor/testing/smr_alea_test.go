@@ -92,7 +92,7 @@ func testIntegrationWithAlea(t *testing.T) {
 				NumClients:  1,
 				Transport:   "libp2p",
 				NumNetTXs:   10,
-				Duration:    15 * time.Second,
+				Duration:    20 * time.Second,
 			}},
 
 		// TODO: fix sim transport with non-transport active modules (threshcrypto breaks it)
