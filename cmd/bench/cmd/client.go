@@ -224,6 +224,7 @@ func clientStats(ctx context.Context, txReceiverAddrs map[t.NodeID]string, clock
 		if err := writer.Write([]string{ts, nrDelivered, tps, avgLatency}); err != nil {
 			panic(err)
 		}
+		writer.Flush()
 
 		lastWrite = now
 		txCount = 0
