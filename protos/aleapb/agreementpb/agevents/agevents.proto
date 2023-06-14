@@ -39,6 +39,11 @@ message Deliver {
   uint64 round    = 1;
   bool   decision = 2;
   int64  duration = 3 [(mir.type) = "time.Duration"];
+
+  // amount of time from input to a quorum(2F+1) of inputs with value 1.
+  // can be negative, when quorum is reached before input.
+  // set to math.MaxInt64 when quorum is never reached.
+  int64 pos_quorum_wait = 4 [(mir.type) = "time.Duration"];
 }
 
 message StaleMsgsRecvd {

@@ -175,9 +175,10 @@ func (*InputValue) MirReflect() mirreflect.Type {
 }
 
 type Deliver struct {
-	Round    uint64
-	Decision bool
-	Duration time.Duration
+	Round         uint64
+	Decision      bool
+	Duration      time.Duration
+	PosQuorumWait time.Duration
 }
 
 func DeliverFromPb(pb *agevents.Deliver) *Deliver {
@@ -185,9 +186,10 @@ func DeliverFromPb(pb *agevents.Deliver) *Deliver {
 		return nil
 	}
 	return &Deliver{
-		Round:    pb.Round,
-		Decision: pb.Decision,
-		Duration: (time.Duration)(pb.Duration),
+		Round:         pb.Round,
+		Decision:      pb.Decision,
+		Duration:      (time.Duration)(pb.Duration),
+		PosQuorumWait: (time.Duration)(pb.PosQuorumWait),
 	}
 }
 
@@ -200,6 +202,7 @@ func (m *Deliver) Pb() *agevents.Deliver {
 		pbMessage.Round = m.Round
 		pbMessage.Decision = m.Decision
 		pbMessage.Duration = (int64)(m.Duration)
+		pbMessage.PosQuorumWait = (int64)(m.PosQuorumWait)
 	}
 
 	return pbMessage

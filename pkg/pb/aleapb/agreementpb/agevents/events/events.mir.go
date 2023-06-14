@@ -27,16 +27,17 @@ func InputValue(destModule types.ModuleID, round uint64, input bool) *types1.Eve
 	}
 }
 
-func Deliver(destModule types.ModuleID, round uint64, decision bool, duration time.Duration) *types1.Event {
+func Deliver(destModule types.ModuleID, round uint64, decision bool, duration time.Duration, posQuorumWait time.Duration) *types1.Event {
 	return &types1.Event{
 		DestModule: destModule,
 		Type: &types1.Event_AleaAgreement{
 			AleaAgreement: &types2.Event{
 				Type: &types2.Event_Deliver{
 					Deliver: &types2.Deliver{
-						Round:    round,
-						Decision: decision,
-						Duration: duration,
+						Round:         round,
+						Decision:      decision,
+						Duration:      duration,
+						PosQuorumWait: posQuorumWait,
 					},
 				},
 			},

@@ -1,6 +1,7 @@
 package agreement
 
 import (
+	"math"
 	"strconv"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	abbapbdsl "github.com/filecoin-project/mir/pkg/pb/abbapb/dsl"
 	abbapbevents "github.com/filecoin-project/mir/pkg/pb/abbapb/events"
 	abbapbmsgs "github.com/filecoin-project/mir/pkg/pb/abbapb/msgs"
+	abbapbtypes "github.com/filecoin-project/mir/pkg/pb/abbapb/types"
 	agreementpbdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents/dsl"
 	agreementpbevents "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents/events"
 	agreementpbmsgdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/dsl"
@@ -28,6 +30,8 @@ import (
 	transportpbevents "github.com/filecoin-project/mir/pkg/pb/transportpb/events"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
+
+var timeRef = time.Now()
 
 // ModuleConfig sets the module ids. All replicas are expected to use identical module configurations.
 type ModuleConfig struct {
@@ -90,10 +94,11 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 		rounds: make([]round, tunables.MaxRoundLookahead),
 
 		// stalled inputs count can never go beyond the number of concurrent agreement rounds
-		pendingInput: make(map[uint64]bool, tunables.MaxRoundLookahead),
+		pendingInput: make(map[uint64]pendingInput, tunables.MaxRoundLookahead),
 	}
 	for i := range state.rounds {
 		state.rounds[i].participants = make(abbatypes.RecvTracker, (len(params.AllNodes)-1)/3*2+1)
+		state.rounds[i].nodesWithInput = make(abbatypes.RecvTracker, len(params.AllNodes))
 	}
 
 	controller := newAgController(mc, params, logger, state, agRounds)
@@ -114,11 +119,22 @@ func (mc *ModuleConfig) agRoundModuleID(id uint64) t.ModuleID {
 
 type round struct {
 	participants abbatypes.RecvTracker // TODO: move recvtracker to another package?
-	startTime    time.Time
+	relStartTime time.Duration
+	relInputTime time.Duration
 
-	delivered bool
-	decision  bool
-	duration  time.Duration
+	nodesWithInput         abbatypes.RecvTracker
+	nodesWithPosInputCount int
+	relPosQuorumTime       time.Duration // instant where 2F+1 nodes provided input=1
+
+	delivered         bool
+	decision          bool
+	duration          time.Duration
+	posQuorumDuration time.Duration
+}
+
+type pendingInput struct {
+	input   bool
+	relTime time.Duration
 }
 
 type state struct {
@@ -128,7 +144,7 @@ type state struct {
 
 	rounds []round
 
-	pendingInput map[uint64]bool
+	pendingInput map[uint64]pendingInput
 }
 
 func (s *state) storeRoundDecision(rounds *modring.Module, roundNum uint64, decision bool) error {
@@ -140,8 +156,18 @@ func (s *state) storeRoundDecision(rounds *modring.Module, roundNum uint64, deci
 	s.rounds[idx].decision = decision
 	s.rounds[idx].delivered = true
 
-	startTime := s.rounds[idx].startTime
-	s.rounds[idx].duration = time.Since(startTime)
+	startTime := s.rounds[idx].relStartTime
+	s.rounds[idx].duration = time.Since(timeRef) - startTime
+
+	var posQuorumDuration time.Duration
+	if s.rounds[idx].relInputTime == 0 && s.rounds[idx].relPosQuorumTime != 0 {
+		posQuorumDuration = 0
+	} else if s.rounds[idx].relInputTime != 0 && s.rounds[idx].relPosQuorumTime == 0 {
+		posQuorumDuration = time.Duration(math.MaxInt64)
+	} else {
+		posQuorumDuration = s.rounds[idx].relPosQuorumTime - s.rounds[idx].relInputTime
+	}
+	s.rounds[idx].posQuorumDuration = posQuorumDuration
 
 	return nil
 }
@@ -162,7 +188,8 @@ func (s *state) clearRoundData(rounds *modring.Module, roundNum uint64, n int) e
 
 	idx := int(roundNum % uint64(len(s.rounds)))
 	s.rounds[idx] = round{
-		participants: make(abbatypes.RecvTracker, (n-1)/3*2+1),
+		participants:   make(abbatypes.RecvTracker, (n-1)/3*2+1),
+		nodesWithInput: make(abbatypes.RecvTracker, n),
 	}
 
 	return nil
@@ -175,13 +202,16 @@ func newAgController(mc ModuleConfig, params ModuleParams, logger logging.Logger
 
 	agreementpbdsl.UponInputValue(m, func(roundNum uint64, input bool) error {
 		// queue input for later
-		state.pendingInput[roundNum] = input
+		state.pendingInput[roundNum] = pendingInput{
+			input:   input,
+			relTime: time.Since(timeRef),
+		}
 		logger.Log(logging.LevelDebug, "queued input to agreement round", "agRound", roundNum, "value", input)
 		return nil
 	})
 
 	abbapbdsl.UponDeliver(m, func(decision bool, srcModule t.ModuleID) error {
-		round, err := mc.abbaRoundNumber(srcModule)
+		round, err := mc.agRoundNumber(srcModule)
 		if err != nil {
 			return err
 		}
@@ -202,7 +232,7 @@ func newAgController(mc ModuleConfig, params ModuleParams, logger logging.Logger
 		for currentRound != nil && currentRound.delivered {
 			logger.Log(logging.LevelDebug, "delivering round", "agRound", state.currentRound, "decision", currentRound.decision)
 
-			agreementpbdsl.Deliver(m, mc.Consumer, state.currentRound, currentRound.decision, currentRound.duration)
+			agreementpbdsl.Deliver(m, mc.Consumer, state.currentRound, currentRound.decision, currentRound.duration, currentRound.posQuorumDuration)
 			state.roundDecisionHistory.Push(currentRound.decision)
 			if err := state.clearRoundData(agRounds, state.currentRound, len(params.AllNodes)); err != nil {
 				return err
@@ -218,7 +248,7 @@ func newAgController(mc ModuleConfig, params ModuleParams, logger logging.Logger
 
 	abbapbdsl.UponDone(m, func(srcModule t.ModuleID) error {
 		// when abba terminates, clean it up
-		round, err := mc.abbaRoundNumber(srcModule)
+		round, err := mc.agRoundNumber(srcModule)
 		if err != nil {
 			return err
 		}
@@ -238,9 +268,10 @@ func newAgController(mc ModuleConfig, params ModuleParams, logger logging.Logger
 				logger.Log(logging.LevelDebug, "inputting value to agreement round", "agRound", round, "value", input)
 				dsl.EmitMirEvent(m, abbapbevents.InputValue(
 					mc.agRoundModuleID(round),
-					input,
+					input.input,
 				))
 
+				state.loadRound(agRounds, round).relInputTime = input.relTime
 				delete(state.pendingInput, round)
 			}
 
@@ -343,25 +374,62 @@ func newAgRoundSniffer(mc ModuleConfig, params ModuleParams, agRounds *modring.M
 	N := len(params.AllNodes)
 	thresh := (N-1)/3*2 + 1
 
+	trackInput := func(r *round, from t.NodeID, msg *messagepbtypes.Message) {
+		abbaRoundNum, err := mc.abbaRoundNumber(msg.DestModule)
+		if err != nil || abbaRoundNum != 0 {
+			return
+		}
+
+		abbaMsg, ok := msg.Type.(*messagepbtypes.Message_Abba)
+		if !ok {
+			return
+		}
+
+		abbaRoundMsg, ok := abbaMsg.Abba.Type.(*abbapbtypes.Message_Round)
+		if !ok {
+			return
+		}
+
+		abbaRoundInitMsg, ok := abbaRoundMsg.Round.Type.(*abbapbtypes.RoundMessage_Init)
+		if !ok || !abbaRoundInitMsg.Init.IsInput {
+			return
+		}
+
+		if !r.nodesWithInput.Register(from) {
+			return
+		}
+
+		if abbaRoundInitMsg.Init.Estimate {
+			r.nodesWithPosInputCount++
+
+			if r.nodesWithPosInputCount == thresh {
+				r.relPosQuorumTime = time.Since(timeRef)
+			}
+		}
+	}
+
 	transportpbdsl.UponMessageReceived(m, func(from t.NodeID, msg *messagepbtypes.Message) error {
-		roundNum, err := mc.abbaRoundNumber(msg.DestModule)
+		roundNum, err := mc.agRoundNumber(msg.DestModule)
 		if err != nil {
-			return err
+			return nil // invalid message
 		}
 
 		if !agRounds.IsInView(roundNum) {
 			return nil // round not being processed yet
 		}
-
 		idx := int(roundNum % uint64(len(state.rounds)))
-		var zeroTime time.Time
-		if state.rounds[idx].startTime == zeroTime {
+
+		// track round start time
+		if state.rounds[idx].relStartTime == 0 {
 			state.rounds[idx].participants.Register(from)
 
 			if state.rounds[idx].participants.Len() >= thresh {
-				state.rounds[idx].startTime = time.Now()
+				state.rounds[idx].relStartTime = time.Since(timeRef)
 			}
 		}
+
+		// track inputs
+		trackInput(&state.rounds[idx], from, msg)
 
 		return nil
 	})
@@ -373,11 +441,29 @@ func newAgRoundSniffer(mc ModuleConfig, params ModuleParams, agRounds *modring.M
 	return m
 }
 
-func (mc *ModuleConfig) abbaRoundNumber(id t.ModuleID) (uint64, error) {
+func (mc *ModuleConfig) agRoundNumber(id t.ModuleID) (uint64, error) {
 	roundStr := id.StripParent(mc.Self).Top()
 	round, err := strconv.ParseUint(string(roundStr), 10, 64)
 	if err != nil {
-		return 0, es.Errorf("deliver event for invalid round: %w", err)
+		return 0, es.Errorf("invalid ag round id: %w", err)
+	}
+
+	return round, nil
+}
+
+func (mc *ModuleConfig) abbaRoundNumber(id t.ModuleID) (uint64, error) {
+	if _, err := mc.agRoundNumber(id); err != nil {
+		return 0, err
+	}
+
+	if id.StripParent(mc.Self).Sub().Top() != abba.ModringSubName {
+		return 0, es.Errorf("invalid abba round id: %v does not match expected structure (missing modring sub name)", id)
+	}
+
+	roundStr := id.StripParent(mc.Self).Sub().Sub().Top()
+	round, err := strconv.ParseUint(string(roundStr), 10, 64)
+	if err != nil {
+		return 0, es.Errorf("invalid abba round id: %w", err)
 	}
 
 	return round, nil

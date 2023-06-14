@@ -30,9 +30,9 @@ func UponInputValue(m dsl.Module, handler func(round uint64, input bool) error) 
 	})
 }
 
-func UponDeliver(m dsl.Module, handler func(round uint64, decision bool, duration time.Duration) error) {
+func UponDeliver(m dsl.Module, handler func(round uint64, decision bool, duration time.Duration, posQuorumWait time.Duration) error) {
 	UponEvent[*types.Event_Deliver](m, func(ev *types.Deliver) error {
-		return handler(ev.Round, ev.Decision, ev.Duration)
+		return handler(ev.Round, ev.Decision, ev.Duration, ev.PosQuorumWait)
 	})
 }
 

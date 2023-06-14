@@ -11,6 +11,383 @@ import (
 	reflectutil "github.com/filecoin-project/mir/pkg/util/reflectutil"
 )
 
+type Event struct {
+	Type Event_Type
+}
+
+type Event_Type interface {
+	mirreflect.GeneratedType
+	isEvent_Type()
+	Pb() abbapb.Event_Type
+}
+
+type Event_TypeWrapper[T any] interface {
+	Event_Type
+	Unwrap() *T
+}
+
+func Event_TypeFromPb(pb abbapb.Event_Type) Event_Type {
+	if pb == nil {
+		return nil
+	}
+	switch pb := pb.(type) {
+	case *abbapb.Event_InputValue:
+		return &Event_InputValue{InputValue: InputValueFromPb(pb.InputValue)}
+	case *abbapb.Event_Deliver:
+		return &Event_Deliver{Deliver: DeliverFromPb(pb.Deliver)}
+	case *abbapb.Event_Round:
+		return &Event_Round{Round: RoundEventFromPb(pb.Round)}
+	case *abbapb.Event_Done:
+		return &Event_Done{Done: DoneFromPb(pb.Done)}
+	}
+	return nil
+}
+
+type Event_InputValue struct {
+	InputValue *InputValue
+}
+
+func (*Event_InputValue) isEvent_Type() {}
+
+func (w *Event_InputValue) Unwrap() *InputValue {
+	return w.InputValue
+}
+
+func (w *Event_InputValue) Pb() abbapb.Event_Type {
+	if w == nil {
+		return nil
+	}
+	if w.InputValue == nil {
+		return &abbapb.Event_InputValue{}
+	}
+	return &abbapb.Event_InputValue{InputValue: (w.InputValue).Pb()}
+}
+
+func (*Event_InputValue) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Event_InputValue]()}
+}
+
+type Event_Deliver struct {
+	Deliver *Deliver
+}
+
+func (*Event_Deliver) isEvent_Type() {}
+
+func (w *Event_Deliver) Unwrap() *Deliver {
+	return w.Deliver
+}
+
+func (w *Event_Deliver) Pb() abbapb.Event_Type {
+	if w == nil {
+		return nil
+	}
+	if w.Deliver == nil {
+		return &abbapb.Event_Deliver{}
+	}
+	return &abbapb.Event_Deliver{Deliver: (w.Deliver).Pb()}
+}
+
+func (*Event_Deliver) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Event_Deliver]()}
+}
+
+type Event_Round struct {
+	Round *RoundEvent
+}
+
+func (*Event_Round) isEvent_Type() {}
+
+func (w *Event_Round) Unwrap() *RoundEvent {
+	return w.Round
+}
+
+func (w *Event_Round) Pb() abbapb.Event_Type {
+	if w == nil {
+		return nil
+	}
+	if w.Round == nil {
+		return &abbapb.Event_Round{}
+	}
+	return &abbapb.Event_Round{Round: (w.Round).Pb()}
+}
+
+func (*Event_Round) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Event_Round]()}
+}
+
+type Event_Done struct {
+	Done *Done
+}
+
+func (*Event_Done) isEvent_Type() {}
+
+func (w *Event_Done) Unwrap() *Done {
+	return w.Done
+}
+
+func (w *Event_Done) Pb() abbapb.Event_Type {
+	if w == nil {
+		return nil
+	}
+	if w.Done == nil {
+		return &abbapb.Event_Done{}
+	}
+	return &abbapb.Event_Done{Done: (w.Done).Pb()}
+}
+
+func (*Event_Done) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Event_Done]()}
+}
+
+func EventFromPb(pb *abbapb.Event) *Event {
+	if pb == nil {
+		return nil
+	}
+	return &Event{
+		Type: Event_TypeFromPb(pb.Type),
+	}
+}
+
+func (m *Event) Pb() *abbapb.Event {
+	if m == nil {
+		return nil
+	}
+	pbMessage := &abbapb.Event{}
+	{
+		if m.Type != nil {
+			pbMessage.Type = (m.Type).Pb()
+		}
+	}
+
+	return pbMessage
+}
+
+func (*Event) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Event]()}
+}
+
+type InputValue struct {
+	Input bool
+}
+
+func InputValueFromPb(pb *abbapb.InputValue) *InputValue {
+	if pb == nil {
+		return nil
+	}
+	return &InputValue{
+		Input: pb.Input,
+	}
+}
+
+func (m *InputValue) Pb() *abbapb.InputValue {
+	if m == nil {
+		return nil
+	}
+	pbMessage := &abbapb.InputValue{}
+	{
+		pbMessage.Input = m.Input
+	}
+
+	return pbMessage
+}
+
+func (*InputValue) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.InputValue]()}
+}
+
+type Deliver struct {
+	Result    bool
+	SrcModule types.ModuleID
+}
+
+func DeliverFromPb(pb *abbapb.Deliver) *Deliver {
+	if pb == nil {
+		return nil
+	}
+	return &Deliver{
+		Result:    pb.Result,
+		SrcModule: (types.ModuleID)(pb.SrcModule),
+	}
+}
+
+func (m *Deliver) Pb() *abbapb.Deliver {
+	if m == nil {
+		return nil
+	}
+	pbMessage := &abbapb.Deliver{}
+	{
+		pbMessage.Result = m.Result
+		pbMessage.SrcModule = (string)(m.SrcModule)
+	}
+
+	return pbMessage
+}
+
+func (*Deliver) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Deliver]()}
+}
+
+type Done struct {
+	SrcModule types.ModuleID
+}
+
+func DoneFromPb(pb *abbapb.Done) *Done {
+	if pb == nil {
+		return nil
+	}
+	return &Done{
+		SrcModule: (types.ModuleID)(pb.SrcModule),
+	}
+}
+
+func (m *Done) Pb() *abbapb.Done {
+	if m == nil {
+		return nil
+	}
+	pbMessage := &abbapb.Done{}
+	{
+		pbMessage.SrcModule = (string)(m.SrcModule)
+	}
+
+	return pbMessage
+}
+
+func (*Done) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Done]()}
+}
+
+type Message struct {
+	Type Message_Type
+}
+
+type Message_Type interface {
+	mirreflect.GeneratedType
+	isMessage_Type()
+	Pb() abbapb.Message_Type
+}
+
+type Message_TypeWrapper[T any] interface {
+	Message_Type
+	Unwrap() *T
+}
+
+func Message_TypeFromPb(pb abbapb.Message_Type) Message_Type {
+	if pb == nil {
+		return nil
+	}
+	switch pb := pb.(type) {
+	case *abbapb.Message_Finish:
+		return &Message_Finish{Finish: FinishMessageFromPb(pb.Finish)}
+	case *abbapb.Message_Round:
+		return &Message_Round{Round: RoundMessageFromPb(pb.Round)}
+	}
+	return nil
+}
+
+type Message_Finish struct {
+	Finish *FinishMessage
+}
+
+func (*Message_Finish) isMessage_Type() {}
+
+func (w *Message_Finish) Unwrap() *FinishMessage {
+	return w.Finish
+}
+
+func (w *Message_Finish) Pb() abbapb.Message_Type {
+	if w == nil {
+		return nil
+	}
+	if w.Finish == nil {
+		return &abbapb.Message_Finish{}
+	}
+	return &abbapb.Message_Finish{Finish: (w.Finish).Pb()}
+}
+
+func (*Message_Finish) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Message_Finish]()}
+}
+
+type Message_Round struct {
+	Round *RoundMessage
+}
+
+func (*Message_Round) isMessage_Type() {}
+
+func (w *Message_Round) Unwrap() *RoundMessage {
+	return w.Round
+}
+
+func (w *Message_Round) Pb() abbapb.Message_Type {
+	if w == nil {
+		return nil
+	}
+	if w.Round == nil {
+		return &abbapb.Message_Round{}
+	}
+	return &abbapb.Message_Round{Round: (w.Round).Pb()}
+}
+
+func (*Message_Round) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Message_Round]()}
+}
+
+func MessageFromPb(pb *abbapb.Message) *Message {
+	if pb == nil {
+		return nil
+	}
+	return &Message{
+		Type: Message_TypeFromPb(pb.Type),
+	}
+}
+
+func (m *Message) Pb() *abbapb.Message {
+	if m == nil {
+		return nil
+	}
+	pbMessage := &abbapb.Message{}
+	{
+		if m.Type != nil {
+			pbMessage.Type = (m.Type).Pb()
+		}
+	}
+
+	return pbMessage
+}
+
+func (*Message) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Message]()}
+}
+
+type FinishMessage struct {
+	Value bool
+}
+
+func FinishMessageFromPb(pb *abbapb.FinishMessage) *FinishMessage {
+	if pb == nil {
+		return nil
+	}
+	return &FinishMessage{
+		Value: pb.Value,
+	}
+}
+
+func (m *FinishMessage) Pb() *abbapb.FinishMessage {
+	if m == nil {
+		return nil
+	}
+	pbMessage := &abbapb.FinishMessage{}
+	{
+		pbMessage.Value = m.Value
+	}
+
+	return pbMessage
+}
+
+func (*FinishMessage) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.FinishMessage]()}
+}
+
 type RoundEvent struct {
 	Type RoundEvent_Type
 }
@@ -505,381 +882,4 @@ func (m *RoundCoinMessage) Pb() *abbapb.RoundCoinMessage {
 
 func (*RoundCoinMessage) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.RoundCoinMessage]()}
-}
-
-type Event struct {
-	Type Event_Type
-}
-
-type Event_Type interface {
-	mirreflect.GeneratedType
-	isEvent_Type()
-	Pb() abbapb.Event_Type
-}
-
-type Event_TypeWrapper[T any] interface {
-	Event_Type
-	Unwrap() *T
-}
-
-func Event_TypeFromPb(pb abbapb.Event_Type) Event_Type {
-	if pb == nil {
-		return nil
-	}
-	switch pb := pb.(type) {
-	case *abbapb.Event_InputValue:
-		return &Event_InputValue{InputValue: InputValueFromPb(pb.InputValue)}
-	case *abbapb.Event_Deliver:
-		return &Event_Deliver{Deliver: DeliverFromPb(pb.Deliver)}
-	case *abbapb.Event_Round:
-		return &Event_Round{Round: RoundEventFromPb(pb.Round)}
-	case *abbapb.Event_Done:
-		return &Event_Done{Done: DoneFromPb(pb.Done)}
-	}
-	return nil
-}
-
-type Event_InputValue struct {
-	InputValue *InputValue
-}
-
-func (*Event_InputValue) isEvent_Type() {}
-
-func (w *Event_InputValue) Unwrap() *InputValue {
-	return w.InputValue
-}
-
-func (w *Event_InputValue) Pb() abbapb.Event_Type {
-	if w == nil {
-		return nil
-	}
-	if w.InputValue == nil {
-		return &abbapb.Event_InputValue{}
-	}
-	return &abbapb.Event_InputValue{InputValue: (w.InputValue).Pb()}
-}
-
-func (*Event_InputValue) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Event_InputValue]()}
-}
-
-type Event_Deliver struct {
-	Deliver *Deliver
-}
-
-func (*Event_Deliver) isEvent_Type() {}
-
-func (w *Event_Deliver) Unwrap() *Deliver {
-	return w.Deliver
-}
-
-func (w *Event_Deliver) Pb() abbapb.Event_Type {
-	if w == nil {
-		return nil
-	}
-	if w.Deliver == nil {
-		return &abbapb.Event_Deliver{}
-	}
-	return &abbapb.Event_Deliver{Deliver: (w.Deliver).Pb()}
-}
-
-func (*Event_Deliver) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Event_Deliver]()}
-}
-
-type Event_Round struct {
-	Round *RoundEvent
-}
-
-func (*Event_Round) isEvent_Type() {}
-
-func (w *Event_Round) Unwrap() *RoundEvent {
-	return w.Round
-}
-
-func (w *Event_Round) Pb() abbapb.Event_Type {
-	if w == nil {
-		return nil
-	}
-	if w.Round == nil {
-		return &abbapb.Event_Round{}
-	}
-	return &abbapb.Event_Round{Round: (w.Round).Pb()}
-}
-
-func (*Event_Round) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Event_Round]()}
-}
-
-type Event_Done struct {
-	Done *Done
-}
-
-func (*Event_Done) isEvent_Type() {}
-
-func (w *Event_Done) Unwrap() *Done {
-	return w.Done
-}
-
-func (w *Event_Done) Pb() abbapb.Event_Type {
-	if w == nil {
-		return nil
-	}
-	if w.Done == nil {
-		return &abbapb.Event_Done{}
-	}
-	return &abbapb.Event_Done{Done: (w.Done).Pb()}
-}
-
-func (*Event_Done) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Event_Done]()}
-}
-
-func EventFromPb(pb *abbapb.Event) *Event {
-	if pb == nil {
-		return nil
-	}
-	return &Event{
-		Type: Event_TypeFromPb(pb.Type),
-	}
-}
-
-func (m *Event) Pb() *abbapb.Event {
-	if m == nil {
-		return nil
-	}
-	pbMessage := &abbapb.Event{}
-	{
-		if m.Type != nil {
-			pbMessage.Type = (m.Type).Pb()
-		}
-	}
-
-	return pbMessage
-}
-
-func (*Event) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Event]()}
-}
-
-type InputValue struct {
-	Input bool
-}
-
-func InputValueFromPb(pb *abbapb.InputValue) *InputValue {
-	if pb == nil {
-		return nil
-	}
-	return &InputValue{
-		Input: pb.Input,
-	}
-}
-
-func (m *InputValue) Pb() *abbapb.InputValue {
-	if m == nil {
-		return nil
-	}
-	pbMessage := &abbapb.InputValue{}
-	{
-		pbMessage.Input = m.Input
-	}
-
-	return pbMessage
-}
-
-func (*InputValue) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.InputValue]()}
-}
-
-type Deliver struct {
-	Result    bool
-	SrcModule types.ModuleID
-}
-
-func DeliverFromPb(pb *abbapb.Deliver) *Deliver {
-	if pb == nil {
-		return nil
-	}
-	return &Deliver{
-		Result:    pb.Result,
-		SrcModule: (types.ModuleID)(pb.SrcModule),
-	}
-}
-
-func (m *Deliver) Pb() *abbapb.Deliver {
-	if m == nil {
-		return nil
-	}
-	pbMessage := &abbapb.Deliver{}
-	{
-		pbMessage.Result = m.Result
-		pbMessage.SrcModule = (string)(m.SrcModule)
-	}
-
-	return pbMessage
-}
-
-func (*Deliver) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Deliver]()}
-}
-
-type Done struct {
-	SrcModule types.ModuleID
-}
-
-func DoneFromPb(pb *abbapb.Done) *Done {
-	if pb == nil {
-		return nil
-	}
-	return &Done{
-		SrcModule: (types.ModuleID)(pb.SrcModule),
-	}
-}
-
-func (m *Done) Pb() *abbapb.Done {
-	if m == nil {
-		return nil
-	}
-	pbMessage := &abbapb.Done{}
-	{
-		pbMessage.SrcModule = (string)(m.SrcModule)
-	}
-
-	return pbMessage
-}
-
-func (*Done) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Done]()}
-}
-
-type Message struct {
-	Type Message_Type
-}
-
-type Message_Type interface {
-	mirreflect.GeneratedType
-	isMessage_Type()
-	Pb() abbapb.Message_Type
-}
-
-type Message_TypeWrapper[T any] interface {
-	Message_Type
-	Unwrap() *T
-}
-
-func Message_TypeFromPb(pb abbapb.Message_Type) Message_Type {
-	if pb == nil {
-		return nil
-	}
-	switch pb := pb.(type) {
-	case *abbapb.Message_Finish:
-		return &Message_Finish{Finish: FinishMessageFromPb(pb.Finish)}
-	case *abbapb.Message_Round:
-		return &Message_Round{Round: RoundMessageFromPb(pb.Round)}
-	}
-	return nil
-}
-
-type Message_Finish struct {
-	Finish *FinishMessage
-}
-
-func (*Message_Finish) isMessage_Type() {}
-
-func (w *Message_Finish) Unwrap() *FinishMessage {
-	return w.Finish
-}
-
-func (w *Message_Finish) Pb() abbapb.Message_Type {
-	if w == nil {
-		return nil
-	}
-	if w.Finish == nil {
-		return &abbapb.Message_Finish{}
-	}
-	return &abbapb.Message_Finish{Finish: (w.Finish).Pb()}
-}
-
-func (*Message_Finish) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Message_Finish]()}
-}
-
-type Message_Round struct {
-	Round *RoundMessage
-}
-
-func (*Message_Round) isMessage_Type() {}
-
-func (w *Message_Round) Unwrap() *RoundMessage {
-	return w.Round
-}
-
-func (w *Message_Round) Pb() abbapb.Message_Type {
-	if w == nil {
-		return nil
-	}
-	if w.Round == nil {
-		return &abbapb.Message_Round{}
-	}
-	return &abbapb.Message_Round{Round: (w.Round).Pb()}
-}
-
-func (*Message_Round) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Message_Round]()}
-}
-
-func MessageFromPb(pb *abbapb.Message) *Message {
-	if pb == nil {
-		return nil
-	}
-	return &Message{
-		Type: Message_TypeFromPb(pb.Type),
-	}
-}
-
-func (m *Message) Pb() *abbapb.Message {
-	if m == nil {
-		return nil
-	}
-	pbMessage := &abbapb.Message{}
-	{
-		if m.Type != nil {
-			pbMessage.Type = (m.Type).Pb()
-		}
-	}
-
-	return pbMessage
-}
-
-func (*Message) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Message]()}
-}
-
-type FinishMessage struct {
-	Value bool
-}
-
-func FinishMessageFromPb(pb *abbapb.FinishMessage) *FinishMessage {
-	if pb == nil {
-		return nil
-	}
-	return &FinishMessage{
-		Value: pb.Value,
-	}
-}
-
-func (m *FinishMessage) Pb() *abbapb.FinishMessage {
-	if m == nil {
-		return nil
-	}
-	pbMessage := &abbapb.FinishMessage{}
-	{
-		pbMessage.Value = m.Value
-	}
-
-	return pbMessage
-}
-
-func (*FinishMessage) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.FinishMessage]()}
 }

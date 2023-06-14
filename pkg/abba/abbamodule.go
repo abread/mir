@@ -58,7 +58,7 @@ type state struct {
 	finishSent bool
 }
 
-const modringSubName t.ModuleID = t.ModuleID("r")
+const ModringSubName t.ModuleID = t.ModuleID("r")
 
 func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
 	if tunables.MaxRoundLookahead <= 0 {
@@ -66,7 +66,7 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 	}
 
 	// rounds use a submodule namespace to allow us to mark all round messages as received at once
-	rounds := modring.New(mc.Self.Then(modringSubName), tunables.MaxRoundLookahead, modring.ModuleParams{
+	rounds := modring.New(mc.Self.Then(ModringSubName), tunables.MaxRoundLookahead, modring.ModuleParams{
 		Generator: newRoundGenerator(mc, params, nodeID, logger),
 	}, logging.Decorate(logger, "Modring controller: "))
 
@@ -152,7 +152,7 @@ func newController(mc ModuleConfig, params ModuleParams, logger logging.Logger, 
 
 				// only care about finish messages from now on
 				// eventually instances that are out-of-date will receive them and be happy
-				rnetdsl.MarkModuleMsgsRecvd(m, mc.ReliableNet, mc.Self.Then(modringSubName), params.AllNodes)
+				rnetdsl.MarkModuleMsgsRecvd(m, mc.ReliableNet, mc.Self.Then(ModringSubName), params.AllNodes)
 			}
 		}
 		return nil
@@ -238,5 +238,5 @@ func (params *ModuleParams) strongSupportThresh() int {
 }
 
 func (mc *ModuleConfig) RoundID(roundNumber uint64) t.ModuleID {
-	return mc.Self.Then(modringSubName).Then(t.NewModuleIDFromInt(roundNumber))
+	return mc.Self.Then(ModringSubName).Then(t.NewModuleIDFromInt(roundNumber))
 }

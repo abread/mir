@@ -59,7 +59,7 @@ type Params struct {
 	// Pad broadcast duration estimate
 	// Must be non-negative
 	// TODO: 1/2*RTT + time to verify ?
-	BcEstimateMargin time.Duration
+	BaseBcEstimateMargin time.Duration
 
 	// Time to wait before resorting to FILL-GAP messages
 	FillGapDelay time.Duration
@@ -85,7 +85,7 @@ func DefaultParams(membership *trantorpbtypes.Membership) Params {
 		MaxOwnUnagreedBatchCount: 1,
 		MaxAbbaRoundLookahead:    4,
 		MaxAgRoundLookahead:      32,
-		BcEstimateMargin:         7*time.Millisecond + aproxRTT/2,
+		BaseBcEstimateMargin:     7*time.Millisecond + aproxRTT/2,
 		FillGapDelay:             aproxBcDuration,
 		MaxAgreementDelay:        aproxBcDuration,
 	}
@@ -148,7 +148,7 @@ func New(ownID t.NodeID, config Config, params Params, startingChkp *checkpoint.
 		director.ModuleTunables{
 			MaxConcurrentVcbPerQueue: params.MaxConcurrentVcbPerQueue,
 			MaxOwnUnagreedBatchCount: params.MaxOwnUnagreedBatchCount,
-			BcEstimateMargin:         params.BcEstimateMargin,
+			InitialBcEstimateMargin:  params.BaseBcEstimateMargin,
 			FillGapDelay:             params.FillGapDelay,
 			MaxAgreementDelay:        params.MaxAgreementDelay,
 		},
