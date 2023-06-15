@@ -56,19 +56,12 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 	ownQueueIdx := aleatypes.QueueIdx(slices.Index(params.AllNodes, nodeID))
 
 	dsl.UponInit(m, func() error {
-		eventpbdsl.TimerRepeat(m, mc.Timer,
-			[]*eventpbtypes.Event{
-				directorpbevents.Heartbeat(mc.Self),
-			},
-			timert.Duration(tunables.MaxAgreementDelay),
-			tt.RetentionIndex(0),
-		)
-
 		return nil
 	})
 
 	directordsl.UponHeartbeat(m, func() error {
-		return nil // no-op, we just need our UponCondition code to run
+		// UponStateUpdate(s) code will run
+		return nil
 	})
 
 	// =============================================================================================
@@ -141,7 +134,7 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 		// pop queue
 		state.agQueueHeads[queueIdx]++
 
-		// remove tracked slot readyness (don't want to run out of memory)
+		// remove tracked slot readiness (don't want to run out of memory)
 		// also free broadcast slot to allow broadcast component to make progress
 		delete(state.slotsReadyToDeliver[slot.QueueIdx], slot.QueueSlot)
 		bcqueuepbdsl.FreeSlot(m, bcutil.BcQueueModuleID(mc.BcQueuePrefix, slot.QueueIdx), slot.QueueSlot)
@@ -274,8 +267,27 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 
 				if startTime, ok := state.bcStartTimes[slot]; ok {
 					stalledTime := time.Since(startTime)
-					if stalledTime <= state.avgBcTime.MaxEstimate()+state.bcEstimateMargin && stalledTime < tunables.MaxAgreementDelay {
+
+					// we do NOT use the dynamic state.bcEstimateMargin for this to avoid ever-increasing waits
+					timeToWait := state.avgBcTime.MaxEstimate() + tunables.InitialBcEstimateMargin - stalledTime
+
+					// clamp wait time just in case
+					if timeToWait > tunables.MaxAgreementDelay {
+						timeToWait = 0
+					}
+
+					if timeToWait > 0 {
 						// stall agreement to allow in-flight broadcast to complete
+
+						// schedule a timer to guarantee we reprocess the previous conditions
+						// and eventually let agreement make progress
+						eventpbdsl.TimerDelay(m, mc.Timer,
+							[]*eventpbtypes.Event{
+								directorpbevents.Heartbeat(mc.Self),
+							},
+							timert.Duration(timeToWait),
+						)
+
 						return nil
 					}
 				}
