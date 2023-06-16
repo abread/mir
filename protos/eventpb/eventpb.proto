@@ -20,6 +20,7 @@ import "ordererpb/ordererpb.proto";
 import "hasherpb/hasherpb.proto";
 import "cryptopb/cryptopb.proto";
 import "transportpb/transportpb.proto";
+import "testerpb/testerpb.proto";
 import "vcbpb/vcbpb.proto";
 import "abbapb/abbapb.proto";
 import "aleapb/agreementpb/agevents/agevents.proto";
@@ -73,6 +74,7 @@ message Event {
     // for unit-tests
     google.protobuf.StringValue testingString = 301;
     google.protobuf.UInt64Value testingUint   = 302;
+    testerpb.Tester tester = 303;
   }
 
   // A list of follow-up events to process after this event has been processed.
@@ -85,7 +87,7 @@ message Event {
   repeated Event next = 400 [(mir.omit_in_event_constructors) = true];
 
   // event timestamp produced by the runtime for tracing purposes
-  int64 local_ts = 303 [(mir.omit_in_event_constructors) = true];
+  int64 local_ts = 401 [(mir.omit_in_event_constructors) = true];
 }
 
 message Init {

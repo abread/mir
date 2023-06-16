@@ -129,6 +129,7 @@ func NewISS(
 	trantorModules[moduleConfig.Mempool] = simplemempool.NewModule(
 		moduleConfig.ConfigureSimpleMempool(),
 		params.Mempool,
+		logger,
 	)
 
 	// The availability component takes transactions from the mempool and disseminates them (including their payload)

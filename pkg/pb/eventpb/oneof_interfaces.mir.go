@@ -23,6 +23,7 @@ import (
 	ordererpb "github.com/filecoin-project/mir/pkg/pb/ordererpb"
 	pingpongpb "github.com/filecoin-project/mir/pkg/pb/pingpongpb"
 	reliablenetpb "github.com/filecoin-project/mir/pkg/pb/reliablenetpb"
+	testerpb "github.com/filecoin-project/mir/pkg/pb/testerpb"
 	threshcryptopb "github.com/filecoin-project/mir/pkg/pb/threshcryptopb"
 	transportpb "github.com/filecoin-project/mir/pkg/pb/transportpb"
 	vcbpb "github.com/filecoin-project/mir/pkg/pb/vcbpb"
@@ -133,6 +134,10 @@ func (w *Event_TestingString) Unwrap() *wrapperspb.StringValue {
 
 func (w *Event_TestingUint) Unwrap() *wrapperspb.UInt64Value {
 	return w.TestingUint
+}
+
+func (w *Event_Tester) Unwrap() *testerpb.Tester {
+	return w.Tester
 }
 
 type TimerEvent_Type = isTimerEvent_Type
