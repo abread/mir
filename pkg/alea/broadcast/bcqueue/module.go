@@ -9,7 +9,7 @@ import (
 
 	"github.com/filecoin-project/mir/pkg/alea/aleatypes"
 	"github.com/filecoin-project/mir/pkg/alea/broadcast/bcutil"
-	aleaCommon "github.com/filecoin-project/mir/pkg/alea/common"
+	aleaCommon "github.com/filecoin-project/mir/pkg/alea/util"
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/logging"

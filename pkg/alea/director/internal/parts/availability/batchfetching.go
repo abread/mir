@@ -6,8 +6,8 @@ import (
 	es "github.com/go-errors/errors"
 
 	"github.com/filecoin-project/mir/pkg/alea/broadcast/bcutil"
-	"github.com/filecoin-project/mir/pkg/alea/common"
 	director "github.com/filecoin-project/mir/pkg/alea/director/internal/common"
+	"github.com/filecoin-project/mir/pkg/alea/util"
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/logging"
 	bcqueuepbdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/dsl"
@@ -83,7 +83,7 @@ func IncludeBatchFetching(
 			state.RequestsState[*slot] = reqState
 
 			// try resolving locally first
-			batchdbdsl.LookupBatch(m, mc.BatchDB, common.FormatAleaBatchID(slot), slot)
+			batchdbdsl.LookupBatch(m, mc.BatchDB, util.FormatAleaBatchID(slot), slot)
 		}
 
 		// add ourselves to the list of requestors in order to receive a reply
@@ -99,7 +99,7 @@ func IncludeBatchFetching(
 			// if bc delivers right after the transaction starts, two lookups will be performed.
 
 			// retry locally, you will now succeed!
-			batchdbdsl.LookupBatch(m, mc.BatchDB, common.FormatAleaBatchID(slot), slot)
+			batchdbdsl.LookupBatch(m, mc.BatchDB, util.FormatAleaBatchID(slot), slot)
 		}
 
 		return nil
@@ -169,7 +169,7 @@ func IncludeBatchFetching(
 		// do not ACK message - acknowledging means sending a FILLER reply
 
 		// logger.Log(logging.LevelDebug, "satisfying FILL-GAP request", "queueIdx", slot.QueueIdx, "queueSlot", slot.QueueSlot, "from", from)
-		batchdbdsl.LookupBatch(m, mc.BatchDB, common.FormatAleaBatchID(slot), &lookupBatchOnRemoteRequestContext{from, slot})
+		batchdbdsl.LookupBatch(m, mc.BatchDB, util.FormatAleaBatchID(slot), &lookupBatchOnRemoteRequestContext{from, slot})
 		return nil
 	})
 
@@ -246,7 +246,7 @@ func IncludeBatchFetching(
 		rnetdsl.MarkRecvd(m, mc.ReliableNet, mc.Self, FillGapMsgID(context.slot), params.AllNodes)
 
 		// store batch asynchronously
-		batchdbdsl.StoreBatch(m, mc.BatchDB, common.FormatAleaBatchID(context.slot), context.txIDs, context.txs, context.signature /*metadata*/, context)
+		batchdbdsl.StoreBatch(m, mc.BatchDB, util.FormatAleaBatchID(context.slot), context.txIDs, context.txs, context.signature /*metadata*/, context)
 
 		// send response to requests
 		// logger.Log(logging.LevelDebug, "satisfying delayed requests with FILLER", "queueIdx", context.slot.QueueIdx, "queueSlot", context.slot.QueueSlot)
