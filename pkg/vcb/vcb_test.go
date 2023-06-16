@@ -193,6 +193,7 @@ func newDeployment(ctx context.Context, conf *TestConfig) (*deploytest.Deploymen
 			&simplemempool.ModuleParams{
 				MaxTransactionsInBatch: 10,
 			},
+			logging.Decorate(nodeLogger, "Mempool: "),
 		)
 
 		vcb := NewModule(vcbConfig, &ModuleParams{
