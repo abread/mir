@@ -2,6 +2,44 @@
 
 package abbapb
 
+type Event_Type = isEvent_Type
+
+type Event_TypeWrapper[T any] interface {
+	Event_Type
+	Unwrap() *T
+}
+
+func (w *Event_InputValue) Unwrap() *InputValue {
+	return w.InputValue
+}
+
+func (w *Event_Deliver) Unwrap() *Deliver {
+	return w.Deliver
+}
+
+func (w *Event_Round) Unwrap() *RoundEvent {
+	return w.Round
+}
+
+func (w *Event_Done) Unwrap() *Done {
+	return w.Done
+}
+
+type Message_Type = isMessage_Type
+
+type Message_TypeWrapper[T any] interface {
+	Message_Type
+	Unwrap() *T
+}
+
+func (w *Message_Finish) Unwrap() *FinishMessage {
+	return w.Finish
+}
+
+func (w *Message_Round) Unwrap() *RoundMessage {
+	return w.Round
+}
+
 type RoundEvent_Type = isRoundEvent_Type
 
 type RoundEvent_TypeWrapper[T any] interface {
@@ -42,42 +80,4 @@ func (w *RoundMessage_Conf) Unwrap() *RoundConfMessage {
 
 func (w *RoundMessage_Coin) Unwrap() *RoundCoinMessage {
 	return w.Coin
-}
-
-type Event_Type = isEvent_Type
-
-type Event_TypeWrapper[T any] interface {
-	Event_Type
-	Unwrap() *T
-}
-
-func (w *Event_InputValue) Unwrap() *InputValue {
-	return w.InputValue
-}
-
-func (w *Event_Deliver) Unwrap() *Deliver {
-	return w.Deliver
-}
-
-func (w *Event_Round) Unwrap() *RoundEvent {
-	return w.Round
-}
-
-func (w *Event_Done) Unwrap() *Done {
-	return w.Done
-}
-
-type Message_Type = isMessage_Type
-
-type Message_TypeWrapper[T any] interface {
-	Message_Type
-	Unwrap() *T
-}
-
-func (w *Message_Finish) Unwrap() *FinishMessage {
-	return w.Finish
-}
-
-func (w *Message_Round) Unwrap() *RoundMessage {
-	return w.Round
 }
