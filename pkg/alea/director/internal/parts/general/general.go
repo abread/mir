@@ -11,6 +11,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/alea/aleatypes"
 	"github.com/filecoin-project/mir/pkg/alea/broadcast/bcutil"
 	"github.com/filecoin-project/mir/pkg/alea/director/internal/common"
+	"github.com/filecoin-project/mir/pkg/alea/util"
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/logging"
 	aagdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents/dsl"
@@ -43,11 +44,11 @@ type state struct {
 	stalledAgRound      bool
 	failedOwnAgRound    bool // last ag round for own queue delivered false
 
-	avgAgTime *estimator
+	avgAgTime *util.Estimator
 
 	bcStartTimes     map[commontypes.Slot]time.Time
-	avgOwnBcTime     *estimator
-	avgBcTime        *estimator
+	avgOwnBcTime     *util.Estimator
+	avgBcTime        *util.Estimator
 	bcEstimateMargin time.Duration
 }
 
@@ -173,10 +174,16 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 			waitRoundCount += len(params.AllNodes)
 		}
 
+		// the margins from multiple nodes constructively interfere and grow artificially
+		// divide it by 2 for batch cutting, to artificially encourage it to lower over time
+		margin := state.bcEstimateMargin / 2
+
 		// TODO: consider progress in current round too (will mean adjustments below)
 		timeToOwnQueueAgRound := state.avgAgTime.MinEstimate() * time.Duration(waitRoundCount)
-		maxTimeBeforeBatch := state.avgOwnBcTime.MaxEstimate() + state.bcEstimateMargin
+		maxTimeBeforeBatch := state.avgOwnBcTime.MaxEstimate() + margin
 
+		// TODO: liveness bug: we must guarantee F+1 nodes have undelivered batches, otherwise
+		// an attacker can stall the system by not sending their batch to enough nodes.
 		if state.agCanDeliver() && timeToOwnQueueAgRound > maxTimeBeforeBatch {
 			// we have a lot of time before we reach our agreement round. let the batch fill up
 			return nil
@@ -268,8 +275,7 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 				if startTime, ok := state.bcStartTimes[slot]; ok {
 					stalledTime := time.Since(startTime)
 
-					// we do NOT use the dynamic state.bcEstimateMargin for this to avoid ever-increasing waits
-					timeToWait := state.avgBcTime.MaxEstimate() + tunables.InitialBcEstimateMargin - stalledTime
+					timeToWait := state.avgBcTime.MaxEstimate() + state.bcEstimateMargin - stalledTime
 
 					// clamp wait time just in case
 					if timeToWait > tunables.MaxAgreementDelay {
@@ -327,11 +333,11 @@ func newState(params common.ModuleParams, tunables common.ModuleTunables, nodeID
 
 		slotsReadyToDeliver: make([]set[aleatypes.QueueSlot], N),
 
-		avgAgTime: newEstimator(N * tunables.MaxConcurrentVcbPerQueue),
+		avgAgTime: util.NewEstimator(N * tunables.MaxConcurrentVcbPerQueue),
 
 		bcStartTimes:     make(map[commontypes.Slot]time.Time, tunables.MaxConcurrentVcbPerQueue*len(params.AllNodes)),
-		avgOwnBcTime:     newEstimator(N * tunables.MaxConcurrentVcbPerQueue),
-		avgBcTime:        newEstimator(N * tunables.MaxConcurrentVcbPerQueue),
+		avgOwnBcTime:     util.NewEstimator(N * tunables.MaxConcurrentVcbPerQueue),
+		avgBcTime:        util.NewEstimator(N * tunables.MaxConcurrentVcbPerQueue),
 		bcEstimateMargin: tunables.InitialBcEstimateMargin,
 	}
 
