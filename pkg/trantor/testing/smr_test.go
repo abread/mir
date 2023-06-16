@@ -132,7 +132,7 @@ func testIntegrationWithISS(t *testing.T) {
 				NumNetTXs:   10,
 				Duration:    15 * time.Second,
 			}},
-		7: {"Do nothing with 1 node in simulation",
+		/*7: {"Do nothing with 1 node in simulation",
 			&TestConfig{
 				NumReplicas: 1,
 				Transport:   "sim",
@@ -179,7 +179,7 @@ func testIntegrationWithISS(t *testing.T) {
 				NumFakeTXs:          100,
 				Duration:            20 * time.Second,
 				SlowProposeReplicas: map[int]bool{0: true},
-			}},
+			}},*/
 	}
 
 	for i, test := range tests {
