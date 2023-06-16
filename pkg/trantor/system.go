@@ -315,6 +315,7 @@ func NewAlea(
 			Hasher: aleaConfig.Hasher,
 		},
 		params.Mempool,
+		logging.Decorate(logger, "Mempool"),
 	)
 
 	// Use fake batch database that only stores batches in memory and does not persist them to disk.
