@@ -38,8 +38,8 @@ type ModuleTunables struct {
 	// Must be at least 1
 	MaxOwnUnagreedBatchCount uint64
 
-	// Pad broadcast duration estimate
-	InitialBcEstimateMargin time.Duration
+	// Subprotocol duration estimates window size
+	EstimateWindowSize int
 
 	// Time to wait before resorting to FILL-GAP messages
 	FillGapDelay time.Duration

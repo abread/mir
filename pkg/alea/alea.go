@@ -56,10 +56,8 @@ type Params struct {
 	// TODO
 	MaxAgRoundLookahead int
 
-	// Pad broadcast duration estimate
-	// Must be non-negative
-	// TODO: 1/2*RTT + time to verify ?
-	BaseBcEstimateMargin time.Duration
+	// Subprotocol duration estimates window size
+	EstimateWindowSize int
 
 	// Time to wait before resorting to FILL-GAP messages
 	FillGapDelay time.Duration
@@ -78,6 +76,12 @@ func DefaultParams(membership *trantorpbtypes.Membership) Params {
 	aproxRTT := 220 * time.Microsecond
 	aproxBcDuration := 3*aproxRTT/2 + 20*time.Millisecond
 
+	N := len(membership.Nodes)
+	estimateWindowSize := N * 4
+	if estimateWindowSize > 64 {
+		estimateWindowSize = 64
+	}
+
 	return Params{
 		InstanceUID:              []byte{42},
 		Membership:               membership,
@@ -85,7 +89,7 @@ func DefaultParams(membership *trantorpbtypes.Membership) Params {
 		MaxOwnUnagreedBatchCount: 1,
 		MaxAbbaRoundLookahead:    4,
 		MaxAgRoundLookahead:      32,
-		BaseBcEstimateMargin:     7*time.Millisecond + aproxRTT/2,
+		EstimateWindowSize:       estimateWindowSize,
 		FillGapDelay:             aproxBcDuration,
 		MaxAgreementDelay:        aproxBcDuration,
 	}
@@ -148,7 +152,7 @@ func New(ownID t.NodeID, config Config, params Params, startingChkp *checkpoint.
 		director.ModuleTunables{
 			MaxConcurrentVcbPerQueue: params.MaxConcurrentVcbPerQueue,
 			MaxOwnUnagreedBatchCount: params.MaxOwnUnagreedBatchCount,
-			InitialBcEstimateMargin:  params.BaseBcEstimateMargin,
+			EstimateWindowSize:       params.EstimateWindowSize,
 			FillGapDelay:             params.FillGapDelay,
 			MaxAgreementDelay:        params.MaxAgreementDelay,
 		},

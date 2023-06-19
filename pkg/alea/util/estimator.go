@@ -51,6 +51,24 @@ func (e Estimator) MaxEstimate() time.Duration {
 	return s[idx]
 }
 
+func (e *Estimator) Clear() {
+	e.len = 0
+}
+
+func (e Estimator) Median() time.Duration {
+	if e.len == 0 {
+		// the maximum representable duration is not a good fit because it could lead to overflows
+		// return a ridiculously high, but not almost overflowing estimate
+		return 24 * time.Hour
+	}
+
+	// P50
+	s := e.sortedSamples()
+	idx := len(s) / 2
+
+	return s[idx]
+}
+
 func (e Estimator) MinEstimate() time.Duration {
 	if e.len == 0 {
 		return 0

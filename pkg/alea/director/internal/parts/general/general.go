@@ -17,7 +17,7 @@ import (
 	aagdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents/dsl"
 	bcqueuepbdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/dsl"
 	commontypes "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
-	directordsl "github.com/filecoin-project/mir/pkg/pb/aleapb/directorpb/dsl"
+	"github.com/filecoin-project/mir/pkg/pb/aleapb/directorpb/dsl"
 	directorpbevents "github.com/filecoin-project/mir/pkg/pb/aleapb/directorpb/events"
 	aleapbtypes "github.com/filecoin-project/mir/pkg/pb/aleapb/types"
 	availabilitypbtypes "github.com/filecoin-project/mir/pkg/pb/availabilitypb/types"
@@ -49,7 +49,7 @@ type state struct {
 	bcStartTimes     map[commontypes.Slot]time.Time
 	avgOwnBcTime     *util.Estimator
 	avgBcTime        *util.Estimator
-	bcEstimateMargin time.Duration
+	bcEstimateMargin *util.Estimator
 }
 
 func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, tunables common.ModuleTunables, nodeID t.NodeID, logger logging.Logger) {
@@ -60,7 +60,7 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 		return nil
 	})
 
-	directordsl.UponHeartbeat(m, func() error {
+	directorpbdsl.UponHeartbeat(m, func() error {
 		// UponStateUpdate(s) code will run
 		return nil
 	})
@@ -176,7 +176,7 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 
 		// the margins from multiple nodes constructively interfere and grow artificially
 		// divide it by 2 for batch cutting, to artificially encourage it to lower over time
-		margin := state.bcEstimateMargin / 2
+		margin := state.bcEstimateMargin.Median() // / 2
 
 		// TODO: consider progress in current round too (will mean adjustments below)
 		timeToOwnQueueAgRound := state.avgAgTime.MinEstimate() * time.Duration(waitRoundCount)
@@ -232,16 +232,12 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 		if aleatypes.QueueIdx(state.agRound%uint64(len(params.AllNodes))) == ownQueueIdx {
 			if posQuorumWait == math.MaxInt64 || !decision {
 				// failed deadline, double margin
-				state.bcEstimateMargin *= 2
+				m := state.bcEstimateMargin.Median()
+				state.bcEstimateMargin.Clear()
+				state.bcEstimateMargin.AddSample(2 * m)
 			} else if !state.failedOwnAgRound {
 				// positive quorum wait was the optimal margin value for this round
-				// approach the optimal value slowly
-
-				// Note: it's important to *not* perform this update when the last ag round for our
-				// queue failed, because this distorts delays. E.g ag delivers false, bc delivers in
-				// remote nodes, next ag delivers true with no delay (and we set bcEstimateMargin to the old value)
-				delta := posQuorumWait - state.bcEstimateMargin
-				state.bcEstimateMargin += delta / 2
+				state.bcEstimateMargin.AddSample(posQuorumWait)
 			}
 
 			state.failedOwnAgRound = !decision
@@ -275,7 +271,7 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 				if startTime, ok := state.bcStartTimes[slot]; ok {
 					stalledTime := time.Since(startTime)
 
-					timeToWait := state.avgBcTime.MaxEstimate() + state.bcEstimateMargin - stalledTime
+					timeToWait := state.avgBcTime.MaxEstimate() + state.bcEstimateMargin.Median() - stalledTime
 
 					// clamp wait time just in case
 					if timeToWait > tunables.MaxAgreementDelay {
@@ -333,12 +329,12 @@ func newState(params common.ModuleParams, tunables common.ModuleTunables, nodeID
 
 		slotsReadyToDeliver: make([]set[aleatypes.QueueSlot], N),
 
-		avgAgTime: util.NewEstimator(N * tunables.MaxConcurrentVcbPerQueue),
+		avgAgTime: util.NewEstimator(tunables.EstimateWindowSize),
 
 		bcStartTimes:     make(map[commontypes.Slot]time.Time, tunables.MaxConcurrentVcbPerQueue*len(params.AllNodes)),
-		avgOwnBcTime:     util.NewEstimator(N * tunables.MaxConcurrentVcbPerQueue),
-		avgBcTime:        util.NewEstimator(N * tunables.MaxConcurrentVcbPerQueue),
-		bcEstimateMargin: tunables.InitialBcEstimateMargin,
+		avgOwnBcTime:     util.NewEstimator(tunables.EstimateWindowSize),
+		avgBcTime:        util.NewEstimator(tunables.EstimateWindowSize),
+		bcEstimateMargin: util.NewEstimator(tunables.EstimateWindowSize),
 	}
 
 	ownQueueIdx := uint32(slices.Index(params.AllNodes, nodeID))
