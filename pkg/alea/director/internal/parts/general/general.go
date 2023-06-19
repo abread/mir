@@ -17,7 +17,7 @@ import (
 	aagdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents/dsl"
 	bcqueuepbdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/dsl"
 	commontypes "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
-	"github.com/filecoin-project/mir/pkg/pb/aleapb/directorpb/dsl"
+	directorpbdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/directorpb/dsl"
 	directorpbevents "github.com/filecoin-project/mir/pkg/pb/aleapb/directorpb/events"
 	aleapbtypes "github.com/filecoin-project/mir/pkg/pb/aleapb/types"
 	availabilitypbtypes "github.com/filecoin-project/mir/pkg/pb/availabilitypb/types"
@@ -55,6 +55,12 @@ type state struct {
 func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, tunables common.ModuleTunables, nodeID t.NodeID, logger logging.Logger) {
 	state := newState(params, tunables, nodeID)
 	ownQueueIdx := aleatypes.QueueIdx(slices.Index(params.AllNodes, nodeID))
+
+	dsl.UponStateUpdates(m, func() error {
+		// stats are reported after updates, and before ordering components around
+		directorpbdsl.Stats(m, "ignore", uint64(len(state.slotsReadyToDeliver)), state.avgAgTime.MinEstimate(), state.avgAgTime.MaxEstimate(), state.avgBcTime.MinEstimate(), state.avgBcTime.MaxEstimate(), state.avgOwnBcTime.MinEstimate(), state.avgOwnBcTime.MaxEstimate(), state.bcEstimateMargin.Median())
+		return nil
+	})
 
 	dsl.UponInit(m, func() error {
 		return nil

@@ -20,6 +20,7 @@ message Event {
 
     Heartbeat heartbeat = 1;
     DoFillGap fill_gap  = 2;
+    Stats stats = 3;
   }
 }
 
@@ -31,4 +32,17 @@ message DoFillGap {
   option (mir.event) = true;
 
   common.Slot slot = 1;
+}
+
+message Stats {
+  option (mir.event) = true;
+
+  uint64 slots_waiting_delivery = 1;
+  int64 min_ag_duration_est = 2 [(mir.type) = "time.Duration"];
+  int64 max_ag_duration_est = 3 [(mir.type) = "time.Duration"];
+  int64 min_bc_duration_est = 4 [(mir.type) = "time.Duration"];
+  int64 max_bc_duration_est = 5 [(mir.type) = "time.Duration"];
+  int64 min_own_bc_duration_est = 6 [(mir.type) = "time.Duration"];
+  int64 max_own_bc_duration_est = 7 [(mir.type) = "time.Duration"];
+  int64 bc_est_margin = 8 [(mir.type) = "time.Duration"];
 }

@@ -16,3 +16,7 @@ func (w *Event_Heartbeat) Unwrap() *Heartbeat {
 func (w *Event_FillGap) Unwrap() *DoFillGap {
 	return w.FillGap
 }
+
+func (w *Event_Stats) Unwrap() *Stats {
+	return w.Stats
+}

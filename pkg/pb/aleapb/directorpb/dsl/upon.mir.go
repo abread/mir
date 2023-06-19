@@ -3,6 +3,8 @@
 package directorpbdsl
 
 import (
+	"time"
+
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
 	types2 "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
 	types "github.com/filecoin-project/mir/pkg/pb/aleapb/directorpb/types"
@@ -31,5 +33,11 @@ func UponHeartbeat(m dsl.Module, handler func() error) {
 func UponDoFillGap(m dsl.Module, handler func(slot *types2.Slot) error) {
 	UponEvent[*types.Event_FillGap](m, func(ev *types.DoFillGap) error {
 		return handler(ev.Slot)
+	})
+}
+
+func UponStats(m dsl.Module, handler func(slotsWaitingDelivery uint64, minAgDurationEst time.Duration, maxAgDurationEst time.Duration, minBcDurationEst time.Duration, maxBcDurationEst time.Duration, minOwnBcDurationEst time.Duration, maxOwnBcDurationEst time.Duration, bcEstMargin time.Duration) error) {
+	UponEvent[*types.Event_Stats](m, func(ev *types.Stats) error {
+		return handler(ev.SlotsWaitingDelivery, ev.MinAgDurationEst, ev.MaxAgDurationEst, ev.MinBcDurationEst, ev.MaxBcDurationEst, ev.MinOwnBcDurationEst, ev.MaxOwnBcDurationEst, ev.BcEstMargin)
 	})
 }

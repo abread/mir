@@ -3,6 +3,8 @@
 package directorpbdsl
 
 import (
+	"time"
+
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
 	types1 "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
 	events "github.com/filecoin-project/mir/pkg/pb/aleapb/directorpb/events"
@@ -17,4 +19,8 @@ func Heartbeat(m dsl.Module, destModule types.ModuleID) {
 
 func DoFillGap(m dsl.Module, destModule types.ModuleID, slot *types1.Slot) {
 	dsl.EmitMirEvent(m, events.DoFillGap(destModule, slot))
+}
+
+func Stats(m dsl.Module, destModule types.ModuleID, slotsWaitingDelivery uint64, minAgDurationEst time.Duration, maxAgDurationEst time.Duration, minBcDurationEst time.Duration, maxBcDurationEst time.Duration, minOwnBcDurationEst time.Duration, maxOwnBcDurationEst time.Duration, bcEstMargin time.Duration) {
+	dsl.EmitMirEvent(m, events.Stats(destModule, slotsWaitingDelivery, minAgDurationEst, maxAgDurationEst, minBcDurationEst, maxBcDurationEst, minOwnBcDurationEst, maxOwnBcDurationEst, bcEstMargin))
 }
