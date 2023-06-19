@@ -90,18 +90,20 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 		logging.Decorate(logger, "Modring controller: "),
 	)
 
+	N := len(params.AllNodes)
+	F := (N - 1) / 3
+
 	state := &state{
-		rounds: make([]round, tunables.MaxRoundLookahead),
+		rounds: make(map[uint64]*round, tunables.MaxRoundLookahead),
 
 		// stalled inputs count can never go beyond the number of concurrent agreement rounds
 		pendingInput: make(map[uint64]pendingInput, tunables.MaxRoundLookahead),
-	}
-	for i := range state.rounds {
-		state.rounds[i].participants = make(abbatypes.RecvTracker, (len(params.AllNodes)-1)/3*2+1)
-		state.rounds[i].nodesWithInput = make(abbatypes.RecvTracker, len(params.AllNodes))
+
+		N:         N,
+		strongMaj: 2*F + 1,
 	}
 
-	controller := newAgController(mc, params, logger, state, agRounds)
+	controller := newAgController(mc, logger, state, agRounds)
 
 	perfSniffer := newAgRoundSniffer(mc, params, agRounds, state)
 
@@ -142,9 +144,12 @@ type state struct {
 
 	currentRound uint64
 
-	rounds []round
+	rounds map[uint64]*round
 
 	pendingInput map[uint64]pendingInput
+
+	N         int
+	strongMaj int
 }
 
 func (s *state) storeRoundDecision(rounds *modring.Module, roundNum uint64, decision bool) error {
@@ -152,22 +157,21 @@ func (s *state) storeRoundDecision(rounds *modring.Module, roundNum uint64, deci
 		return es.Errorf("round out of view: %v", rounds)
 	}
 
-	idx := int(roundNum % uint64(len(s.rounds)))
-	s.rounds[idx].decision = decision
-	s.rounds[idx].delivered = true
+	s.rounds[roundNum].decision = decision
+	s.rounds[roundNum].delivered = true
 
-	startTime := s.rounds[idx].relStartTime
-	s.rounds[idx].duration = time.Since(timeRef) - startTime
+	startTime := s.rounds[roundNum].relStartTime
+	s.rounds[roundNum].duration = time.Since(timeRef) - startTime
 
 	var posQuorumDuration time.Duration
-	if s.rounds[idx].relInputTime == 0 && s.rounds[idx].relPosQuorumTime != 0 {
+	if s.rounds[roundNum].relInputTime == 0 && s.rounds[roundNum].relPosQuorumTime != 0 {
 		posQuorumDuration = 0
-	} else if s.rounds[idx].relInputTime != 0 && s.rounds[idx].relPosQuorumTime == 0 {
+	} else if s.rounds[roundNum].relInputTime != 0 && s.rounds[roundNum].relPosQuorumTime == 0 {
 		posQuorumDuration = time.Duration(math.MaxInt64)
 	} else {
-		posQuorumDuration = s.rounds[idx].relPosQuorumTime - s.rounds[idx].relInputTime
+		posQuorumDuration = s.rounds[roundNum].relPosQuorumTime - s.rounds[roundNum].relInputTime
 	}
-	s.rounds[idx].posQuorumDuration = posQuorumDuration
+	s.rounds[roundNum].posQuorumDuration = posQuorumDuration
 
 	return nil
 }
@@ -177,25 +181,26 @@ func (s *state) loadRound(rounds *modring.Module, roundNum uint64) *round {
 		return nil
 	}
 
-	idx := int(roundNum % uint64(len(s.rounds)))
-	return &s.rounds[idx]
+	if _, ok := s.rounds[roundNum]; !ok {
+		s.rounds[roundNum] = &round{
+			participants:   make(abbatypes.RecvTracker, s.strongMaj),
+			nodesWithInput: make(abbatypes.RecvTracker, s.N),
+		}
+	}
+
+	return s.rounds[roundNum]
 }
 
-func (s *state) clearRoundData(rounds *modring.Module, roundNum uint64, n int) error {
+func (s *state) clearRoundData(rounds *modring.Module, roundNum uint64) error {
 	if !rounds.IsInView(roundNum) {
 		return es.Errorf("round out of view: %v", rounds)
 	}
 
-	idx := int(roundNum % uint64(len(s.rounds)))
-	s.rounds[idx] = round{
-		participants:   make(abbatypes.RecvTracker, (n-1)/3*2+1),
-		nodesWithInput: make(abbatypes.RecvTracker, n),
-	}
-
+	delete(s.rounds, roundNum)
 	return nil
 }
 
-func newAgController(mc ModuleConfig, params ModuleParams, logger logging.Logger, state *state, agRounds *modring.Module) modules.PassiveModule {
+func newAgController(mc ModuleConfig, logger logging.Logger, state *state, agRounds *modring.Module) modules.PassiveModule {
 	_ = logger // silence warnings
 
 	m := dsl.NewModule(mc.Self)
@@ -234,7 +239,7 @@ func newAgController(mc ModuleConfig, params ModuleParams, logger logging.Logger
 
 			agreementpbdsl.Deliver(m, mc.Consumer, state.currentRound, currentRound.decision, currentRound.duration, currentRound.posQuorumDuration)
 			state.roundDecisionHistory.Push(currentRound.decision)
-			if err := state.clearRoundData(agRounds, state.currentRound, len(params.AllNodes)); err != nil {
+			if err := state.clearRoundData(agRounds, state.currentRound); err != nil {
 				return err
 			}
 
@@ -248,16 +253,17 @@ func newAgController(mc ModuleConfig, params ModuleParams, logger logging.Logger
 
 	abbapbdsl.UponDone(m, func(srcModule t.ModuleID) error {
 		// when abba terminates, clean it up
-		round, err := mc.agRoundNumber(srcModule)
+		roundNumber, err := mc.agRoundNumber(srcModule)
 		if err != nil {
 			return err
 		}
 
-		logger.Log(logging.LevelDebug, "garbage-collecting round", "agRound", round)
-		if err := agRounds.MarkSubmodulePast(round); err != nil {
+		logger.Log(logging.LevelDebug, "garbage-collecting round", "agRound", roundNumber)
+		if err := agRounds.MarkSubmodulePast(roundNumber); err != nil {
 			return es.Errorf("failed to clean up finished agreement round: %w", err)
 		}
 
+		delete(state.rounds, roundNumber)
 		return nil
 	})
 
@@ -417,19 +423,19 @@ func newAgRoundSniffer(mc ModuleConfig, params ModuleParams, agRounds *modring.M
 		if !agRounds.IsInView(roundNum) {
 			return nil // round not being processed yet
 		}
-		idx := int(roundNum % uint64(len(state.rounds)))
 
 		// track round start time
-		if state.rounds[idx].relStartTime == 0 {
-			state.rounds[idx].participants.Register(from)
+		r := state.loadRound(agRounds, roundNum)
+		if r.relStartTime == 0 {
+			r.participants.Register(from)
 
-			if state.rounds[idx].participants.Len() >= thresh {
-				state.rounds[idx].relStartTime = time.Since(timeRef)
+			if r.participants.Len() >= thresh {
+				r.relStartTime = time.Since(timeRef)
 			}
 		}
 
 		// track inputs
-		trackInput(&state.rounds[idx], from, msg)
+		trackInput(r, from, msg)
 
 		return nil
 	})
