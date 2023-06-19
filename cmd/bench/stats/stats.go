@@ -163,6 +163,14 @@ func (s *Stats) WriteCSVHeader(w *csv.Writer) {
 		"agRoundFalseDelivers",
 		"bcDelivers",
 		"threshQueueSize",
+		"slotsAwaitingDelivery",
+		"minAgDurationEst",
+		"maxAgDurationEst",
+		"minBcDurationEst",
+		"maxBcDurationEst",
+		"minOwnBcDurationEst",
+		"maxOwnBcDurationEst",
+		"bcEstMargin",
 	}
 	_ = w.Write(record)
 }
