@@ -183,7 +183,7 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 		// the margins from multiple nodes constructively interfere and grow artificially
 		// it's easy for the system to enter a steady-state of constantly failing every other round
 		// divide it by 2 for batch cutting, to artificially encourage it to lower over time
-		margin := state.bcEstimateMargin.Median() / 2
+		margin := state.bcEstimateMargin.MinEstimate() // /2
 
 		// TODO: consider progress in current round too (will mean adjustments below)
 		timeToOwnQueueAgRound := state.avgAgTime.MinEstimate() * time.Duration(waitRoundCount)
@@ -239,7 +239,7 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 		if aleatypes.QueueIdx(state.agRound%uint64(len(params.AllNodes))) == ownQueueIdx {
 			if posQuorumWait == math.MaxInt64 || !decision {
 				// failed deadline, double margin
-				m := state.bcEstimateMargin.Median()
+				m := state.bcEstimateMargin.MaxEstimate()
 				state.bcEstimateMargin.Clear()
 				state.bcEstimateMargin.AddSample(2 * m)
 			} else if !state.failedOwnAgRound {
@@ -278,7 +278,7 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 				if startTime, ok := state.bcStartTimes[slot]; ok {
 					stalledTime := time.Since(startTime)
 
-					timeToWait := state.avgBcTime.MaxEstimate() + state.bcEstimateMargin.Median() - stalledTime
+					timeToWait := state.avgBcTime.MaxEstimate() + state.bcEstimateMargin.MaxEstimate() - stalledTime
 
 					// clamp wait time just in case
 					if timeToWait > tunables.MaxAgreementDelay {
