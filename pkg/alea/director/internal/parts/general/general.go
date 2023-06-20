@@ -183,7 +183,7 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 		// the margins from multiple nodes constructively interfere and grow artificially
 		// it's easy for the system to enter a steady-state of constantly failing every other round
 		// divide it by 2 for batch cutting, to artificially encourage it to lower over time
-		margin := state.bcEstimateMargin.MinEstimate() // /2
+		margin := state.bcEstimateMargin.MinEstimate() / 2
 
 		// TODO: consider progress in current round too (will mean adjustments below)
 		timeToOwnQueueAgRound := state.avgAgTime.MinEstimate() * time.Duration(waitRoundCount)
