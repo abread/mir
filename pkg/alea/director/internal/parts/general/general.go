@@ -310,12 +310,20 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 
 		// TODO: consider progress in current round too (will mean adjustments below)
 		timeToOwnQueueAgRound := state.avgAgTime.MinEstimate() * time.Duration(waitRoundCount)
-		maxTimeBeforeBatch := state.avgOwnBcTime.MaxEstimate() + margin
+		bcRuntime := state.avgOwnBcTime.MaxEstimate() + margin
 
 		// We have a lot of time before we reach our agreement round. Let the batch fill up!
 		// We must also guarantee F+1 nodes have undelivered batches, or that agreement is progressing,
 		// otherwise an attacker can stall the system by not sending their batch to enough nodes.
-		if timeToOwnQueueAgRound > maxTimeBeforeBatch && (!state.stalledAgRound || state.agCanDeliver(F+1)) {
+		if timeToOwnQueueAgRound > bcRuntime && (!state.stalledAgRound || state.agCanDeliver(F+1)) {
+			// ensure we are woken up to create a batch before we run out of time
+			eventpbdsl.TimerDelay(m, mc.Timer,
+				[]*eventpbtypes.Event{
+					directorpbevents.Heartbeat(mc.Self),
+				},
+				timert.Duration(timeToOwnQueueAgRound-bcRuntime),
+			)
+
 			return nil
 		}
 
