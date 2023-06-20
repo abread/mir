@@ -240,8 +240,8 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 			if posQuorumWait == math.MaxInt64 || !decision {
 				// failed deadline, double margin
 				m := state.bcEstimateMargin.MaxEstimate()
-				state.bcEstimateMargin.Clear()
 				state.bcEstimateMargin.AddSample(2 * m)
+				// TODO: use explicit ACKs in VCB to compute this accurately
 			} else if !state.failedOwnAgRound {
 				// positive quorum wait was the optimal margin value for this round
 				state.bcEstimateMargin.AddSample(posQuorumWait)
