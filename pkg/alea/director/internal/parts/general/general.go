@@ -167,11 +167,16 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 	aagdsl.UponDeliver(m, func(round uint64, decision bool, duration time.Duration, posQuorumWait time.Duration) error {
 		// adjust bc estimate margins
 		if aleatypes.QueueIdx(state.agRound%uint64(N)) == ownQueueIdx {
-			if posQuorumWait == math.MaxInt64 || !decision {
+			if !decision {
 				// failed deadline, double margin
 				m := state.ownBcEstimateMargin.MaxEstimate()
 				state.ownBcEstimateMargin.Clear()
 				state.ownBcEstimateMargin.AddSample(2 * m)
+				// TODO: use explicit ACKs in VCB to compute this accurately
+			} else if posQuorumWait == math.MaxInt64 {
+				// did not fail deadline, but we're not quite there yet
+				expectedWaitTime := time.Since(state.ownBcDeliverTimes[state.agQueueHeads[ownQueueIdx]-1]) - duration
+				state.ownBcEstimateMargin.AddSample(expectedWaitTime * 3 / 2)
 				// TODO: use explicit ACKs in VCB to compute this accurately
 			} else if !state.failedOwnAgRound {
 				waitTime := time.Since(state.ownBcDeliverTimes[state.agQueueHeads[ownQueueIdx]-1]) - duration
