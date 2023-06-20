@@ -49,9 +49,9 @@ type state struct {
 	bcStartTimes          map[commontypes.Slot]time.Time
 	ownBcDeliverTimes     map[aleatypes.QueueSlot]time.Time
 	avgOwnBcTime          util.Estimator
-	avgOtherBcTime        util.Estimator
+	avgOtherBcTime        util.ByzEstimator
 	ownBcEstimateMargin   util.Estimator
-	otherBcEstimateMargin util.Estimator
+	otherBcEstimateMargin util.ByzEstimator
 }
 
 func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, tunables common.ModuleTunables, nodeID t.NodeID, logger logging.Logger) {
@@ -97,7 +97,7 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 		if slot.QueueIdx == ownQueueIdx {
 			state.avgOwnBcTime.AddSample(duration)
 		} else {
-			state.avgOtherBcTime.AddSample(duration)
+			state.avgOtherBcTime.AddSample(int(slot.QueueIdx), duration)
 		}
 
 		delete(state.bcStartTimes, slot)
@@ -128,7 +128,7 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 			return nil
 		}
 
-		queueIdx := aleatypes.QueueIdx(round % uint64(len(params.AllNodes)))
+		queueIdx := aleatypes.QueueIdx(round % uint64(N))
 		slot := &commontypes.Slot{
 			QueueIdx:  queueIdx,
 			QueueSlot: state.agQueueHeads[queueIdx],
@@ -179,11 +179,11 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 			return nil
 		}
 
-		waitRoundCount := int(ownQueueIdx) - int(state.agRound%uint64(len(params.AllNodes))) - 1
+		waitRoundCount := int(ownQueueIdx) - int(state.agRound%uint64(N)) - 1
 		if waitRoundCount == -1 {
-			waitRoundCount = len(params.AllNodes)
+			waitRoundCount = N
 		} else if waitRoundCount < 0 {
-			waitRoundCount += len(params.AllNodes)
+			waitRoundCount += N
 		}
 
 		margin := state.ownBcEstimateMargin.MaxEstimate()
@@ -235,7 +235,7 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 	})
 	aagdsl.UponDeliver(m, func(round uint64, decision bool, duration time.Duration, posQuorumWait time.Duration) error {
 		// adjust bc estimate margins
-		if aleatypes.QueueIdx(state.agRound%uint64(len(params.AllNodes))) == ownQueueIdx {
+		if aleatypes.QueueIdx(state.agRound%uint64(N)) == ownQueueIdx {
 			if posQuorumWait == math.MaxInt64 || !decision {
 				// failed deadline, double margin
 				m := state.ownBcEstimateMargin.MaxEstimate()
@@ -250,14 +250,16 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 			state.failedOwnAgRound = !decision
 			delete(state.ownBcDeliverTimes, state.agQueueHeads[ownQueueIdx]-1)
 		} else {
+			queueIdx := int(round % uint64(N))
 			if posQuorumWait == math.MaxInt64 || !decision {
 				// failed deadline, double margin
 				m := state.otherBcEstimateMargin.MaxEstimate()
-				state.otherBcEstimateMargin.Clear()
-				state.otherBcEstimateMargin.AddSample(2 * m)
+
+				state.otherBcEstimateMargin.Clear(queueIdx)
+				state.otherBcEstimateMargin.AddSample(queueIdx, 2*m)
 				// TODO: use explicit ACKs in VCB to compute this accurately
 			} else {
-				state.otherBcEstimateMargin.AddSample(posQuorumWait)
+				state.otherBcEstimateMargin.AddSample(queueIdx, posQuorumWait)
 			}
 		}
 		return nil
@@ -290,7 +292,7 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 
 		canDeliverSomething := state.agCanDeliver(1)
 
-		nextQueueIdx := aleatypes.QueueIdx(state.agRound % uint64(len(params.AllNodes)))
+		nextQueueIdx := aleatypes.QueueIdx(state.agRound % uint64(N))
 		nextQueueSlot := state.agQueueHeads[nextQueueIdx]
 
 		if canDeliverSomething {
@@ -372,11 +374,11 @@ func newState(params common.ModuleParams, tunables common.ModuleTunables, nodeID
 
 		avgAgTime: util.NewEstimator(tunables.EstimateWindowSize),
 
-		bcStartTimes:          make(map[commontypes.Slot]time.Time, tunables.MaxConcurrentVcbPerQueue*len(params.AllNodes)),
+		bcStartTimes:          make(map[commontypes.Slot]time.Time, tunables.MaxConcurrentVcbPerQueue*N),
 		avgOwnBcTime:          util.NewEstimator(tunables.EstimateWindowSize),
-		avgOtherBcTime:        util.NewEstimator(tunables.EstimateWindowSize),
+		avgOtherBcTime:        util.NewByzEstimator(tunables.EstimateWindowSize, N),
 		ownBcEstimateMargin:   util.NewEstimator(tunables.EstimateWindowSize),
-		otherBcEstimateMargin: util.NewEstimator(tunables.EstimateWindowSize),
+		otherBcEstimateMargin: util.NewByzEstimator(tunables.EstimateWindowSize, N),
 		ownBcDeliverTimes:     make(map[aleatypes.QueueSlot]time.Time, tunables.MaxOwnUnagreedBatchCount),
 	}
 

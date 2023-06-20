@@ -44,9 +44,9 @@ func (e *Estimator) MaxEstimate() time.Duration {
 		return 24 * time.Hour
 	}
 
-	// P66 (accounts for ~1/3 nodes being byzantine and delaying operations to artificially inflate estimates)
+	// P95
 	s := e.sortedSamples()
-	idx := len(s) * 66 / 100
+	idx := len(s) * 95 / 100
 
 	return s[idx]
 }
@@ -73,9 +73,9 @@ func (e *Estimator) MinEstimate() time.Duration {
 		return 0
 	}
 
-	// P3 (accounts for ~1/3 nodes being byzantine and skipping operations to artificially deflate estimates)3
+	// P05
 	s := e.sortedSamples()
-	idx := len(s) * 33 / 100
+	idx := len(s) * 5 / 100
 
 	return s[idx]
 }
