@@ -23,7 +23,8 @@ import (
 	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	vcbpbdsl "github.com/filecoin-project/mir/pkg/pb/vcbpb/dsl"
 	vcbpbevents "github.com/filecoin-project/mir/pkg/pb/vcbpb/events"
-	vcbpbtypes "github.com/filecoin-project/mir/pkg/pb/vcbpb/types"
+	"github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
+	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 	"github.com/filecoin-project/mir/pkg/vcb"
 )
@@ -58,10 +59,9 @@ func newQueueController(mc ModuleConfig, params ModuleParams, logger logging.Log
 		return nil
 	})
 
-	// we can't use .UponDeliver because that assumes a DSL origin
 	// upon vcb deliver, store batch and deliver to broadcast component
-	vcbpbdsl.UponEvent[*vcbpbtypes.Event_Deliver](m, func(ev *vcbpbtypes.Deliver) error {
-		queueSlotStr := ev.SrcModule.StripParent(mc.Self).Top()
+	vcbpbdsl.UponDeliver(m, func(txs []*trantorpbtypes.Transaction, txIds []tt.TxID, signature tctypes.FullSig, srcModule t.ModuleID) error {
+		queueSlotStr := srcModule.StripParent(mc.Self).Top()
 		queueSlot, err := strconv.ParseUint(string(queueSlotStr), 10, 64)
 		if err != nil {
 			return es.Errorf("deliver event for invalid round: %w", err)
@@ -72,7 +72,7 @@ func newQueueController(mc ModuleConfig, params ModuleParams, logger logging.Log
 			QueueSlot: aleatypes.QueueSlot(queueSlot),
 		}
 
-		batchdbdsl.StoreBatch(m, mc.BatchDB, aleaCommon.FormatAleaBatchID(slot), ev.TxIds, ev.Txs, ev.Signature, slot)
+		batchdbdsl.StoreBatch(m, mc.BatchDB, aleaCommon.FormatAleaBatchID(slot), txIds, txs, signature, slot)
 		return nil
 	})
 
