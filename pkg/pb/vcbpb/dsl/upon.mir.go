@@ -36,3 +36,9 @@ func UponDeliver(m dsl.Module, handler func(txs []*types2.Transaction, txIds []t
 		return handler(ev.Txs, ev.TxIds, ev.Signature, ev.SrcModule)
 	})
 }
+
+func UponDone(m dsl.Module, handler func(srcModule types4.ModuleID) error) {
+	UponEvent[*types.Event_Done](m, func(ev *types.Done) error {
+		return handler(ev.SrcModule)
+	})
+}

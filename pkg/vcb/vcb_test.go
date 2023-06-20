@@ -178,6 +178,7 @@ func newDeployment(ctx context.Context, conf *TestConfig) (*deploytest.Deploymen
 		vcbConfig := ModuleConfig{
 			Self:         "vcb",
 			Consumer:     "app",
+			Net:          "net",
 			ReliableNet:  "reliablenet",
 			Hasher:       "hasher",
 			ThreshCrypto: "threshcrypto",
@@ -210,7 +211,7 @@ func newDeployment(ctx context.Context, conf *TestConfig) (*deploytest.Deploymen
 			nodeID,
 			reliablenet.ModuleConfig{
 				Self:  vcbConfig.ReliableNet,
-				Net:   "net",
+				Net:   vcbConfig.Net,
 				Timer: "timer",
 			},
 			rnetParams,
@@ -232,7 +233,7 @@ func newDeployment(ctx context.Context, conf *TestConfig) (*deploytest.Deploymen
 			vcbConfig.Mempool:      mempool,
 			vcbConfig.Hasher:       mirCrypto.NewHasher(ctx, mirCrypto.DefaultHasherModuleParams(), crypto.SHA256),
 			vcbConfig.ReliableNet:  rnet,
-			"net":                  transport,
+			vcbConfig.Net:          transport,
 			"timer":                timer.New(),
 		}
 

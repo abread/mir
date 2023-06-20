@@ -166,6 +166,7 @@ func New(ownID t.NodeID, config Config, params Params, startingChkp *checkpoint.
 			Consumer:     config.AleaDirector,
 			BatchDB:      config.BatchDB,
 			Mempool:      config.Mempool,
+			Net:          config.Net,
 			ReliableNet:  config.ReliableNet,
 			Hasher:       config.Hasher,
 			ThreshCrypto: config.ThreshCrypto,

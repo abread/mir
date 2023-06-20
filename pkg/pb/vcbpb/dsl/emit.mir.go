@@ -20,3 +20,7 @@ func InputValue(m dsl.Module, destModule types.ModuleID, txs []*types1.Transacti
 func Deliver(m dsl.Module, destModule types.ModuleID, txs []*types1.Transaction, txIds []types2.TxID, signature tctypes.FullSig, srcModule types.ModuleID) {
 	dsl.EmitMirEvent(m, events.Deliver(destModule, txs, txIds, signature, srcModule))
 }
+
+func Done(m dsl.Module, destModule types.ModuleID, srcModule types.ModuleID) {
+	dsl.EmitMirEvent(m, events.Done(destModule, srcModule))
+}

@@ -42,3 +42,9 @@ func UponFinalMessageReceived(m dsl.Module, handler func(from types1.NodeID, sig
 		return handler(from, msg.Signature)
 	})
 }
+
+func UponDoneMessageReceived(m dsl.Module, handler func(from types1.NodeID) error) {
+	UponMessageReceived[*types.Message_DoneMessage](m, func(from types1.NodeID, msg *types.DoneMessage) error {
+		return handler(from)
+	})
+}

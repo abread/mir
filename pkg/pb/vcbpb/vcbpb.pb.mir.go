@@ -10,6 +10,7 @@ func (*Event) ReflectTypeOptions() []reflect.Type {
 	return []reflect.Type{
 		reflect.TypeOf((*Event_InputValue)(nil)),
 		reflect.TypeOf((*Event_Deliver)(nil)),
+		reflect.TypeOf((*Event_Done)(nil)),
 	}
 }
 
@@ -18,5 +19,6 @@ func (*Message) ReflectTypeOptions() []reflect.Type {
 		reflect.TypeOf((*Message_SendMessage)(nil)),
 		reflect.TypeOf((*Message_EchoMessage)(nil)),
 		reflect.TypeOf((*Message_FinalMessage)(nil)),
+		reflect.TypeOf((*Message_DoneMessage)(nil)),
 	}
 }

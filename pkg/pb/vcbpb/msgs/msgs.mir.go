@@ -54,3 +54,16 @@ func FinalMessage(destModule types.ModuleID, signature tctypes.FullSig) *types2.
 		},
 	}
 }
+
+func DoneMessage(destModule types.ModuleID) *types2.Message {
+	return &types2.Message{
+		DestModule: destModule,
+		Type: &types2.Message_Vcb{
+			Vcb: &types3.Message{
+				Type: &types3.Message_DoneMessage{
+					DoneMessage: &types3.DoneMessage{},
+				},
+			},
+		},
+	}
+}

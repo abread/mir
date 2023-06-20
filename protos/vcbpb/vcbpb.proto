@@ -22,6 +22,7 @@ message Event {
 
     InputValue input_value = 1;
     Deliver    deliver     = 2;
+    Done       done        = 3;
   }
 }
 
@@ -42,6 +43,12 @@ message Deliver {
   string src_module = 4 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.ModuleID"];
 }
 
+message Done {
+  option (mir.event) = true;
+
+  string src_module = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.ModuleID"];
+}
+
 // ============================================================
 // Messages
 // ============================================================
@@ -55,6 +62,7 @@ message Message {
     SendMessage  send_message  = 1;
     EchoMessage  echo_message  = 2;
     FinalMessage final_message = 3;
+    DoneMessage  done_message  = 4;
   }
 }
 
@@ -74,4 +82,8 @@ message FinalMessage {
   option (net.message) = true;
 
   bytes signature = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes.FullSig"];
+}
+
+message DoneMessage {
+  option (net.message) = true;
 }

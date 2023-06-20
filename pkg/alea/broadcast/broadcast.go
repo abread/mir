@@ -17,6 +17,7 @@ type ConfigTemplate struct {
 	Consumer     t.ModuleID
 	BatchDB      t.ModuleID
 	Mempool      t.ModuleID
+	Net          t.ModuleID
 	ReliableNet  t.ModuleID
 	Hasher       t.ModuleID
 	ThreshCrypto t.ModuleID
@@ -42,6 +43,7 @@ func CreateQueues(mcTemplate ConfigTemplate, paramsTemplate ParamsTemplate, tuna
 			Consumer:     mcTemplate.Consumer,
 			BatchDB:      mcTemplate.BatchDB,
 			Mempool:      mcTemplate.Mempool,
+			Net:          mcTemplate.Net,
 			ReliableNet:  mcTemplate.ReliableNet,
 			Hasher:       mcTemplate.Hasher,
 			ThreshCrypto: mcTemplate.ThreshCrypto,

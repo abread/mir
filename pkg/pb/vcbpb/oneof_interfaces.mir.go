@@ -17,6 +17,10 @@ func (w *Event_Deliver) Unwrap() *Deliver {
 	return w.Deliver
 }
 
+func (w *Event_Done) Unwrap() *Done {
+	return w.Done
+}
+
 type Message_Type = isMessage_Type
 
 type Message_TypeWrapper[T any] interface {
@@ -34,4 +38,8 @@ func (w *Message_EchoMessage) Unwrap() *EchoMessage {
 
 func (w *Message_FinalMessage) Unwrap() *FinalMessage {
 	return w.FinalMessage
+}
+
+func (w *Message_DoneMessage) Unwrap() *DoneMessage {
+	return w.DoneMessage
 }

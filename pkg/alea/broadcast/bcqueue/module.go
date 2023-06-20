@@ -104,6 +104,7 @@ func newVcbGenerator(queueMc ModuleConfig, queueParams ModuleParams, nodeID t.No
 	baseConfig := vcb.ModuleConfig{
 		Self:         "INVALID",
 		Consumer:     queueMc.Self,
+		Net:          queueMc.Net,
 		ReliableNet:  queueMc.ReliableNet,
 		Hasher:       queueMc.Hasher,
 		ThreshCrypto: queueMc.ThreshCrypto,

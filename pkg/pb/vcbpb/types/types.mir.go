@@ -38,6 +38,8 @@ func Event_TypeFromPb(pb vcbpb.Event_Type) Event_Type {
 		return &Event_InputValue{InputValue: InputValueFromPb(pb.InputValue)}
 	case *vcbpb.Event_Deliver:
 		return &Event_Deliver{Deliver: DeliverFromPb(pb.Deliver)}
+	case *vcbpb.Event_Done:
+		return &Event_Done{Done: DoneFromPb(pb.Done)}
 	}
 	return nil
 }
@@ -88,6 +90,30 @@ func (w *Event_Deliver) Pb() vcbpb.Event_Type {
 
 func (*Event_Deliver) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*vcbpb.Event_Deliver]()}
+}
+
+type Event_Done struct {
+	Done *Done
+}
+
+func (*Event_Done) isEvent_Type() {}
+
+func (w *Event_Done) Unwrap() *Done {
+	return w.Done
+}
+
+func (w *Event_Done) Pb() vcbpb.Event_Type {
+	if w == nil {
+		return nil
+	}
+	if w.Done == nil {
+		return &vcbpb.Event_Done{}
+	}
+	return &vcbpb.Event_Done{Done: (w.Done).Pb()}
+}
+
+func (*Event_Done) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*vcbpb.Event_Done]()}
 }
 
 func EventFromPb(pb *vcbpb.Event) *Event {
@@ -196,6 +222,35 @@ func (*Deliver) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*vcbpb.Deliver]()}
 }
 
+type Done struct {
+	SrcModule types3.ModuleID
+}
+
+func DoneFromPb(pb *vcbpb.Done) *Done {
+	if pb == nil {
+		return nil
+	}
+	return &Done{
+		SrcModule: (types3.ModuleID)(pb.SrcModule),
+	}
+}
+
+func (m *Done) Pb() *vcbpb.Done {
+	if m == nil {
+		return nil
+	}
+	pbMessage := &vcbpb.Done{}
+	{
+		pbMessage.SrcModule = (string)(m.SrcModule)
+	}
+
+	return pbMessage
+}
+
+func (*Done) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*vcbpb.Done]()}
+}
+
 type Message struct {
 	Type Message_Type
 }
@@ -222,6 +277,8 @@ func Message_TypeFromPb(pb vcbpb.Message_Type) Message_Type {
 		return &Message_EchoMessage{EchoMessage: EchoMessageFromPb(pb.EchoMessage)}
 	case *vcbpb.Message_FinalMessage:
 		return &Message_FinalMessage{FinalMessage: FinalMessageFromPb(pb.FinalMessage)}
+	case *vcbpb.Message_DoneMessage:
+		return &Message_DoneMessage{DoneMessage: DoneMessageFromPb(pb.DoneMessage)}
 	}
 	return nil
 }
@@ -296,6 +353,30 @@ func (w *Message_FinalMessage) Pb() vcbpb.Message_Type {
 
 func (*Message_FinalMessage) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*vcbpb.Message_FinalMessage]()}
+}
+
+type Message_DoneMessage struct {
+	DoneMessage *DoneMessage
+}
+
+func (*Message_DoneMessage) isMessage_Type() {}
+
+func (w *Message_DoneMessage) Unwrap() *DoneMessage {
+	return w.DoneMessage
+}
+
+func (w *Message_DoneMessage) Pb() vcbpb.Message_Type {
+	if w == nil {
+		return nil
+	}
+	if w.DoneMessage == nil {
+		return &vcbpb.Message_DoneMessage{}
+	}
+	return &vcbpb.Message_DoneMessage{DoneMessage: (w.DoneMessage).Pb()}
+}
+
+func (*Message_DoneMessage) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*vcbpb.Message_DoneMessage]()}
 }
 
 func MessageFromPb(pb *vcbpb.Message) *Message {
@@ -414,4 +495,28 @@ func (m *FinalMessage) Pb() *vcbpb.FinalMessage {
 
 func (*FinalMessage) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*vcbpb.FinalMessage]()}
+}
+
+type DoneMessage struct{}
+
+func DoneMessageFromPb(pb *vcbpb.DoneMessage) *DoneMessage {
+	if pb == nil {
+		return nil
+	}
+	return &DoneMessage{}
+}
+
+func (m *DoneMessage) Pb() *vcbpb.DoneMessage {
+	if m == nil {
+		return nil
+	}
+	pbMessage := &vcbpb.DoneMessage{}
+	{
+	}
+
+	return pbMessage
+}
+
+func (*DoneMessage) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*vcbpb.DoneMessage]()}
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/modules"
 	rnetdsl "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/dsl"
 	threshDsl "github.com/filecoin-project/mir/pkg/pb/threshcryptopb/dsl"
+	transportpbdsl "github.com/filecoin-project/mir/pkg/pb/transportpb/dsl"
 	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	vcbdsl "github.com/filecoin-project/mir/pkg/pb/vcbpb/dsl"
 	vcbmsgs "github.com/filecoin-project/mir/pkg/pb/vcbpb/msgs"
@@ -23,6 +24,7 @@ import (
 type ModuleConfig struct {
 	Self         t.ModuleID // id of this module
 	Consumer     t.ModuleID
+	Net          t.ModuleID
 	ReliableNet  t.ModuleID
 	Hasher       t.ModuleID
 	ThreshCrypto t.ModuleID
@@ -89,7 +91,11 @@ func NewModule(mc ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger lo
 			return nil // byz node // TODO: suspect?
 		}
 
-		rnetdsl.Ack(m, mc.ReliableNet, mc.Self, FinalMsgID(), from)
+		if state.phase == VcbPhaseDelivered {
+			// re-send ACK
+			transportpbdsl.SendMessage(m, mc.Net, vcbmsgs.DoneMessage(mc.Self), []t.NodeID{params.Leader})
+		}
+
 		if state.phase >= VcbPhasePendingVerification {
 			return nil // already received final
 		}
@@ -141,6 +147,9 @@ func NewModule(mc ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger lo
 			return nil
 		}
 
+		transportpbdsl.SendMessage(m, mc.Net, vcbmsgs.DoneMessage(mc.Self), []t.NodeID{params.Leader})
+		vcbdsl.Done(m, mc.Consumer, mc.Self)
+
 		state.phase = VcbPhaseDelivered
 		return nil
 	})
@@ -184,6 +193,8 @@ type leaderState struct {
 	phase vcbLeaderPhase
 
 	sigAgg *tsagg.ThreshSigAggregator
+
+	revcdDone map[t.NodeID]struct{}
 }
 
 type vcbLeaderPhase uint8
@@ -191,6 +202,7 @@ type vcbLeaderPhase uint8
 const (
 	VcbLeaderPhaseAwaitingInput vcbLeaderPhase = iota
 	VcbLeaderPhaseAwaitingEchoes
+	VcbLeaderPhaseDelivered
 	VcbLeaderPhaseDone
 )
 
@@ -205,6 +217,8 @@ func setupVcbLeader(m dsl.Module, mc ModuleConfig, params *ModuleParams, logger 
 			SigData:                 state.payload.SigData,
 			InitialNodeCount:        params.GetN(),
 		}, logging.Decorate(logger, "ThresholdSigAggregator: ")),
+
+		revcdDone: make(map[t.NodeID]struct{}, params.GetN()),
 	}
 
 	vcbdsl.UponEchoMessageReceived(m, func(from t.NodeID, signatureShare tctypes.SigShare) error {
@@ -234,8 +248,30 @@ func setupVcbLeader(m dsl.Module, mc ModuleConfig, params *ModuleParams, logger 
 			// all SEND messages were made redundant, we can forget about them
 			rnetdsl.MarkRecvd(m, mc.ReliableNet, mc.Self, SendMsgID(), params.AllNodes)
 
+			leaderState.phase = VcbLeaderPhaseDelivered
+		}
+		return nil
+	})
+
+	vcbdsl.UponDoneMessageReceived(m, func(from t.NodeID) error {
+		// TODO: leader phase < delivered => <from> is faulty
+
+		if _, ok := leaderState.revcdDone[from]; ok {
+			return nil // already processed
+		}
+		leaderState.revcdDone[from] = struct{}{}
+
+		rnetdsl.MarkRecvd(m, mc.ReliableNet, mc.Self, FinalMsgID(), []t.NodeID{from})
+
+		return nil
+	})
+
+	dsl.UponStateUpdates(m, func() error {
+		if leaderState.phase == VcbLeaderPhaseDelivered && len(leaderState.revcdDone) >= 2*params.GetF()+1 {
+			vcbdsl.Done(m, mc.Consumer, mc.Self)
 			leaderState.phase = VcbLeaderPhaseDone
 		}
+
 		return nil
 	})
 
