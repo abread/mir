@@ -44,5 +44,6 @@ message Stats {
   int64 max_bc_duration_est = 5 [(mir.type) = "time.Duration"];
   int64 min_own_bc_duration_est = 6 [(mir.type) = "time.Duration"];
   int64 max_own_bc_duration_est = 7 [(mir.type) = "time.Duration"];
-  int64 bc_est_margin = 8 [(mir.type) = "time.Duration"];
+  int64 own_bc_est_margin = 8 [(mir.type) = "time.Duration"];
+  int64 other_bc_est_margin = 9 [(mir.type) = "time.Duration"];
 }

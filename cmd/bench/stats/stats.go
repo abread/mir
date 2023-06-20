@@ -40,7 +40,8 @@ type Stats struct {
 	maxBcDurationEst      time.Duration
 	minOwnBcDurationEst   time.Duration
 	maxOwnBcDurationEst   time.Duration
-	bcEstMargin           time.Duration
+	ownBcEstMargin        time.Duration
+	otherBcEstMargin      time.Duration
 }
 
 type txKey struct {
@@ -114,7 +115,8 @@ func (s *Stats) DirectorStats(stats *directorpb.Stats) {
 	s.maxBcDurationEst = time.Duration(stats.MaxBcDurationEst)
 	s.minOwnBcDurationEst = time.Duration(stats.MinOwnBcDurationEst)
 	s.maxOwnBcDurationEst = time.Duration(stats.MaxOwnBcDurationEst)
-	s.bcEstMargin = time.Duration(stats.BcEstMargin)
+	s.ownBcEstMargin = time.Duration(stats.OwnBcEstMargin)
+	s.otherBcEstMargin = time.Duration(stats.OtherBcEstMargin)
 
 	s.lock.Unlock()
 }
@@ -170,7 +172,8 @@ func (s *Stats) WriteCSVHeader(w *csv.Writer) {
 		"maxBcDurationEst",
 		"minOwnBcDurationEst",
 		"maxOwnBcDurationEst",
-		"bcEstMargin",
+		"ownBcEstMargin",
+		"otherBcEstMargin",
 	}
 	_ = w.Write(record)
 }
@@ -198,7 +201,8 @@ func (s *Stats) WriteCSVRecordAndReset(w *csv.Writer, d time.Duration) {
 	maxBcDurationEst := s.maxBcDurationEst
 	minOwnBcDurationEst := s.minOwnBcDurationEst
 	maxOwnBcDurationEst := s.maxOwnBcDurationEst
-	bcEstMargin := s.bcEstMargin
+	ownBcEstMargin := s.ownBcEstMargin
+	otherBcEstMargin := s.otherBcEstMargin
 
 	if s.timestampedTransactions == 0 {
 		avgLatency = math.NaN()
@@ -244,7 +248,8 @@ func (s *Stats) WriteCSVRecordAndReset(w *csv.Writer, d time.Duration) {
 		fmt.Sprintf("%.6f", maxBcDurationEst.Seconds()),
 		fmt.Sprintf("%.6f", minOwnBcDurationEst.Seconds()),
 		fmt.Sprintf("%.6f", maxOwnBcDurationEst.Seconds()),
-		fmt.Sprintf("%.6f", bcEstMargin.Seconds()),
+		fmt.Sprintf("%.6f", ownBcEstMargin.Seconds()),
+		fmt.Sprintf("%.6f", otherBcEstMargin.Seconds()),
 	}
 	_ = w.Write(record)
 }

@@ -13,8 +13,8 @@ type Estimator struct {
 	len       int
 }
 
-func NewEstimator(windowSize int) *Estimator {
-	return &Estimator{
+func NewEstimator(windowSize int) Estimator {
+	return Estimator{
 		estimates: make([]time.Duration, windowSize),
 	}
 }
@@ -31,13 +31,13 @@ func (e *Estimator) AddSample(sample time.Duration) {
 	}
 }
 
-func (e Estimator) sortedSamples() []time.Duration {
+func (e *Estimator) sortedSamples() []time.Duration {
 	s := slices.Clone(e.estimates[:e.len])
 	slices.Sort(s)
 	return s
 }
 
-func (e Estimator) MaxEstimate() time.Duration {
+func (e *Estimator) MaxEstimate() time.Duration {
 	if e.len == 0 {
 		// the maximum representable duration is not a good fit because it could lead to overflows
 		// return a ridiculously high, but not almost overflowing estimate
@@ -55,11 +55,10 @@ func (e *Estimator) Clear() {
 	e.len = 0
 }
 
-func (e Estimator) Median() time.Duration {
+func (e *Estimator) Median() time.Duration {
 	if e.len == 0 {
-		// the maximum representable duration is not a good fit because it could lead to overflows
-		// return a ridiculously high, but not almost overflowing estimate
-		return 24 * time.Hour
+		// return a reasonable value
+		return 1 * time.Second
 	}
 
 	// P50
@@ -69,7 +68,7 @@ func (e Estimator) Median() time.Duration {
 	return s[idx]
 }
 
-func (e Estimator) MinEstimate() time.Duration {
+func (e *Estimator) MinEstimate() time.Duration {
 	if e.len == 0 {
 		return 0
 	}

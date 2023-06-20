@@ -203,7 +203,8 @@ type Stats struct {
 	MaxBcDurationEst     time.Duration
 	MinOwnBcDurationEst  time.Duration
 	MaxOwnBcDurationEst  time.Duration
-	BcEstMargin          time.Duration
+	OwnBcEstMargin       time.Duration
+	OtherBcEstMargin     time.Duration
 }
 
 func StatsFromPb(pb *directorpb.Stats) *Stats {
@@ -218,7 +219,8 @@ func StatsFromPb(pb *directorpb.Stats) *Stats {
 		MaxBcDurationEst:     (time.Duration)(pb.MaxBcDurationEst),
 		MinOwnBcDurationEst:  (time.Duration)(pb.MinOwnBcDurationEst),
 		MaxOwnBcDurationEst:  (time.Duration)(pb.MaxOwnBcDurationEst),
-		BcEstMargin:          (time.Duration)(pb.BcEstMargin),
+		OwnBcEstMargin:       (time.Duration)(pb.OwnBcEstMargin),
+		OtherBcEstMargin:     (time.Duration)(pb.OtherBcEstMargin),
 	}
 }
 
@@ -235,7 +237,8 @@ func (m *Stats) Pb() *directorpb.Stats {
 		pbMessage.MaxBcDurationEst = (int64)(m.MaxBcDurationEst)
 		pbMessage.MinOwnBcDurationEst = (int64)(m.MinOwnBcDurationEst)
 		pbMessage.MaxOwnBcDurationEst = (int64)(m.MaxOwnBcDurationEst)
-		pbMessage.BcEstMargin = (int64)(m.BcEstMargin)
+		pbMessage.OwnBcEstMargin = (int64)(m.OwnBcEstMargin)
+		pbMessage.OtherBcEstMargin = (int64)(m.OtherBcEstMargin)
 	}
 
 	return pbMessage
