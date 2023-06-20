@@ -156,75 +156,6 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 	})
 
 	// =============================================================================================
-	// Batch Cutting / Own Queue Broadcast Control
-	// =============================================================================================
-
-	// upon init, cut a new batch
-	dsl.UponInit(m, func() error {
-		state.stalledBatchCut = false
-		mempooldsl.RequestBatch[struct{}](m, mc.Mempool, nil)
-
-		return nil
-	})
-
-	// upon nice condition (unagreed batch count < max, no batch being cut, timeToNextAgForThisNode < estBc+margin || stalled ag), cut a new batch and broadcast it
-	// TODO: move to bc component
-	dsl.UponStateUpdates(m, func() error {
-		// bcOwnQueueHead is the next slot to be broadcast
-		// agQueueHeads[ownQueueIdx] is the next slot to be agreed on
-		unagreedOwnBatchCount := uint64(state.bcOwnQueueHead - state.agQueueHeads[ownQueueIdx])
-
-		if !state.stalledBatchCut || unagreedOwnBatchCount >= tunables.MaxOwnUnagreedBatchCount {
-			// batch cut in progress, or enough are cut already
-			return nil
-		}
-
-		waitRoundCount := int(ownQueueIdx) - int(state.agRound%uint64(N)) - 1
-		if waitRoundCount == -1 {
-			waitRoundCount = N
-		} else if waitRoundCount < 0 {
-			waitRoundCount += N
-		}
-
-		margin := state.ownBcEstimateMargin.MaxEstimate()
-
-		// TODO: consider progress in current round too (will mean adjustments below)
-		timeToOwnQueueAgRound := state.avgAgTime.MinEstimate() * time.Duration(waitRoundCount)
-		maxTimeBeforeBatch := state.avgOwnBcTime.MaxEstimate() + margin
-
-		// TODO: liveness bug: we must guarantee F+1 nodes have undelivered batches, otherwise
-		// an attacker can stall the system by not sending their batch to enough nodes.
-		if state.agCanDeliver(F+1) && timeToOwnQueueAgRound > maxTimeBeforeBatch {
-			// we have a lot of time before we reach our agreement round. let the batch fill up
-			return nil
-		}
-
-		// logger.Log(logging.LevelDebug, "requesting more transactions")
-		state.stalledBatchCut = false
-
-		mempooldsl.RequestBatch[struct{}](m, mc.Mempool, nil)
-		return nil
-	})
-	mempooldsl.UponNewBatch(m, func(txIDs []tt.TxID, txs []*trantorpbtypes.Transaction, ctx *struct{}) error {
-		if len(txs) == 0 {
-			return es.Errorf("empty batch. did you misconfigure your mempool?")
-		}
-
-		// logger.Log(logging.LevelDebug, "new batch", "nTransactions", len(txs))
-
-		bcqueuepbdsl.InputValue(m, bcutil.BcQueueModuleID(mc.BcQueuePrefix, ownQueueIdx), state.bcOwnQueueHead, txs)
-		state.bcOwnQueueHead++
-		return nil
-	})
-	bcqueuepbdsl.UponDeliver(m, func(slot *commontypes.Slot) error {
-		if slot.QueueIdx == ownQueueIdx && slot.QueueSlot == state.bcOwnQueueHead-1 {
-			// new batch was delivered
-			state.stalledBatchCut = true
-		}
-		return nil
-	})
-
-	// =============================================================================================
 	// Bc Estimate Margin Estimation
 	// =============================================================================================
 	bcqueuepbdsl.UponDeliver(m, func(slot *commontypes.Slot) error {
@@ -341,6 +272,75 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 			state.stalledAgRound = false
 		}
 
+		return nil
+	})
+
+	// =============================================================================================
+	// Batch Cutting / Own Queue Broadcast Control
+	// =============================================================================================
+
+	// upon init, cut a new batch
+	dsl.UponInit(m, func() error {
+		state.stalledBatchCut = false
+		mempooldsl.RequestBatch[struct{}](m, mc.Mempool, nil)
+
+		return nil
+	})
+
+	// upon nice condition (unagreed batch count < max, no batch being cut, timeToNextAgForThisNode < estBc+margin || stalled ag), cut a new batch and broadcast it
+	// TODO: move to bc component
+	dsl.UponStateUpdates(m, func() error {
+		// bcOwnQueueHead is the next slot to be broadcast
+		// agQueueHeads[ownQueueIdx] is the next slot to be agreed on
+		unagreedOwnBatchCount := uint64(state.bcOwnQueueHead - state.agQueueHeads[ownQueueIdx])
+
+		if !state.stalledBatchCut || unagreedOwnBatchCount >= tunables.MaxOwnUnagreedBatchCount {
+			// batch cut in progress, or enough are cut already
+			return nil
+		}
+
+		waitRoundCount := int(ownQueueIdx) - int(state.agRound%uint64(N)) - 1
+		if waitRoundCount == -1 {
+			waitRoundCount = N
+		} else if waitRoundCount < 0 {
+			waitRoundCount += N
+		}
+
+		margin := state.ownBcEstimateMargin.MaxEstimate()
+
+		// TODO: consider progress in current round too (will mean adjustments below)
+		timeToOwnQueueAgRound := state.avgAgTime.MinEstimate() * time.Duration(waitRoundCount)
+		maxTimeBeforeBatch := state.avgOwnBcTime.MaxEstimate() + margin
+
+		// We have a lot of time before we reach our agreement round. Let the batch fill up!
+		// We must also guarantee F+1 nodes have undelivered batches, or that agreement is progressing,
+		// otherwise an attacker can stall the system by not sending their batch to enough nodes.
+		if timeToOwnQueueAgRound > maxTimeBeforeBatch && (!state.stalledAgRound || state.agCanDeliver(F+1)) {
+			return nil
+		}
+
+		// logger.Log(logging.LevelDebug, "requesting more transactions")
+		state.stalledBatchCut = false
+
+		mempooldsl.RequestBatch[struct{}](m, mc.Mempool, nil)
+		return nil
+	})
+	mempooldsl.UponNewBatch(m, func(txIDs []tt.TxID, txs []*trantorpbtypes.Transaction, ctx *struct{}) error {
+		if len(txs) == 0 {
+			return es.Errorf("empty batch. did you misconfigure your mempool?")
+		}
+
+		// logger.Log(logging.LevelDebug, "new batch", "nTransactions", len(txs))
+
+		bcqueuepbdsl.InputValue(m, bcutil.BcQueueModuleID(mc.BcQueuePrefix, ownQueueIdx), state.bcOwnQueueHead, txs)
+		state.bcOwnQueueHead++
+		return nil
+	})
+	bcqueuepbdsl.UponDeliver(m, func(slot *commontypes.Slot) error {
+		if slot.QueueIdx == ownQueueIdx && slot.QueueSlot == state.bcOwnQueueHead-1 {
+			// new batch was delivered
+			state.stalledBatchCut = true
+		}
 		return nil
 	})
 }
