@@ -1,7 +1,6 @@
 package general
 
 import (
-	"math"
 	"time"
 
 	"golang.org/x/exp/slices"
@@ -11,7 +10,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/alea/aleatypes"
 	"github.com/filecoin-project/mir/pkg/alea/broadcast/bcutil"
 	"github.com/filecoin-project/mir/pkg/alea/director/internal/common"
-	"github.com/filecoin-project/mir/pkg/alea/util"
+	"github.com/filecoin-project/mir/pkg/alea/director/internal/parts/estimators"
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/logging"
 	aagdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents/dsl"
@@ -42,17 +41,9 @@ type state struct {
 	slotsReadyToDeliver []set[aleatypes.QueueSlot]
 	agRound             uint64
 	stalledAgRound      bool
-
-	avgAgTime util.Estimator
-
-	bcStartTimes          map[commontypes.Slot]time.Time
-	avgOwnBcTime          util.Estimator
-	avgOtherBcTime        util.ByzEstimator
-	ownBcEstimateMargin   util.Estimator
-	otherBcEstimateMargin util.ByzEstimator
 }
 
-func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, tunables common.ModuleTunables, nodeID t.NodeID, logger logging.Logger) {
+func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, tunables common.ModuleTunables, nodeID t.NodeID, logger logging.Logger, est *estimators.Estimators) {
 	state := newState(params, tunables, nodeID)
 	ownQueueIdx := aleatypes.QueueIdx(slices.Index(params.AllNodes, nodeID))
 
@@ -61,7 +52,7 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 
 	dsl.UponStateUpdates(m, func() error {
 		// stats are reported after updates, and before ordering components around
-		directorpbdsl.Stats(m, "ignore", uint64(len(state.slotsReadyToDeliver)), state.avgAgTime.MinEstimate(), state.avgAgTime.MaxEstimate(), state.avgOtherBcTime.MinEstimate(), state.avgOtherBcTime.MaxEstimate(), state.avgOwnBcTime.MinEstimate(), state.avgOwnBcTime.MaxEstimate(), state.ownBcEstimateMargin.MaxEstimate(), state.otherBcEstimateMargin.MaxEstimate())
+		directorpbdsl.Stats(m, "ignore", uint64(len(state.slotsReadyToDeliver)), est.AgMinDurationEst(), est.AgMaxDurationEst(), est.ExtBcMinDurationEst(), est.ExtBcMaxDurationEst(), est.OwnBcMinDurationEst(), est.OwnBcMaxDurationEst())
 		return nil
 	})
 
@@ -71,35 +62,6 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 
 	directorpbdsl.UponHeartbeat(m, func() error {
 		// UponStateUpdate(s) code will run
-		return nil
-	})
-
-	// =============================================================================================
-	// Broadcast duration estimation
-	// =============================================================================================
-	bcqueuepbdsl.UponBcStarted(m, func(slot *commontypes.Slot) error {
-		state.bcStartTimes[*slot] = time.Now()
-
-		return nil
-	})
-	bcqueuepbdsl.UponDeliver(m, func(slotRef *commontypes.Slot) error {
-		slot := *slotRef
-
-		startTime, ok := state.bcStartTimes[slot]
-		if !ok {
-			return nil // already processed
-		}
-
-		duration := time.Since(startTime)
-
-		if slot.QueueIdx == ownQueueIdx {
-			state.avgOwnBcTime.AddSample(duration)
-		} else {
-			state.avgOtherBcTime.AddSample(int(slot.QueueIdx), duration)
-		}
-
-		delete(state.bcStartTimes, slot)
-
 		return nil
 	})
 
@@ -154,32 +116,6 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 	})
 
 	// =============================================================================================
-	// Bc Estimate Margin Estimation
-	// =============================================================================================
-	bcqueuepbdsl.UponBcDone(m, func(slot *commontypes.Slot, deliverDelta time.Duration) error {
-		// adjust own bc estimate margin
-		state.ownBcEstimateMargin.AddSample(deliverDelta)
-		return nil
-	})
-	aagdsl.UponDeliver(m, func(round uint64, decision bool, duration time.Duration, posQuorumWait time.Duration) error {
-		// adjust other bc estimate margins
-		if aleatypes.QueueIdx(state.agRound%uint64(N)) != ownQueueIdx {
-			queueIdx := int(round % uint64(N))
-			if posQuorumWait == math.MaxInt64 || !decision {
-				// failed deadline, double margin
-				m := state.otherBcEstimateMargin.MaxEstimate()
-
-				state.otherBcEstimateMargin.Clear(queueIdx)
-				state.otherBcEstimateMargin.AddSample(queueIdx, 2*m)
-				// TODO: use explicit ACKs in VCB to compute this accurately
-			} else {
-				state.otherBcEstimateMargin.AddSample(queueIdx, posQuorumWait)
-			}
-		}
-		return nil
-	})
-
-	// =============================================================================================
 	// Agreement Round Control
 	// =============================================================================================
 
@@ -191,7 +127,6 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 
 	// upon agreement round completion, prepare next round
 	aagdsl.UponDeliver(m, func(round uint64, decision bool, duration time.Duration, _posQuorumWait time.Duration) error {
-		state.avgAgTime.AddSample(duration)
 		state.agRound++
 		state.stalledAgRound = true
 		return nil
@@ -217,15 +152,14 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 					QueueSlot: nextQueueSlot,
 				}
 
-				if startTime, ok := state.bcStartTimes[slot]; ok {
+				if bcRuntime, ok := est.BcRuntime(slot); ok {
 					if nextQueueIdx == ownQueueIdx {
 						// always wait for own bc
 						logger.Log(logging.LevelDebug, "stalling agreement input for own batch")
 						return nil
 					}
 
-					bcRuntime := time.Since(startTime)
-					maxTimeToWait := state.avgOtherBcTime.MaxEstimate() + state.otherBcEstimateMargin.MaxEstimate() - bcRuntime
+					maxTimeToWait := est.ExtBcMaxDurationEst() - bcRuntime
 
 					// clamp wait time just in case
 					if maxTimeToWait > tunables.MaxAgreementDelay {
@@ -291,18 +225,16 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 			waitRoundCount += N
 		}
 
-		margin := state.ownBcEstimateMargin.MaxEstimate()
-
 		// TODO: consider progress in current round too (will mean adjustments below)
-		timeToOwnQueueAgRound := state.avgAgTime.MinEstimate() * time.Duration(waitRoundCount)
-		bcRuntime := state.avgOwnBcTime.MaxEstimate() + margin
+		timeToOwnQueueAgRound := est.AgMinDurationEst() * time.Duration(waitRoundCount)
+		bcRuntimeEst := est.OwnBcMaxDurationEst()
 
 		// We have a lot of time before we reach our agreement round. Let the batch fill up!
-		// We must also guarantee F+1 nodes have undelivered batches, or that agreement is progressing,
+		// We must also guarantee F+1 nodes have undelivered batches, or that agreement is currently progressing,
 		// otherwise an attacker can stall the system by not sending their batch to enough nodes.
-		if timeToOwnQueueAgRound > bcRuntime && (!state.stalledAgRound || state.agCanDeliver(F+1)) {
+		if timeToOwnQueueAgRound > bcRuntimeEst && (!state.stalledAgRound || state.agCanDeliver(F+1)) {
 			// ensure we are woken up to create a batch before we run out of time
-			maxDelay := timeToOwnQueueAgRound - bcRuntime
+			maxDelay := timeToOwnQueueAgRound - bcRuntimeEst
 			logger.Log(logging.LevelDebug, "stalling batch cut", "max delay", maxDelay)
 
 			eventpbdsl.TimerDelay(m, mc.Timer,
@@ -367,14 +299,6 @@ func newState(params common.ModuleParams, tunables common.ModuleTunables, nodeID
 		agQueueHeads: make([]aleatypes.QueueSlot, N),
 
 		slotsReadyToDeliver: make([]set[aleatypes.QueueSlot], N),
-
-		avgAgTime: util.NewEstimator(tunables.EstimateWindowSize),
-
-		bcStartTimes:          make(map[commontypes.Slot]time.Time, tunables.MaxConcurrentVcbPerQueue*N),
-		avgOwnBcTime:          util.NewEstimator(tunables.EstimateWindowSize),
-		avgOtherBcTime:        util.NewByzEstimator(tunables.EstimateWindowSize, N),
-		ownBcEstimateMargin:   util.NewEstimator(tunables.EstimateWindowSize),
-		otherBcEstimateMargin: util.NewByzEstimator(tunables.EstimateWindowSize, N),
 	}
 
 	ownQueueIdx := uint32(slices.Index(params.AllNodes, nodeID))
