@@ -19,7 +19,7 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 
 	est := estimators.New(m, params, tunables, nodeID)
 	general.Include(m, mc, params, tunables, nodeID, logger, est)
-	availability.Include(m, mc, params, tunables, logger)
+	availability.Include(m, mc, params, logger, est)
 
 	return m
 }

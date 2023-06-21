@@ -41,9 +41,6 @@ type ModuleTunables struct {
 	// Subprotocol duration estimates window size
 	EstimateWindowSize int
 
-	// Time to wait before resorting to FILL-GAP messages
-	FillGapDelay time.Duration
-
 	// Maximum time to stall agreement round waiting for broadcasts to complete
 	MaxAgreementDelay time.Duration
 }

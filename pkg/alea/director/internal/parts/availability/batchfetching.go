@@ -2,11 +2,13 @@ package availability
 
 import (
 	"fmt"
+	"time"
 
 	es "github.com/go-errors/errors"
 
 	"github.com/filecoin-project/mir/pkg/alea/broadcast/bcutil"
 	director "github.com/filecoin-project/mir/pkg/alea/director/internal/common"
+	"github.com/filecoin-project/mir/pkg/alea/director/internal/parts/estimators"
 	"github.com/filecoin-project/mir/pkg/alea/util"
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/logging"
@@ -55,8 +57,8 @@ func IncludeBatchFetching(
 	m dsl.Module,
 	mc director.ModuleConfig,
 	params director.ModuleParams,
-	tunables director.ModuleTunables,
 	logger logging.Logger,
+	est *estimators.Estimators,
 ) {
 	_ = logger // silence warnings
 
@@ -134,10 +136,19 @@ func IncludeBatchFetching(
 
 		// send FILL-GAP after a timeout (if request was not satisfied)
 		// this way bc has more chances of completing before even trying to send a fill-gap message
+		delay := time.Duration(0)
+
+		if bcRuntime, ok := est.BcRuntime(*slot); ok {
+			delay = est.ExtBcMaxDurationEst() - bcRuntime
+			if delay < 0 {
+				delay = 0
+			}
+		}
+
 		// TODO: adjust delay according to bc estimate. don't delay when bc slot was already freed
 		dsl.EmitMirEvent(m, eventpbevents.TimerDelay(mc.Timer, []*eventpbtypes.Event{
 			directorpbevents.DoFillGap(mc.Self, slot),
-		}, types.Duration(tunables.FillGapDelay)))
+		}, types.Duration(delay)))
 
 		return nil
 	})
