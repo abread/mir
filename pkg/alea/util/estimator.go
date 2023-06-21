@@ -39,9 +39,7 @@ func (e *Estimator) sortedSamples() []time.Duration {
 
 func (e *Estimator) MaxEstimate() time.Duration {
 	if e.len == 0 {
-		// the maximum representable duration is not a good fit because it could lead to overflows
-		// return a ridiculously high, but not almost overflowing estimate
-		return 24 * time.Hour
+		return 0
 	}
 
 	// P95
@@ -57,8 +55,7 @@ func (e *Estimator) Clear() {
 
 func (e *Estimator) Median() time.Duration {
 	if e.len == 0 {
-		// return a reasonable value
-		return 1 * time.Second
+		return 0
 	}
 
 	// P50

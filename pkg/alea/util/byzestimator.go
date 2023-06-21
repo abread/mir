@@ -62,7 +62,7 @@ func (e *ByzEstimator) Median() time.Duration {
 	}
 
 	if len(estimates) == 0 {
-		return e.children[0].Median() // return default max value
+		return e.children[0].Median() // return default median value
 	}
 
 	slices.Sort(estimates)
