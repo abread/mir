@@ -148,8 +148,6 @@ func NewModule(mc ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger lo
 		}
 
 		transportpbdsl.SendMessage(m, mc.Net, vcbmsgs.DoneMessage(mc.Self), []t.NodeID{params.Leader})
-		vcbdsl.Done(m, mc.Consumer, mc.Self)
-
 		state.phase = VcbPhaseDelivered
 		return nil
 	})
