@@ -70,15 +70,6 @@ type Params struct {
 // A proper deployment is expected to craft a custom configuration,
 // for which DefaultParams can serve as a starting point.
 func DefaultParams(membership *trantorpbtypes.Membership) Params {
-	aproxRTT := 220 * time.Microsecond
-	aproxBcDuration := 3*aproxRTT/2 + 20*time.Millisecond
-
-	N := len(membership.Nodes)
-	estimateWindowSize := N * 4
-	if estimateWindowSize > 64 {
-		estimateWindowSize = 64
-	}
-
 	return Params{
 		InstanceUID:              []byte{42},
 		Membership:               membership,
@@ -86,8 +77,8 @@ func DefaultParams(membership *trantorpbtypes.Membership) Params {
 		MaxOwnUnagreedBatchCount: 1,
 		MaxAbbaRoundLookahead:    4,
 		MaxAgRoundLookahead:      32,
-		EstimateWindowSize:       estimateWindowSize,
-		MaxAgreementDelay:        aproxBcDuration,
+		EstimateWindowSize:       32,
+		MaxAgreementDelay:        time.Second,
 	}
 }
 
