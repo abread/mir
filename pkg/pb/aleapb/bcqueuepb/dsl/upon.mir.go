@@ -3,6 +3,8 @@
 package bcqueuepbdsl
 
 import (
+	"time"
+
 	aleatypes "github.com/filecoin-project/mir/pkg/alea/aleatypes"
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
 	types "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/types"
@@ -52,5 +54,11 @@ func UponPastVcbFinal(m dsl.Module, handler func(queueSlot aleatypes.QueueSlot, 
 func UponBcStarted(m dsl.Module, handler func(slot *types3.Slot) error) {
 	UponEvent[*types.Event_BcStarted](m, func(ev *types.BcStarted) error {
 		return handler(ev.Slot)
+	})
+}
+
+func UponBcDone(m dsl.Module, handler func(slot *types3.Slot, deliverDelta time.Duration) error) {
+	UponEvent[*types.Event_BcDone](m, func(ev *types.BcDone) error {
+		return handler(ev.Slot, ev.DeliverDelta)
 	})
 }

@@ -3,6 +3,8 @@
 package bcqueuepbdsl
 
 import (
+	"time"
+
 	aleatypes "github.com/filecoin-project/mir/pkg/alea/aleatypes"
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
 	events "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/events"
@@ -32,4 +34,8 @@ func PastVcbFinal(m dsl.Module, destModule types.ModuleID, queueSlot aleatypes.Q
 
 func BcStarted(m dsl.Module, destModule types.ModuleID, slot *types2.Slot) {
 	dsl.EmitMirEvent(m, events.BcStarted(destModule, slot))
+}
+
+func BcDone(m dsl.Module, destModule types.ModuleID, slot *types2.Slot, deliverDelta time.Duration) {
+	dsl.EmitMirEvent(m, events.BcDone(destModule, slot, deliverDelta))
 }

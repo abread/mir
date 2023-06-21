@@ -2,6 +2,7 @@ package bcqueue
 
 import (
 	"strconv"
+	"time"
 
 	es "github.com/go-errors/errors"
 
@@ -19,10 +20,15 @@ import (
 	bcqueuepbevents "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/events"
 	commontypes "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
 	batchdbdsl "github.com/filecoin-project/mir/pkg/pb/availabilitypb/batchdbpb/dsl"
+	messagepbtypes "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
+	modringpbtypes "github.com/filecoin-project/mir/pkg/pb/modringpb/types"
 	reliablenetpbdsl "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/dsl"
+	transportpbevents "github.com/filecoin-project/mir/pkg/pb/transportpb/events"
 	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	vcbpbdsl "github.com/filecoin-project/mir/pkg/pb/vcbpb/dsl"
 	vcbpbevents "github.com/filecoin-project/mir/pkg/pb/vcbpb/events"
+	vcbpbmsgs "github.com/filecoin-project/mir/pkg/pb/vcbpb/msgs"
+	vcbpbtypes "github.com/filecoin-project/mir/pkg/pb/vcbpb/types"
 	"github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 	t "github.com/filecoin-project/mir/pkg/types"
@@ -35,15 +41,16 @@ func New(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, nodeID t
 	}
 
 	slots := modring.New(mc.Self, tunables.MaxConcurrentVcb, modring.ModuleParams{
-		Generator: newVcbGenerator(mc, params, nodeID, logger),
+		Generator:      newVcbGenerator(mc, params, nodeID, logger),
+		PastMsgHandler: newPastMsgHandler(mc, params),
 	}, logging.Decorate(logger, "Modring controller: "))
 
-	controller := newQueueController(mc, params, logger, slots)
+	controller := newQueueController(mc, params, tunables, nodeID, logger, slots)
 
 	return modules.RoutedModule(mc.Self, controller, slots), nil
 }
 
-func newQueueController(mc ModuleConfig, params ModuleParams, logger logging.Logger, slots *modring.Module) modules.PassiveModule {
+func newQueueController(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, nodeID t.NodeID, logger logging.Logger, slots *modring.Module) modules.PassiveModule {
 	m := dsl.NewModule(mc.Self)
 
 	bcqueuedsl.UponInputValue(m, func(queueSlot aleatypes.QueueSlot, txs []*trantorpbtypes.Transaction) error {
@@ -76,6 +83,34 @@ func newQueueController(mc ModuleConfig, params ModuleParams, logger logging.Log
 		return nil
 	})
 
+	if params.QueueOwner == nodeID {
+		slotDeliverTimes := make(map[aleatypes.QueueSlot]time.Time, tunables.MaxConcurrentVcb)
+
+		batchdbdsl.UponBatchStored(m, func(slot *commontypes.Slot) error {
+			slotDeliverTimes[slot.QueueSlot] = time.Now()
+			return nil
+		})
+
+		vcbpbdsl.UponDone(m, func(srcModule t.ModuleID) error {
+			queueSlotStr := srcModule.StripParent(mc.Self).Top()
+			queueSlot, err := strconv.ParseUint(string(queueSlotStr), 10, 64)
+			if err != nil {
+				return es.Errorf("deliver event for invalid round: %w", err)
+			}
+
+			slot := &commontypes.Slot{
+				QueueIdx:  params.QueueIdx,
+				QueueSlot: aleatypes.QueueSlot(queueSlot),
+			}
+
+			deliverDelta := time.Since(slotDeliverTimes[slot.QueueSlot])
+			bcqueuedsl.BcDone(m, mc.Consumer, slot, deliverDelta)
+
+			delete(slotDeliverTimes, slot.QueueSlot)
+			return nil
+		})
+	}
+
 	batchdbdsl.UponBatchStored(m, func(slot *commontypes.Slot) error {
 		logger.Log(logging.LevelDebug, "delivering broadcast", "queueSlot", slot.QueueSlot)
 		bcqueuedsl.Deliver(m, mc.Consumer, slot)
@@ -98,6 +133,31 @@ func newQueueController(mc ModuleConfig, params ModuleParams, logger logging.Log
 	})
 
 	return m
+}
+
+func newPastMsgHandler(mc ModuleConfig, params ModuleParams) modring.PastMessagesHandler {
+	return func(pastMessages []*modringpbtypes.PastMessage) (*events.EventList, error) {
+		evsOut := &events.EventList{}
+		for _, msg := range pastMessages {
+			vcbMsgW, ok := msg.Message.Type.(*messagepbtypes.Message_Vcb)
+			if !ok {
+				continue
+			}
+
+			_, ok = vcbMsgW.Vcb.Type.(*vcbpbtypes.Message_FinalMessage)
+			if !ok {
+				continue
+			}
+
+			if msg.From != params.QueueOwner {
+				continue
+			}
+
+			evsOut.PushBack(transportpbevents.SendMessage(mc.Net, vcbpbmsgs.DoneMessage(msg.Message.DestModule), []t.NodeID{msg.From}).Pb())
+		}
+
+		return evsOut, nil
+	}
 }
 
 func newVcbGenerator(queueMc ModuleConfig, queueParams ModuleParams, nodeID t.NodeID, logger logging.Logger) func(id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {

@@ -3,6 +3,8 @@
 package bcqueuepbevents
 
 import (
+	"time"
+
 	aleatypes "github.com/filecoin-project/mir/pkg/alea/aleatypes"
 	types3 "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/types"
 	types4 "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
@@ -83,6 +85,22 @@ func BcStarted(destModule types.ModuleID, slot *types4.Slot) *types2.Event {
 				Type: &types3.Event_BcStarted{
 					BcStarted: &types3.BcStarted{
 						Slot: slot,
+					},
+				},
+			},
+		},
+	}
+}
+
+func BcDone(destModule types.ModuleID, slot *types4.Slot, deliverDelta time.Duration) *types2.Event {
+	return &types2.Event{
+		DestModule: destModule,
+		Type: &types2.Event_AleaBcqueue{
+			AleaBcqueue: &types3.Event{
+				Type: &types3.Event_BcDone{
+					BcDone: &types3.BcDone{
+						Slot:         slot,
+						DeliverDelta: deliverDelta,
 					},
 				},
 			},

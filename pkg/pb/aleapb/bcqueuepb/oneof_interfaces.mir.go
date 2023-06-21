@@ -28,3 +28,7 @@ func (w *Event_PastVcbFinal) Unwrap() *PastVcbFinal {
 func (w *Event_BcStarted) Unwrap() *BcStarted {
 	return w.BcStarted
 }
+
+func (w *Event_BcDone) Unwrap() *BcDone {
+	return w.BcDone
+}

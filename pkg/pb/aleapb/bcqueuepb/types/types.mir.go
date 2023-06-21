@@ -3,6 +3,8 @@
 package bcqueuepbtypes
 
 import (
+	"time"
+
 	mirreflect "github.com/filecoin-project/mir/codegen/mirreflect"
 	types1 "github.com/filecoin-project/mir/codegen/model/types"
 	aleatypes "github.com/filecoin-project/mir/pkg/alea/aleatypes"
@@ -44,6 +46,8 @@ func Event_TypeFromPb(pb bcqueuepb.Event_Type) Event_Type {
 		return &Event_PastVcbFinal{PastVcbFinal: PastVcbFinalFromPb(pb.PastVcbFinal)}
 	case *bcqueuepb.Event_BcStarted:
 		return &Event_BcStarted{BcStarted: BcStartedFromPb(pb.BcStarted)}
+	case *bcqueuepb.Event_BcDone:
+		return &Event_BcDone{BcDone: BcDoneFromPb(pb.BcDone)}
 	}
 	return nil
 }
@@ -166,6 +170,30 @@ func (w *Event_BcStarted) Pb() bcqueuepb.Event_Type {
 
 func (*Event_BcStarted) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*bcqueuepb.Event_BcStarted]()}
+}
+
+type Event_BcDone struct {
+	BcDone *BcDone
+}
+
+func (*Event_BcDone) isEvent_Type() {}
+
+func (w *Event_BcDone) Unwrap() *BcDone {
+	return w.BcDone
+}
+
+func (w *Event_BcDone) Pb() bcqueuepb.Event_Type {
+	if w == nil {
+		return nil
+	}
+	if w.BcDone == nil {
+		return &bcqueuepb.Event_BcDone{}
+	}
+	return &bcqueuepb.Event_BcDone{BcDone: (w.BcDone).Pb()}
+}
+
+func (*Event_BcDone) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*bcqueuepb.Event_BcDone]()}
 }
 
 func EventFromPb(pb *bcqueuepb.Event) *Event {
@@ -359,4 +387,38 @@ func (m *BcStarted) Pb() *bcqueuepb.BcStarted {
 
 func (*BcStarted) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*bcqueuepb.BcStarted]()}
+}
+
+type BcDone struct {
+	Slot         *types2.Slot
+	DeliverDelta time.Duration
+}
+
+func BcDoneFromPb(pb *bcqueuepb.BcDone) *BcDone {
+	if pb == nil {
+		return nil
+	}
+	return &BcDone{
+		Slot:         types2.SlotFromPb(pb.Slot),
+		DeliverDelta: (time.Duration)(pb.DeliverDelta),
+	}
+}
+
+func (m *BcDone) Pb() *bcqueuepb.BcDone {
+	if m == nil {
+		return nil
+	}
+	pbMessage := &bcqueuepb.BcDone{}
+	{
+		if m.Slot != nil {
+			pbMessage.Slot = (m.Slot).Pb()
+		}
+		pbMessage.DeliverDelta = (int64)(m.DeliverDelta)
+	}
+
+	return pbMessage
+}
+
+func (*BcDone) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*bcqueuepb.BcDone]()}
 }

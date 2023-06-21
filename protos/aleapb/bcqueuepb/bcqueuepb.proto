@@ -24,7 +24,8 @@ message Event {
     Deliver      deliver        = 2;
     FreeSlot     free_slot      = 3;
     PastVcbFinal past_vcb_final = 4;
-    BcStarted    bc_started = 5;
+    BcStarted    bc_started     = 5;
+    BcDone       bc_done        = 6;
   }
 }
 
@@ -62,4 +63,11 @@ message BcStarted {
   option (mir.event) = true;
 
   common.Slot slot = 1;
+}
+
+message BcDone {
+  option (mir.event) = true;
+
+  common.Slot slot          = 1;
+  int64       deliver_delta = 2 [(mir.type) = "time.Duration"];
 }
