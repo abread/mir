@@ -76,6 +76,8 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 			// slot wasn't delivered yet by agreement component
 			// logger.Log(logging.LevelDebug, "marking slot as ready for delivery", "queueIdx", slot.QueueIdx, "queueSlot", slot.QueueSlot)
 			state.slotsReadyToDeliver[slot.QueueIdx][slot.QueueSlot] = struct{}{}
+		} else {
+			bcqueuepbdsl.FreeSlot(m, bcutil.BcQueueModuleID(mc.BcQueuePrefix, slot.QueueIdx), slot.QueueSlot)
 		}
 
 		return nil
