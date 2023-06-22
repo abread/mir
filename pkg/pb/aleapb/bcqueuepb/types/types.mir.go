@@ -48,8 +48,8 @@ func Event_TypeFromPb(pb bcqueuepb.Event_Type) Event_Type {
 		return &Event_BcStarted{BcStarted: BcStartedFromPb(pb.BcStarted)}
 	case *bcqueuepb.Event_BcQuorumDone:
 		return &Event_BcQuorumDone{BcQuorumDone: BcQuorumDoneFromPb(pb.BcQuorumDone)}
-	case *bcqueuepb.Event_BcFullyDone:
-		return &Event_BcFullyDone{BcFullyDone: BcFullyDoneFromPb(pb.BcFullyDone)}
+	case *bcqueuepb.Event_BcAllDone:
+		return &Event_BcAllDone{BcAllDone: BcAllDoneFromPb(pb.BcAllDone)}
 	}
 	return nil
 }
@@ -198,28 +198,28 @@ func (*Event_BcQuorumDone) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*bcqueuepb.Event_BcQuorumDone]()}
 }
 
-type Event_BcFullyDone struct {
-	BcFullyDone *BcFullyDone
+type Event_BcAllDone struct {
+	BcAllDone *BcAllDone
 }
 
-func (*Event_BcFullyDone) isEvent_Type() {}
+func (*Event_BcAllDone) isEvent_Type() {}
 
-func (w *Event_BcFullyDone) Unwrap() *BcFullyDone {
-	return w.BcFullyDone
+func (w *Event_BcAllDone) Unwrap() *BcAllDone {
+	return w.BcAllDone
 }
 
-func (w *Event_BcFullyDone) Pb() bcqueuepb.Event_Type {
+func (w *Event_BcAllDone) Pb() bcqueuepb.Event_Type {
 	if w == nil {
 		return nil
 	}
-	if w.BcFullyDone == nil {
-		return &bcqueuepb.Event_BcFullyDone{}
+	if w.BcAllDone == nil {
+		return &bcqueuepb.Event_BcAllDone{}
 	}
-	return &bcqueuepb.Event_BcFullyDone{BcFullyDone: (w.BcFullyDone).Pb()}
+	return &bcqueuepb.Event_BcAllDone{BcAllDone: (w.BcAllDone).Pb()}
 }
 
-func (*Event_BcFullyDone) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*bcqueuepb.Event_BcFullyDone]()}
+func (*Event_BcAllDone) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*bcqueuepb.Event_BcAllDone]()}
 }
 
 func EventFromPb(pb *bcqueuepb.Event) *Event {
@@ -449,36 +449,36 @@ func (*BcQuorumDone) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*bcqueuepb.BcQuorumDone]()}
 }
 
-type BcFullyDone struct {
-	Slot             *types2.Slot
-	FullDeliverDelta time.Duration
+type BcAllDone struct {
+	Slot            *types2.Slot
+	QuorumDoneDelta time.Duration
 }
 
-func BcFullyDoneFromPb(pb *bcqueuepb.BcFullyDone) *BcFullyDone {
+func BcAllDoneFromPb(pb *bcqueuepb.BcAllDone) *BcAllDone {
 	if pb == nil {
 		return nil
 	}
-	return &BcFullyDone{
-		Slot:             types2.SlotFromPb(pb.Slot),
-		FullDeliverDelta: (time.Duration)(pb.FullDeliverDelta),
+	return &BcAllDone{
+		Slot:            types2.SlotFromPb(pb.Slot),
+		QuorumDoneDelta: (time.Duration)(pb.QuorumDoneDelta),
 	}
 }
 
-func (m *BcFullyDone) Pb() *bcqueuepb.BcFullyDone {
+func (m *BcAllDone) Pb() *bcqueuepb.BcAllDone {
 	if m == nil {
 		return nil
 	}
-	pbMessage := &bcqueuepb.BcFullyDone{}
+	pbMessage := &bcqueuepb.BcAllDone{}
 	{
 		if m.Slot != nil {
 			pbMessage.Slot = (m.Slot).Pb()
 		}
-		pbMessage.FullDeliverDelta = (int64)(m.FullDeliverDelta)
+		pbMessage.QuorumDoneDelta = (int64)(m.QuorumDoneDelta)
 	}
 
 	return pbMessage
 }
 
-func (*BcFullyDone) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*bcqueuepb.BcFullyDone]()}
+func (*BcAllDone) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*bcqueuepb.BcAllDone]()}
 }

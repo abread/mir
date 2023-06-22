@@ -23,7 +23,7 @@ message Event {
     InputValue input_value = 1;
     Deliver    deliver     = 2;
     QuorumDone quorum_done = 3;
-    FullyDone  fully_done  = 4;
+    AllDone    all_done    = 4;
   }
 }
 
@@ -50,7 +50,7 @@ message QuorumDone {
   string src_module = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.ModuleID"];
 }
 
-message FullyDone {
+message AllDone {
   option (mir.event) = true;
 
   string src_module = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.ModuleID"];

@@ -33,6 +33,6 @@ func (w *Event_BcQuorumDone) Unwrap() *BcQuorumDone {
 	return w.BcQuorumDone
 }
 
-func (w *Event_BcFullyDone) Unwrap() *BcFullyDone {
-	return w.BcFullyDone
+func (w *Event_BcAllDone) Unwrap() *BcAllDone {
+	return w.BcAllDone
 }

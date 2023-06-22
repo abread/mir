@@ -114,7 +114,7 @@ func newQueueController(mc ModuleConfig, params ModuleParams, tunables ModuleTun
 			return nil
 		})
 
-		vcbpbdsl.UponFullyDone(m, func(srcModule t.ModuleID) error {
+		vcbpbdsl.UponAllDone(m, func(srcModule t.ModuleID) error {
 			queueSlotStr := srcModule.StripParent(mc.Self).Top()
 			queueSlot, err := strconv.ParseUint(string(queueSlotStr), 10, 64)
 			if err != nil {
@@ -128,7 +128,7 @@ func newQueueController(mc ModuleConfig, params ModuleParams, tunables ModuleTun
 
 			if startTime, ok := slotDeliverTimes[slot.QueueSlot]; ok {
 				deliverDelta := time.Since(startTime)
-				bcqueuedsl.BcFullyDone(m, mc.Consumer, slot, deliverDelta)
+				bcqueuedsl.BcAllDone(m, mc.Consumer, slot, deliverDelta)
 			}
 
 			return nil

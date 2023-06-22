@@ -21,8 +21,8 @@ func (w *Event_QuorumDone) Unwrap() *QuorumDone {
 	return w.QuorumDone
 }
 
-func (w *Event_FullyDone) Unwrap() *FullyDone {
-	return w.FullyDone
+func (w *Event_AllDone) Unwrap() *AllDone {
+	return w.AllDone
 }
 
 type Message_Type = isMessage_Type

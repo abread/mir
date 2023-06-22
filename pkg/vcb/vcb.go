@@ -271,7 +271,7 @@ func setupVcbLeader(m dsl.Module, mc ModuleConfig, params *ModuleParams, logger 
 			leaderState.phase = VcbLeaderPhaseQuorumDone
 		}
 		if leaderState.phase == VcbLeaderPhaseQuorumDone && len(leaderState.revcdDone) >= params.GetN() {
-			vcbdsl.FullyDone(m, mc.Consumer, mc.Self)
+			vcbdsl.AllDone(m, mc.Consumer, mc.Self)
 			leaderState.phase = VcbLeaderPhaseFullyDone
 		}
 

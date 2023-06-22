@@ -40,8 +40,8 @@ func Event_TypeFromPb(pb vcbpb.Event_Type) Event_Type {
 		return &Event_Deliver{Deliver: DeliverFromPb(pb.Deliver)}
 	case *vcbpb.Event_QuorumDone:
 		return &Event_QuorumDone{QuorumDone: QuorumDoneFromPb(pb.QuorumDone)}
-	case *vcbpb.Event_FullyDone:
-		return &Event_FullyDone{FullyDone: FullyDoneFromPb(pb.FullyDone)}
+	case *vcbpb.Event_AllDone:
+		return &Event_AllDone{AllDone: AllDoneFromPb(pb.AllDone)}
 	}
 	return nil
 }
@@ -118,28 +118,28 @@ func (*Event_QuorumDone) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*vcbpb.Event_QuorumDone]()}
 }
 
-type Event_FullyDone struct {
-	FullyDone *FullyDone
+type Event_AllDone struct {
+	AllDone *AllDone
 }
 
-func (*Event_FullyDone) isEvent_Type() {}
+func (*Event_AllDone) isEvent_Type() {}
 
-func (w *Event_FullyDone) Unwrap() *FullyDone {
-	return w.FullyDone
+func (w *Event_AllDone) Unwrap() *AllDone {
+	return w.AllDone
 }
 
-func (w *Event_FullyDone) Pb() vcbpb.Event_Type {
+func (w *Event_AllDone) Pb() vcbpb.Event_Type {
 	if w == nil {
 		return nil
 	}
-	if w.FullyDone == nil {
-		return &vcbpb.Event_FullyDone{}
+	if w.AllDone == nil {
+		return &vcbpb.Event_AllDone{}
 	}
-	return &vcbpb.Event_FullyDone{FullyDone: (w.FullyDone).Pb()}
+	return &vcbpb.Event_AllDone{AllDone: (w.AllDone).Pb()}
 }
 
-func (*Event_FullyDone) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*vcbpb.Event_FullyDone]()}
+func (*Event_AllDone) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*vcbpb.Event_AllDone]()}
 }
 
 func EventFromPb(pb *vcbpb.Event) *Event {
@@ -277,24 +277,24 @@ func (*QuorumDone) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*vcbpb.QuorumDone]()}
 }
 
-type FullyDone struct {
+type AllDone struct {
 	SrcModule types3.ModuleID
 }
 
-func FullyDoneFromPb(pb *vcbpb.FullyDone) *FullyDone {
+func AllDoneFromPb(pb *vcbpb.AllDone) *AllDone {
 	if pb == nil {
 		return nil
 	}
-	return &FullyDone{
+	return &AllDone{
 		SrcModule: (types3.ModuleID)(pb.SrcModule),
 	}
 }
 
-func (m *FullyDone) Pb() *vcbpb.FullyDone {
+func (m *AllDone) Pb() *vcbpb.AllDone {
 	if m == nil {
 		return nil
 	}
-	pbMessage := &vcbpb.FullyDone{}
+	pbMessage := &vcbpb.AllDone{}
 	{
 		pbMessage.SrcModule = (string)(m.SrcModule)
 	}
@@ -302,8 +302,8 @@ func (m *FullyDone) Pb() *vcbpb.FullyDone {
 	return pbMessage
 }
 
-func (*FullyDone) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*vcbpb.FullyDone]()}
+func (*AllDone) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*vcbpb.AllDone]()}
 }
 
 type Message struct {

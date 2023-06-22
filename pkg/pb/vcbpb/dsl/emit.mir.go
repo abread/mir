@@ -25,6 +25,6 @@ func QuorumDone(m dsl.Module, destModule types.ModuleID, srcModule types.ModuleI
 	dsl.EmitMirEvent(m, events.QuorumDone(destModule, srcModule))
 }
 
-func FullyDone(m dsl.Module, destModule types.ModuleID, srcModule types.ModuleID) {
-	dsl.EmitMirEvent(m, events.FullyDone(destModule, srcModule))
+func AllDone(m dsl.Module, destModule types.ModuleID, srcModule types.ModuleID) {
+	dsl.EmitMirEvent(m, events.AllDone(destModule, srcModule))
 }

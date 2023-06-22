@@ -43,8 +43,8 @@ func UponQuorumDone(m dsl.Module, handler func(srcModule types4.ModuleID) error)
 	})
 }
 
-func UponFullyDone(m dsl.Module, handler func(srcModule types4.ModuleID) error) {
-	UponEvent[*types.Event_FullyDone](m, func(ev *types.FullyDone) error {
+func UponAllDone(m dsl.Module, handler func(srcModule types4.ModuleID) error) {
+	UponEvent[*types.Event_AllDone](m, func(ev *types.AllDone) error {
 		return handler(ev.SrcModule)
 	})
 }

@@ -115,15 +115,15 @@ func New(m dsl.Module, params common.ModuleParams, tunables common.ModuleTunable
 		est.ownBcFinishMargin.AddSample(deliverDelta)
 		return nil
 	})
-	bcqueuepbdsl.UponBcFullyDone(m, func(slot *commontypes.Slot, deliverDelta time.Duration) error {
+	bcqueuepbdsl.UponBcAllDone(m, func(slot *commontypes.Slot, quorumDoneDelta time.Duration) error {
 		// adjust own bc estimate margin
 		// this pertains to the last F nodes, so we must limit it based on the quorum margin
 		quorumMargin := est.ownBcFinishMargin.MaxEstimate()
-		if float64(deliverDelta) > float64(quorumMargin)*tunables.MaxOwnBcTotalFinishSlowdownFactor {
-			deliverDelta = quorumMargin
+		if float64(quorumDoneDelta) > float64(quorumMargin)*tunables.MaxOwnBcTotalFinishSlowdownFactor {
+			quorumDoneDelta = quorumMargin
 		}
 
-		est.ownBcTotalFinishMargin.AddSample(deliverDelta)
+		est.ownBcTotalFinishMargin.AddSample(quorumDoneDelta)
 		return nil
 	})
 	ageventsdsl.UponDeliver(m, func(round uint64, decision bool, duration time.Duration, posQuorumWait time.Duration) error {

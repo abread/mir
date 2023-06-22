@@ -59,13 +59,13 @@ func QuorumDone(destModule types.ModuleID, srcModule types.ModuleID) *types2.Eve
 	}
 }
 
-func FullyDone(destModule types.ModuleID, srcModule types.ModuleID) *types2.Event {
+func AllDone(destModule types.ModuleID, srcModule types.ModuleID) *types2.Event {
 	return &types2.Event{
 		DestModule: destModule,
 		Type: &types2.Event_Vcb{
 			Vcb: &types3.Event{
-				Type: &types3.Event_FullyDone{
-					FullyDone: &types3.FullyDone{
+				Type: &types3.Event_AllDone{
+					AllDone: &types3.AllDone{
 						SrcModule: srcModule,
 					},
 				},

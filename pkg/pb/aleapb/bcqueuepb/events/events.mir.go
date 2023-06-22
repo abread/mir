@@ -108,15 +108,15 @@ func BcQuorumDone(destModule types.ModuleID, slot *types4.Slot, deliverDelta tim
 	}
 }
 
-func BcFullyDone(destModule types.ModuleID, slot *types4.Slot, fullDeliverDelta time.Duration) *types2.Event {
+func BcAllDone(destModule types.ModuleID, slot *types4.Slot, quorumDoneDelta time.Duration) *types2.Event {
 	return &types2.Event{
 		DestModule: destModule,
 		Type: &types2.Event_AleaBcqueue{
 			AleaBcqueue: &types3.Event{
-				Type: &types3.Event_BcFullyDone{
-					BcFullyDone: &types3.BcFullyDone{
-						Slot:             slot,
-						FullDeliverDelta: fullDeliverDelta,
+				Type: &types3.Event_BcAllDone{
+					BcAllDone: &types3.BcAllDone{
+						Slot:            slot,
+						QuorumDoneDelta: quorumDoneDelta,
 					},
 				},
 			},

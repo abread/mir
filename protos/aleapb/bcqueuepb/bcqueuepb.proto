@@ -26,7 +26,7 @@ message Event {
     PastVcbFinal past_vcb_final = 4;
     BcStarted    bc_started     = 5;
     BcQuorumDone bc_quorum_done = 6;
-    BcFullyDone  bc_fully_done  = 7;
+    BcAllDone    bc_all_done    = 7;
   }
 }
 
@@ -68,13 +68,17 @@ message BcStarted {
 message BcQuorumDone {
   option (mir.event) = true;
 
-  common.Slot slot          = 1;
-  int64       deliver_delta = 2 [(mir.type) = "time.Duration"];
+  common.Slot slot = 1;
+
+  // Time between VCB deliver and receiving 2F+1 VCB Done messages (from different nodes).
+  int64 deliver_delta = 2 [(mir.type) = "time.Duration"];
 }
 
-message BcFullyDone {
+message BcAllDone {
   option (mir.event) = true;
 
-  common.Slot slot               = 1;
-  int64       full_deliver_delta = 2 [(mir.type) = "time.Duration"];
+  common.Slot slot = 1;
+
+  // Time between receiving 2F+1 VCB Done messages (from different nodes) and the remaining F.
+  int64 quorum_done_delta = 2 [(mir.type) = "time.Duration"];
 }
