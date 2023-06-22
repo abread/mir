@@ -146,9 +146,7 @@ func newController(mc ModuleConfig, params ModuleParams, logger logging.Logger, 
 				abbadsl.Done(m, mc.Consumer, mc.Self)
 				state.phase = phaseDone
 
-				if err := rounds.MarkAllPast(); err != nil {
-					return es.Errorf("could not stop abba rounds: %w", err)
-				}
+				rounds.MarkPastAndFreeAll()
 
 				// only care about finish messages from now on
 				// eventually instances that are out-of-date will receive them and be happy

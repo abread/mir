@@ -1,6 +1,7 @@
 package modring
 
 import (
+	"fmt"
 	"math"
 	"runtime/debug"
 	"strconv"
@@ -22,10 +23,16 @@ type Module struct {
 	generator      ModuleGenerator
 	pastMsgHandler PastMessagesHandler
 
-	ringController RingController
-	ring           []modules.PassiveModule
+	minID uint64
+	ring  []submodule
 
 	logger logging.Logger
+}
+
+type submodule struct {
+	mod       modules.PassiveModule
+	subID     uint64
+	isCurrent bool
 }
 
 func New(ownID t.ModuleID, ringSize int, params ModuleParams, logger logging.Logger) *Module {
@@ -33,16 +40,23 @@ func New(ownID t.ModuleID, ringSize int, params ModuleParams, logger logging.Log
 		logger = logging.ConsoleErrorLogger
 	}
 
-	return &Module{
+	m := &Module{
 		ownID:          ownID,
 		generator:      params.Generator,
 		pastMsgHandler: params.PastMsgHandler,
 
-		ringController: NewRingController(ringSize),
-		ring:           make([]modules.PassiveModule, ringSize),
+		minID: 0,
+		ring:  make([]submodule, ringSize),
 
 		logger: logger,
 	}
+
+	for i := range m.ring {
+		m.ring[i].isCurrent = true
+		m.ring[i].subID = uint64(i)
+	}
+
+	return m
 }
 
 func (m *Module) ImplementsModule() {}
@@ -67,25 +81,25 @@ func (m *Module) ApplyEvents(eventsIn *events.EventList) (*events.EventList, err
 			continue
 		}
 
-		mod, initEvent, err := m.getSubByRingIdx(i)
+		mod, extraInitEvs, err := m.getSubByRingIdx(i)
 		if err != nil {
 			firstError = err
 			break
 		}
 		if mod == nil {
-			continue // module out of view
+			return nil, fmt.Errorf("consistency error: ring idx %d is broken", i)
 		}
 
-		if initEvent != nil {
-			// created module, loop events in the system again
+		if extraInitEvs != nil {
+			// created module, prepend init event
+			oldEvsIn := subEventsIn[i]
 
-			// TODO: INIT event may be processed *after* other events directed at this module
-			// possible solution: track which modules are pending initialization, and loop events back in
-			// until INIT is processed
-			initEvent.Next = append(initEvent.Next, subEventsIn[i].Slice()...)
-			eventsOut.PushBack(initEvent)
+			subFullID := m.ownID.Then(t.NewModuleIDFromInt(m.ring[i].subID))
+			subEventsIn[i] = *events.ListOf(events.Init(subFullID))
+			subEventsIn[i].PushBackList(&oldEvsIn)
 
-			continue
+			// queue extra init events for processing
+			eventsOut.PushBackList(extraInitEvs)
 		}
 
 		go func(modring *Module, evsIn *events.EventList, j int) {
@@ -139,11 +153,19 @@ func (m *Module) splitEventsByDest(eventsIn *events.EventList) ([]events.EventLi
 		subIDStr := t.ModuleID(event.DestModule).StripParent(m.ownID).Top()
 		subID, err := strconv.ParseUint(string(subIDStr), 10, 64)
 		if err != nil {
-			// m.logger.Log(logging.LevelWarn, "event received for invalid submodule index", "submoduleIdx", subIDStr)
+			// m.logger.Log(logging.LevelWarn, "event received for invalid submodule id", "submoduleID", subIDStr)
 			continue
 		}
 
-		if m.ringController.IsPastSlot(subID) {
+		if subID == math.MaxUint64 {
+			// m.logger.Log(logging.LevelWarn, "event received for end-of-times submodule id", "submoduleID", subID)
+			// TODO: report byz?
+			continue
+		}
+
+		idx := subID % uint64(len(m.ring))
+
+		if subID < m.minID && m.ring[idx].subID != subID {
 			if ev, ok := event.Type.(*eventpb.Event_Transport); ok {
 				if e, ok := ev.Transport.Type.(*transportpb.Event_MessageReceived); ok {
 					pastMsgs = append(pastMsgs, &modringpbtypes.PastMessage{
@@ -156,114 +178,130 @@ func (m *Module) splitEventsByDest(eventsIn *events.EventList) ([]events.EventLi
 			continue
 		}
 
-		if !m.ringController.IsSlotInView(subID) {
-			// m.logger.Log(logging.LevelDebug, "event received for out of view submodule", "submoduleID", subID)
+		if subID > m.minID+uint64(len(m.ring))-1 {
+			// m.logger.Log(logging.LevelDebug, "event received for out-of-view (future) submodule", "submoduleID", subID)
 			continue
 		}
 
-		idx := int(subID % uint64(len(m.ring)))
+		if m.ring[idx].subID != subID && !m.ring[idx].isCurrent && subID >= m.minID {
+			oldID := m.ring[idx].subID
+
+			// garbage-collect old module and advance view
+			m.ring[idx] = submodule{
+				mod:       nil,
+				subID:     subID,
+				isCurrent: true,
+			}
+			// m.logger.Log(logging.LevelDebug, "freed submodule", "submoduleID", oldID)
+
+			// must flush previously buffered events to past message handler
+			it := subEventsIn[idx].Iterator()
+			for ev := it.Next(); ev != nil; ev = it.Next() {
+				if ev, ok := event.Type.(*eventpb.Event_Transport); ok {
+					if e, ok := ev.Transport.Type.(*transportpb.Event_MessageReceived); ok {
+						pastMsgs = append(pastMsgs, &modringpbtypes.PastMessage{
+							DestId:  oldID,
+							From:    t.NodeID(e.MessageReceived.From),
+							Message: messagepbtypes.MessageFromPb(e.MessageReceived.Msg),
+						})
+					}
+				}
+			}
+
+			subEventsIn[idx] = events.EventList{}
+		}
+
 		subEventsIn[idx].PushBack(event)
 	}
 
 	return subEventsIn, pastMsgs
 }
 
-func subIDInRingIdx(rc *RingController, ringIdx int) uint64 {
-	minSlot, endSlot := rc.GetCurrentView()
-	ringSize := endSlot - minSlot + 1
-	minIdx := int(minSlot % ringSize)
-
-	if ringIdx >= minIdx {
-		return minSlot + uint64(ringIdx-minIdx)
+func (m *Module) getSubByRingIdx(ringIdx int) (modules.PassiveModule, *events.EventList, error) {
+	if m.ring[ringIdx].mod != nil {
+		return m.ring[ringIdx].mod, nil, nil
 	}
 
-	return minSlot + uint64(int(ringSize)-minIdx) + uint64(ringIdx)
-}
+	subID := m.ring[ringIdx].subID
 
-func (m *Module) getSubByRingIdx(ringIdx int) (modules.PassiveModule, *eventpb.Event, error) {
-	subID := subIDInRingIdx(&m.ringController, ringIdx)
-
-	switch m.ringController.GetSlotStatus(subID) {
-	case RingSlotPast:
-		return nil, nil, nil
-	case RingSlotCurrent:
-		if m.ring[ringIdx] == nil {
-			return nil, nil, es.Errorf("module %v disappeared", subID)
-		}
-
-		return m.ring[ringIdx], nil, nil
-	case RingSlotFuture:
-		if !m.ringController.MarkCurrentIfFuture(subID) {
-			return nil, nil, nil
-		}
-
-		subFullID := m.ownID.Then(t.NewModuleIDFromInt(subID))
-		sub, initialEvs, err := (m.generator)(subFullID, subID)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		// construct init event
-		initEvent := events.Init(subFullID)
-		initEvent.Next = append(initEvent.Next, initialEvs.Slice()...)
-
-		m.ring[ringIdx] = sub
-		// m.logger.Log(logging.LevelDebug, "module created", "id", subID)
-
-		return m.ring[ringIdx], initEvent, err
-	default:
-		return nil, nil, es.Errorf("unknown slot status: %v", m.ringController.GetSlotStatus(subID))
+	if !m.ring[ringIdx].isCurrent {
+		return nil, nil, es.Errorf("tried to init module after free: %v", subID)
 	}
+
+	subFullID := m.ownID.Then(t.NewModuleIDFromInt(subID))
+	sub, extraInitEvs, err := (m.generator)(subFullID, subID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	m.ring[ringIdx].mod = sub
+
+	// m.logger.Log(logging.LevelDebug, "initialized submodule", "submoduleID", subID)
+	return m.ring[ringIdx].mod, extraInitEvs, err
 }
 
 func (m *Module) AdvanceViewToAtLeastSubmodule(id uint64) error {
-	if m.ringController.IsPastSlot(id) || m.ringController.IsSlotInView(id) {
-		return nil // already advanced enough
+	if m.minID >= id || m.minID == math.MaxUint64 {
+		return nil
 	}
 
-	// free all current slots
-	minSlot, endSlot := m.ringController.GetCurrentView()
-	for slot := minSlot; slot <= endSlot; slot++ {
-		if m.ringController.IsCurrentSlot(slot) {
-			if err := m.MarkSubmodulePast(slot); err != nil {
-				return es.Errorf("cannot advance view: %w", err)
-			}
+	m.minID = id
+
+	for i := 0; i < len(m.ring); i++ {
+		if m.ring[i].subID < id {
+			m.ring[i].isCurrent = false
 		}
 	}
 
-	if err := m.ringController.AdvanceViewToSlot(id); err != nil {
-		return es.Errorf("cannot advance view: %w", err)
-	}
-
-	// m.logger.Log(logging.LevelDebug, "fast-forwarded view", "id", id, "newMinSlot", m.ringController.minSlot)
-
+	// m.logger.Log(logging.LevelDebug, "fast-forwarded view", "newMinid", id)
 	return nil
 }
 
 func (m *Module) MarkSubmodulePast(id uint64) error {
-	if m.ringController.IsPastSlot(id) {
-		// already in the past
-		return nil
+	if id < m.minID {
+		return nil // already marked as past
+	} else if id >= m.minID+uint64(len(m.ring)) {
+		return es.Errorf("tried to mark far-in-the future submodule (%d) as past (minId is %d)", id, m.minID)
+	} else if id == math.MaxUint64 {
+		return es.Errorf("tried to mark the unreachable marker slot as past")
 	}
 
-	if m.ringController.IsFutureSlot(id) {
-		return m.ringController.MarkPast(id)
+	idx := id % uint64(len(m.ring))
+	if m.ring[idx].subID == id {
+		m.ring[idx].isCurrent = false
+	} else {
+		// garbage collect really old module
+		// m.logger.Log(logging.LevelDebug, "freed submodule", "id", m.ring[idx].subID)
+
+		m.ring[idx] = submodule{
+			mod:       nil,
+			subID:     id,
+			isCurrent: false,
+		}
 	}
 
-	if err := m.ringController.MarkPast(id); err != nil {
-		return es.Errorf("cannot mark submodule as past: %w", err)
+	// update minID
+	minIdx := m.minID % uint64(len(m.ring))
+	for m.ring[minIdx].subID == m.minID && !m.ring[minIdx].isCurrent {
+		m.minID++
+		minIdx = m.minID % uint64(len(m.ring))
 	}
 
-	// zero slot just in case (and to let the GC do its job)
-	ringIdx := int(id % uint64(len(m.ring)))
-	m.ring[ringIdx] = nil
-
-	// m.logger.Log(logging.LevelDebug, "module freed", "id", id, "newMinSlot", m.ringController.minSlot)
+	// m.logger.Log(logging.LevelDebug, "module marked as past", "id", id, "newMinID", m.minID)
 	return nil
 }
 
 func (m *Module) IsInView(id uint64) bool {
-	return m.ringController.IsSlotInView(id)
+	if id == math.MaxUint64 {
+		return false
+	}
+
+	return id >= m.minID && id < m.minID+uint64(len(m.ring))
+}
+
+func (m *Module) IsInExtendedView(id uint64) bool {
+	idx := id % uint64(len(m.ring))
+	return m.ring[idx].subID == id || m.IsInView(id)
 }
 
 // multiApplySafely is a wrapper around an event processing function that catches its panic and returns it as an error.
@@ -284,13 +322,16 @@ func multiApplySafely(
 	return module.ApplyEvents(events)
 }
 
-func (m *Module) MarkAllPast() error {
-	if err := m.AdvanceViewToAtLeastSubmodule(math.MaxUint64); err != nil {
-		return err
+func (m *Module) MarkPastAndFreeAll() {
+	m.minID = math.MaxUint64
+
+	for i := 0; i < len(m.ring); i++ {
+		m.ring[i] = submodule{
+			mod:       nil,
+			subID:     math.MaxUint64,
+			isCurrent: false,
+		}
 	}
 
-	if err := m.MarkSubmodulePast(math.MaxUint64); err != nil {
-		return err
-	}
-	return m.MarkSubmodulePast(math.MaxUint64)
+	// m.logger.Log(logging.LevelDebug, "freed all submodules, and marked everything as past")
 }
