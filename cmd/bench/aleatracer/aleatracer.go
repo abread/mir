@@ -12,6 +12,7 @@ import (
 	es "github.com/go-errors/errors"
 
 	"github.com/filecoin-project/mir/pkg/alea/aleatypes"
+	"github.com/filecoin-project/mir/pkg/clientprogress"
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/pb/abbapb"
@@ -23,10 +24,12 @@ import (
 	"github.com/filecoin-project/mir/pkg/pb/batchfetcherpb"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
 	"github.com/filecoin-project/mir/pkg/pb/hasherpb"
+	"github.com/filecoin-project/mir/pkg/pb/mempoolpb"
 	"github.com/filecoin-project/mir/pkg/pb/messagepb"
 	"github.com/filecoin-project/mir/pkg/pb/threshcryptopb"
 	"github.com/filecoin-project/mir/pkg/pb/transportpb"
 	"github.com/filecoin-project/mir/pkg/pb/vcbpb"
+	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 	"github.com/filecoin-project/mir/pkg/util/localclock"
 )
@@ -35,6 +38,7 @@ type AleaTracer struct {
 	ownQueueIdx aleatypes.QueueIdx
 	nodeCount   int
 
+	wipTxSpan                map[txID]*span
 	wipBcSpan                map[commontypes.Slot]*span
 	wipBcAwaitEchoSpan       map[commontypes.Slot]*span
 	wipBcAwaitFinalSpan      map[commontypes.Slot]*span
@@ -56,6 +60,8 @@ type AleaTracer struct {
 	agQueueHeads            []aleatypes.QueueSlot
 	agUndeliveredAbbaRounds map[uint64]map[uint64]struct{}
 
+	txTracker clientprogress.ClientProgress
+
 	inChan chan *events.EventList
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
@@ -75,6 +81,11 @@ type span struct {
 	end   time.Duration
 }
 
+type txID struct {
+	clientID tt.ClientID
+	txNo     tt.TxNo
+}
+
 const N = 128
 
 func NewAleaTracer(ctx context.Context, ownQueueIdx aleatypes.QueueIdx, nodeCount int, out io.Writer) *AleaTracer {
@@ -84,6 +95,7 @@ func NewAleaTracer(ctx context.Context, ownQueueIdx aleatypes.QueueIdx, nodeCoun
 		ownQueueIdx: ownQueueIdx,
 		nodeCount:   nodeCount,
 
+		wipTxSpan:                make(map[txID]*span, 256),
 		wipBcSpan:                make(map[commontypes.Slot]*span, nodeCount),
 		wipBcAwaitEchoSpan:       make(map[commontypes.Slot]*span, nodeCount),
 		wipBcAwaitFinalSpan:      make(map[commontypes.Slot]*span, nodeCount),
@@ -132,6 +144,8 @@ func NewAleaTracer(ctx context.Context, ownQueueIdx aleatypes.QueueIdx, nodeCoun
 						panic(err)
 					}
 				}
+
+				tracer.txTracker.GarbageCollect()
 			}
 		}
 	}()
@@ -162,6 +176,12 @@ func (at *AleaTracer) interceptOne(event *eventpb.Event) error { // nolint: goco
 	}
 
 	switch ev := event.Type.(type) {
+	case *eventpb.Event_Mempool:
+		if e, ok := ev.Mempool.Type.(*mempoolpb.Event_NewTransactions); ok {
+			for _, tx := range e.NewTransactions.Transactions {
+				at.startTxSpan(ts, tt.ClientID(tx.ClientId), tt.TxNo(tx.TxNo))
+			}
+		}
 	case *eventpb.Event_AleaBcqueue:
 		switch e := ev.AleaBcqueue.Type.(type) {
 		case *bcqueuepb.Event_InputValue:
@@ -308,12 +328,16 @@ func (at *AleaTracer) interceptOne(event *eventpb.Event) error { // nolint: goco
 			at.startDeliveryStalledSpan(ts, slot)
 		}
 	case *eventpb.Event_BatchFetcher:
-		switch ev.BatchFetcher.Type.(type) {
+		switch e := ev.BatchFetcher.Type.(type) {
 		case *batchfetcherpb.Event_NewOrderedBatch:
 			slot := at.bfDeliverQueue[0]
 			at.bfDeliverQueue = at.bfDeliverQueue[1:]
 
 			at.endDeliveryStalledSpan(ts, slot)
+
+			for _, tx := range e.NewOrderedBatch.Txs {
+				at.endTxSpan(ts, tt.ClientID(tx.ClientId), tt.TxNo(tx.TxNo))
+			}
 		}
 	case *eventpb.Event_Hasher:
 		switch ev.Hasher.Type.(type) {
@@ -505,6 +529,38 @@ func (at *AleaTracer) endBcSpan(ts time.Duration, slot commontypes.Slot) {
 	delete(at.wipBcComputeSigDataSpan, slot)
 	delete(at.wipBcAwaitQuorumDoneSpan, slot)
 	delete(at.wipBcAwaitAllDoneSpan, slot)
+}
+
+func (at *AleaTracer) _txSpan(ts time.Duration, clientID tt.ClientID, txNo tt.TxNo) *span {
+	id := txID{clientID, txNo}
+
+	s, ok := at.wipTxSpan[id]
+	if !ok {
+		at.wipTxSpan[id] = &span{
+			class: "tx",
+			id:    fmt.Sprintf("%d:%d", clientID, txNo),
+			start: ts,
+		}
+		s = at.wipTxSpan[id]
+	}
+	return s
+}
+func (at *AleaTracer) startTxSpan(ts time.Duration, clientID tt.ClientID, txNo tt.TxNo) {
+	if at.txTracker.Add(clientID, txNo) {
+		at._txSpan(ts, clientID, txNo)
+	}
+}
+func (at *AleaTracer) endTxSpan(ts time.Duration, clientID tt.ClientID, txNo tt.TxNo) {
+	id := txID{clientID, txNo}
+
+	s, ok := at.wipTxSpan[id]
+	if !ok {
+		return
+	}
+	s.end = ts
+	at.writeSpan(s)
+
+	delete(at.wipTxSpan, id)
 }
 
 func (at *AleaTracer) _bcAwaitEchoSpan(ts time.Duration, slot commontypes.Slot) *span {
