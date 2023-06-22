@@ -161,7 +161,7 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 						return nil
 					}
 
-					maxTimeToWait := est.ExtBcMaxDurationEst() - bcRuntime
+					maxTimeToWait := est.ExtBcMedianDurationEst() - bcRuntime
 
 					// clamp wait time just in case
 					if maxTimeToWait > tunables.MaxAgreementDelay {

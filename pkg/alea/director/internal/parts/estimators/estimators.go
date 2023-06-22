@@ -41,6 +41,10 @@ func (e *Estimators) ExtBcMaxDurationEst() time.Duration {
 	return e.extBcDuration.MaxEstimate() + e.extBcFinishMargin.MaxEstimate()
 }
 
+func (e *Estimators) ExtBcMedianDurationEst() time.Duration {
+	return e.extBcDuration.Median() + e.extBcFinishMargin.Median()
+}
+
 func (e *Estimators) ExtBcMinDurationEst() time.Duration {
 	return e.extBcDuration.MinEstimate() + e.extBcFinishMargin.MinEstimate()
 }
