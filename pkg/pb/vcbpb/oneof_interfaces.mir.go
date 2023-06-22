@@ -17,8 +17,12 @@ func (w *Event_Deliver) Unwrap() *Deliver {
 	return w.Deliver
 }
 
-func (w *Event_Done) Unwrap() *Done {
-	return w.Done
+func (w *Event_QuorumDone) Unwrap() *QuorumDone {
+	return w.QuorumDone
+}
+
+func (w *Event_FullyDone) Unwrap() *FullyDone {
+	return w.FullyDone
 }
 
 type Message_Type = isMessage_Type

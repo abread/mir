@@ -37,8 +37,14 @@ func UponDeliver(m dsl.Module, handler func(txs []*types2.Transaction, txIds []t
 	})
 }
 
-func UponDone(m dsl.Module, handler func(srcModule types4.ModuleID) error) {
-	UponEvent[*types.Event_Done](m, func(ev *types.Done) error {
+func UponQuorumDone(m dsl.Module, handler func(srcModule types4.ModuleID) error) {
+	UponEvent[*types.Event_QuorumDone](m, func(ev *types.QuorumDone) error {
+		return handler(ev.SrcModule)
+	})
+}
+
+func UponFullyDone(m dsl.Module, handler func(srcModule types4.ModuleID) error) {
+	UponEvent[*types.Event_FullyDone](m, func(ev *types.FullyDone) error {
 		return handler(ev.SrcModule)
 	})
 }

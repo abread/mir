@@ -57,8 +57,14 @@ func UponBcStarted(m dsl.Module, handler func(slot *types3.Slot) error) {
 	})
 }
 
-func UponBcDone(m dsl.Module, handler func(slot *types3.Slot, deliverDelta time.Duration) error) {
-	UponEvent[*types.Event_BcDone](m, func(ev *types.BcDone) error {
+func UponBcQuorumDone(m dsl.Module, handler func(slot *types3.Slot, deliverDelta time.Duration) error) {
+	UponEvent[*types.Event_BcQuorumDone](m, func(ev *types.BcQuorumDone) error {
 		return handler(ev.Slot, ev.DeliverDelta)
+	})
+}
+
+func UponBcFullyDone(m dsl.Module, handler func(slot *types3.Slot, fullDeliverDelta time.Duration) error) {
+	UponEvent[*types.Event_BcFullyDone](m, func(ev *types.BcFullyDone) error {
+		return handler(ev.Slot, ev.FullDeliverDelta)
 	})
 }

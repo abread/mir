@@ -108,7 +108,7 @@ func New(m dsl.Module, params common.ModuleParams, tunables common.ModuleTunable
 	// =============================================================================================
 	// Bc Finish Duration Estimation
 	// =============================================================================================
-	bcqueuepbdsl.UponBcDone(m, func(slot *commontypes.Slot, deliverDelta time.Duration) error {
+	bcqueuepbdsl.UponBcQuorumDone(m, func(slot *commontypes.Slot, deliverDelta time.Duration) error {
 		// adjust own bc estimate margin
 		est.ownBcFinishMargin.AddSample(deliverDelta)
 		return nil

@@ -29,6 +29,10 @@ func (w *Event_BcStarted) Unwrap() *BcStarted {
 	return w.BcStarted
 }
 
-func (w *Event_BcDone) Unwrap() *BcDone {
-	return w.BcDone
+func (w *Event_BcQuorumDone) Unwrap() *BcQuorumDone {
+	return w.BcQuorumDone
+}
+
+func (w *Event_BcFullyDone) Unwrap() *BcFullyDone {
+	return w.BcFullyDone
 }

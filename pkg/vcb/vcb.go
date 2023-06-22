@@ -201,7 +201,8 @@ const (
 	VcbLeaderPhaseAwaitingInput vcbLeaderPhase = iota
 	VcbLeaderPhaseAwaitingEchoes
 	VcbLeaderPhaseDelivered
-	VcbLeaderPhaseDone
+	VcbLeaderPhaseQuorumDone
+	VcbLeaderPhaseFullyDone
 )
 
 func setupVcbLeader(m dsl.Module, mc ModuleConfig, params *ModuleParams, logger logging.Logger, state *state) {
@@ -266,8 +267,12 @@ func setupVcbLeader(m dsl.Module, mc ModuleConfig, params *ModuleParams, logger 
 
 	dsl.UponStateUpdates(m, func() error {
 		if leaderState.phase == VcbLeaderPhaseDelivered && len(leaderState.revcdDone) >= 2*params.GetF()+1 {
-			vcbdsl.Done(m, mc.Consumer, mc.Self)
-			leaderState.phase = VcbLeaderPhaseDone
+			vcbdsl.QuorumDone(m, mc.Consumer, mc.Self)
+			leaderState.phase = VcbLeaderPhaseQuorumDone
+		}
+		if leaderState.phase == VcbLeaderPhaseQuorumDone && len(leaderState.revcdDone) >= params.GetN() {
+			vcbdsl.FullyDone(m, mc.Consumer, mc.Self)
+			leaderState.phase = VcbLeaderPhaseFullyDone
 		}
 
 		return nil

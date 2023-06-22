@@ -36,6 +36,10 @@ func BcStarted(m dsl.Module, destModule types.ModuleID, slot *types2.Slot) {
 	dsl.EmitMirEvent(m, events.BcStarted(destModule, slot))
 }
 
-func BcDone(m dsl.Module, destModule types.ModuleID, slot *types2.Slot, deliverDelta time.Duration) {
-	dsl.EmitMirEvent(m, events.BcDone(destModule, slot, deliverDelta))
+func BcQuorumDone(m dsl.Module, destModule types.ModuleID, slot *types2.Slot, deliverDelta time.Duration) {
+	dsl.EmitMirEvent(m, events.BcQuorumDone(destModule, slot, deliverDelta))
+}
+
+func BcFullyDone(m dsl.Module, destModule types.ModuleID, slot *types2.Slot, fullDeliverDelta time.Duration) {
+	dsl.EmitMirEvent(m, events.BcFullyDone(destModule, slot, fullDeliverDelta))
 }

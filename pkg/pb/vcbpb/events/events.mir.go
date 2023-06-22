@@ -44,13 +44,28 @@ func Deliver(destModule types.ModuleID, txs []*types1.Transaction, txIds []types
 	}
 }
 
-func Done(destModule types.ModuleID, srcModule types.ModuleID) *types2.Event {
+func QuorumDone(destModule types.ModuleID, srcModule types.ModuleID) *types2.Event {
 	return &types2.Event{
 		DestModule: destModule,
 		Type: &types2.Event_Vcb{
 			Vcb: &types3.Event{
-				Type: &types3.Event_Done{
-					Done: &types3.Done{
+				Type: &types3.Event_QuorumDone{
+					QuorumDone: &types3.QuorumDone{
+						SrcModule: srcModule,
+					},
+				},
+			},
+		},
+	}
+}
+
+func FullyDone(destModule types.ModuleID, srcModule types.ModuleID) *types2.Event {
+	return &types2.Event{
+		DestModule: destModule,
+		Type: &types2.Event_Vcb{
+			Vcb: &types3.Event{
+				Type: &types3.Event_FullyDone{
+					FullyDone: &types3.FullyDone{
 						SrcModule: srcModule,
 					},
 				},

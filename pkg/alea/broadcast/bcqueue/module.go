@@ -91,7 +91,7 @@ func newQueueController(mc ModuleConfig, params ModuleParams, tunables ModuleTun
 			return nil
 		})
 
-		vcbpbdsl.UponDone(m, func(srcModule t.ModuleID) error {
+		vcbpbdsl.UponQuorumDone(m, func(srcModule t.ModuleID) error {
 			queueSlotStr := srcModule.StripParent(mc.Self).Top()
 			queueSlot, err := strconv.ParseUint(string(queueSlotStr), 10, 64)
 			if err != nil {
@@ -103,10 +103,39 @@ func newQueueController(mc ModuleConfig, params ModuleParams, tunables ModuleTun
 				QueueSlot: aleatypes.QueueSlot(queueSlot),
 			}
 
-			deliverDelta := time.Since(slotDeliverTimes[slot.QueueSlot])
-			bcqueuedsl.BcDone(m, mc.Consumer, slot, deliverDelta)
+			if startTime, ok := slotDeliverTimes[slot.QueueSlot]; ok {
+				deliverDelta := time.Since(startTime)
+				bcqueuedsl.BcQuorumDone(m, mc.Consumer, slot, deliverDelta)
 
-			delete(slotDeliverTimes, slot.QueueSlot)
+				// add delta to avoid including it in the fully done delta calc
+				slotDeliverTimes[slot.QueueSlot] = startTime.Add(deliverDelta)
+			}
+
+			return nil
+		})
+
+		vcbpbdsl.UponFullyDone(m, func(srcModule t.ModuleID) error {
+			queueSlotStr := srcModule.StripParent(mc.Self).Top()
+			queueSlot, err := strconv.ParseUint(string(queueSlotStr), 10, 64)
+			if err != nil {
+				return es.Errorf("deliver event for invalid round: %w", err)
+			}
+
+			slot := &commontypes.Slot{
+				QueueIdx:  params.QueueIdx,
+				QueueSlot: aleatypes.QueueSlot(queueSlot),
+			}
+
+			if startTime, ok := slotDeliverTimes[slot.QueueSlot]; ok {
+				deliverDelta := time.Since(startTime)
+				bcqueuedsl.BcFullyDone(m, mc.Consumer, slot, deliverDelta)
+			}
+
+			return nil
+		})
+
+		bcqueuedsl.UponFreeSlot(m, func(queueSlot aleatypes.QueueSlot) error {
+			delete(slotDeliverTimes, queueSlot)
 			return nil
 		})
 	}

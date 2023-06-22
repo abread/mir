@@ -10,7 +10,8 @@ func (*Event) ReflectTypeOptions() []reflect.Type {
 	return []reflect.Type{
 		reflect.TypeOf((*Event_InputValue)(nil)),
 		reflect.TypeOf((*Event_Deliver)(nil)),
-		reflect.TypeOf((*Event_Done)(nil)),
+		reflect.TypeOf((*Event_QuorumDone)(nil)),
+		reflect.TypeOf((*Event_FullyDone)(nil)),
 	}
 }
 

@@ -38,8 +38,10 @@ func Event_TypeFromPb(pb vcbpb.Event_Type) Event_Type {
 		return &Event_InputValue{InputValue: InputValueFromPb(pb.InputValue)}
 	case *vcbpb.Event_Deliver:
 		return &Event_Deliver{Deliver: DeliverFromPb(pb.Deliver)}
-	case *vcbpb.Event_Done:
-		return &Event_Done{Done: DoneFromPb(pb.Done)}
+	case *vcbpb.Event_QuorumDone:
+		return &Event_QuorumDone{QuorumDone: QuorumDoneFromPb(pb.QuorumDone)}
+	case *vcbpb.Event_FullyDone:
+		return &Event_FullyDone{FullyDone: FullyDoneFromPb(pb.FullyDone)}
 	}
 	return nil
 }
@@ -92,28 +94,52 @@ func (*Event_Deliver) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*vcbpb.Event_Deliver]()}
 }
 
-type Event_Done struct {
-	Done *Done
+type Event_QuorumDone struct {
+	QuorumDone *QuorumDone
 }
 
-func (*Event_Done) isEvent_Type() {}
+func (*Event_QuorumDone) isEvent_Type() {}
 
-func (w *Event_Done) Unwrap() *Done {
-	return w.Done
+func (w *Event_QuorumDone) Unwrap() *QuorumDone {
+	return w.QuorumDone
 }
 
-func (w *Event_Done) Pb() vcbpb.Event_Type {
+func (w *Event_QuorumDone) Pb() vcbpb.Event_Type {
 	if w == nil {
 		return nil
 	}
-	if w.Done == nil {
-		return &vcbpb.Event_Done{}
+	if w.QuorumDone == nil {
+		return &vcbpb.Event_QuorumDone{}
 	}
-	return &vcbpb.Event_Done{Done: (w.Done).Pb()}
+	return &vcbpb.Event_QuorumDone{QuorumDone: (w.QuorumDone).Pb()}
 }
 
-func (*Event_Done) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*vcbpb.Event_Done]()}
+func (*Event_QuorumDone) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*vcbpb.Event_QuorumDone]()}
+}
+
+type Event_FullyDone struct {
+	FullyDone *FullyDone
+}
+
+func (*Event_FullyDone) isEvent_Type() {}
+
+func (w *Event_FullyDone) Unwrap() *FullyDone {
+	return w.FullyDone
+}
+
+func (w *Event_FullyDone) Pb() vcbpb.Event_Type {
+	if w == nil {
+		return nil
+	}
+	if w.FullyDone == nil {
+		return &vcbpb.Event_FullyDone{}
+	}
+	return &vcbpb.Event_FullyDone{FullyDone: (w.FullyDone).Pb()}
+}
+
+func (*Event_FullyDone) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*vcbpb.Event_FullyDone]()}
 }
 
 func EventFromPb(pb *vcbpb.Event) *Event {
@@ -222,24 +248,24 @@ func (*Deliver) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*vcbpb.Deliver]()}
 }
 
-type Done struct {
+type QuorumDone struct {
 	SrcModule types3.ModuleID
 }
 
-func DoneFromPb(pb *vcbpb.Done) *Done {
+func QuorumDoneFromPb(pb *vcbpb.QuorumDone) *QuorumDone {
 	if pb == nil {
 		return nil
 	}
-	return &Done{
+	return &QuorumDone{
 		SrcModule: (types3.ModuleID)(pb.SrcModule),
 	}
 }
 
-func (m *Done) Pb() *vcbpb.Done {
+func (m *QuorumDone) Pb() *vcbpb.QuorumDone {
 	if m == nil {
 		return nil
 	}
-	pbMessage := &vcbpb.Done{}
+	pbMessage := &vcbpb.QuorumDone{}
 	{
 		pbMessage.SrcModule = (string)(m.SrcModule)
 	}
@@ -247,8 +273,37 @@ func (m *Done) Pb() *vcbpb.Done {
 	return pbMessage
 }
 
-func (*Done) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*vcbpb.Done]()}
+func (*QuorumDone) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*vcbpb.QuorumDone]()}
+}
+
+type FullyDone struct {
+	SrcModule types3.ModuleID
+}
+
+func FullyDoneFromPb(pb *vcbpb.FullyDone) *FullyDone {
+	if pb == nil {
+		return nil
+	}
+	return &FullyDone{
+		SrcModule: (types3.ModuleID)(pb.SrcModule),
+	}
+}
+
+func (m *FullyDone) Pb() *vcbpb.FullyDone {
+	if m == nil {
+		return nil
+	}
+	pbMessage := &vcbpb.FullyDone{}
+	{
+		pbMessage.SrcModule = (string)(m.SrcModule)
+	}
+
+	return pbMessage
+}
+
+func (*FullyDone) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*vcbpb.FullyDone]()}
 }
 
 type Message struct {

@@ -25,7 +25,8 @@ message Event {
     FreeSlot     free_slot      = 3;
     PastVcbFinal past_vcb_final = 4;
     BcStarted    bc_started     = 5;
-    BcDone       bc_done        = 6;
+    BcQuorumDone bc_quorum_done = 6;
+    BcFullyDone  bc_fully_done  = 7;
   }
 }
 
@@ -37,7 +38,6 @@ message InputValue {
   // empty txs represents a request to listen for VCB (and deliver what was broadcast to us)
   repeated trantorpb.Transaction txs = 2;
 }
-
 
 message Deliver {
   option (mir.event) = true;
@@ -65,9 +65,16 @@ message BcStarted {
   common.Slot slot = 1;
 }
 
-message BcDone {
+message BcQuorumDone {
   option (mir.event) = true;
 
   common.Slot slot          = 1;
   int64       deliver_delta = 2 [(mir.type) = "time.Duration"];
+}
+
+message BcFullyDone {
+  option (mir.event) = true;
+
+  common.Slot slot               = 1;
+  int64       full_deliver_delta = 2 [(mir.type) = "time.Duration"];
 }
