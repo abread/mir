@@ -61,6 +61,11 @@ type Params struct {
 
 	// Maximum time to stall agreement round waiting for broadcasts to complete
 	MaxAgreementDelay time.Duration
+
+	// Maximum factor that the F slowest nodes are allowed to delay bc completion vs the rest.
+	// A factor of K will let the system wait up to <time for local deliver> + K * <time for 2F+1 VCB quorum done>
+	// Must be non-negative
+	MaxOwnBcTotalFinishSlowdownFactor float64
 }
 
 // DefaultParams returns the default configuration for a given membership.
@@ -71,14 +76,15 @@ type Params struct {
 // for which DefaultParams can serve as a starting point.
 func DefaultParams(membership *trantorpbtypes.Membership) Params {
 	return Params{
-		InstanceUID:              []byte{42},
-		Membership:               membership,
-		MaxConcurrentVcbPerQueue: 32,
-		MaxOwnUnagreedBatchCount: 1,
-		MaxAbbaRoundLookahead:    4,
-		MaxAgRoundLookahead:      32,
-		EstimateWindowSize:       32,
-		MaxAgreementDelay:        time.Second,
+		InstanceUID:                       []byte{42},
+		Membership:                        membership,
+		MaxConcurrentVcbPerQueue:          32,
+		MaxOwnUnagreedBatchCount:          1,
+		MaxAbbaRoundLookahead:             4,
+		MaxAgRoundLookahead:               32,
+		EstimateWindowSize:                32,
+		MaxAgreementDelay:                 time.Second,
+		MaxOwnBcTotalFinishSlowdownFactor: 2,
 	}
 }
 
@@ -137,10 +143,11 @@ func New(ownID t.NodeID, config Config, params Params, startingChkp *checkpoint.
 			AllNodes:    allNodes,
 		},
 		director.ModuleTunables{
-			MaxConcurrentVcbPerQueue: params.MaxConcurrentVcbPerQueue,
-			MaxOwnUnagreedBatchCount: params.MaxOwnUnagreedBatchCount,
-			EstimateWindowSize:       params.EstimateWindowSize,
-			MaxAgreementDelay:        params.MaxAgreementDelay,
+			MaxConcurrentVcbPerQueue:          params.MaxConcurrentVcbPerQueue,
+			MaxOwnUnagreedBatchCount:          params.MaxOwnUnagreedBatchCount,
+			EstimateWindowSize:                params.EstimateWindowSize,
+			MaxAgreementDelay:                 params.MaxAgreementDelay,
+			MaxOwnBcTotalFinishSlowdownFactor: params.MaxOwnBcTotalFinishSlowdownFactor,
 		},
 		ownID,
 		logging.Decorate(logger, "AleaDirector: "),

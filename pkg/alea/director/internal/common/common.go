@@ -43,4 +43,9 @@ type ModuleTunables struct {
 
 	// Maximum time to stall agreement round waiting for broadcasts to complete
 	MaxAgreementDelay time.Duration
+
+	// Maximum factor that the F slowest nodes are allowed to delay bc completion vs the rest.
+	// A factor of K will let the system wait up to <time for local deliver> + K * <time for 2F+1 VCB quorum done>
+	// Must be non-negative
+	MaxOwnBcTotalFinishSlowdownFactor float64
 }
