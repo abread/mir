@@ -42,9 +42,9 @@ func (e *Estimator) MaxEstimate() time.Duration {
 		return 0
 	}
 
-	// P85
+	// P95
 	s := e.sortedSamples()
-	idx := len(s) * 85 / 100
+	idx := len(s) * 95 / 100
 
 	return s[idx]
 }
@@ -70,9 +70,9 @@ func (e *Estimator) MinEstimate() time.Duration {
 		return 0
 	}
 
-	// P15
+	// P05
 	s := e.sortedSamples()
-	idx := len(s) * 15 / 100
+	idx := len(s) * 5 / 100
 
 	return s[idx]
 }
