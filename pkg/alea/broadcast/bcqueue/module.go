@@ -147,7 +147,16 @@ func newQueueController(mc ModuleConfig, params ModuleParams, tunables ModuleTun
 	})
 
 	bcqueuedsl.UponFreeSlot(m, func(queueSlot aleatypes.QueueSlot) error {
-		if err := slots.AdvanceViewToAtLeastSubmodule(uint64(queueSlot)); err != nil {
+		// advance queue to not get stuck in old slots
+		// we could go to the latest slot, but if we center it around the latest slot, we can still
+		// recover slow broadcasts *and* accept new ones.
+		var minSlot uint64
+		if uint64(queueSlot) < uint64(tunables.MaxConcurrentVcb) {
+			minSlot = 0
+		} else {
+			minSlot = uint64(queueSlot) - uint64(tunables.MaxConcurrentVcb)/2
+		}
+		if err := slots.AdvanceViewToAtLeastSubmodule(minSlot); err != nil {
 			return es.Errorf("could not advance view to free queue slot: %w", err)
 		}
 
