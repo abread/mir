@@ -231,6 +231,9 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 		timeToOwnQueueAgRound := est.AgMinDurationEst() * time.Duration(waitRoundCount)
 		bcRuntimeEst := est.OwnBcMaxDurationEst()
 
+		// consider a low estimate for the agreement duration, to encourage unanimity results
+		timeToOwnQueueAgRound /= 5 // number of messages in one ABBA round
+
 		// We have a lot of time before we reach our agreement round. Let the batch fill up!
 		// We must also guarantee F+1 nodes have undelivered batches, or that agreement is currently progressing,
 		// otherwise an attacker can stall the system by not sending their batch to enough nodes.
