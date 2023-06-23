@@ -15,6 +15,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/clientprogress"
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/events"
+	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/pb/abbapb"
 	"github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents"
 	"github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb"
@@ -60,7 +61,7 @@ type AleaTracer struct {
 	agQueueHeads            []aleatypes.QueueSlot
 	agUndeliveredAbbaRounds map[uint64]map[uint64]struct{}
 
-	txTracker clientprogress.ClientProgress
+	txTracker *clientprogress.ClientProgress
 
 	inChan chan *events.EventList
 	cancel context.CancelFunc
@@ -116,6 +117,8 @@ func NewAleaTracer(ctx context.Context, ownQueueIdx aleatypes.QueueIdx, nodeCoun
 
 		agQueueHeads:            make([]aleatypes.QueueSlot, nodeCount),
 		agUndeliveredAbbaRounds: make(map[uint64]map[uint64]struct{}, nodeCount),
+
+		txTracker: clientprogress.NewClientProgress(logging.NilLogger),
 
 		inChan: make(chan *events.EventList, nodeCount*16),
 		cancel: cancel,
