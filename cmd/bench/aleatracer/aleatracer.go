@@ -57,8 +57,10 @@ type AleaTracer struct {
 
 	// stall tracker
 	nextBatchToCut       aleatypes.QueueSlot
+	nextAgRound          uint64
 	wipBatchCutStallSpan *span
 	wipAgStallSpan       *span
+	unagreedSlots        map[aleatypes.QueueIdx]map[aleatypes.QueueSlot]struct{}
 
 	bfWipSlotsCtxID map[uint64]commontypes.Slot
 	bfDeliverQueue  []commontypes.Slot
@@ -118,8 +120,10 @@ func NewAleaTracer(ctx context.Context, ownQueueIdx aleatypes.QueueIdx, nodeCoun
 		wipThreshCryptoSpan:      make(map[string]*span, nodeCount*32),
 
 		nextBatchToCut:       0,
+		nextAgRound:          0,
 		wipBatchCutStallSpan: nil,
 		wipAgStallSpan:       nil,
+		unagreedSlots:        make(map[aleatypes.QueueIdx]map[aleatypes.QueueSlot]struct{}, nodeCount),
 
 		bfWipSlotsCtxID: make(map[uint64]commontypes.Slot, nodeCount),
 		bfDeliverQueue:  nil,
@@ -132,6 +136,10 @@ func NewAleaTracer(ctx context.Context, ownQueueIdx aleatypes.QueueIdx, nodeCoun
 		inChan: make(chan *events.EventList, nodeCount*16),
 		cancel: cancel,
 		out:    out,
+	}
+
+	for i := aleatypes.QueueIdx(0); i < aleatypes.QueueIdx(nodeCount); i++ {
+		tracer.unagreedSlots[i] = make(map[aleatypes.QueueSlot]struct{}, 32)
 	}
 
 	ref := localclock.RefTime().UnixNano()
@@ -215,9 +223,19 @@ func (at *AleaTracer) interceptOne(event *eventpb.Event) error { // nolint: goco
 			at.endBcSpan(ts, slot)
 			at.endBcModSpan(ts, slot)
 		case *bcqueuepb.Event_Deliver:
-			if e.Deliver.Slot.QueueIdx == uint32(at.ownQueueIdx) && e.Deliver.Slot.QueueSlot == uint64(at.nextBatchToCut) {
+			slot := commontypes.SlotFromPb(e.Deliver.Slot)
+
+			if slot.QueueIdx == at.ownQueueIdx && slot.QueueSlot == at.nextBatchToCut {
 				at.nextBatchToCut++
 				at.startBatchCutStallSpan(ts, at.nextBatchToCut)
+			}
+
+			if slot.QueueSlot >= at.agQueueHeads[slot.QueueIdx] {
+				at.unagreedSlots[slot.QueueIdx][slot.QueueSlot] = struct{}{}
+
+				if slot.QueueSlot == at.agQueueHeads[slot.QueueIdx] {
+					at.startAgStallSpan(ts, at.nextAgRound)
+				}
 			}
 		}
 	case *eventpb.Event_BatchDb:
@@ -258,9 +276,14 @@ func (at *AleaTracer) interceptOne(event *eventpb.Event) error { // nolint: goco
 				slot := at.slotForAgRound(e.Deliver.Round)
 				at.agQueueHeads[slot.QueueIdx]++
 				at.bfDeliverQueue = append(at.bfDeliverQueue, slot)
+				delete(at.unagreedSlots[slot.QueueIdx], slot.QueueSlot)
 			}
 
-			at.startAgStallSpan(ts, e.Deliver.Round+1)
+			if at.agCanDeliver() {
+				at.startAgStallSpan(ts, e.Deliver.Round+1)
+			}
+
+			at.nextAgRound = e.Deliver.Round + 1
 		}
 	case *eventpb.Event_Vcb:
 		switch e := ev.Vcb.Type.(type) {
@@ -436,6 +459,17 @@ func (at *AleaTracer) interceptOne(event *eventpb.Event) error { // nolint: goco
 	}
 
 	return nil
+}
+
+func (at *AleaTracer) agCanDeliver() bool {
+	for queueIdx, nextSlot := range at.agQueueHeads {
+		_, present := at.unagreedSlots[aleatypes.QueueIdx(queueIdx)][nextSlot]
+		if present {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (at *AleaTracer) registerModStart(ts time.Duration, event *eventpb.Event) {
