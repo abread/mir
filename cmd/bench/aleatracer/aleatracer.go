@@ -58,6 +58,7 @@ type AleaTracer struct {
 	// stall tracker
 	nextBatchToCut       aleatypes.QueueSlot
 	nextAgRound          uint64
+	agRunning            bool
 	wipBatchCutStallSpan *span
 	wipAgStallSpan       *span
 	unagreedSlots        map[aleatypes.QueueIdx]map[aleatypes.QueueSlot]struct{}
@@ -233,7 +234,7 @@ func (at *AleaTracer) interceptOne(event *eventpb.Event) error { // nolint: goco
 			if slot.QueueSlot >= at.agQueueHeads[slot.QueueIdx] {
 				at.unagreedSlots[slot.QueueIdx][slot.QueueSlot] = struct{}{}
 
-				if slot.QueueSlot == at.agQueueHeads[slot.QueueIdx] {
+				if slot.QueueSlot == at.agQueueHeads[slot.QueueIdx] && !at.agRunning {
 					at.startAgStallSpan(ts, at.nextAgRound)
 				}
 			}
@@ -268,6 +269,7 @@ func (at *AleaTracer) interceptOne(event *eventpb.Event) error { // nolint: goco
 		case *agevents.Event_InputValue:
 			at.endAgStallSpan(ts, e.InputValue.Round)
 			at.startAgSpan(ts, e.InputValue.Round)
+			at.agRunning = true
 		case *agevents.Event_Deliver:
 			at.endAgSpan(ts, e.Deliver.Round)
 			at.endAgModSpan(ts, e.Deliver.Round)
@@ -279,11 +281,13 @@ func (at *AleaTracer) interceptOne(event *eventpb.Event) error { // nolint: goco
 				delete(at.unagreedSlots[slot.QueueIdx], slot.QueueSlot)
 			}
 
+			at.nextAgRound = e.Deliver.Round + 1
+
+			at.agRunning = false
 			if at.agCanDeliver() {
-				at.startAgStallSpan(ts, e.Deliver.Round+1)
+				at.startAgStallSpan(ts, at.nextAgRound)
 			}
 
-			at.nextAgRound = e.Deliver.Round + 1
 		}
 	case *eventpb.Event_Vcb:
 		switch e := ev.Vcb.Type.(type) {
