@@ -221,9 +221,7 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 		}
 
 		waitRoundCount := int(ownQueueIdx) - int(state.agRound%uint64(N)) - 1
-		if waitRoundCount == -1 {
-			waitRoundCount = N
-		} else if waitRoundCount < 0 {
+		if waitRoundCount < 0 {
 			waitRoundCount += N
 		}
 
