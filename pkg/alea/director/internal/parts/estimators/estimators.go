@@ -19,42 +19,33 @@ import (
 type Estimators struct {
 	bcStartTimes map[commontypes.Slot]time.Time
 
-	ownBcDuration          util.Estimator
-	ownBcFinishMargin      util.Estimator
-	ownBcTotalFinishMargin util.Estimator
+	ownBcDuration           util.Estimator
+	ownBcQuorumFinishMargin util.Estimator
+	ownBcTotalFinishMargin  util.Estimator
 
 	extBcDuration     util.ByzEstimator
 	extBcFinishMargin util.ByzEstimator
 
-	agDuration util.Estimator
+	abbaRoundDuration util.Estimator
 }
 
 func (e *Estimators) OwnBcMaxDurationEst() time.Duration {
-	return e.ownBcDuration.MaxEstimate() + e.ownBcFinishMargin.MaxEstimate() + e.ownBcTotalFinishMargin.MaxEstimate()
-}
-
-func (e *Estimators) OwnBcMinDurationEst() time.Duration {
-	return e.ownBcDuration.MinEstimate() + e.ownBcFinishMargin.MinEstimate()
-}
-
-func (e *Estimators) ExtBcMaxDurationEst() time.Duration {
-	return e.extBcDuration.MaxEstimate() + e.extBcFinishMargin.MaxEstimate()
+	return e.ownBcDuration.MaxEstimate() + e.ownBcQuorumFinishMargin.MaxEstimate() + e.ownBcTotalFinishMargin.MaxEstimate()
 }
 
 func (e *Estimators) ExtBcMedianDurationEst() time.Duration {
 	return e.extBcDuration.Median() + e.extBcFinishMargin.Median()
 }
 
-func (e *Estimators) ExtBcMinDurationEst() time.Duration {
-	return e.extBcDuration.MinEstimate() + e.extBcFinishMargin.MinEstimate()
-}
-
-func (e *Estimators) AgMaxDurationEst() time.Duration {
-	return e.agDuration.MaxEstimate()
+func (e *Estimators) ExtBcMaxDurationEst() time.Duration {
+	return e.extBcDuration.MaxEstimate() + e.extBcFinishMargin.MaxEstimate()
 }
 
 func (e *Estimators) AgMinDurationEst() time.Duration {
-	return e.agDuration.MinEstimate()
+	// the unanimity optimization lowers convergence to the time for one message broadcast (per node):
+	// the INIT message, containing the initial input
+	// one abba round takes roughly 5 message broadcasts (per node)
+	return e.abbaRoundDuration.MinEstimate() / 5
 }
 
 func (e *Estimators) BcRuntime(slot commontypes.Slot) (time.Duration, bool) {
@@ -72,14 +63,14 @@ func New(m dsl.Module, params common.ModuleParams, tunables common.ModuleTunable
 	est := &Estimators{
 		bcStartTimes: make(map[commontypes.Slot]time.Time, (N-1)*tunables.MaxConcurrentVcbPerQueue+int(tunables.MaxOwnUnagreedBatchCount)),
 
-		ownBcDuration:          util.NewEstimator(tunables.EstimateWindowSize),
-		ownBcFinishMargin:      util.NewEstimator(tunables.EstimateWindowSize),
-		ownBcTotalFinishMargin: util.NewEstimator(tunables.EstimateWindowSize),
+		ownBcDuration:           util.NewEstimator(tunables.EstimateWindowSize),
+		ownBcQuorumFinishMargin: util.NewEstimator(tunables.EstimateWindowSize),
+		ownBcTotalFinishMargin:  util.NewEstimator(tunables.EstimateWindowSize),
 
 		extBcDuration:     util.NewByzEstimator(tunables.EstimateWindowSize, N),
 		extBcFinishMargin: util.NewByzEstimator(tunables.EstimateWindowSize, N),
 
-		agDuration: util.NewEstimator(tunables.EstimateWindowSize),
+		abbaRoundDuration: util.NewEstimator(tunables.EstimateWindowSize),
 	}
 
 	// =============================================================================================
@@ -116,13 +107,13 @@ func New(m dsl.Module, params common.ModuleParams, tunables common.ModuleTunable
 	// =============================================================================================
 	bcqueuepbdsl.UponBcQuorumDone(m, func(slot *commontypes.Slot, deliverDelta time.Duration) error {
 		// adjust own bc estimate margin
-		est.ownBcFinishMargin.AddSample(deliverDelta)
+		est.ownBcQuorumFinishMargin.AddSample(deliverDelta)
 		return nil
 	})
 	bcqueuepbdsl.UponBcAllDone(m, func(slot *commontypes.Slot, quorumDoneDelta time.Duration) error {
 		// adjust own bc estimate margin
 		// this pertains to the last F nodes, so we must limit it based on the quorum margin
-		quorumMargin := est.ownBcFinishMargin.MaxEstimate()
+		quorumMargin := est.ownBcQuorumFinishMargin.MaxEstimate()
 		if float64(quorumDoneDelta) > float64(quorumMargin)*tunables.MaxOwnBcTotalFinishSlowdownFactor {
 			quorumDoneDelta = quorumMargin
 		}
@@ -130,18 +121,28 @@ func New(m dsl.Module, params common.ModuleParams, tunables common.ModuleTunable
 		est.ownBcTotalFinishMargin.AddSample(quorumDoneDelta)
 		return nil
 	})
-	ageventsdsl.UponDeliver(m, func(round uint64, decision bool, duration time.Duration, posQuorumWait time.Duration) error {
+	ageventsdsl.UponDeliver(m, func(round uint64, decision bool, posQuorumWait time.Duration, posTotalDelta time.Duration) error {
 		// adjust other bc estimate margins
 		queueIdx := aleatypes.QueueIdx(round % uint64(N))
 		if queueIdx != ownQueueIdx {
-			if posQuorumWait == math.MaxInt64 || !decision {
+			if posQuorumWait == math.MaxInt64 {
 				// failed deadline, double margin
 				m := est.extBcFinishMargin.MaxEstimate()
 
 				est.extBcFinishMargin.Clear(int(queueIdx))
 				est.extBcFinishMargin.AddSample(int(queueIdx), 2*m)
 			} else {
-				est.extBcFinishMargin.AddSample(int(queueIdx), posQuorumWait)
+				// limit slow node influence
+				if float64(posTotalDelta) > float64(posQuorumWait)*tunables.MaxOwnBcTotalFinishSlowdownFactor {
+					posTotalDelta = time.Duration(float64(posQuorumWait) * tunables.MaxOwnBcTotalFinishSlowdownFactor)
+				}
+
+				// failed deadline, ensure margin is at least doubled
+				if !decision && posTotalDelta < posQuorumWait {
+					posTotalDelta = posQuorumWait
+				}
+
+				est.extBcFinishMargin.AddSample(int(queueIdx), posQuorumWait+posTotalDelta)
 			}
 		}
 		return nil
@@ -150,8 +151,8 @@ func New(m dsl.Module, params common.ModuleParams, tunables common.ModuleTunable
 	// =============================================================================================
 	// Ag Duration Estimation
 	// =============================================================================================
-	ageventsdsl.UponDeliver(m, func(_round uint64, _decision bool, duration time.Duration, _posQuorumWait time.Duration) error {
-		est.agDuration.AddSample(duration)
+	ageventsdsl.UponInnerAbbaRoundTime(m, func(duration time.Duration) error {
+		est.abbaRoundDuration.AddSample(duration)
 		return nil
 	})
 

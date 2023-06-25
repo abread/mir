@@ -52,7 +52,7 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 
 	dsl.UponStateUpdates(m, func() error {
 		// stats are reported after updates, and before ordering components around
-		directorpbdsl.Stats(m, "ignore", uint64(len(state.slotsReadyToDeliver)), est.AgMinDurationEst(), est.AgMaxDurationEst(), est.ExtBcMinDurationEst(), est.ExtBcMaxDurationEst(), est.OwnBcMinDurationEst(), est.OwnBcMaxDurationEst())
+		directorpbdsl.Stats(m, "ignore", uint64(len(state.slotsReadyToDeliver)), est.AgMinDurationEst(), est.OwnBcMaxDurationEst(), est.ExtBcMedianDurationEst(), est.ExtBcMaxDurationEst())
 		return nil
 	})
 
@@ -228,9 +228,6 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 		// TODO: consider progress in current round too (will mean adjustments below)
 		timeToOwnQueueAgRound := est.AgMinDurationEst() * time.Duration(waitRoundCount)
 		bcRuntimeEst := est.OwnBcMaxDurationEst()
-
-		// consider a low estimate for the agreement duration, to encourage unanimity results
-		timeToOwnQueueAgRound /= 5 // number of messages in one ABBA round
 
 		// We have a lot of time before we reach our agreement round. Let the batch fill up!
 		// We must also guarantee F+1 nodes have undelivered batches, or that agreement is currently progressing,

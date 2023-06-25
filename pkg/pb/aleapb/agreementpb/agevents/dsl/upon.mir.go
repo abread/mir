@@ -30,14 +30,20 @@ func UponInputValue(m dsl.Module, handler func(round uint64, input bool) error) 
 	})
 }
 
-func UponDeliver(m dsl.Module, handler func(round uint64, decision bool, duration time.Duration, posQuorumWait time.Duration) error) {
+func UponDeliver(m dsl.Module, handler func(round uint64, decision bool, posQuorumWait time.Duration, posTotalWait time.Duration) error) {
 	UponEvent[*types.Event_Deliver](m, func(ev *types.Deliver) error {
-		return handler(ev.Round, ev.Decision, ev.Duration, ev.PosQuorumWait)
+		return handler(ev.Round, ev.Decision, ev.PosQuorumWait, ev.PosTotalWait)
 	})
 }
 
 func UponStaleMsgsRecvd(m dsl.Module, handler func(messages []*types2.PastMessage) error) {
 	UponEvent[*types.Event_StaleMsgsRevcd](m, func(ev *types.StaleMsgsRecvd) error {
 		return handler(ev.Messages)
+	})
+}
+
+func UponInnerAbbaRoundTime(m dsl.Module, handler func(duration time.Duration) error) {
+	UponEvent[*types.Event_InnerAbbaRoundTime](m, func(ev *types.InnerAbbaRoundTime) error {
+		return handler(ev.Duration)
 	})
 }

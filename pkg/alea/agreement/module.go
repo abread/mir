@@ -120,18 +120,19 @@ func (mc *ModuleConfig) agRoundModuleID(id uint64) t.ModuleID {
 }
 
 type round struct {
-	participants abbatypes.RecvTracker // TODO: move recvtracker to another package?
-	relStartTime time.Duration
-	relInputTime time.Duration
-
-	nodesWithInput         abbatypes.RecvTracker
+	nodesWithInput         abbatypes.RecvTracker // TODO: move recvtracker to another package?
 	nodesWithPosInputCount int
+	relInputTime           time.Duration
 	relPosQuorumTime       time.Duration // instant where 2F+1 nodes provided input=1
+	relPosTotalTime        time.Duration // instant where all nodes provided input=1
+
+	abbaRoundNumber       uint64
+	relAbbaRoundStartTime time.Duration
 
 	delivered         bool
 	decision          bool
-	duration          time.Duration
 	posQuorumDuration time.Duration
+	posTotalDuration  time.Duration
 }
 
 type pendingInput struct {
@@ -157,23 +158,36 @@ func (s *state) storeRoundDecision(rounds *modring.Module, roundNum uint64, deci
 		return es.Errorf("round out of view: %v", rounds)
 	}
 
-	s.rounds[roundNum].decision = decision
-	s.rounds[roundNum].delivered = true
+	r := s.rounds[roundNum]
 
-	startTime := s.rounds[roundNum].relStartTime
-	s.rounds[roundNum].duration = time.Since(timeRef) - startTime
+	r.decision = decision
+	r.delivered = true
 
-	var posQuorumDuration time.Duration
-	if s.rounds[roundNum].relInputTime == 0 && s.rounds[roundNum].relPosQuorumTime != 0 {
-		posQuorumDuration = 0
-	} else if s.rounds[roundNum].relInputTime != 0 && s.rounds[roundNum].relPosQuorumTime == 0 {
-		posQuorumDuration = time.Duration(math.MaxInt64)
+	if r.relInputTime == 0 && r.relPosQuorumTime != 0 {
+		r.posQuorumDuration = 0
+	} else if r.relInputTime != 0 && r.relPosQuorumTime == 0 {
+		r.posQuorumDuration = time.Duration(math.MaxInt64)
 	} else {
-		posQuorumDuration = s.rounds[roundNum].relPosQuorumTime - s.rounds[roundNum].relInputTime
+		r.posQuorumDuration = r.relPosQuorumTime - r.relInputTime
 	}
-	s.rounds[roundNum].posQuorumDuration = posQuorumDuration
+
+	if r.relPosTotalTime != 0 {
+		r.posTotalDuration = r.relPosTotalTime - r.relPosQuorumTime
+	} else {
+		r.posTotalDuration = time.Duration(math.MaxInt64)
+	}
 
 	return nil
+}
+
+func (s *state) ensureRoundInitialized(roundNum uint64) *round {
+	if _, ok := s.rounds[roundNum]; !ok {
+		s.rounds[roundNum] = &round{
+			nodesWithInput: make(abbatypes.RecvTracker, s.N),
+		}
+	}
+
+	return s.rounds[roundNum]
 }
 
 func (s *state) loadRound(rounds *modring.Module, roundNum uint64) *round {
@@ -182,10 +196,7 @@ func (s *state) loadRound(rounds *modring.Module, roundNum uint64) *round {
 	}
 
 	if _, ok := s.rounds[roundNum]; !ok {
-		s.rounds[roundNum] = &round{
-			participants:   make(abbatypes.RecvTracker, s.strongMaj),
-			nodesWithInput: make(abbatypes.RecvTracker, s.N),
-		}
+		return nil
 	}
 
 	return s.rounds[roundNum]
@@ -237,14 +248,13 @@ func newAgController(mc ModuleConfig, logger logging.Logger, state *state, agRou
 		for currentRound != nil && currentRound.delivered {
 			logger.Log(logging.LevelDebug, "delivering round", "agRound", state.currentRound, "decision", currentRound.decision)
 
-			agreementpbdsl.Deliver(m, mc.Consumer, state.currentRound, currentRound.decision, currentRound.duration, currentRound.posQuorumDuration)
+			agreementpbdsl.Deliver(m, mc.Consumer, state.currentRound, currentRound.decision, currentRound.posQuorumDuration, currentRound.posTotalDuration)
 			state.roundDecisionHistory.Push(currentRound.decision)
 			if err := state.clearRoundData(agRounds, state.currentRound); err != nil {
 				return err
 			}
 
 			state.currentRound++
-
 			currentRound = state.loadRound(agRounds, state.currentRound)
 		}
 
@@ -277,7 +287,7 @@ func newAgController(mc ModuleConfig, logger logging.Logger, state *state, agRou
 					input.input,
 				))
 
-				state.loadRound(agRounds, round).relInputTime = input.relTime
+				state.ensureRoundInitialized(round).relInputTime = input.relTime
 				delete(state.pendingInput, round)
 			}
 
@@ -375,10 +385,10 @@ func newAbbaGenerator(agMc ModuleConfig, agParams ModuleParams, agTunables Modul
 }
 
 func newAgRoundSniffer(mc ModuleConfig, params ModuleParams, agRounds *modring.Module, state *state) modules.PassiveModule {
-	m := dsl.NewModule("__invalid__") // this module shall not emit events
+	m := dsl.NewModule(mc.Self)
 
 	N := len(params.AllNodes)
-	thresh := (N-1)/3*2 + 1
+	strongQuorumThresh := (N-1)/3*2 + 1
 
 	trackInput := func(r *round, from t.NodeID, msg *messagepbtypes.Message) {
 		abbaRoundNum, err := mc.abbaRoundNumber(msg.DestModule)
@@ -408,8 +418,10 @@ func newAgRoundSniffer(mc ModuleConfig, params ModuleParams, agRounds *modring.M
 		if abbaRoundInitMsg.Init.Estimate {
 			r.nodesWithPosInputCount++
 
-			if r.nodesWithPosInputCount == thresh {
+			if r.nodesWithPosInputCount == strongQuorumThresh {
 				r.relPosQuorumTime = time.Since(timeRef)
+			} else if r.nodesWithPosInputCount == N {
+				r.relPosTotalTime = time.Since(timeRef)
 			}
 		}
 	}
@@ -424,27 +436,97 @@ func newAgRoundSniffer(mc ModuleConfig, params ModuleParams, agRounds *modring.M
 			return nil // round not being processed yet
 		}
 
-		// track round start time
-		r := state.loadRound(agRounds, roundNum)
-		if r.relStartTime == 0 {
-			r.participants.Register(from)
-
-			if r.participants.Len() >= thresh {
-				r.relStartTime = time.Since(timeRef)
-			}
-		}
-
 		// track inputs
+		r := state.ensureRoundInitialized(roundNum)
 		trackInput(r, from, msg)
 
 		return nil
 	})
 
-	dsl.UponOtherMirEvent(m, func(_ *eventpbtypes.Event) error {
+	dsl.UponOtherMirEvent(m, func(ev *eventpbtypes.Event) error {
+		switch e := ev.Type.(type) {
+		case *eventpbtypes.Event_Abba:
+			switch abbaEv := e.Abba.Type.(type) {
+			case *abbapbtypes.Event_Round:
+				switch abbaRoundEv := abbaEv.Round.Type.(type) {
+				case *abbapbtypes.RoundEvent_InputValue:
+					agRoundNum, abbaRoundNum, err := parseAgAbbaRoundNumbersFromModule(ev.DestModule, &mc)
+					if err != nil {
+						return err
+					}
+
+					if abbaRoundNum == 0 {
+						return nil // skip first round
+					}
+
+					r := state.loadRound(agRounds, agRoundNum)
+					if r == nil {
+						return nil
+					}
+
+					if r.abbaRoundNumber+1 != abbaRoundNum {
+						return es.Errorf("abba rounds are not being processed sequentially! (expected input for %d, got %d)", r.abbaRoundNumber+1, abbaRoundNum)
+					}
+					r.abbaRoundNumber = abbaRoundNum
+					r.relAbbaRoundStartTime = time.Since(timeRef)
+				case *abbapbtypes.RoundEvent_Deliver:
+					agRoundNum, err := parseAgRoundNumberFromModule(ev.DestModule, &mc)
+					if err != nil {
+						return err
+					}
+					abbaRoundNum := abbaRoundEv.Deliver.RoundNumber
+
+					if abbaRoundNum == 0 {
+						return nil // skip first round
+					}
+
+					r := state.loadRound(agRounds, agRoundNum)
+					if r == nil {
+						return nil
+					}
+
+					if r.abbaRoundNumber != abbaRoundNum {
+						return es.Errorf("abba rounds are not being processed sequentially! (expected deliver from %d, got %d)", r.abbaRoundNumber, abbaRoundNum)
+					}
+
+					now := time.Since(timeRef)
+					duration := now - r.relAbbaRoundStartTime
+					agreementpbdsl.InnerAbbaRoundTime(m, mc.Consumer, duration)
+
+					r.relAbbaRoundStartTime = 0
+				}
+
+			}
+		}
 		return nil
 	})
 
 	return m
+}
+
+func parseAgRoundNumberFromModule(destModule t.ModuleID, mc *ModuleConfig) (uint64, error) {
+	agRoundNumStr := destModule.StripParent(mc.Self).Top()
+	agRoundNum, err := strconv.ParseUint(string(agRoundNumStr), 10, 64)
+	if err != nil {
+		return 0, es.Errorf("failed to parse ag round number from %s (%s): %w", agRoundNumStr, destModule, err)
+	}
+
+	return agRoundNum, nil
+}
+
+func parseAgAbbaRoundNumbersFromModule(destModule t.ModuleID, mc *ModuleConfig) (uint64, uint64, error) {
+	agRoundNum, err := parseAgRoundNumberFromModule(destModule, mc)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	abbaRoundNumStr := destModule.StripParent(mc.Self).Sub().Sub().Top()
+	abbaRoundNum, err := strconv.ParseUint(string(abbaRoundNumStr), 10, 64)
+	if err != nil {
+		return 0, 0, es.Errorf("failed to parse abba round number from %s (%s): %w", abbaRoundNumStr, destModule, err)
+	}
+
+	return agRoundNum, abbaRoundNum, nil
 }
 
 func (mc *ModuleConfig) agRoundNumber(id t.ModuleID) (uint64, error) {

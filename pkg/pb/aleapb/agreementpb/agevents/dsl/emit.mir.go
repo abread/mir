@@ -17,10 +17,14 @@ func InputValue(m dsl.Module, destModule types.ModuleID, round uint64, input boo
 	dsl.EmitMirEvent(m, events.InputValue(destModule, round, input))
 }
 
-func Deliver(m dsl.Module, destModule types.ModuleID, round uint64, decision bool, duration time.Duration, posQuorumWait time.Duration) {
-	dsl.EmitMirEvent(m, events.Deliver(destModule, round, decision, duration, posQuorumWait))
+func Deliver(m dsl.Module, destModule types.ModuleID, round uint64, decision bool, posQuorumWait time.Duration, posTotalWait time.Duration) {
+	dsl.EmitMirEvent(m, events.Deliver(destModule, round, decision, posQuorumWait, posTotalWait))
 }
 
 func StaleMsgsRecvd(m dsl.Module, destModule types.ModuleID, messages []*types1.PastMessage) {
 	dsl.EmitMirEvent(m, events.StaleMsgsRecvd(destModule, messages))
+}
+
+func InnerAbbaRoundTime(m dsl.Module, destModule types.ModuleID, duration time.Duration) {
+	dsl.EmitMirEvent(m, events.InnerAbbaRoundTime(destModule, duration))
 }

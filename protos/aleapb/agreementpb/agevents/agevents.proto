@@ -23,6 +23,8 @@ message Event {
     InputValue     input_value      = 1;
     Deliver        deliver          = 2;
     StaleMsgsRecvd stale_msgs_revcd = 3;
+
+    InnerAbbaRoundTime inner_abba_round_time = 4;
   }
 }
 
@@ -38,12 +40,24 @@ message Deliver {
 
   uint64 round    = 1;
   bool   decision = 2;
-  int64  duration = 3 [(mir.type) = "time.Duration"];
 
-  // amount of time from input to a quorum(2F+1) of inputs with value 1.
-  // can be negative, when quorum is reached before input.
-  // set to math.MaxInt64 when quorum is never reached.
-  int64 pos_quorum_wait = 4 [(mir.type) = "time.Duration"];
+  // Amount of time from input to a quorum(2F+1) of inputs with value 1.
+  // Can be negative, when quorum is reached before input.
+  // Set to math.MaxInt64 when quorum is never reached.
+  int64 pos_quorum_wait = 3 [(mir.type) = "time.Duration"];
+
+  // Amount of time from a quorum(2F+1) of 1-valued inputs to all nodes giving 1-valued inputs.
+  // Set to math.MaxInt64 when quroum is never reached.
+  int64 pos_total_wait = 4 [(mir.type) = "time.Duration"];
+}
+
+message InnerAbbaRoundTime {
+  option (mir.event) = true;
+
+  // Duration of an "inner" ABBA round.
+  // Any ABBA round that delivers and is not the first of an ABBA instance is considered "inner".
+  // This distinction is useful because the first round time is inflated from input delays.
+  int64 duration = 1 [(mir.type) = "time.Duration"];
 }
 
 message StaleMsgsRecvd {

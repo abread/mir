@@ -39,6 +39,8 @@ func Event_TypeFromPb(pb agevents.Event_Type) Event_Type {
 		return &Event_Deliver{Deliver: DeliverFromPb(pb.Deliver)}
 	case *agevents.Event_StaleMsgsRevcd:
 		return &Event_StaleMsgsRevcd{StaleMsgsRevcd: StaleMsgsRecvdFromPb(pb.StaleMsgsRevcd)}
+	case *agevents.Event_InnerAbbaRoundTime:
+		return &Event_InnerAbbaRoundTime{InnerAbbaRoundTime: InnerAbbaRoundTimeFromPb(pb.InnerAbbaRoundTime)}
 	}
 	return nil
 }
@@ -115,6 +117,30 @@ func (*Event_StaleMsgsRevcd) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*agevents.Event_StaleMsgsRevcd]()}
 }
 
+type Event_InnerAbbaRoundTime struct {
+	InnerAbbaRoundTime *InnerAbbaRoundTime
+}
+
+func (*Event_InnerAbbaRoundTime) isEvent_Type() {}
+
+func (w *Event_InnerAbbaRoundTime) Unwrap() *InnerAbbaRoundTime {
+	return w.InnerAbbaRoundTime
+}
+
+func (w *Event_InnerAbbaRoundTime) Pb() agevents.Event_Type {
+	if w == nil {
+		return nil
+	}
+	if w.InnerAbbaRoundTime == nil {
+		return &agevents.Event_InnerAbbaRoundTime{}
+	}
+	return &agevents.Event_InnerAbbaRoundTime{InnerAbbaRoundTime: (w.InnerAbbaRoundTime).Pb()}
+}
+
+func (*Event_InnerAbbaRoundTime) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*agevents.Event_InnerAbbaRoundTime]()}
+}
+
 func EventFromPb(pb *agevents.Event) *Event {
 	if pb == nil {
 		return nil
@@ -177,8 +203,8 @@ func (*InputValue) MirReflect() mirreflect.Type {
 type Deliver struct {
 	Round         uint64
 	Decision      bool
-	Duration      time.Duration
 	PosQuorumWait time.Duration
+	PosTotalWait  time.Duration
 }
 
 func DeliverFromPb(pb *agevents.Deliver) *Deliver {
@@ -188,8 +214,8 @@ func DeliverFromPb(pb *agevents.Deliver) *Deliver {
 	return &Deliver{
 		Round:         pb.Round,
 		Decision:      pb.Decision,
-		Duration:      (time.Duration)(pb.Duration),
 		PosQuorumWait: (time.Duration)(pb.PosQuorumWait),
+		PosTotalWait:  (time.Duration)(pb.PosTotalWait),
 	}
 }
 
@@ -201,8 +227,8 @@ func (m *Deliver) Pb() *agevents.Deliver {
 	{
 		pbMessage.Round = m.Round
 		pbMessage.Decision = m.Decision
-		pbMessage.Duration = (int64)(m.Duration)
 		pbMessage.PosQuorumWait = (int64)(m.PosQuorumWait)
+		pbMessage.PosTotalWait = (int64)(m.PosTotalWait)
 	}
 
 	return pbMessage
@@ -210,6 +236,35 @@ func (m *Deliver) Pb() *agevents.Deliver {
 
 func (*Deliver) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*agevents.Deliver]()}
+}
+
+type InnerAbbaRoundTime struct {
+	Duration time.Duration
+}
+
+func InnerAbbaRoundTimeFromPb(pb *agevents.InnerAbbaRoundTime) *InnerAbbaRoundTime {
+	if pb == nil {
+		return nil
+	}
+	return &InnerAbbaRoundTime{
+		Duration: (time.Duration)(pb.Duration),
+	}
+}
+
+func (m *InnerAbbaRoundTime) Pb() *agevents.InnerAbbaRoundTime {
+	if m == nil {
+		return nil
+	}
+	pbMessage := &agevents.InnerAbbaRoundTime{}
+	{
+		pbMessage.Duration = (int64)(m.Duration)
+	}
+
+	return pbMessage
+}
+
+func (*InnerAbbaRoundTime) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*agevents.InnerAbbaRoundTime]()}
 }
 
 type StaleMsgsRecvd struct {

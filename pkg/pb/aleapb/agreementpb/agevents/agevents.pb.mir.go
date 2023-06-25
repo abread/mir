@@ -11,5 +11,6 @@ func (*Event) ReflectTypeOptions() []reflect.Type {
 		reflect.TypeOf((*Event_InputValue)(nil)),
 		reflect.TypeOf((*Event_Deliver)(nil)),
 		reflect.TypeOf((*Event_StaleMsgsRevcd)(nil)),
+		reflect.TypeOf((*Event_InnerAbbaRoundTime)(nil)),
 	}
 }

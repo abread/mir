@@ -20,3 +20,7 @@ func (w *Event_Deliver) Unwrap() *Deliver {
 func (w *Event_StaleMsgsRevcd) Unwrap() *StaleMsgsRecvd {
 	return w.StaleMsgsRevcd
 }
+
+func (w *Event_InnerAbbaRoundTime) Unwrap() *InnerAbbaRoundTime {
+	return w.InnerAbbaRoundTime
+}

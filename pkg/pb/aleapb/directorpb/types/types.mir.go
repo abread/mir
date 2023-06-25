@@ -198,11 +198,9 @@ func (*DoFillGap) MirReflect() mirreflect.Type {
 type Stats struct {
 	SlotsWaitingDelivery uint64
 	MinAgDurationEst     time.Duration
-	MaxAgDurationEst     time.Duration
-	MinBcDurationEst     time.Duration
-	MaxBcDurationEst     time.Duration
-	MinOwnBcDurationEst  time.Duration
 	MaxOwnBcDurationEst  time.Duration
+	ExtBcDurationEst     time.Duration
+	MaxExtBcDurationEst  time.Duration
 }
 
 func StatsFromPb(pb *directorpb.Stats) *Stats {
@@ -212,11 +210,9 @@ func StatsFromPb(pb *directorpb.Stats) *Stats {
 	return &Stats{
 		SlotsWaitingDelivery: pb.SlotsWaitingDelivery,
 		MinAgDurationEst:     (time.Duration)(pb.MinAgDurationEst),
-		MaxAgDurationEst:     (time.Duration)(pb.MaxAgDurationEst),
-		MinBcDurationEst:     (time.Duration)(pb.MinBcDurationEst),
-		MaxBcDurationEst:     (time.Duration)(pb.MaxBcDurationEst),
-		MinOwnBcDurationEst:  (time.Duration)(pb.MinOwnBcDurationEst),
 		MaxOwnBcDurationEst:  (time.Duration)(pb.MaxOwnBcDurationEst),
+		ExtBcDurationEst:     (time.Duration)(pb.ExtBcDurationEst),
+		MaxExtBcDurationEst:  (time.Duration)(pb.MaxExtBcDurationEst),
 	}
 }
 
@@ -228,11 +224,9 @@ func (m *Stats) Pb() *directorpb.Stats {
 	{
 		pbMessage.SlotsWaitingDelivery = m.SlotsWaitingDelivery
 		pbMessage.MinAgDurationEst = (int64)(m.MinAgDurationEst)
-		pbMessage.MaxAgDurationEst = (int64)(m.MaxAgDurationEst)
-		pbMessage.MinBcDurationEst = (int64)(m.MinBcDurationEst)
-		pbMessage.MaxBcDurationEst = (int64)(m.MaxBcDurationEst)
-		pbMessage.MinOwnBcDurationEst = (int64)(m.MinOwnBcDurationEst)
 		pbMessage.MaxOwnBcDurationEst = (int64)(m.MaxOwnBcDurationEst)
+		pbMessage.ExtBcDurationEst = (int64)(m.ExtBcDurationEst)
+		pbMessage.MaxExtBcDurationEst = (int64)(m.MaxExtBcDurationEst)
 	}
 
 	return pbMessage

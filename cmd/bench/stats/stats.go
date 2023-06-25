@@ -35,11 +35,9 @@ type Stats struct {
 
 	slotsAwaitingDelivery uint64
 	minAgDurationEst      time.Duration
-	maxAgDurationEst      time.Duration
-	minExtBcDurationEst   time.Duration
-	maxExtBcDurationEst   time.Duration
-	minOwnBcDurationEst   time.Duration
 	maxOwnBcDurationEst   time.Duration
+	extBcDurationEst      time.Duration
+	maxExtBcDurationEst   time.Duration
 }
 
 type txKey struct {
@@ -108,11 +106,9 @@ func (s *Stats) DirectorStats(stats *directorpb.Stats) {
 
 	s.slotsAwaitingDelivery = stats.SlotsWaitingDelivery
 	s.minAgDurationEst = time.Duration(stats.MinAgDurationEst)
-	s.maxAgDurationEst = time.Duration(stats.MaxAgDurationEst)
-	s.minExtBcDurationEst = time.Duration(stats.MinBcDurationEst)
-	s.maxExtBcDurationEst = time.Duration(stats.MaxBcDurationEst)
-	s.minOwnBcDurationEst = time.Duration(stats.MinOwnBcDurationEst)
 	s.maxOwnBcDurationEst = time.Duration(stats.MaxOwnBcDurationEst)
+	s.extBcDurationEst = time.Duration(stats.ExtBcDurationEst)
+	s.maxExtBcDurationEst = time.Duration(stats.MaxExtBcDurationEst)
 
 	s.lock.Unlock()
 }
@@ -163,11 +159,9 @@ func (s *Stats) WriteCSVHeader(w *csv.Writer) {
 		"threshQueueSize",
 		"slotsAwaitingDelivery",
 		"minAgDurationEst",
-		"maxAgDurationEst",
-		"minExtBcDurationEst",
-		"maxExtBcDurationEst",
-		"minOwnBcDurationEst",
 		"maxOwnBcDurationEst",
+		"extBcDurationEst",
+		"maxExtBcDurationEst",
 	}
 	_ = w.Write(record)
 }
@@ -190,11 +184,9 @@ func (s *Stats) WriteCSVRecordAndReset(w *csv.Writer, d time.Duration) {
 	threshQueueSize := s.threshQueueSize
 	slotsAwaitingDelivery := s.slotsAwaitingDelivery
 	minAgDurationEst := s.minAgDurationEst
-	maxAgDurationEst := s.maxAgDurationEst
-	minBcDurationEst := s.minExtBcDurationEst
-	maxBcDurationEst := s.maxExtBcDurationEst
-	minOwnBcDurationEst := s.minOwnBcDurationEst
 	maxOwnBcDurationEst := s.maxOwnBcDurationEst
+	extBcDurationEst := s.extBcDurationEst
+	maxBcDurationEst := s.maxExtBcDurationEst
 
 	if s.timestampedTransactions == 0 {
 		avgLatency = math.NaN()
@@ -235,11 +227,9 @@ func (s *Stats) WriteCSVRecordAndReset(w *csv.Writer, d time.Duration) {
 		strconv.FormatInt(int64(threshQueueSize), 10),
 		strconv.FormatUint(slotsAwaitingDelivery, 10),
 		fmt.Sprintf("%.6f", minAgDurationEst.Seconds()),
-		fmt.Sprintf("%.6f", maxAgDurationEst.Seconds()),
-		fmt.Sprintf("%.6f", minBcDurationEst.Seconds()),
-		fmt.Sprintf("%.6f", maxBcDurationEst.Seconds()),
-		fmt.Sprintf("%.6f", minOwnBcDurationEst.Seconds()),
 		fmt.Sprintf("%.6f", maxOwnBcDurationEst.Seconds()),
+		fmt.Sprintf("%.6f", extBcDurationEst.Seconds()),
+		fmt.Sprintf("%.6f", maxBcDurationEst.Seconds()),
 	}
 	_ = w.Write(record)
 }

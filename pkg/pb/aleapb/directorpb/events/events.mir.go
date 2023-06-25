@@ -39,7 +39,7 @@ func DoFillGap(destModule types.ModuleID, slot *types3.Slot) *types1.Event {
 	}
 }
 
-func Stats(destModule types.ModuleID, slotsWaitingDelivery uint64, minAgDurationEst time.Duration, maxAgDurationEst time.Duration, minBcDurationEst time.Duration, maxBcDurationEst time.Duration, minOwnBcDurationEst time.Duration, maxOwnBcDurationEst time.Duration) *types1.Event {
+func Stats(destModule types.ModuleID, slotsWaitingDelivery uint64, minAgDurationEst time.Duration, maxOwnBcDurationEst time.Duration, extBcDurationEst time.Duration, maxExtBcDurationEst time.Duration) *types1.Event {
 	return &types1.Event{
 		DestModule: destModule,
 		Type: &types1.Event_AleaDirector{
@@ -48,11 +48,9 @@ func Stats(destModule types.ModuleID, slotsWaitingDelivery uint64, minAgDuration
 					Stats: &types2.Stats{
 						SlotsWaitingDelivery: slotsWaitingDelivery,
 						MinAgDurationEst:     minAgDurationEst,
-						MaxAgDurationEst:     maxAgDurationEst,
-						MinBcDurationEst:     minBcDurationEst,
-						MaxBcDurationEst:     maxBcDurationEst,
-						MinOwnBcDurationEst:  minOwnBcDurationEst,
 						MaxOwnBcDurationEst:  maxOwnBcDurationEst,
+						ExtBcDurationEst:     extBcDurationEst,
+						MaxExtBcDurationEst:  maxExtBcDurationEst,
 					},
 				},
 			},
