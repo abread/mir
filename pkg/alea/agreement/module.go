@@ -459,10 +459,7 @@ func newAgRoundSniffer(mc ModuleConfig, params ModuleParams, agRounds *modring.M
 						return nil // skip first round
 					}
 
-					r := state.loadRound(agRounds, agRoundNum)
-					if r == nil {
-						return nil
-					}
+					r := state.ensureRoundInitialized(agRoundNum)
 
 					if r.abbaRoundNumber+1 != abbaRoundNum {
 						return es.Errorf("abba rounds are not being processed sequentially! (expected input for %d, got %d)", r.abbaRoundNumber+1, abbaRoundNum)
@@ -480,10 +477,7 @@ func newAgRoundSniffer(mc ModuleConfig, params ModuleParams, agRounds *modring.M
 						return nil // skip first round
 					}
 
-					r := state.loadRound(agRounds, agRoundNum)
-					if r == nil {
-						return nil
-					}
+					r := state.ensureRoundInitialized(agRoundNum)
 
 					if r.abbaRoundNumber != abbaRoundNum {
 						return es.Errorf("abba rounds are not being processed sequentially! (expected deliver from %d, got %d)", r.abbaRoundNumber, abbaRoundNum)
