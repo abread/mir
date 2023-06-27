@@ -155,33 +155,33 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 				}
 
 				if bcRuntime, ok := est.BcRuntime(slot); ok {
-					if nextQueueIdx == ownQueueIdx && bcRuntime < est.OwnBcMinDurationEstNoMargin() {
+					if nextQueueIdx == ownQueueIdx && bcRuntime < est.OwnBcMedianDurationEstNoMargin() {
 						logger.Log(logging.LevelDebug, "stalling agreement input for own batch")
 						return nil
-					}
+					} else {
+						maxTimeToWait := est.ExtBcMaxDurationEst() - bcRuntime
 
-					maxTimeToWait := est.ExtBcMedianDurationEst() - bcRuntime
+						// clamp wait time just in case
+						if maxTimeToWait > tunables.MaxAgreementDelay {
+							maxTimeToWait = 0
+						}
 
-					// clamp wait time just in case
-					if maxTimeToWait > tunables.MaxAgreementDelay {
-						maxTimeToWait = 0
-					}
+						if maxTimeToWait > 0 {
+							// stall agreement to allow in-flight broadcast to complete
 
-					if maxTimeToWait > 0 {
-						// stall agreement to allow in-flight broadcast to complete
+							// schedule a timer to guarantee we reprocess the previous conditions
+							// and eventually let agreement make progress, even if this broadcast
+							// stalls indefinitely
+							logger.Log(logging.LevelDebug, "stalling agreement input", "maxDelay", maxTimeToWait)
+							eventpbdsl.TimerDelay(m, mc.Timer,
+								[]*eventpbtypes.Event{
+									directorpbevents.Heartbeat(mc.Self),
+								},
+								timert.Duration(maxTimeToWait),
+							)
 
-						// schedule a timer to guarantee we reprocess the previous conditions
-						// and eventually let agreement make progress, even if this broadcast
-						// stalls indefinitely
-						logger.Log(logging.LevelDebug, "stalling agreement input", "maxDelay", maxTimeToWait)
-						eventpbdsl.TimerDelay(m, mc.Timer,
-							[]*eventpbtypes.Event{
-								directorpbevents.Heartbeat(mc.Self),
-							},
-							timert.Duration(maxTimeToWait),
-						)
-
-						return nil
+							return nil
+						}
 					}
 				}
 			}
