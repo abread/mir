@@ -226,6 +226,11 @@ func (at *AleaTracer) interceptOne(event *eventpb.Event) error { // nolint: goco
 		case *bcqueuepb.Event_Deliver:
 			slot := commontypes.SlotFromPb(e.Deliver.Slot)
 
+			if slot.QueueIdx == at.ownQueueIdx && slot.QueueSlot == at.nextBatchToCut {
+				at.nextBatchToCut++
+				at.startBatchCutStallSpan(ts, at.nextBatchToCut)
+			}
+
 			if slot.QueueSlot >= at.agQueueHeads[slot.QueueIdx] {
 				at.unagreedSlots[slot.QueueIdx][slot.QueueSlot] = struct{}{}
 
@@ -271,12 +276,6 @@ func (at *AleaTracer) interceptOne(event *eventpb.Event) error { // nolint: goco
 
 			if e.Deliver.Decision {
 				slot := at.slotForAgRound(e.Deliver.Round)
-
-				if slot.QueueIdx == at.ownQueueIdx && slot.QueueSlot+1 == at.nextBatchToCut {
-					at.startBatchCutStallSpan(ts, at.nextBatchToCut)
-					at.nextBatchToCut++
-				}
-
 				at.agQueueHeads[slot.QueueIdx]++
 				at.bfDeliverQueue = append(at.bfDeliverQueue, slot)
 				delete(at.unagreedSlots[slot.QueueIdx], slot.QueueSlot)
