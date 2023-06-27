@@ -155,8 +155,7 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 				}
 
 				if bcRuntime, ok := est.BcRuntime(slot); ok {
-					if nextQueueIdx == ownQueueIdx {
-						// always wait for own bc
+					if nextQueueIdx == ownQueueIdx && bcRuntime < est.OwnBcMinDurationEstNoMargin() {
 						logger.Log(logging.LevelDebug, "stalling agreement input for own batch")
 						return nil
 					}

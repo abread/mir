@@ -33,6 +33,10 @@ func (e *Estimators) OwnBcMaxDurationEst() time.Duration {
 	return e.ownBcDuration.MaxEstimate() + e.ownBcQuorumFinishMargin.MaxEstimate() + e.ownBcTotalFinishMargin.MaxEstimate()
 }
 
+func (e *Estimators) OwnBcMinDurationEstNoMargin() time.Duration {
+	return e.ownBcDuration.Median()
+}
+
 func (e *Estimators) ExtBcMedianDurationEst() time.Duration {
 	return e.extBcDuration.Median() + e.extBcFinishMargin.Median()
 }
