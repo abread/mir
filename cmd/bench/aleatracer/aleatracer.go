@@ -149,6 +149,8 @@ func NewAleaTracer(ctx context.Context, ownQueueIdx aleatypes.QueueIdx, nodeCoun
 		panic(err)
 	}
 
+	tracer.startBatchCutStallSpan(time.Duration(0), aleatypes.QueueSlot(0))
+
 	tracer.wg.Add(1)
 	doneC := tracerCtx.Done()
 	go func() {
@@ -204,7 +206,9 @@ func (at *AleaTracer) interceptOne(event *eventpb.Event) error { // nolint: goco
 				at.startTxSpan(ts, tt.ClientID(tx.ClientId), tt.TxNo(tx.TxNo))
 			}
 		case *mempoolpb.Event_RequestBatch:
-			at.endBatchCutStallSpan(ts, at.nextBatchToCut)
+			if at.endBatchCutStallSpan(ts, at.nextBatchToCut) {
+				at.nextBatchToCut++
+			}
 		}
 	case *eventpb.Event_AleaBcqueue:
 		switch e := ev.AleaBcqueue.Type.(type) {
@@ -227,7 +231,6 @@ func (at *AleaTracer) interceptOne(event *eventpb.Event) error { // nolint: goco
 			slot := commontypes.SlotFromPb(e.Deliver.Slot)
 
 			if slot.QueueIdx == at.ownQueueIdx && slot.QueueSlot == at.nextBatchToCut {
-				at.nextBatchToCut++
 				at.startBatchCutStallSpan(ts, at.nextBatchToCut)
 			}
 
@@ -636,14 +639,17 @@ func (at *AleaTracer) _batchCutStallSpan(ts time.Duration, queueSlot aleatypes.Q
 func (at *AleaTracer) startBatchCutStallSpan(ts time.Duration, queueSlot aleatypes.QueueSlot) {
 	at._batchCutStallSpan(ts, queueSlot)
 }
-func (at *AleaTracer) endBatchCutStallSpan(ts time.Duration, _ aleatypes.QueueSlot) {
+func (at *AleaTracer) endBatchCutStallSpan(ts time.Duration, qs aleatypes.QueueSlot) bool {
 	if at.wipBatchCutStallSpan == nil {
-		return
+		return false
 	}
 
 	at.wipBatchCutStallSpan.end = ts
-	at.writeSpan(at.wipBatchCutStallSpan)
+	if qs > 0 {
+		at.writeSpan(at.wipBatchCutStallSpan)
+	}
 	at.wipBatchCutStallSpan = nil
+	return true
 }
 
 func (at *AleaTracer) _agStallSpan(ts time.Duration, round uint64) *span {
