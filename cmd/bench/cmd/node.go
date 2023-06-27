@@ -204,6 +204,7 @@ func runNode(ctx context.Context) error {
 			return false
 		}),
 	)
+	defer recorder.Stop()
 	if err != nil {
 		return es.Errorf("cannot create event recorder: %w", err)
 	}*/

@@ -202,11 +202,7 @@ func (s *state) loadRound(rounds *modring.Module, roundNum uint64) *round {
 	return s.rounds[roundNum]
 }
 
-func (s *state) clearRoundData(rounds *modring.Module, roundNum uint64) error {
-	if !rounds.IsInView(roundNum) {
-		return es.Errorf("round out of view: %v", rounds)
-	}
-
+func (s *state) clearRoundData(roundNum uint64) error {
 	delete(s.rounds, roundNum)
 	return nil
 }
@@ -222,6 +218,7 @@ func newAgController(mc ModuleConfig, logger logging.Logger, state *state, agRou
 			input:   input,
 			relTime: time.Since(timeRef),
 		}
+		state.ensureRoundInitialized(roundNum)
 		logger.Log(logging.LevelDebug, "queued input to agreement round", "agRound", roundNum, "value", input)
 		return nil
 	})
@@ -250,9 +247,6 @@ func newAgController(mc ModuleConfig, logger logging.Logger, state *state, agRou
 
 			agreementpbdsl.Deliver(m, mc.Consumer, state.currentRound, currentRound.decision, currentRound.posQuorumDuration, currentRound.posTotalDuration)
 			state.roundDecisionHistory.Push(currentRound.decision)
-			if err := state.clearRoundData(agRounds, state.currentRound); err != nil {
-				return err
-			}
 
 			state.currentRound++
 			currentRound = state.loadRound(agRounds, state.currentRound)
@@ -273,7 +267,7 @@ func newAgController(mc ModuleConfig, logger logging.Logger, state *state, agRou
 			return es.Errorf("failed to clean up finished agreement round: %w", err)
 		}
 
-		delete(state.rounds, roundNumber)
+		state.clearRoundData(roundNumber)
 		return nil
 	})
 
@@ -450,7 +444,11 @@ func newAgRoundSniffer(mc ModuleConfig, params ModuleParams, agRounds *modring.M
 			case *abbapbtypes.Event_Round:
 				switch abbaRoundEv := abbaEv.Round.Type.(type) {
 				case *abbapbtypes.RoundEvent_InputValue:
-					agRoundNum, abbaRoundNum, err := parseAgAbbaRoundNumbersFromModule(ev.DestModule, &mc)
+					agRoundNum, err := mc.agRoundNumber(ev.DestModule)
+					if err != nil {
+						return err
+					}
+					abbaRoundNum, err := mc.abbaRoundNumber(ev.DestModule)
 					if err != nil {
 						return err
 					}
@@ -459,7 +457,10 @@ func newAgRoundSniffer(mc ModuleConfig, params ModuleParams, agRounds *modring.M
 						return nil // skip first round
 					}
 
-					r := state.ensureRoundInitialized(agRoundNum)
+					r := state.loadRound(agRounds, agRoundNum)
+					if r == nil {
+						return nil
+					}
 
 					if r.abbaRoundNumber+1 != abbaRoundNum {
 						return es.Errorf("abba rounds are not being processed sequentially! (expected input for %d, got %d)", r.abbaRoundNumber+1, abbaRoundNum)
@@ -467,7 +468,7 @@ func newAgRoundSniffer(mc ModuleConfig, params ModuleParams, agRounds *modring.M
 					r.abbaRoundNumber = abbaRoundNum
 					r.relAbbaRoundStartTime = time.Since(timeRef)
 				case *abbapbtypes.RoundEvent_Deliver:
-					agRoundNum, err := parseAgRoundNumberFromModule(ev.DestModule, &mc)
+					agRoundNum, err := mc.agRoundNumber(ev.DestModule)
 					if err != nil {
 						return err
 					}
@@ -477,7 +478,10 @@ func newAgRoundSniffer(mc ModuleConfig, params ModuleParams, agRounds *modring.M
 						return nil // skip first round
 					}
 
-					r := state.ensureRoundInitialized(agRoundNum)
+					r := state.loadRound(agRounds, agRoundNum)
+					if r == nil {
+						return nil
+					}
 
 					if r.abbaRoundNumber != abbaRoundNum {
 						return es.Errorf("abba rounds are not being processed sequentially! (expected deliver from %d, got %d)", r.abbaRoundNumber, abbaRoundNum)
@@ -496,31 +500,6 @@ func newAgRoundSniffer(mc ModuleConfig, params ModuleParams, agRounds *modring.M
 	})
 
 	return m
-}
-
-func parseAgRoundNumberFromModule(destModule t.ModuleID, mc *ModuleConfig) (uint64, error) {
-	agRoundNumStr := destModule.StripParent(mc.Self).Top()
-	agRoundNum, err := strconv.ParseUint(string(agRoundNumStr), 10, 64)
-	if err != nil {
-		return 0, es.Errorf("failed to parse ag round number from %s (%s): %w", agRoundNumStr, destModule, err)
-	}
-
-	return agRoundNum, nil
-}
-
-func parseAgAbbaRoundNumbersFromModule(destModule t.ModuleID, mc *ModuleConfig) (uint64, uint64, error) {
-	agRoundNum, err := parseAgRoundNumberFromModule(destModule, mc)
-	if err != nil {
-		return 0, 0, err
-	}
-
-	abbaRoundNumStr := destModule.StripParent(mc.Self).Sub().Sub().Top()
-	abbaRoundNum, err := strconv.ParseUint(string(abbaRoundNumStr), 10, 64)
-	if err != nil {
-		return 0, 0, es.Errorf("failed to parse abba round number from %s (%s): %w", abbaRoundNumStr, destModule, err)
-	}
-
-	return agRoundNum, abbaRoundNum, nil
 }
 
 func (mc *ModuleConfig) agRoundNumber(id t.ModuleID) (uint64, error) {
