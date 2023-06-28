@@ -31,6 +31,8 @@ import (
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
+var timeRef = time.Now()
+
 type set[T comparable] map[T]struct{}
 
 type state struct {
@@ -44,6 +46,8 @@ type state struct {
 	stalledAgRound      bool
 
 	nextCoalescedTimerDuration time.Duration
+	lastWakeUp                 time.Duration
+	lastScheduledWakeup        time.Duration
 }
 
 func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, tunables common.ModuleTunables, nodeID t.NodeID, logger logging.Logger, est *estimators.Estimators) {
@@ -161,25 +165,25 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 					if nextQueueIdx == ownQueueIdx && bcRuntime < est.OwnBcMedianDurationEstNoMargin() {
 						logger.Log(logging.LevelDebug, "stalling agreement input for own batch")
 						return nil
-					} else {
-						maxTimeToWait := est.ExtBcMaxDurationEst() - bcRuntime
+					}
 
-						// clamp wait time just in case
-						if maxTimeToWait > tunables.MaxAgreementDelay {
-							maxTimeToWait = 0
-						}
+					maxTimeToWait := est.ExtBcMaxDurationEst() - bcRuntime
 
-						if maxTimeToWait > 0 {
-							// stall agreement to allow in-flight broadcast to complete
+					// clamp wait time just in case
+					if maxTimeToWait > tunables.MaxAgreementDelay {
+						maxTimeToWait = 0
+					}
 
-							// schedule a timer to guarantee we reprocess the previous conditions
-							// and eventually let agreement make progress, even if this broadcast
-							// stalls indefinitely
-							logger.Log(logging.LevelDebug, "stalling agreement input", "maxDelay", maxTimeToWait)
-							state.wakeUpAfter(maxTimeToWait)
+					if maxTimeToWait > 0 {
+						// stall agreement to allow in-flight broadcast to complete
 
-							return nil
-						}
+						// schedule a timer to guarantee we reprocess the previous conditions
+						// and eventually let agreement make progress, even if this broadcast
+						// stalls indefinitely
+						logger.Log(logging.LevelDebug, "stalling agreement input", "maxDelay", maxTimeToWait)
+						state.wakeUpAfter(maxTimeToWait)
+
+						return nil
 					}
 				}
 			}
@@ -266,17 +270,24 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 	// Schedule coalesced timer
 	// MUST BE THE LAST UponStateUpdates HANDLER
 	dsl.UponStateUpdates(m, func() error {
-		if state.nextCoalescedTimerDuration != math.MaxInt64 {
+		now := time.Since(timeRef)
+
+		// only schedule timer if needed (request AND there is no timer scheduled already for somewhere before this period)
+		d := state.nextCoalescedTimerDuration
+		if d != math.MaxInt64 && now+d > state.lastScheduledWakeup {
 			eventpbdsl.TimerDelay(m, mc.Timer,
 				[]*eventpbtypes.Event{
 					directorpbevents.Heartbeat(mc.Self),
 				},
-				timert.Duration(state.nextCoalescedTimerDuration),
+				timert.Duration(d),
 			)
 
 			// clear coalesced timer for next batch of events
 			state.nextCoalescedTimerDuration = 0
 		}
+
+		state.lastWakeUp = now
+		state.lastScheduledWakeup = now + d
 
 		return nil
 	})
