@@ -206,9 +206,7 @@ func (at *AleaTracer) interceptOne(event *eventpb.Event) error { // nolint: goco
 				at.startTxSpan(ts, tt.ClientID(tx.ClientId), tt.TxNo(tx.TxNo))
 			}
 		case *mempoolpb.Event_RequestBatch:
-			if at.endBatchCutStallSpan(ts, at.nextBatchToCut) {
-				at.nextBatchToCut++
-			}
+			at.endBatchCutStallSpan(ts, at.nextBatchToCut)
 		}
 	case *eventpb.Event_AleaBcqueue:
 		switch e := ev.AleaBcqueue.Type.(type) {
@@ -282,6 +280,11 @@ func (at *AleaTracer) interceptOne(event *eventpb.Event) error { // nolint: goco
 				at.agQueueHeads[slot.QueueIdx]++
 				at.bfDeliverQueue = append(at.bfDeliverQueue, slot)
 				delete(at.unagreedSlots[slot.QueueIdx], slot.QueueSlot)
+
+				if slot.QueueIdx == at.ownQueueIdx && at.nextBatchToCut == slot.QueueSlot {
+					at.nextBatchToCut++
+					at.startBatchCutStallSpan(ts, at.nextBatchToCut)
+				}
 			}
 
 			at.nextAgRound = e.Deliver.Round + 1
