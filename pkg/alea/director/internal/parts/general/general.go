@@ -1,6 +1,7 @@
 package general
 
 import (
+	"math"
 	"time"
 
 	"golang.org/x/exp/slices"
@@ -41,6 +42,8 @@ type state struct {
 	slotsReadyToDeliver []set[aleatypes.QueueSlot]
 	agRound             uint64
 	stalledAgRound      bool
+
+	nextCoalescedTimerDuration time.Duration
 }
 
 func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, tunables common.ModuleTunables, nodeID t.NodeID, logger logging.Logger, est *estimators.Estimators) {
@@ -173,12 +176,7 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 							// and eventually let agreement make progress, even if this broadcast
 							// stalls indefinitely
 							logger.Log(logging.LevelDebug, "stalling agreement input", "maxDelay", maxTimeToWait)
-							eventpbdsl.TimerDelay(m, mc.Timer,
-								[]*eventpbtypes.Event{
-									directorpbevents.Heartbeat(mc.Self),
-								},
-								timert.Duration(maxTimeToWait),
-							)
+							state.wakeUpAfter(maxTimeToWait)
 
 							return nil
 						}
@@ -235,13 +233,7 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 			// ensure we are woken up to create a batch before we run out of time
 			maxDelay := timeToOwnQueueAgRound - bcRuntimeEst
 			logger.Log(logging.LevelDebug, "stalling batch cut", "max delay", maxDelay)
-
-			eventpbdsl.TimerDelay(m, mc.Timer,
-				[]*eventpbtypes.Event{
-					directorpbevents.Heartbeat(mc.Self),
-				},
-				timert.Duration(maxDelay),
-			)
+			state.wakeUpAfter(maxDelay)
 
 			return nil
 		}
@@ -270,6 +262,30 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 		}
 		return nil
 	})
+
+	// Schedule coalesced timer
+	// MUST BE THE LAST UponStateUpdates HANDLER
+	dsl.UponStateUpdates(m, func() error {
+		if state.nextCoalescedTimerDuration != math.MaxInt64 {
+			eventpbdsl.TimerDelay(m, mc.Timer,
+				[]*eventpbtypes.Event{
+					directorpbevents.Heartbeat(mc.Self),
+				},
+				timert.Duration(state.nextCoalescedTimerDuration),
+			)
+
+			// clear coalesced timer for next batch of events
+			state.nextCoalescedTimerDuration = 0
+		}
+
+		return nil
+	})
+}
+
+func (state *state) wakeUpAfter(d time.Duration) {
+	if d < state.nextCoalescedTimerDuration {
+		state.nextCoalescedTimerDuration = d
+	}
 }
 
 func (state *state) agCanDeliver(min int) bool {
@@ -298,6 +314,8 @@ func newState(params common.ModuleParams, tunables common.ModuleTunables, nodeID
 		agQueueHeads: make([]aleatypes.QueueSlot, N),
 
 		slotsReadyToDeliver: make([]set[aleatypes.QueueSlot], N),
+
+		nextCoalescedTimerDuration: math.MaxInt64,
 	}
 
 	ownQueueIdx := uint32(slices.Index(params.AllNodes, nodeID))
