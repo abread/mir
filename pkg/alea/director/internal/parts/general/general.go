@@ -48,6 +48,9 @@ type state struct {
 	nextCoalescedTimerDuration time.Duration
 	lastWakeUp                 time.Duration
 	lastScheduledWakeup        time.Duration
+
+	targetOwnUnagreedBatches int
+	ownAgConsecutiveDelivers int
 }
 
 func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, tunables common.ModuleTunables, nodeID t.NodeID, logger logging.Logger, est *estimators.Estimators) {
@@ -191,6 +194,36 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 		return nil
 	})
 
+	// =====
+	// Unagreed batch count target control
+	// =====
+	aagdsl.UponDeliver(m, func(round uint64, decision bool, posQuorumWait, posTotalWait time.Duration) error {
+		if round%uint64(N) != uint64(ownQueueIdx) {
+			return nil // not own batch
+		}
+
+		if decision {
+			state.ownAgConsecutiveDelivers++
+		} else {
+			state.ownAgConsecutiveDelivers = 0
+		}
+
+		return nil
+	})
+	dsl.UponStateUpdates(m, func() error {
+		if state.ownAgConsecutiveDelivers < 5 {
+			state.targetOwnUnagreedBatches++
+		} else {
+			state.targetOwnUnagreedBatches = 1
+		}
+
+		if state.targetOwnUnagreedBatches > tunables.MaxOwnUnagreedBatchCount {
+			state.targetOwnUnagreedBatches = tunables.MaxOwnUnagreedBatchCount
+		}
+
+		return nil
+	})
+
 	// =============================================================================================
 	// Batch Cutting / Own Queue Broadcast Control
 	// =============================================================================================
@@ -210,7 +243,7 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 		// agQueueHeads[ownQueueIdx] is the next slot to be agreed on
 		unagreedOwnBatchCount := uint64(state.bcOwnQueueHead - state.agQueueHeads[ownQueueIdx])
 
-		if !state.stalledBatchCut || unagreedOwnBatchCount >= tunables.MaxOwnUnagreedBatchCount {
+		if !state.stalledBatchCut || unagreedOwnBatchCount >= uint64(state.targetOwnUnagreedBatches) {
 			// batch cut in progress, or enough are cut already
 			return nil
 		}
@@ -321,6 +354,8 @@ func newState(params common.ModuleParams, tunables common.ModuleTunables, nodeID
 		slotsReadyToDeliver: make([]set[aleatypes.QueueSlot], N),
 
 		nextCoalescedTimerDuration: math.MaxInt64,
+
+		targetOwnUnagreedBatches: 1,
 	}
 
 	ownQueueIdx := uint32(slices.Index(params.AllNodes, nodeID))

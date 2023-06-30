@@ -36,7 +36,7 @@ type ModuleTunables struct {
 
 	// Maximum number of unagreed batches that the broadcast component can have in this node's queue
 	// Must be at least 1
-	MaxOwnUnagreedBatchCount uint64
+	MaxOwnUnagreedBatchCount int
 
 	// Subprotocol duration estimates window size
 	EstimateWindowSize int

@@ -48,7 +48,7 @@ type Params struct {
 
 	// Maximum number of unagreed batches that the broadcast component can have in this node's queue
 	// Must be at least 1
-	MaxOwnUnagreedBatchCount uint64
+	MaxOwnUnagreedBatchCount int
 
 	// TODO
 	MaxAbbaRoundLookahead int
@@ -79,7 +79,7 @@ func DefaultParams(membership *trantorpbtypes.Membership) Params {
 		InstanceUID:                       []byte{42},
 		Membership:                        membership,
 		MaxConcurrentVcbPerQueue:          32,
-		MaxOwnUnagreedBatchCount:          1,
+		MaxOwnUnagreedBatchCount:          2,
 		MaxAbbaRoundLookahead:             4,
 		MaxAgRoundLookahead:               32,
 		EstimateWindowSize:                32,
