@@ -33,11 +33,13 @@ type Stats struct {
 	bcDelivers           uint64
 	threshQueueSize      int
 
-	slotsAwaitingDelivery uint64
-	minAgDurationEst      time.Duration
-	maxOwnBcDurationEst   time.Duration
-	extBcDurationEst      time.Duration
-	maxExtBcDurationEst   time.Duration
+	minAbbaRoundDurationEst    time.Duration
+	ownBcDurationEst           time.Duration
+	maxOwnBcDurationEst        time.Duration
+	maxOwnBcQuorumFinishMargin time.Duration
+	maxOwnBcTotalFinishMargin  time.Duration
+	maxExtBcDurationEst        time.Duration
+	maxExtBcFinishMargin       time.Duration
 }
 
 type txKey struct {
@@ -104,11 +106,13 @@ func (s *Stats) DeliveredBcSlot() {
 func (s *Stats) DirectorStats(stats *directorpb.Stats) {
 	s.lock.Lock()
 
-	s.slotsAwaitingDelivery = stats.SlotsWaitingDelivery
-	s.minAgDurationEst = time.Duration(stats.MinAgDurationEst)
+	s.minAbbaRoundDurationEst = time.Duration(stats.MinAbbaRoundDurationEst)
+	s.ownBcDurationEst = time.Duration(stats.OwnBcDurationEst)
 	s.maxOwnBcDurationEst = time.Duration(stats.MaxOwnBcDurationEst)
-	s.extBcDurationEst = time.Duration(stats.ExtBcDurationEst)
+	s.maxOwnBcQuorumFinishMargin = time.Duration(stats.MaxOwnBcQuorumFinishMargin)
+	s.maxOwnBcTotalFinishMargin = time.Duration(stats.MaxOwnBcTotalFinishMargin)
 	s.maxExtBcDurationEst = time.Duration(stats.MaxExtBcDurationEst)
+	s.maxExtBcFinishMargin = time.Duration(stats.MaxExtBcFinishMargin)
 
 	s.lock.Unlock()
 }
@@ -157,11 +161,13 @@ func (s *Stats) WriteCSVHeader(w *csv.Writer) {
 		"agRoundFalseDelivers",
 		"bcDelivers",
 		"threshQueueSize",
-		"slotsAwaitingDelivery",
-		"minAgDurationEst",
-		"maxOwnBcDurationEst",
-		"extBcDurationEst",
-		"maxExtBcDurationEst",
+		"minAbbaRoundDuration",
+		"ownBcDuration",
+		"maxOwnBcDuration",
+		"maxOwnBcQuorumFinishMargin",
+		"maxOwnBcTotalFinishMargin",
+		"maxExtBcDuration",
+		"maxExtBcFinishMargin",
 	}
 	_ = w.Write(record)
 }
@@ -182,11 +188,13 @@ func (s *Stats) WriteCSVRecordAndReset(w *csv.Writer, d time.Duration) {
 	agRoundFalseDelivers := s.agRoundFalseDelivers
 	bcDelivers := s.bcDelivers
 	threshQueueSize := s.threshQueueSize
-	slotsAwaitingDelivery := s.slotsAwaitingDelivery
-	minAgDurationEst := s.minAgDurationEst
+	minAbbaRoundDurationEst := s.minAbbaRoundDurationEst
+	ownBcDurationEst := s.ownBcDurationEst
 	maxOwnBcDurationEst := s.maxOwnBcDurationEst
-	extBcDurationEst := s.extBcDurationEst
-	maxBcDurationEst := s.maxExtBcDurationEst
+	maxOwnBcQuorumFinishMargin := s.maxOwnBcQuorumFinishMargin
+	maxOwnBcTotalFinishMargin := s.maxOwnBcTotalFinishMargin
+	maxExtBcDurationEst := s.maxExtBcDurationEst
+	maxExtBcFinishMargin := s.maxExtBcFinishMargin
 
 	if s.timestampedTransactions == 0 {
 		avgLatency = math.NaN()
@@ -225,11 +233,13 @@ func (s *Stats) WriteCSVRecordAndReset(w *csv.Writer, d time.Duration) {
 		strconv.FormatUint(agRoundFalseDelivers, 10),
 		strconv.FormatUint(bcDelivers, 10),
 		strconv.FormatInt(int64(threshQueueSize), 10),
-		strconv.FormatUint(slotsAwaitingDelivery, 10),
-		fmt.Sprintf("%.6f", minAgDurationEst.Seconds()),
+		fmt.Sprintf("%.6f", minAbbaRoundDurationEst.Seconds()),
+		fmt.Sprintf("%.6f", ownBcDurationEst.Seconds()),
 		fmt.Sprintf("%.6f", maxOwnBcDurationEst.Seconds()),
-		fmt.Sprintf("%.6f", extBcDurationEst.Seconds()),
-		fmt.Sprintf("%.6f", maxBcDurationEst.Seconds()),
+		fmt.Sprintf("%.6f", maxOwnBcQuorumFinishMargin.Seconds()),
+		fmt.Sprintf("%.6f", maxOwnBcTotalFinishMargin.Seconds()),
+		fmt.Sprintf("%.6f", maxExtBcDurationEst.Seconds()),
+		fmt.Sprintf("%.6f", maxExtBcFinishMargin.Seconds()),
 	}
 	_ = w.Write(record)
 }

@@ -39,18 +39,20 @@ func DoFillGap(destModule types.ModuleID, slot *types3.Slot) *types1.Event {
 	}
 }
 
-func Stats(destModule types.ModuleID, slotsWaitingDelivery uint64, minAgDurationEst time.Duration, maxOwnBcDurationEst time.Duration, extBcDurationEst time.Duration, maxExtBcDurationEst time.Duration) *types1.Event {
+func Stats(destModule types.ModuleID, minAbbaRoundDurationEst time.Duration, ownBcDurationEst time.Duration, maxOwnBcDurationEst time.Duration, maxOwnBcQuorumFinishMargin time.Duration, maxOwnBcTotalFinishMargin time.Duration, maxExtBcDurationEst time.Duration, maxExtBcFinishMargin time.Duration) *types1.Event {
 	return &types1.Event{
 		DestModule: destModule,
 		Type: &types1.Event_AleaDirector{
 			AleaDirector: &types2.Event{
 				Type: &types2.Event_Stats{
 					Stats: &types2.Stats{
-						SlotsWaitingDelivery: slotsWaitingDelivery,
-						MinAgDurationEst:     minAgDurationEst,
-						MaxOwnBcDurationEst:  maxOwnBcDurationEst,
-						ExtBcDurationEst:     extBcDurationEst,
-						MaxExtBcDurationEst:  maxExtBcDurationEst,
+						MinAbbaRoundDurationEst:    minAbbaRoundDurationEst,
+						OwnBcDurationEst:           ownBcDurationEst,
+						MaxOwnBcDurationEst:        maxOwnBcDurationEst,
+						MaxOwnBcQuorumFinishMargin: maxOwnBcQuorumFinishMargin,
+						MaxOwnBcTotalFinishMargin:  maxOwnBcTotalFinishMargin,
+						MaxExtBcDurationEst:        maxExtBcDurationEst,
+						MaxExtBcFinishMargin:       maxExtBcFinishMargin,
 					},
 				},
 			},

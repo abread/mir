@@ -13,6 +13,7 @@ import (
 	ageventsdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents/dsl"
 	bcqueuepbdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/dsl"
 	commontypes "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
+	directorpbdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/directorpb/dsl"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -35,10 +36,6 @@ func (e *Estimators) OwnBcMaxDurationEst() time.Duration {
 
 func (e *Estimators) OwnBcMedianDurationEstNoMargin() time.Duration {
 	return e.ownBcDuration.Median()
-}
-
-func (e *Estimators) ExtBcMedianDurationEst() time.Duration {
-	return e.extBcDuration.Median() + e.extBcFinishMargin.Median()
 }
 
 func (e *Estimators) ExtBcMaxDurationEst() time.Duration {
@@ -157,6 +154,13 @@ func New(m dsl.Module, params common.ModuleParams, tunables common.ModuleTunable
 	// =============================================================================================
 	ageventsdsl.UponInnerAbbaRoundTime(m, func(duration time.Duration) error {
 		est.abbaRoundDuration.AddSample(duration)
+		return nil
+	})
+
+	// Stats
+	dsl.UponStateUpdates(m, func() error {
+		// stats are reported after updates, and before ordering components around
+		directorpbdsl.Stats(m, "ignore", est.abbaRoundDuration.MinEstimate(), est.ownBcDuration.Median(), est.ownBcDuration.MaxEstimate(), est.ownBcQuorumFinishMargin.MaxEstimate(), est.ownBcTotalFinishMargin.MaxEstimate(), est.extBcDuration.MaxEstimate(), est.extBcFinishMargin.MaxEstimate())
 		return nil
 	})
 

@@ -57,12 +57,6 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 	N := len(params.AllNodes)
 	F := (N - 1) / 3
 
-	dsl.UponStateUpdates(m, func() error {
-		// stats are reported after updates, and before ordering components around
-		directorpbdsl.Stats(m, "ignore", uint64(len(state.slotsReadyToDeliver)), est.AgMinDurationEst(), est.OwnBcMaxDurationEst(), est.ExtBcMedianDurationEst(), est.ExtBcMaxDurationEst())
-		return nil
-	})
-
 	dsl.UponInit(m, func() error {
 		return nil
 	})

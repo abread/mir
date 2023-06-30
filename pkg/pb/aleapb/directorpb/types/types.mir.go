@@ -196,11 +196,13 @@ func (*DoFillGap) MirReflect() mirreflect.Type {
 }
 
 type Stats struct {
-	SlotsWaitingDelivery uint64
-	MinAgDurationEst     time.Duration
-	MaxOwnBcDurationEst  time.Duration
-	ExtBcDurationEst     time.Duration
-	MaxExtBcDurationEst  time.Duration
+	MinAbbaRoundDurationEst    time.Duration
+	OwnBcDurationEst           time.Duration
+	MaxOwnBcDurationEst        time.Duration
+	MaxOwnBcQuorumFinishMargin time.Duration
+	MaxOwnBcTotalFinishMargin  time.Duration
+	MaxExtBcDurationEst        time.Duration
+	MaxExtBcFinishMargin       time.Duration
 }
 
 func StatsFromPb(pb *directorpb.Stats) *Stats {
@@ -208,11 +210,13 @@ func StatsFromPb(pb *directorpb.Stats) *Stats {
 		return nil
 	}
 	return &Stats{
-		SlotsWaitingDelivery: pb.SlotsWaitingDelivery,
-		MinAgDurationEst:     (time.Duration)(pb.MinAgDurationEst),
-		MaxOwnBcDurationEst:  (time.Duration)(pb.MaxOwnBcDurationEst),
-		ExtBcDurationEst:     (time.Duration)(pb.ExtBcDurationEst),
-		MaxExtBcDurationEst:  (time.Duration)(pb.MaxExtBcDurationEst),
+		MinAbbaRoundDurationEst:    (time.Duration)(pb.MinAbbaRoundDurationEst),
+		OwnBcDurationEst:           (time.Duration)(pb.OwnBcDurationEst),
+		MaxOwnBcDurationEst:        (time.Duration)(pb.MaxOwnBcDurationEst),
+		MaxOwnBcQuorumFinishMargin: (time.Duration)(pb.MaxOwnBcQuorumFinishMargin),
+		MaxOwnBcTotalFinishMargin:  (time.Duration)(pb.MaxOwnBcTotalFinishMargin),
+		MaxExtBcDurationEst:        (time.Duration)(pb.MaxExtBcDurationEst),
+		MaxExtBcFinishMargin:       (time.Duration)(pb.MaxExtBcFinishMargin),
 	}
 }
 
@@ -222,11 +226,13 @@ func (m *Stats) Pb() *directorpb.Stats {
 	}
 	pbMessage := &directorpb.Stats{}
 	{
-		pbMessage.SlotsWaitingDelivery = m.SlotsWaitingDelivery
-		pbMessage.MinAgDurationEst = (int64)(m.MinAgDurationEst)
+		pbMessage.MinAbbaRoundDurationEst = (int64)(m.MinAbbaRoundDurationEst)
+		pbMessage.OwnBcDurationEst = (int64)(m.OwnBcDurationEst)
 		pbMessage.MaxOwnBcDurationEst = (int64)(m.MaxOwnBcDurationEst)
-		pbMessage.ExtBcDurationEst = (int64)(m.ExtBcDurationEst)
+		pbMessage.MaxOwnBcQuorumFinishMargin = (int64)(m.MaxOwnBcQuorumFinishMargin)
+		pbMessage.MaxOwnBcTotalFinishMargin = (int64)(m.MaxOwnBcTotalFinishMargin)
 		pbMessage.MaxExtBcDurationEst = (int64)(m.MaxExtBcDurationEst)
+		pbMessage.MaxExtBcFinishMargin = (int64)(m.MaxExtBcFinishMargin)
 	}
 
 	return pbMessage

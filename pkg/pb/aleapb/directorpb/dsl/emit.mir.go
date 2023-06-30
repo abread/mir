@@ -21,6 +21,6 @@ func DoFillGap(m dsl.Module, destModule types.ModuleID, slot *types1.Slot) {
 	dsl.EmitMirEvent(m, events.DoFillGap(destModule, slot))
 }
 
-func Stats(m dsl.Module, destModule types.ModuleID, slotsWaitingDelivery uint64, minAgDurationEst time.Duration, maxOwnBcDurationEst time.Duration, extBcDurationEst time.Duration, maxExtBcDurationEst time.Duration) {
-	dsl.EmitMirEvent(m, events.Stats(destModule, slotsWaitingDelivery, minAgDurationEst, maxOwnBcDurationEst, extBcDurationEst, maxExtBcDurationEst))
+func Stats(m dsl.Module, destModule types.ModuleID, minAbbaRoundDurationEst time.Duration, ownBcDurationEst time.Duration, maxOwnBcDurationEst time.Duration, maxOwnBcQuorumFinishMargin time.Duration, maxOwnBcTotalFinishMargin time.Duration, maxExtBcDurationEst time.Duration, maxExtBcFinishMargin time.Duration) {
+	dsl.EmitMirEvent(m, events.Stats(destModule, minAbbaRoundDurationEst, ownBcDurationEst, maxOwnBcDurationEst, maxOwnBcQuorumFinishMargin, maxOwnBcTotalFinishMargin, maxExtBcDurationEst, maxExtBcFinishMargin))
 }

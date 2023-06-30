@@ -36,8 +36,8 @@ func UponDoFillGap(m dsl.Module, handler func(slot *types2.Slot) error) {
 	})
 }
 
-func UponStats(m dsl.Module, handler func(slotsWaitingDelivery uint64, minAgDurationEst time.Duration, maxOwnBcDurationEst time.Duration, extBcDurationEst time.Duration, maxExtBcDurationEst time.Duration) error) {
+func UponStats(m dsl.Module, handler func(minAbbaRoundDurationEst time.Duration, ownBcDurationEst time.Duration, maxOwnBcDurationEst time.Duration, maxOwnBcQuorumFinishMargin time.Duration, maxOwnBcTotalFinishMargin time.Duration, maxExtBcDurationEst time.Duration, maxExtBcFinishMargin time.Duration) error) {
 	UponEvent[*types.Event_Stats](m, func(ev *types.Stats) error {
-		return handler(ev.SlotsWaitingDelivery, ev.MinAgDurationEst, ev.MaxOwnBcDurationEst, ev.ExtBcDurationEst, ev.MaxExtBcDurationEst)
+		return handler(ev.MinAbbaRoundDurationEst, ev.OwnBcDurationEst, ev.MaxOwnBcDurationEst, ev.MaxOwnBcQuorumFinishMargin, ev.MaxOwnBcTotalFinishMargin, ev.MaxExtBcDurationEst, ev.MaxExtBcFinishMargin)
 	})
 }
