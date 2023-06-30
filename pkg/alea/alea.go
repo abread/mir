@@ -62,10 +62,10 @@ type Params struct {
 	// Maximum time to stall agreement round waiting for broadcasts to complete
 	MaxAgreementDelay time.Duration
 
-	// Maximum factor that the F slowest nodes are allowed to delay bc completion vs the rest.
-	// A factor of K will let the system wait up to <time for local deliver> + K * <time for 2F+1 VCB quorum done>
-	// Must be non-negative
-	MaxOwnBcTotalFinishSlowdownFactor float64
+	// How slower can the F slowest nodes be compared to the rest
+	// A factor of 2, means we allow F nodes to take double the time we expect the rest to take.
+	// Must be >=1
+	MaxExtSlowdownFactor float64
 }
 
 // DefaultParams returns the default configuration for a given membership.
@@ -84,7 +84,7 @@ func DefaultParams(membership *trantorpbtypes.Membership) Params {
 		MaxAgRoundLookahead:               32,
 		EstimateWindowSize:                32,
 		MaxAgreementDelay:                 time.Second,
-		MaxOwnBcTotalFinishSlowdownFactor: 2,
+		MaxExtSlowdownFactor: 1.25,
 	}
 }
 
@@ -143,11 +143,11 @@ func New(ownID t.NodeID, config Config, params Params, startingChkp *checkpoint.
 			AllNodes:    allNodes,
 		},
 		director.ModuleTunables{
-			MaxConcurrentVcbPerQueue:          params.MaxConcurrentVcbPerQueue,
-			MaxOwnUnagreedBatchCount:          params.MaxOwnUnagreedBatchCount,
-			EstimateWindowSize:                params.EstimateWindowSize,
-			MaxAgreementDelay:                 params.MaxAgreementDelay,
-			MaxOwnBcTotalFinishSlowdownFactor: params.MaxOwnBcTotalFinishSlowdownFactor,
+			MaxConcurrentVcbPerQueue: params.MaxConcurrentVcbPerQueue,
+			MaxOwnUnagreedBatchCount: params.MaxOwnUnagreedBatchCount,
+			EstimateWindowSize:       params.EstimateWindowSize,
+			MaxAgreementDelay:        params.MaxAgreementDelay,
+			MaxExtSlowdownFactor:     params.MaxExtSlowdownFactor,
 		},
 		ownID,
 		logging.Decorate(logger, "AleaDirector: "),
