@@ -126,9 +126,6 @@ type round struct {
 	relPosQuorumTime       time.Duration // instant where 2F+1 nodes provided input=1
 	relPosTotalTime        time.Duration // instant where all nodes provided input=1
 
-	abbaRoundNumber       uint64
-	relAbbaRoundStartTime time.Duration
-
 	delivered         bool
 	decision          bool
 	posQuorumDuration time.Duration
@@ -443,55 +440,14 @@ func newAgRoundSniffer(mc ModuleConfig, params ModuleParams, agRounds *modring.M
 			switch abbaEv := e.Abba.Type.(type) {
 			case *abbapbtypes.Event_Round:
 				switch abbaRoundEv := abbaEv.Round.Type.(type) {
-				case *abbapbtypes.RoundEvent_InputValue:
-					agRoundNum, err := mc.agRoundNumber(ev.DestModule)
-					if err != nil {
-						return err
-					}
-					abbaRoundNum, err := mc.abbaRoundNumber(ev.DestModule)
-					if err != nil {
-						return err
-					}
-
-					if abbaRoundNum == 0 {
-						return nil // skip first round
-					}
-
-					r := state.loadRound(agRounds, agRoundNum)
-					if r == nil {
-						return nil
-					}
-
-					if r.abbaRoundNumber+1 != abbaRoundNum {
-						return es.Errorf("abba rounds are not being processed sequentially! (expected input for %d, got %d)", r.abbaRoundNumber+1, abbaRoundNum)
-					}
-					r.abbaRoundNumber = abbaRoundNum
-					r.relAbbaRoundStartTime = time.Since(timeRef)
 				case *abbapbtypes.RoundEvent_Deliver:
-					agRoundNum, err := mc.agRoundNumber(ev.DestModule)
-					if err != nil {
-						return err
-					}
 					abbaRoundNum := abbaRoundEv.Deliver.RoundNumber
-
 					if abbaRoundNum == 0 {
 						return nil // skip first round
 					}
 
-					r := state.loadRound(agRounds, agRoundNum)
-					if r == nil {
-						return nil
-					}
-
-					if r.abbaRoundNumber != abbaRoundNum {
-						return es.Errorf("abba rounds are not being processed sequentially! (expected deliver from %d, got %d)", r.abbaRoundNumber, abbaRoundNum)
-					}
-
-					now := time.Since(timeRef)
-					duration := now - r.relAbbaRoundStartTime
-					agreementpbdsl.InnerAbbaRoundTime(m, mc.Consumer, duration)
-
-					r.relAbbaRoundStartTime = 0
+					durationNoCoin := abbaRoundEv.Deliver.DurationNoCoin
+					agreementpbdsl.InnerAbbaRoundTime(m, mc.Consumer, durationNoCoin)
 				}
 
 			}

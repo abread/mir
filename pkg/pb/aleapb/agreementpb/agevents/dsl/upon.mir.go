@@ -42,8 +42,8 @@ func UponStaleMsgsRecvd(m dsl.Module, handler func(messages []*types2.PastMessag
 	})
 }
 
-func UponInnerAbbaRoundTime(m dsl.Module, handler func(duration time.Duration) error) {
+func UponInnerAbbaRoundTime(m dsl.Module, handler func(durationNoCoin time.Duration) error) {
 	UponEvent[*types.Event_InnerAbbaRoundTime](m, func(ev *types.InnerAbbaRoundTime) error {
-		return handler(ev.Duration)
+		return handler(ev.DurationNoCoin)
 	})
 }

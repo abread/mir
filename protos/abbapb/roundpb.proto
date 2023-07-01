@@ -36,6 +36,8 @@ message RoundDeliver {
 
   bool   next_estimate = 1;
   uint64 round_number  = 2;
+
+  int64 duration_no_coin = 3 [(mir.type) = "time.Duration"];
 }
 
 message RoundFinishAll {

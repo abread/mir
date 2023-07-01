@@ -25,6 +25,6 @@ func StaleMsgsRecvd(m dsl.Module, destModule types.ModuleID, messages []*types1.
 	dsl.EmitMirEvent(m, events.StaleMsgsRecvd(destModule, messages))
 }
 
-func InnerAbbaRoundTime(m dsl.Module, destModule types.ModuleID, duration time.Duration) {
-	dsl.EmitMirEvent(m, events.InnerAbbaRoundTime(destModule, duration))
+func InnerAbbaRoundTime(m dsl.Module, destModule types.ModuleID, durationNoCoin time.Duration) {
+	dsl.EmitMirEvent(m, events.InnerAbbaRoundTime(destModule, durationNoCoin))
 }

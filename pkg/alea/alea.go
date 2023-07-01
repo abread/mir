@@ -76,15 +76,15 @@ type Params struct {
 // for which DefaultParams can serve as a starting point.
 func DefaultParams(membership *trantorpbtypes.Membership) Params {
 	return Params{
-		InstanceUID:                       []byte{42},
-		Membership:                        membership,
-		MaxConcurrentVcbPerQueue:          32,
-		MaxOwnUnagreedBatchCount:          2,
-		MaxAbbaRoundLookahead:             4,
-		MaxAgRoundLookahead:               32,
-		EstimateWindowSize:                32,
-		MaxAgreementDelay:                 time.Second,
-		MaxExtSlowdownFactor: 1.25,
+		InstanceUID:              []byte{42},
+		Membership:               membership,
+		MaxConcurrentVcbPerQueue: 32,
+		MaxOwnUnagreedBatchCount: 2,
+		MaxAbbaRoundLookahead:    4,
+		MaxAgRoundLookahead:      32,
+		EstimateWindowSize:       32,
+		MaxAgreementDelay:        time.Second,
+		MaxExtSlowdownFactor:     1.25,
 	}
 }
 

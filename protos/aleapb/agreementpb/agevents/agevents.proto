@@ -54,10 +54,8 @@ message Deliver {
 message InnerAbbaRoundTime {
   option (mir.event) = true;
 
-  // Duration of an "inner" ABBA round.
-  // Any ABBA round that delivers and is not the first of an ABBA instance is considered "inner".
-  // This distinction is useful because the first round time is inflated from input delays.
-  int64 duration = 1 [(mir.type) = "time.Duration"];
+  // Duration of an "inner" ABBA round, excluding coin messages and their processing.
+  int64 duration_no_coin = 1 [(mir.type) = "time.Duration"];
 }
 
 message StaleMsgsRecvd {

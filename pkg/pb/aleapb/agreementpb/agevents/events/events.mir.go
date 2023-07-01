@@ -60,14 +60,14 @@ func StaleMsgsRecvd(destModule types.ModuleID, messages []*types3.PastMessage) *
 	}
 }
 
-func InnerAbbaRoundTime(destModule types.ModuleID, duration time.Duration) *types1.Event {
+func InnerAbbaRoundTime(destModule types.ModuleID, durationNoCoin time.Duration) *types1.Event {
 	return &types1.Event{
 		DestModule: destModule,
 		Type: &types1.Event_AleaAgreement{
 			AleaAgreement: &types2.Event{
 				Type: &types2.Event_InnerAbbaRoundTime{
 					InnerAbbaRoundTime: &types2.InnerAbbaRoundTime{
-						Duration: duration,
+						DurationNoCoin: durationNoCoin,
 					},
 				},
 			},

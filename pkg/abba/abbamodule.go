@@ -1,6 +1,8 @@
 package abba
 
 import (
+	"time"
+
 	es "github.com/go-errors/errors"
 
 	"github.com/filecoin-project/mir/pkg/abba/abbaround"
@@ -169,7 +171,7 @@ func newController(mc ModuleConfig, params ModuleParams, logger logging.Logger, 
 		return nil
 	})
 
-	abbadsl.UponRoundDeliver(m, func(nextEstimate bool, prevRoundNum uint64) error {
+	abbadsl.UponRoundDeliver(m, func(nextEstimate bool, prevRoundNum uint64, _ time.Duration) error {
 		if state.phase == phaseAwaitingInput {
 			return es.Errorf("round delivered before input")
 		} else if state.phase == phaseDone {

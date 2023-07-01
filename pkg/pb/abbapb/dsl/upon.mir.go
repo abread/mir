@@ -3,6 +3,8 @@
 package abbapbdsl
 
 import (
+	"time"
+
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
 	types "github.com/filecoin-project/mir/pkg/pb/abbapb/types"
 	types1 "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
@@ -51,9 +53,9 @@ func UponRoundInputValue(m dsl.Module, handler func(input bool) error) {
 	})
 }
 
-func UponRoundDeliver(m dsl.Module, handler func(nextEstimate bool, roundNumber uint64) error) {
+func UponRoundDeliver(m dsl.Module, handler func(nextEstimate bool, roundNumber uint64, durationNoCoin time.Duration) error) {
 	UponRoundEvent[*types.RoundEvent_Deliver](m, func(ev *types.RoundDeliver) error {
-		return handler(ev.NextEstimate, ev.RoundNumber)
+		return handler(ev.NextEstimate, ev.RoundNumber, ev.DurationNoCoin)
 	})
 }
 

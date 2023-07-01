@@ -239,7 +239,7 @@ func (*Deliver) MirReflect() mirreflect.Type {
 }
 
 type InnerAbbaRoundTime struct {
-	Duration time.Duration
+	DurationNoCoin time.Duration
 }
 
 func InnerAbbaRoundTimeFromPb(pb *agevents.InnerAbbaRoundTime) *InnerAbbaRoundTime {
@@ -247,7 +247,7 @@ func InnerAbbaRoundTimeFromPb(pb *agevents.InnerAbbaRoundTime) *InnerAbbaRoundTi
 		return nil
 	}
 	return &InnerAbbaRoundTime{
-		Duration: (time.Duration)(pb.Duration),
+		DurationNoCoin: (time.Duration)(pb.DurationNoCoin),
 	}
 }
 
@@ -257,7 +257,7 @@ func (m *InnerAbbaRoundTime) Pb() *agevents.InnerAbbaRoundTime {
 	}
 	pbMessage := &agevents.InnerAbbaRoundTime{}
 	{
-		pbMessage.Duration = (int64)(m.Duration)
+		pbMessage.DurationNoCoin = (int64)(m.DurationNoCoin)
 	}
 
 	return pbMessage

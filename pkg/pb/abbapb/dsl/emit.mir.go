@@ -3,6 +3,8 @@
 package abbapbdsl
 
 import (
+	"time"
+
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
 	events "github.com/filecoin-project/mir/pkg/pb/abbapb/events"
 	types "github.com/filecoin-project/mir/pkg/types"
@@ -22,8 +24,8 @@ func RoundInputValue(m dsl.Module, destModule types.ModuleID, input bool) {
 	dsl.EmitMirEvent(m, events.RoundInputValue(destModule, input))
 }
 
-func RoundDeliver(m dsl.Module, destModule types.ModuleID, nextEstimate bool, roundNumber uint64) {
-	dsl.EmitMirEvent(m, events.RoundDeliver(destModule, nextEstimate, roundNumber))
+func RoundDeliver(m dsl.Module, destModule types.ModuleID, nextEstimate bool, roundNumber uint64, durationNoCoin time.Duration) {
+	dsl.EmitMirEvent(m, events.RoundDeliver(destModule, nextEstimate, roundNumber, durationNoCoin))
 }
 
 func RoundFinishAll(m dsl.Module, destModule types.ModuleID, decision bool, unanimous bool) {

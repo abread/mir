@@ -2,6 +2,7 @@ package abbaround
 
 import (
 	"runtime"
+	"time"
 
 	es "github.com/go-errors/errors"
 
@@ -31,6 +32,8 @@ const (
 	phaseDone                               // protocol step 10 (coin was tossed, next estimate was delivered)
 )
 
+var timeRef = time.Now()
+
 type state struct {
 	phase    roundPhase
 	estimate bool
@@ -51,6 +54,9 @@ type state struct {
 
 	initWeakSupportReachedForValue abbat.BoolFlags
 	auxSent                        bool
+
+	relStartTime            time.Duration
+	relCoinRecoverStartTime time.Duration
 }
 
 // nolint: gocognit
@@ -71,6 +77,8 @@ func New(mc ModuleConfig, params ModuleParams, nodeID t.NodeID, logger logging.L
 			},
 			InitialNodeCount: len(params.AllNodes),
 		}, logging.Decorate(logger, "ThresholdSigAggregator: ")),
+
+		relStartTime: time.Since(timeRef),
 	}
 
 	abbadsl.UponRoundInputValue(m, func(input bool) error {
@@ -209,6 +217,7 @@ func New(mc ModuleConfig, params ModuleParams, nodeID t.NodeID, logger logging.L
 
 			// 9. sample coin
 			state.phase = phaseTossingCoin
+			state.relCoinRecoverStartTime = time.Since(timeRef)
 
 			// logger.Log(logging.LevelDebug, "tossing coin", "ownShare", state.ownCoinShare)
 			rnetdsl.SendMessage(m, mc.ReliableNet,
@@ -274,11 +283,14 @@ func New(mc ModuleConfig, params ModuleParams, nodeID t.NodeID, logger logging.L
 			}
 		}
 
+		durationNoCoinRecover := state.relCoinRecoverStartTime - state.relStartTime
+
 		// (still 10.) Set r = r + 1, and return to step 4
 		dsl.EmitMirEvent(m, abbapbevents.RoundDeliver(
 			mc.Consumer,
 			state.estimate,
 			params.RoundNumber,
+			durationNoCoinRecover,
 		))
 
 		state.phase = phaseDone

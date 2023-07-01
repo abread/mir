@@ -3,6 +3,8 @@
 package abbapbevents
 
 import (
+	"time"
+
 	types2 "github.com/filecoin-project/mir/pkg/pb/abbapb/types"
 	types1 "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 	types "github.com/filecoin-project/mir/pkg/types"
@@ -58,7 +60,7 @@ func RoundInputValue(destModule types.ModuleID, input bool) *types1.Event {
 	}
 }
 
-func RoundDeliver(destModule types.ModuleID, nextEstimate bool, roundNumber uint64) *types1.Event {
+func RoundDeliver(destModule types.ModuleID, nextEstimate bool, roundNumber uint64, durationNoCoin time.Duration) *types1.Event {
 	return &types1.Event{
 		DestModule: destModule,
 		Type: &types1.Event_Abba{
@@ -67,8 +69,9 @@ func RoundDeliver(destModule types.ModuleID, nextEstimate bool, roundNumber uint
 					Round: &types2.RoundEvent{
 						Type: &types2.RoundEvent_Deliver{
 							Deliver: &types2.RoundDeliver{
-								NextEstimate: nextEstimate,
-								RoundNumber:  roundNumber,
+								NextEstimate:   nextEstimate,
+								RoundNumber:    roundNumber,
+								DurationNoCoin: durationNoCoin,
 							},
 						},
 					},

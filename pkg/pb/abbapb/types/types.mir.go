@@ -3,6 +3,8 @@
 package abbapbtypes
 
 import (
+	"time"
+
 	mirreflect "github.com/filecoin-project/mir/codegen/mirreflect"
 	abbatypes "github.com/filecoin-project/mir/pkg/abba/abbatypes"
 	abbapb "github.com/filecoin-project/mir/pkg/pb/abbapb"
@@ -547,8 +549,9 @@ func (*RoundInputValue) MirReflect() mirreflect.Type {
 }
 
 type RoundDeliver struct {
-	NextEstimate bool
-	RoundNumber  uint64
+	NextEstimate   bool
+	RoundNumber    uint64
+	DurationNoCoin time.Duration
 }
 
 func RoundDeliverFromPb(pb *abbapb.RoundDeliver) *RoundDeliver {
@@ -556,8 +559,9 @@ func RoundDeliverFromPb(pb *abbapb.RoundDeliver) *RoundDeliver {
 		return nil
 	}
 	return &RoundDeliver{
-		NextEstimate: pb.NextEstimate,
-		RoundNumber:  pb.RoundNumber,
+		NextEstimate:   pb.NextEstimate,
+		RoundNumber:    pb.RoundNumber,
+		DurationNoCoin: (time.Duration)(pb.DurationNoCoin),
 	}
 }
 
@@ -569,6 +573,7 @@ func (m *RoundDeliver) Pb() *abbapb.RoundDeliver {
 	{
 		pbMessage.NextEstimate = m.NextEstimate
 		pbMessage.RoundNumber = m.RoundNumber
+		pbMessage.DurationNoCoin = (int64)(m.DurationNoCoin)
 	}
 
 	return pbMessage

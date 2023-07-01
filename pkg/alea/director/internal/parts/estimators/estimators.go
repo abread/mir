@@ -27,7 +27,7 @@ type Estimators struct {
 	extBcDuration   util.ByzEstimator
 	extBcDoneMargin util.ByzEstimator
 
-	abbaRoundDuration util.Estimator
+	abbaRoundNoCoinDuration util.Estimator
 }
 
 func (e *Estimators) OwnBcMaxDurationEst() time.Duration {
@@ -45,8 +45,8 @@ func (e *Estimators) ExtBcMaxDurationEst() time.Duration {
 func (e *Estimators) AgMinDurationEst() time.Duration {
 	// the unanimity optimization lowers convergence to the time for one message broadcast (per node):
 	// the INIT message, containing the initial input
-	// one abba round takes roughly 5 message broadcasts (per node)
-	return e.abbaRoundDuration.MinEstimate() / 5
+	// one abba round takes roughly 3 message broadcasts (per node), +1 for the common coin
+	return e.abbaRoundNoCoinDuration.MinEstimate() / 3
 }
 
 func (e *Estimators) BcRuntime(slot commontypes.Slot) (time.Duration, bool) {
@@ -62,7 +62,7 @@ func New(m dsl.Module, params common.ModuleParams, tunables common.ModuleTunable
 	ownQueueIdx := aleatypes.QueueIdx(slices.Index(params.AllNodes, nodeID))
 
 	est := &Estimators{
-		bcStartTimes: make(map[commontypes.Slot]time.Time, (N-1)*tunables.MaxConcurrentVcbPerQueue+int(tunables.MaxOwnUnagreedBatchCount)),
+		bcStartTimes: make(map[commontypes.Slot]time.Time, (N-1)*tunables.MaxConcurrentVcbPerQueue+tunables.MaxOwnUnagreedBatchCount),
 
 		ownBcDuration:         util.NewEstimator(tunables.EstimateWindowSize),
 		ownBcQuorumDoneMargin: util.NewEstimator(tunables.EstimateWindowSize),
@@ -71,7 +71,7 @@ func New(m dsl.Module, params common.ModuleParams, tunables common.ModuleTunable
 		extBcDuration:   util.NewByzEstimator(tunables.EstimateWindowSize, N),
 		extBcDoneMargin: util.NewByzEstimator(tunables.EstimateWindowSize, N),
 
-		abbaRoundDuration: util.NewEstimator(tunables.EstimateWindowSize),
+		abbaRoundNoCoinDuration: util.NewEstimator(tunables.EstimateWindowSize),
 	}
 
 	// =============================================================================================
@@ -153,15 +153,19 @@ func New(m dsl.Module, params common.ModuleParams, tunables common.ModuleTunable
 	// =============================================================================================
 	// Ag Duration Estimation
 	// =============================================================================================
-	ageventsdsl.UponInnerAbbaRoundTime(m, func(duration time.Duration) error {
-		est.abbaRoundDuration.AddSample(duration)
+	ageventsdsl.UponInnerAbbaRoundTime(m, func(durationNoCoin time.Duration) error {
+		est.abbaRoundNoCoinDuration.AddSample(durationNoCoin)
 		return nil
 	})
+
+	// =============================================================================================
+	// Abba Coin Crypto Duration Estimation
+	// =============================================================================================
 
 	// Stats
 	dsl.UponStateUpdates(m, func() error {
 		// stats are reported after updates, and before ordering components around
-		directorpbdsl.Stats(m, "ignore", est.abbaRoundDuration.MinEstimate(), est.ownBcDuration.Median(), est.ownBcDuration.MaxEstimate(), est.ownBcQuorumDoneMargin.MaxEstimate(), est.ownBcTotalDoneMargin.MaxEstimate(), est.extBcDuration.MaxEstimate(), est.extBcDoneMargin.MaxEstimate())
+		directorpbdsl.Stats(m, "ignore", est.abbaRoundNoCoinDuration.MinEstimate(), est.ownBcDuration.Median(), est.ownBcDuration.MaxEstimate(), est.ownBcQuorumDoneMargin.MaxEstimate(), est.ownBcTotalDoneMargin.MaxEstimate(), est.extBcDuration.MaxEstimate(), est.extBcDoneMargin.MaxEstimate())
 		return nil
 	})
 
