@@ -34,6 +34,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/timer"
 	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 	"github.com/filecoin-project/mir/pkg/types"
+	"github.com/filecoin-project/mir/pkg/util/maputil"
 
 	es "github.com/go-errors/errors"
 )
@@ -43,22 +44,23 @@ const (
 )
 
 type TestConfig struct {
-	Info       string
-	RandomSeed int64
-	N          int
-	F          int
-	Transport  string
-	Duration   time.Duration
-	Directory  string
-	Logger     logging.Logger
+	Info          string
+	RandomSeed    int64
+	NodeIDsWeight map[types.NodeID]tt.VoteWeight
+	F             int
+	Transport     string
+	Duration      time.Duration
+	Directory     string
+	Logger        logging.Logger
 }
 
 func TestVcb(t *testing.T) {
+	F := 2
 	config := TestConfig{
-		N:         7,
-		F:         2,
-		Transport: "libp2p", // TODO: fix sim for goroutine pool active modules (threshcrypto breaks it)
-		Duration:  5 * time.Second,
+		NodeIDsWeight: deploytest.NewNodeIDsDefaultWeights(3*F + 1),
+		F:             F,
+		Transport:     "libp2p", // TODO: fix sim for goroutine pool active modules (threshcrypto breaks it)
+		Duration:      5 * time.Second,
 	}
 
 	if v := os.Getenv("RANDOM_SEED"); v != "" {
@@ -106,7 +108,7 @@ func runTest(t *testing.T, conf *TestConfig) (heapObjects int64, heapAlloc int64
 	nodeErrors, heapObjects, heapAlloc = deployment.Run(ctx)
 
 	// Check whether all the test replicas exited correctly.
-	assert.Len(t, nodeErrors, conf.N)
+	assert.Len(t, nodeErrors, len(conf.NodeIDsWeight))
 	for _, err := range nodeErrors {
 		if err != nil {
 			assert.Equal(t, mir.ErrStopped, err)
@@ -145,7 +147,7 @@ func runTest(t *testing.T, conf *TestConfig) (heapObjects int64, heapAlloc int64
 }
 
 func newDeployment(ctx context.Context, conf *TestConfig) (*deploytest.Deployment, error) {
-	nodeIDs := deploytest.NewNodeIDs(conf.N)
+	nodeIDs := maputil.GetSortedKeys(conf.NodeIDsWeight)
 	logger := deploytest.NewLogger(conf.Logger)
 
 	var simulation *deploytest.Simulation
@@ -157,7 +159,7 @@ func newDeployment(ctx context.Context, conf *TestConfig) (*deploytest.Deploymen
 		}
 		simulation = deploytest.NewSimulation(r, nodeIDs, eventDelayFn)
 	}
-	transportLayer, err := deploytest.NewLocalTransportLayer(simulation, conf.Transport, nodeIDs, logger)
+	transportLayer, err := deploytest.NewLocalTransportLayer(simulation, conf.Transport, conf.NodeIDsWeight, logger)
 	if err != nil {
 		return nil, es.Errorf("failed to create local transport: %w", err)
 	}

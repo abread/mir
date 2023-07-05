@@ -30,7 +30,9 @@ import (
 	"github.com/filecoin-project/mir/pkg/reliablenet"
 	"github.com/filecoin-project/mir/pkg/testsim"
 	"github.com/filecoin-project/mir/pkg/timer"
+	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 	"github.com/filecoin-project/mir/pkg/types"
+	"github.com/filecoin-project/mir/pkg/util/maputil"
 )
 
 const (
@@ -40,7 +42,7 @@ const (
 type TestConfig struct {
 	Info              string
 	RandomSeed        int64
-	N                 int
+	NodeIDsWeight     map[types.NodeID]tt.VoteWeight
 	F                 int
 	Transport         string
 	Duration          time.Duration
@@ -52,7 +54,7 @@ type TestConfig struct {
 
 func runHappyTest(t *testing.T, F int, decision bool, customInputs map[types.NodeID]bool) {
 	config := TestConfig{
-		N:                 3*F + 1,
+		NodeIDsWeight:     deploytest.NewNodeIDsDefaultWeights(3*F + 1),
 		F:                 F,
 		Transport:         "libp2p", // TODO: fix sim for goroutine pool active modules (threshcrypto breaks it)
 		DefaultInputValue: decision,
@@ -147,7 +149,7 @@ func runTest(t *testing.T, conf *TestConfig) (result bool, heapObjects int64, he
 	t.Logf("deployment.Run done")
 
 	// Check whether all the test replicas exited correctly.
-	assert.Len(t, nodeErrors, conf.N)
+	assert.Len(t, nodeErrors, len(conf.NodeIDsWeight))
 	for _, err := range nodeErrors {
 		if err != nil {
 			assert.Equal(t, mir.ErrStopped, err)
@@ -199,7 +201,7 @@ var rnetConfig = reliablenet.ModuleConfig{
 }
 
 func newDeployment(ctx context.Context, conf *TestConfig) (*deploytest.Deployment, error) {
-	nodeIDs := deploytest.NewNodeIDs(conf.N)
+	nodeIDs := maputil.GetSortedKeys(conf.NodeIDsWeight)
 	logger := deploytest.NewLogger(conf.Logger)
 
 	var simulation *deploytest.Simulation
@@ -211,7 +213,7 @@ func newDeployment(ctx context.Context, conf *TestConfig) (*deploytest.Deploymen
 		}
 		simulation = deploytest.NewSimulation(r, nodeIDs, eventDelayFn)
 	}
-	transportLayer, err := deploytest.NewLocalTransportLayer(simulation, conf.Transport, nodeIDs, logger)
+	transportLayer, err := deploytest.NewLocalTransportLayer(simulation, conf.Transport, conf.NodeIDsWeight, logger)
 	if err != nil {
 		return nil, es.Errorf("could not create transport: %w", err)
 	}
