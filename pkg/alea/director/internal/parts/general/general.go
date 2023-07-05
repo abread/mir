@@ -270,7 +270,7 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 		// We must also guarantee F+1 nodes have undelivered batches, or that agreement is currently progressing,
 		// otherwise an attacker can stall the system by not sending their batch to enough nodes.
 		// Additionally, we don't want to delay a batch indefinitely in the presence of bad estimates: if agreement for our slot fails, we took too long!
-		if timeToOwnQueueAgRound > bcRuntimeEst && state.ownAgConsecutiveDelivers > 0 && (!state.stalledAgRound || state.agCanDeliver(F+1)) {
+		if timeToOwnQueueAgRound > bcRuntimeEst && (state.ownAgConsecutiveDelivers > 0 || unagreedOwnBatchCount > 0) && (!state.stalledAgRound || state.agCanDeliver(F+1)) {
 			// ensure we are woken up to create a batch before we run out of time
 			maxDelay := timeToOwnQueueAgRound - bcRuntimeEst
 			logger.Log(logging.LevelDebug, "stalling batch cut", "max delay", maxDelay)
