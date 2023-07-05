@@ -196,7 +196,7 @@ func (dc *DummyClient) connectToNode(ctx context.Context, addrString string) (*g
 
 	// Remotely invoke the Listen function on the other node's gRPC server.
 	// As this is "stream of requests"-type RPC, it returns a message sink.
-	msgSink, err := client.Listen(context.Background())
+	msgSink, err := client.Listen(ctx)
 	if err != nil {
 		if cerr := conn.Close(); cerr != nil {
 			dc.logger.Log(logging.LevelWarn, fmt.Sprintf("Failed to close connection: %v", cerr))

@@ -170,7 +170,7 @@ func (rrc *RoundRobinClient) connectToNode(ctx context.Context, addrString strin
 
 	// Remotely invoke the Listen function on the other node's gRPC server.
 	// As this is "stream of transactions"-type RPC, it returns a message sink.
-	msgSink, err := client.Listen(context.Background())
+	msgSink, err := client.Listen(ctx)
 	if err != nil {
 		if cerr := conn.Close(); cerr != nil {
 			rrc.logger.Log(logging.LevelWarn, fmt.Sprintf("Failed to close connection: %v", cerr))
