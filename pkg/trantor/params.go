@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/filecoin-project/mir/pkg/alea"
+	"github.com/filecoin-project/mir/pkg/availability/multisigcollector"
 	issconfig "github.com/filecoin-project/mir/pkg/iss/config"
 	"github.com/filecoin-project/mir/pkg/mempool/simplemempool"
 	"github.com/filecoin-project/mir/pkg/net/libp2p"
@@ -20,6 +21,7 @@ type Params struct {
 	Alea         alea.Params // TODO: extract protocol parameters away or figure out a better way to handle this
 	ReliableNet  *reliablenet.ModuleParams
 	ThreshCrypto *threshcrypto.ModuleParams
+	Availability multisigcollector.ModuleParams
 }
 
 func DefaultParams(initialMembership *trantorpbtypes.Membership) Params {
@@ -31,6 +33,7 @@ func DefaultParams(initialMembership *trantorpbtypes.Membership) Params {
 		Alea:         alea.DefaultParams(initialMembership),
 		ReliableNet:  reliablenet.DefaultModuleParams(allNodes),
 		ThreshCrypto: threshcrypto.DefaultModuleParams(),
+		Availability: multisigcollector.DefaultParamsTemplate(),
 	}
 }
 

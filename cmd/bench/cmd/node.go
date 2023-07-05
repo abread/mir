@@ -71,7 +71,10 @@ func init() {
 }
 
 func issSMRFactory(ctx context.Context, app *App, ownID t.NodeID, transport net.Transport, initialMembership *trantorpbtypes.Membership, smrParams trantor.Params, logger logging.Logger) (*trantor.System, error) {
-	localCS := deploytest.NewLocalCryptoSystem(cryptoImplType, membership.GetIDs(initialMembership), logger)
+	localCS, err := deploytest.NewLocalCryptoSystem(cryptoImplType, membership.GetIDs(initialMembership), logger)
+	if err != nil {
+		return nil, es.Errorf("could not create a local crypto system: %w", err)
+	}
 	localCrypto, err := localCS.Crypto(ownID)
 	if err != nil {
 		return nil, es.Errorf("could not create a local crypto system: %w", err)

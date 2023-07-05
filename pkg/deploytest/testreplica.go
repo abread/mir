@@ -70,7 +70,13 @@ func (tr *TestReplica) EventLogFile() string {
 func (tr *TestReplica) Run(ctx context.Context, txReceiverListener gonet.Listener) error {
 
 	// Initialize recording of events.
-	interceptor, err := eventlog.NewRecorder(tr.ID, tr.Dir, logging.Decorate(tr.Config.Logger, "Interceptor: "))
+	interceptor, err := eventlog.NewRecorder(
+		tr.ID,
+		tr.Dir,
+		logging.Decorate(tr.Config.Logger, "Interceptor: "),
+		//eventlog.SyncWriteOpt(),
+	)
+
 	if err != nil {
 		return es.Errorf("error creating interceptor: %w", err)
 	}
@@ -116,7 +122,10 @@ func (tr *TestReplica) Run(ctx context.Context, txReceiverListener gonet.Listene
 
 	// TODO: avoid hacky special cases like this.
 	if transport, ok := tr.Modules["net"]; ok {
-		transport := transport.(net.Transport)
+		transport, ok := transport.(net.Transport)
+		if !ok {
+			transport = tr.Modules["truenet"].(net.Transport)
+		}
 
 		err = transport.Start()
 		if err != nil {

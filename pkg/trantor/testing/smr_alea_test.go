@@ -32,6 +32,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/trantor"
 	"github.com/filecoin-project/mir/pkg/trantor/appmodule"
 	"github.com/filecoin-project/mir/pkg/types"
+	"github.com/filecoin-project/mir/pkg/util/maputil"
 )
 
 // TODO: try to unify with smr_test
@@ -58,53 +59,53 @@ func testIntegrationWithAlea(t *testing.T) {
 	}{
 		0: {"Do nothing with 1 node",
 			&TestConfig{
-				NumReplicas: 1,
-				Transport:   "fake",
-				Duration:    4 * time.Second,
+				NodeIDsWeight: deploytest.NewNodeIDsDefaultWeights(1),
+				Transport:     "fake",
+				Duration:      4 * time.Second,
 			}},
 		2: {"Submit 10 fake requests with 1 node",
 			&TestConfig{
-				NumReplicas: 1,
-				Transport:   "fake",
-				NumFakeTXs:  10,
-				Directory:   "mirbft-deployment-test",
-				Duration:    4 * time.Second,
+				NodeIDsWeight: deploytest.NewNodeIDsDefaultWeights(1),
+				Transport:     "fake",
+				NumFakeTXs:    10,
+				Directory:     "mirbft-deployment-test",
+				Duration:      4 * time.Second,
 			}},
 		5: {"Submit 10 fake requests with 4 nodes and libp2p networking",
 			&TestConfig{
-				NumReplicas: 4,
-				Transport:   "libp2p",
-				NumFakeTXs:  10,
-				Duration:    15 * time.Second,
+				NodeIDsWeight: deploytest.NewNodeIDsDefaultWeights(4),
+				Transport:     "libp2p",
+				NumFakeTXs:    10,
+				Duration:      15 * time.Second,
 			}},
 		6: {"Submit 10 requests with 1 node and libp2p networking",
 			&TestConfig{
-				NumReplicas: 1,
-				NumClients:  1,
-				Transport:   "libp2p",
-				NumNetTXs:   10,
-				Duration:    10 * time.Second,
+				NodeIDsWeight: deploytest.NewNodeIDsDefaultWeights(1),
+				NumClients:    1,
+				Transport:     "libp2p",
+				NumNetTXs:     10,
+				Duration:      10 * time.Second,
 			}},
 		7: {"Submit 10 requests with 4 nodes and libp2p networking",
 			&TestConfig{
-				Info:        "libp2p 10 requests and 4 nodes",
-				NumReplicas: 4,
-				NumClients:  1,
-				Transport:   "libp2p",
-				NumNetTXs:   10,
-				Duration:    20 * time.Second,
+				Info:          "libp2p 10 requests and 4 nodes",
+				NodeIDsWeight: deploytest.NewNodeIDsDefaultWeights(4),
+				NumClients:    1,
+				Transport:     "libp2p",
+				NumNetTXs:     10,
+				Duration:      20 * time.Second,
 			}},
 
 		// TODO: fix sim transport with non-transport active modules (threshcrypto breaks it)
 		/*8: {"Do nothing with 1 node in simulation",
 			&TestConfig{
-				NumReplicas: 1,
+				NodeIDsWeight: deploytest.NewNodeIDsDefaultWeights(1),
 				Transport:   "sim",
 				Duration:    4 * time.Second,
 			}},
 		10: {"Submit 10 fake requests with 1 node in simulation",
 			&TestConfig{
-				NumReplicas:     1,
+				NodeIDsWeight: deploytest.NewNodeIDsDefaultWeights(1),
 				Transport:       "sim",
 				NumFakeTXs: 10,
 				Directory:       "mirbft-deployment-test",
@@ -112,7 +113,7 @@ func testIntegrationWithAlea(t *testing.T) {
 			}},
 		12: {"Submit 100 fake requests with 1 node in simulation",
 			&TestConfig{
-				NumReplicas:     1,
+				NodeIDsWeight: deploytest.NewNodeIDsDefaultWeights(1),
 				NumClients:      0,
 				Transport:       "sim",
 				NumFakeTXs: 100,
@@ -121,12 +122,12 @@ func testIntegrationWithAlea(t *testing.T) {
 
 		100: {"Submit 10 requests with 4 nodes and libp2p networking, with 1 replica not receiving broadcasts",
 			&TestConfig{
-				Info:        "libp2p 10 requests and 4 nodes, force FILL-GAP/FILLER",
-				NumReplicas: 4,
-				Transport:   "libp2p",
-				NumNetTXs:   10,
-				NumClients:  1,
-				Duration:    10 * time.Second,
+				Info:          "libp2p 10 requests and 4 nodes, force FILL-GAP/FILLER",
+				NodeIDsWeight: deploytest.NewNodeIDsDefaultWeights(4),
+				Transport:     "libp2p",
+				NumNetTXs:     10,
+				NumClients:    1,
+				Duration:      10 * time.Second,
 				TransportFilter: func(msg *messagepb.Message, from, to types.NodeID) bool {
 					node0 := types.NewNodeIDFromInt(0)
 					_, isVcb := msg.Type.(*messagepb.Message_Vcb)
@@ -192,12 +193,12 @@ func benchmarkIntegrationWithAlea(b *testing.B) {
 	}{
 		0: {"Runs for 20s/400txs with 4 nodes",
 			&TestConfig{
-				NumReplicas: 4,
-				NumClients:  1,
-				Transport:   "sim",
-				NumFakeTXs:  100,
-				Duration:    20 * time.Second,
-				Logger:      logging.ConsoleErrorLogger,
+				NodeIDsWeight: deploytest.NewNodeIDsDefaultWeights(4),
+				NumClients:    1,
+				Transport:     "sim",
+				NumFakeTXs:    100,
+				Duration:      20 * time.Second,
+				Logger:        logging.ConsoleErrorLogger,
 			}},
 	}
 
@@ -254,7 +255,7 @@ func runIntegrationWithAleaConfig(tb testing.TB, conf *TestConfig) (heapObjects 
 	nodeErrors, heapObjects, heapAlloc = deployment.Run(ctx)
 
 	// Check whether all the test replicas exited correctly.
-	assert.Len(tb, nodeErrors, conf.NumReplicas)
+	assert.Len(tb, nodeErrors, len(conf.NodeIDsWeight))
 	for _, err := range nodeErrors {
 		if err != nil {
 			assert.Equal(tb, mir.ErrStopped, err)
@@ -301,7 +302,7 @@ func fileLogger(conf *TestConfig, name string) (logging.Logger, error) {
 }
 
 func newDeploymentAlea(ctx context.Context, conf *TestConfig) (*deploytest.Deployment, error) {
-	nodeIDs := deploytest.NewNodeIDs(conf.NumReplicas)
+	nodeIDs := maputil.GetSortedKeys(conf.NodeIDsWeight)
 	testCommonLogger := deploytest.NewLogger(conf.Logger)
 
 	commonFileLogger, err := fileLogger(conf, "common.log")
@@ -333,12 +334,13 @@ func newDeploymentAlea(ctx context.Context, conf *TestConfig) (*deploytest.Deplo
 		}
 		simulation = deploytest.NewSimulation(r, nodeIDs, eventDelayFn)
 	}
-	transportLayer, err := deploytest.NewLocalTransportLayer(simulation, conf.Transport, nodeIDs, logging.Decorate(everythingLogger, "LocalTransport: "))
+	transportLayer, err := deploytest.NewLocalTransportLayer(simulation, conf.Transport, conf.NodeIDsWeight, logging.Decorate(everythingLogger, "LocalTransport: "))
 	if err != nil {
 		return nil, es.Errorf("error creating transport: %w", err)
 	}
 
-	F := (conf.NumReplicas - 1) / 3
+	// TODO: fix for weighted stuff
+	F := (len(conf.NodeIDsWeight) - 1) / 3
 	cryptoSystem := deploytest.NewLocalThreshCryptoSystem("pseudo", nodeIDs, 2*F+1)
 
 	nodeModules := make(map[types.NodeID]modules.Modules)

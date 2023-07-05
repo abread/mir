@@ -15,19 +15,27 @@ type LocalCryptoSystem interface {
 }
 
 type localPseudoCryptoSystem struct {
-	nodeIDs    []t.NodeID
-	cryptoType string
+	nodeIDs       []t.NodeID
+	cryptoType    string
+	localKeyPairs mirCrypto.KeyPairs
 }
 
 // NewLocalCryptoSystem creates an instance of LocalCryptoSystem suitable for tests.
 // In the current implementation, cryptoType can only be "pseudo" or "dummy".
-func NewLocalCryptoSystem(cryptoType string, nodeIDs []t.NodeID, _ logging.Logger) LocalCryptoSystem {
-	return &localPseudoCryptoSystem{nodeIDs, cryptoType}
+// TODO: Think about merging all the code in this file with the pseudo crypto implementation.
+func NewLocalCryptoSystem(cryptoType string, nodeIDs []t.NodeID, _ logging.Logger) (LocalCryptoSystem, error) {
+	// Generate keys once. All crypto modules derived from this crypto system will use those keys.
+	keyPairs, err := mirCrypto.GenerateKeys(len(nodeIDs), mirCrypto.DefaultPseudoSeed)
+	if err != nil {
+		return nil, err
+	}
+
+	return &localPseudoCryptoSystem{nodeIDs, cryptoType, keyPairs}, nil
 }
 
 func (cs *localPseudoCryptoSystem) Crypto(id t.NodeID) (mirCrypto.Crypto, error) {
 	if cs.cryptoType == "pseudo" {
-		return mirCrypto.InsecureCryptoForTestingOnly(cs.nodeIDs, id, mirCrypto.DefaultPseudoSeed)
+		return mirCrypto.InsecureCryptoForTestingOnly(cs.nodeIDs, id, &cs.localKeyPairs)
 	} else if cs.cryptoType == "dummy" {
 		return &mirCrypto.DummyCrypto{
 			DummySig: []byte("a valid signature"),
