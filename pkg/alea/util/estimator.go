@@ -35,7 +35,7 @@ func (e *Estimator) AddSample(sample time.Duration) {
 		for samplesView[0] != toRemove {
 			middleIdx := len(samplesView) / 2
 			if samplesView[middleIdx] > toRemove {
-				samplesView = samplesView[:middleIdx]
+				samplesView = samplesView[:middleIdx+1]
 			} else {
 				samplesView = samplesView[middleIdx:]
 			}
