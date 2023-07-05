@@ -9,11 +9,9 @@ import (
 
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/modules"
-	"github.com/filecoin-project/mir/pkg/pb/eventpb"
-	"github.com/filecoin-project/mir/pkg/pb/hasherpb"
+	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 	hasherpbevents "github.com/filecoin-project/mir/pkg/pb/hasherpb/events"
 	hasherpbtypes "github.com/filecoin-project/mir/pkg/pb/hasherpb/types"
-	t "github.com/filecoin-project/mir/pkg/types"
 )
 
 type HashImpl interface {
@@ -38,27 +36,27 @@ type hasherEventProc struct {
 	hashImpl HashImpl
 }
 
-func (hasher *hasherEventProc) ApplyEvent(_ context.Context, event *eventpb.Event) *events.EventList {
+func (hasher *hasherEventProc) ApplyEvent(_ context.Context, event *eventpbtypes.Event) *events.EventList {
 	switch e := event.Type.(type) {
-	case *eventpb.Event_Init:
+	case *eventpbtypes.Event_Init:
 		// no actions on init
 		return events.EmptyList()
-	case *eventpb.Event_Hasher:
+	case *eventpbtypes.Event_Hasher:
 		switch e := e.Hasher.Type.(type) {
-		case *hasherpb.Event_Request:
+		case *hasherpbtypes.Event_Request:
 			// Return all computed digests in one common event.
 			return events.ListOf(hasherpbevents.Result(
-				t.ModuleID(e.Request.Origin.Module),
+				e.Request.Origin.Module,
 				hasher.computeDigests(e.Request.Data),
-				hasherpbtypes.HashOriginFromPb(e.Request.Origin),
-			).Pb())
-		case *hasherpb.Event_RequestOne:
+				e.Request.Origin,
+			))
+		case *hasherpbtypes.Event_RequestOne:
 			// Return a single computed digests.
 			return events.ListOf(hasherpbevents.ResultOne(
-				t.ModuleID(e.RequestOne.Origin.Module),
-				hasher.computeDigests([]*hasherpb.HashData{e.RequestOne.Data})[0],
-				hasherpbtypes.HashOriginFromPb(e.RequestOne.Origin),
-			).Pb())
+				e.RequestOne.Origin.Module,
+				hasher.computeDigests([]*hasherpbtypes.HashData{e.RequestOne.Data})[0],
+				e.RequestOne.Origin,
+			))
 		default:
 			panic(es.Errorf("unexpected hasher event type: %T", e))
 		}
@@ -68,7 +66,7 @@ func (hasher *hasherEventProc) ApplyEvent(_ context.Context, event *eventpb.Even
 	}
 }
 
-func (hasher *hasherEventProc) computeDigests(allData []*hasherpb.HashData) [][]byte {
+func (hasher *hasherEventProc) computeDigests(allData []*hasherpbtypes.HashData) [][]byte {
 	// Create a slice for the resulting digests containing one element for each data item to be hashed.
 	digests := make([][]byte, len(allData))
 

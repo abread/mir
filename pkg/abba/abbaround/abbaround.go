@@ -286,7 +286,7 @@ func New(mc ModuleConfig, params ModuleParams, nodeID t.NodeID, logger logging.L
 		durationNoCoinRecover := state.relCoinRecoverStartTime - state.relStartTime
 
 		// (still 10.) Set r = r + 1, and return to step 4
-		dsl.EmitMirEvent(m, abbapbevents.RoundDeliver(
+		dsl.EmitEvent(m, abbapbevents.RoundDeliver(
 			mc.Consumer,
 			state.estimate,
 			params.RoundNumber,

@@ -13,10 +13,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents"
-	"github.com/filecoin-project/mir/pkg/pb/aleapb/directorpb"
-	"github.com/filecoin-project/mir/pkg/pb/threshcryptopb"
-	"github.com/filecoin-project/mir/pkg/pb/trantorpb"
+	ageventstypes "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents/types"
+	directorpbtypes "github.com/filecoin-project/mir/pkg/pb/aleapb/directorpb/types"
+	threshcryptopbtypes "github.com/filecoin-project/mir/pkg/pb/threshcryptopb/types"
+	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
+
+	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 )
 
 type Stats struct {
@@ -43,8 +45,8 @@ type Stats struct {
 }
 
 type txKey struct {
-	ClientID string
-	TxNo     uint64
+	ClientID tt.ClientID
+	TxNo     tt.TxNo
 }
 
 func NewStats() *Stats {
@@ -55,7 +57,7 @@ func NewStats() *Stats {
 	return stats
 }
 
-func (s *Stats) NewTX(tx *trantorpb.Transaction, ts int64) {
+func (s *Stats) NewTX(tx *trantorpbtypes.Transaction, ts int64) {
 	s.lock.Lock()
 	k := txKey{tx.ClientId, tx.TxNo}
 	s.txTimestamps[k] = ts
@@ -63,7 +65,7 @@ func (s *Stats) NewTX(tx *trantorpb.Transaction, ts int64) {
 	s.lock.Unlock()
 }
 
-func (s *Stats) Delivered(tx *trantorpb.Transaction, deliverTS int64) {
+func (s *Stats) Delivered(tx *trantorpbtypes.Transaction, deliverTS int64) {
 	s.lock.Lock()
 	s.deliveredTxs++
 	k := txKey{tx.ClientId, tx.TxNo}
@@ -85,7 +87,7 @@ func (s *Stats) MempoolNewBatch() {
 	s.mempoolNewBatches++
 }
 
-func (s *Stats) DeliveredAgRound(ev *agevents.Deliver) {
+func (s *Stats) DeliveredAgRound(ev *ageventstypes.Deliver) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -103,33 +105,33 @@ func (s *Stats) DeliveredBcSlot() {
 	s.bcDelivers++
 }
 
-func (s *Stats) DirectorStats(stats *directorpb.Stats) {
+func (s *Stats) DirectorStats(stats *directorpbtypes.Stats) {
 	s.lock.Lock()
 
-	s.minAbbaRoundDurationEst = time.Duration(stats.MinAbbaRoundDurationEst)
-	s.ownBcDurationEst = time.Duration(stats.OwnBcDurationEst)
-	s.maxOwnBcDurationEst = time.Duration(stats.MaxOwnBcDurationEst)
-	s.maxOwnBcQuorumFinishMargin = time.Duration(stats.MaxOwnBcQuorumFinishMargin)
-	s.maxOwnBcTotalFinishMargin = time.Duration(stats.MaxOwnBcTotalFinishMargin)
-	s.maxExtBcDurationEst = time.Duration(stats.MaxExtBcDurationEst)
-	s.maxExtBcFinishMargin = time.Duration(stats.MaxExtBcFinishMargin)
+	s.minAbbaRoundDurationEst = stats.MinAbbaRoundDurationEst
+	s.ownBcDurationEst = stats.OwnBcDurationEst
+	s.maxOwnBcDurationEst = stats.MaxOwnBcDurationEst
+	s.maxOwnBcQuorumFinishMargin = stats.MaxOwnBcQuorumFinishMargin
+	s.maxOwnBcTotalFinishMargin = stats.MaxOwnBcTotalFinishMargin
+	s.maxExtBcDurationEst = stats.MaxExtBcDurationEst
+	s.maxExtBcFinishMargin = stats.MaxExtBcFinishMargin
 
 	s.lock.Unlock()
 }
 
-func (s *Stats) ThreshCryptoEvent(ev *threshcryptopb.Event) {
+func (s *Stats) ThreshCryptoEvent(ev *threshcryptopbtypes.Event) {
 	var delta int
 
 	switch ev.Type.(type) {
-	case *threshcryptopb.Event_SignShare:
-	case *threshcryptopb.Event_VerifyShare:
-	case *threshcryptopb.Event_VerifyFull:
-	case *threshcryptopb.Event_Recover:
+	case *threshcryptopbtypes.Event_SignShare:
+	case *threshcryptopbtypes.Event_VerifyShare:
+	case *threshcryptopbtypes.Event_VerifyFull:
+	case *threshcryptopbtypes.Event_Recover:
 		delta = 1
-	case *threshcryptopb.Event_SignShareResult:
-	case *threshcryptopb.Event_VerifyShareResult:
-	case *threshcryptopb.Event_VerifyFullResult:
-	case *threshcryptopb.Event_RecoverResult:
+	case *threshcryptopbtypes.Event_SignShareResult:
+	case *threshcryptopbtypes.Event_VerifyShareResult:
+	case *threshcryptopbtypes.Event_VerifyFullResult:
+	case *threshcryptopbtypes.Event_RecoverResult:
 		delta = -1
 	default:
 		panic("unknown threshcrypto event")

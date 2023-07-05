@@ -7,16 +7,16 @@ import (
 )
 
 type ByzEstimator struct {
-	children []Estimator
+	children []*Estimator
 
 	maxEst time.Duration
 	minEst time.Duration
 	median time.Duration
 }
 
-func NewByzEstimator(windowSize int, N int) ByzEstimator {
-	e := ByzEstimator{
-		children: make([]Estimator, N),
+func NewByzEstimator(windowSize int, N int) *ByzEstimator {
+	e := &ByzEstimator{
+		children: make([]*Estimator, N),
 	}
 
 	for i := range e.children {

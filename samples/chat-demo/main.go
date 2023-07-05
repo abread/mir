@@ -275,7 +275,7 @@ func run() error {
 				TxNo:     nextTxNo,
 				Type:     0,
 				Data:     scanner.Bytes(),
-			}}).Pb()),
+			}})),
 		)
 
 		// Print error if occurred.

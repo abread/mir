@@ -135,7 +135,7 @@ func NewModule(mc ModuleConfig, epochNr tt.EpochNr, clientProgress *clientprogre
 			// At the time of forwarding, submit the client progress to the checkpointing protocol.
 			f: func(_ *eventpbtypes.Event) {
 				clientProgress.GarbageCollect()
-				dsl.EmitMirEvent(m, bfevents.ClientProgress(
+				dsl.EmitEvent(m, bfevents.ClientProgress(
 					mc.Checkpoint.Then(t.NewModuleIDFromInt(epochNr)),
 					clientProgress.DslStruct(),
 				))
@@ -192,7 +192,7 @@ func NewModule(mc ModuleConfig, epochNr tt.EpochNr, clientProgress *clientprogre
 	})
 
 	// All other events simply pass through the batch fetcher unchanged (except their destination module).
-	dsl.UponOtherMirEvent(m, func(ev *eventpbtypes.Event) error {
+	dsl.UponOtherEvent(m, func(ev *eventpbtypes.Event) error {
 
 		output.Enqueue(&outputItem{
 			event: events.Redirect(ev, mc.Destination),

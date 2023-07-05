@@ -6,12 +6,12 @@ package stats
 
 import (
 	"github.com/filecoin-project/mir/pkg/events"
-	"github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents"
-	"github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb"
-	"github.com/filecoin-project/mir/pkg/pb/aleapb/directorpb"
-	bfpb "github.com/filecoin-project/mir/pkg/pb/batchfetcherpb"
-	"github.com/filecoin-project/mir/pkg/pb/eventpb"
-	"github.com/filecoin-project/mir/pkg/pb/mempoolpb"
+	ageventstypes "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents/types"
+	bcqueuepbtypes "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/types"
+	directorpbtypes "github.com/filecoin-project/mir/pkg/pb/aleapb/directorpb/types"
+	batchfetcherpbtypes "github.com/filecoin-project/mir/pkg/pb/batchfetcherpb/types"
+	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
+	mempoolpbtypes "github.com/filecoin-project/mir/pkg/pb/mempoolpb/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -41,41 +41,41 @@ func (i *StatInterceptor) Intercept(events *events.EventList) error {
 	it := events.Iterator()
 	for evt := it.Next(); evt != nil; evt = it.Next() {
 		switch e := evt.Type.(type) {
-		case *eventpb.Event_Mempool:
+		case *eventpbtypes.Event_Mempool:
 			switch e := e.Mempool.Type.(type) {
-			case *mempoolpb.Event_NewTransactions:
+			case *mempoolpbtypes.Event_NewTransactions:
 				for _, tx := range e.NewTransactions.Transactions {
 					i.Stats.NewTX(tx, evt.LocalTs)
 				}
-			case *mempoolpb.Event_NewBatch:
+			case *mempoolpbtypes.Event_NewBatch:
 				i.Stats.MempoolNewBatch()
 			}
-		case *eventpb.Event_BatchFetcher:
+		case *eventpbtypes.Event_BatchFetcher:
 
 			// Skip events destined to other modules than the one consuming the transactions.
-			if t.ModuleID(evt.DestModule) != i.txConsumerModule {
+			if evt.DestModule != i.txConsumerModule {
 				continue
 			}
 
 			switch e := e.BatchFetcher.Type.(type) {
-			case *bfpb.Event_NewOrderedBatch:
+			case *batchfetcherpbtypes.Event_NewOrderedBatch:
 				for _, tx := range e.NewOrderedBatch.Txs {
 					i.Stats.Delivered(tx, evt.LocalTs)
 				}
 			}
-		case *eventpb.Event_AleaAgreement:
-			if e2, ok := e.AleaAgreement.Type.(*agevents.Event_Deliver); ok {
+		case *eventpbtypes.Event_AleaAgreement:
+			if e2, ok := e.AleaAgreement.Type.(*ageventstypes.Event_Deliver); ok {
 				i.Stats.DeliveredAgRound(e2.Deliver)
 			}
-		case *eventpb.Event_AleaBcqueue:
-			if _, ok := e.AleaBcqueue.Type.(*bcqueuepb.Event_Deliver); ok {
+		case *eventpbtypes.Event_AleaBcqueue:
+			if _, ok := e.AleaBcqueue.Type.(*bcqueuepbtypes.Event_Deliver); ok {
 				i.Stats.DeliveredBcSlot()
 			}
-		case *eventpb.Event_AleaDirector:
-			if e2, ok := e.AleaDirector.Type.(*directorpb.Event_Stats); ok {
+		case *eventpbtypes.Event_AleaDirector:
+			if e2, ok := e.AleaDirector.Type.(*directorpbtypes.Event_Stats); ok {
 				i.Stats.DirectorStats(e2.Stats)
 			}
-		case *eventpb.Event_ThreshCrypto:
+		case *eventpbtypes.Event_ThreshCrypto:
 			i.Stats.ThreshCryptoEvent(e.ThreshCrypto)
 		}
 	}

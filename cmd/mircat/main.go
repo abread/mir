@@ -10,6 +10,7 @@ import (
 	"gopkg.in/alecthomas/kingpin.v2"
 
 	t "github.com/filecoin-project/mir/pkg/types"
+	"github.com/filecoin-project/mir/pkg/util/maputil"
 )
 
 // mircat is a tool for reviewing Mir state machine recordings.
@@ -90,8 +91,9 @@ func main() {
 	// have the user interactively select the event destinations' to include in the output.
 	if len(args.selectedEventDests) == 0 {
 
+		allDestsStr := maputil.Transform(allDests, func(k t.ModuleID, v struct{}) (string, struct{}) { return string(k), v })
 		// Select top-level events
-		args.selectedEventDests = checkboxes("Please select the event destinations", allDests)
+		args.selectedEventDests = checkboxes("Please select the event destinations", allDestsStr)
 
 	}
 

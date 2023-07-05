@@ -31,8 +31,8 @@ import (
 	"github.com/filecoin-project/mir/pkg/mempool/simplemempool"
 	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/net/libp2p"
-	"github.com/filecoin-project/mir/pkg/pb/eventpb"
-	"github.com/filecoin-project/mir/pkg/pb/messagepb"
+	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
+	messagepbtypes "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
 	"github.com/filecoin-project/mir/pkg/testsim"
 	"github.com/filecoin-project/mir/pkg/trantor"
 	"github.com/filecoin-project/mir/pkg/trantor/appmodule"
@@ -78,7 +78,7 @@ type TestConfig struct {
 	CheckFunc           func(tb testing.TB, deployment *deploytest.Deployment, conf *TestConfig)
 	Logger              logging.Logger
 
-	TransportFilter func(msg *messagepb.Message, from t.NodeID, to t.NodeID) bool
+	TransportFilter func(msg *messagepbtypes.Message, from t.NodeID, to t.NodeID) bool
 	ParamsModifier  func(params *trantor.Params)
 }
 
@@ -414,7 +414,7 @@ func newDeployment(ctx context.Context, conf *TestConfig) (*deploytest.Deploymen
 	var simulation *deploytest.Simulation
 	if conf.Transport == "sim" {
 		r := rand.New(rand.NewSource(conf.RandomSeed)) // nolint: gosec
-		eventDelayFn := func(e *eventpb.Event) time.Duration {
+		eventDelayFn := func(e *eventpbtypes.Event) time.Duration {
 			// TODO: Make min and max event processing delay configurable
 			return testsim.RandDuration(r, 0, time.Microsecond)
 		}

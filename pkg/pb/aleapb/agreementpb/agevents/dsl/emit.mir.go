@@ -14,17 +14,17 @@ import (
 // Module-specific dsl functions for emitting events.
 
 func InputValue(m dsl.Module, destModule types.ModuleID, round uint64, input bool) {
-	dsl.EmitMirEvent(m, events.InputValue(destModule, round, input))
+	dsl.EmitEvent(m, events.InputValue(destModule, round, input))
 }
 
 func Deliver(m dsl.Module, destModule types.ModuleID, round uint64, decision bool, posQuorumWait time.Duration, posTotalWait time.Duration) {
-	dsl.EmitMirEvent(m, events.Deliver(destModule, round, decision, posQuorumWait, posTotalWait))
+	dsl.EmitEvent(m, events.Deliver(destModule, round, decision, posQuorumWait, posTotalWait))
 }
 
 func StaleMsgsRecvd(m dsl.Module, destModule types.ModuleID, messages []*types1.PastMessage) {
-	dsl.EmitMirEvent(m, events.StaleMsgsRecvd(destModule, messages))
+	dsl.EmitEvent(m, events.StaleMsgsRecvd(destModule, messages))
 }
 
 func InnerAbbaRoundTime(m dsl.Module, destModule types.ModuleID, durationNoCoin time.Duration) {
-	dsl.EmitMirEvent(m, events.InnerAbbaRoundTime(destModule, durationNoCoin))
+	dsl.EmitEvent(m, events.InnerAbbaRoundTime(destModule, durationNoCoin))
 }

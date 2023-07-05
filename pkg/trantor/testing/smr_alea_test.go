@@ -26,8 +26,8 @@ import (
 	"github.com/filecoin-project/mir/pkg/eventmangler"
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/modules"
-	"github.com/filecoin-project/mir/pkg/pb/eventpb"
-	"github.com/filecoin-project/mir/pkg/pb/messagepb"
+	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
+	messagepbtypes "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
 	"github.com/filecoin-project/mir/pkg/reliablenet"
 	"github.com/filecoin-project/mir/pkg/testsim"
 	"github.com/filecoin-project/mir/pkg/trantor"
@@ -133,13 +133,13 @@ func testIntegrationWithAlea(t *testing.T) {
 				NumNetTXs:     10,
 				NumClients:    1,
 				Duration:      10 * time.Second,
-				TransportFilter: func(msg *messagepb.Message, from, to types.NodeID) bool {
+				TransportFilter: func(msg *messagepbtypes.Message, from, to types.NodeID) bool {
 					node0 := types.NewNodeIDFromInt(0)
-					_, isVcb := msg.Type.(*messagepb.Message_Vcb)
+					_, isVcb := msg.Type.(*messagepbtypes.Message_Vcb)
 
 					// drop all broadcast messages involving node 0
 					// node 0 will not receive broadcasts, but should be able to deliver
-					if isVcb && to == node0 && from != to && !types.ModuleID(msg.DestModule).IsSubOf("abc-0") {
+					if isVcb && to == node0 && from != to && !msg.DestModule.IsSubOf("abc-0") {
 						return false
 					}
 					return true
@@ -343,7 +343,7 @@ func newDeploymentAlea(ctx context.Context, conf *TestConfig) (*deploytest.Deplo
 	var simulation *deploytest.Simulation
 	if conf.Transport == "sim" {
 		r := rand.New(rand.NewSource(conf.RandomSeed)) // nolint: gosec
-		eventDelayFn := func(e *eventpb.Event) time.Duration {
+		eventDelayFn := func(e *eventpbtypes.Event) time.Duration {
 			// TODO: Make min and max event processing delay configurable
 			return testsim.RandDuration(r, 0, time.Microsecond)
 		}

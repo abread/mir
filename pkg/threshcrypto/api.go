@@ -1,6 +1,9 @@
 package threshcrypto
 
-import t "github.com/filecoin-project/mir/pkg/types"
+import (
+	"github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
+	t "github.com/filecoin-project/mir/pkg/types"
+)
 
 // The ThreshCrypto interface represents an implementation of threshold cryptography primitives inside the MirModule module.
 // It is responsible for producing and verifying cryptographic threshold signatures, which disperses the authority
@@ -12,20 +15,20 @@ type ThreshCrypto interface {
 	// A signature share produced by SignShare is verifiable using VerifyShare.
 	// After obtaining signature shares from T group members, the full signature can be constructed with Recover.
 	// Returns the signature (and a nil error) on success, and a non-nil error otherwise.
-	SignShare(data [][]byte) ([]byte, error)
+	SignShare(data [][]byte) (tctypes.SigShare, error)
 
 	// VerifyShare verifies that a signature share is valid for the given data and node (if applicable).
 	// Returns nil on success (i.e., if the given signature share is valid) and a non-nil error otherwise.
-	VerifyShare(data [][]byte, signatureShare []byte, nodeID t.NodeID) error
+	VerifyShare(data [][]byte, signatureShare tctypes.SigShare, nodeID t.NodeID) error
 
 	// Recover constructs a full signature from signature shares over data.
 	// All signature shares MUST have been previously verified with VerifyShare, and must come from
 	// different nodes.
 	// Returns the full signature (and a nil error) on success and a non-nil error otherwise.
 	// Signatures returned by Recover are guaranteed to be valid.
-	Recover(data [][]byte, signatureShares [][]byte) ([]byte, error)
+	Recover(data [][]byte, signatureShares []tctypes.SigShare) (tctypes.FullSig, error)
 
 	// VerifyFull verifies a full signature from the group over data.
 	// Returns nil on success (i.e., if the given signature is valid) and a non-nil error otherwise.
-	VerifyFull(data [][]byte, signature []byte) error
+	VerifyFull(data [][]byte, signature tctypes.FullSig) error
 }

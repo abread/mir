@@ -273,7 +273,7 @@ func newAgController(mc ModuleConfig, logger logging.Logger, state *state, agRou
 		for round, input := range state.pendingInput {
 			if agRounds.IsInView(round) {
 				logger.Log(logging.LevelDebug, "inputting value to agreement round", "agRound", round, "value", input.input)
-				dsl.EmitMirEvent(m, abbapbevents.InputValue(
+				dsl.EmitEvent(m, abbapbevents.InputValue(
 					mc.agRoundModuleID(round),
 					input.input,
 				))
@@ -304,7 +304,7 @@ func newAgController(mc ModuleConfig, logger logging.Logger, state *state, agRou
 			// Note: this must not be done after the relevant round delivers, or it will lead to an
 			// infinite loop of FinishAbbaMessages, as it will trigger the PastMessagesRecvd handler.
 
-			dsl.EmitMirEvent(m, transportpbevents.MessageReceived(
+			dsl.EmitEvent(m, transportpbevents.MessageReceived(
 				destModule,
 				from,
 				abbapbmsgs.FinishMessage(destModule, value),
@@ -342,7 +342,7 @@ func newAgController(mc ModuleConfig, logger logging.Logger, state *state, agRou
 func newPastMessageHandler(mc ModuleConfig) func(pastMessages []*modringpbtypes.PastMessage) (*events.EventList, error) {
 	return func(pastMessages []*modringpbtypes.PastMessage) (*events.EventList, error) {
 		return events.ListOf(
-			agreementpbevents.StaleMsgsRecvd(mc.Self, pastMessages).Pb(),
+			agreementpbevents.StaleMsgsRecvd(mc.Self, pastMessages),
 		), nil
 	}
 }
@@ -434,7 +434,7 @@ func newAgRoundSniffer(mc ModuleConfig, params ModuleParams, agRounds *modring.M
 		return nil
 	})
 
-	dsl.UponOtherMirEvent(m, func(ev *eventpbtypes.Event) error {
+	dsl.UponOtherEvent(m, func(ev *eventpbtypes.Event) error {
 		switch e := ev.Type.(type) {
 		case *eventpbtypes.Event_Abba:
 			switch abbaEv := e.Abba.Type.(type) {

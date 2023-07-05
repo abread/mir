@@ -13,21 +13,21 @@ import (
 // Module-specific dsl functions for emitting events.
 
 func SendMessage(m dsl.Module, destModule types.ModuleID, msgId rntypes.MsgID, msg *types1.Message, destinations []types.NodeID) {
-	dsl.EmitMirEvent(m, events.SendMessage(destModule, msgId, msg, destinations))
+	dsl.EmitEvent(m, events.SendMessage(destModule, msgId, msg, destinations))
 }
 
 func Ack(m dsl.Module, destModule types.ModuleID, destModule0 types.ModuleID, msgId rntypes.MsgID, source types.NodeID) {
-	dsl.EmitMirEvent(m, events.Ack(destModule, destModule0, msgId, source))
+	dsl.EmitEvent(m, events.Ack(destModule, destModule0, msgId, source))
 }
 
 func MarkRecvd(m dsl.Module, destModule types.ModuleID, destModule0 types.ModuleID, msgId rntypes.MsgID, destinations []types.NodeID) {
-	dsl.EmitMirEvent(m, events.MarkRecvd(destModule, destModule0, msgId, destinations))
+	dsl.EmitEvent(m, events.MarkRecvd(destModule, destModule0, msgId, destinations))
 }
 
 func MarkModuleMsgsRecvd(m dsl.Module, destModule types.ModuleID, destModule0 types.ModuleID, destinations []types.NodeID) {
-	dsl.EmitMirEvent(m, events.MarkModuleMsgsRecvd(destModule, destModule0, destinations))
+	dsl.EmitEvent(m, events.MarkModuleMsgsRecvd(destModule, destModule0, destinations))
 }
 
 func RetransmitAll(m dsl.Module, destModule types.ModuleID) {
-	dsl.EmitMirEvent(m, events.RetransmitAll(destModule))
+	dsl.EmitEvent(m, events.RetransmitAll(destModule))
 }

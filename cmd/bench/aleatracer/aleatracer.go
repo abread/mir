@@ -16,20 +16,20 @@ import (
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/logging"
-	"github.com/filecoin-project/mir/pkg/pb/abbapb"
-	"github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents"
-	"github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb"
+	abbapbtypes "github.com/filecoin-project/mir/pkg/pb/abbapb/types"
+	ageventstypes "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents/types"
+	bcqueuepbtypes "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/types"
 	commontypes "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
-	"github.com/filecoin-project/mir/pkg/pb/availabilitypb"
-	"github.com/filecoin-project/mir/pkg/pb/availabilitypb/batchdbpb"
-	"github.com/filecoin-project/mir/pkg/pb/batchfetcherpb"
-	"github.com/filecoin-project/mir/pkg/pb/eventpb"
-	"github.com/filecoin-project/mir/pkg/pb/hasherpb"
-	"github.com/filecoin-project/mir/pkg/pb/mempoolpb"
-	"github.com/filecoin-project/mir/pkg/pb/messagepb"
-	"github.com/filecoin-project/mir/pkg/pb/threshcryptopb"
-	"github.com/filecoin-project/mir/pkg/pb/transportpb"
-	"github.com/filecoin-project/mir/pkg/pb/vcbpb"
+	batchdbpbtypes "github.com/filecoin-project/mir/pkg/pb/availabilitypb/batchdbpb/types"
+	availabilitypbtypes "github.com/filecoin-project/mir/pkg/pb/availabilitypb/types"
+	batchfetcherpbtypes "github.com/filecoin-project/mir/pkg/pb/batchfetcherpb/types"
+	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
+	hasherpbtypes "github.com/filecoin-project/mir/pkg/pb/hasherpb/types"
+	mempoolpbtypes "github.com/filecoin-project/mir/pkg/pb/mempoolpb/types"
+	messagepbtypes "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
+	threshcryptopbtypes "github.com/filecoin-project/mir/pkg/pb/threshcryptopb/types"
+	transportpbtypes "github.com/filecoin-project/mir/pkg/pb/transportpb/types"
+	vcbpbtypes "github.com/filecoin-project/mir/pkg/pb/vcbpb/types"
 	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 	"github.com/filecoin-project/mir/pkg/util/localclock"
@@ -186,12 +186,12 @@ func (at *AleaTracer) Intercept(evs *events.EventList) error {
 	return nil
 }
 
-func (at *AleaTracer) interceptOne(event *eventpb.Event) error { // nolint: gocognit,gocyclo
+func (at *AleaTracer) interceptOne(event *eventpbtypes.Event) error { // nolint: gocognit,gocyclo
 	ts := time.Duration(event.LocalTs)
 
 	// consider all non-messagereceived events as module initialization
-	if ev, ok := event.Type.(*eventpb.Event_Transport); ok {
-		if _, ok := ev.Transport.Type.(*transportpb.Event_MessageReceived); !ok {
+	if ev, ok := event.Type.(*eventpbtypes.Event_Transport); ok {
+		if _, ok := ev.Transport.Type.(*transportpbtypes.Event_MessageReceived); !ok {
 			at.registerModStart(ts, event)
 		}
 	} else {
@@ -199,34 +199,34 @@ func (at *AleaTracer) interceptOne(event *eventpb.Event) error { // nolint: goco
 	}
 
 	switch ev := event.Type.(type) {
-	case *eventpb.Event_Mempool:
+	case *eventpbtypes.Event_Mempool:
 		switch e := ev.Mempool.Type.(type) {
-		case *mempoolpb.Event_NewTransactions:
+		case *mempoolpbtypes.Event_NewTransactions:
 			for _, tx := range e.NewTransactions.Transactions {
-				at.startTxSpan(ts, tt.ClientID(tx.ClientId), tt.TxNo(tx.TxNo))
+				at.startTxSpan(ts, tx.ClientId, tx.TxNo)
 			}
-		case *mempoolpb.Event_RequestBatch:
+		case *mempoolpbtypes.Event_RequestBatch:
 			at.endBatchCutStallSpan(ts, at.nextBatchToCut)
 		}
-	case *eventpb.Event_AleaBcqueue:
+	case *eventpbtypes.Event_AleaBcqueue:
 		switch e := ev.AleaBcqueue.Type.(type) {
-		case *bcqueuepb.Event_InputValue:
+		case *bcqueuepbtypes.Event_InputValue:
 			queueIdx := parseQueueIdxFromModuleID(event.DestModule)
 			slot := commontypes.Slot{
 				QueueIdx:  queueIdx,
-				QueueSlot: aleatypes.QueueSlot(e.InputValue.QueueSlot),
+				QueueSlot: e.InputValue.QueueSlot,
 			}
 			at.startBcSpan(ts, slot)
-		case *bcqueuepb.Event_FreeSlot:
+		case *bcqueuepbtypes.Event_FreeSlot:
 			queueIdx := parseQueueIdxFromModuleID(event.DestModule)
 			slot := commontypes.Slot{
 				QueueIdx:  queueIdx,
-				QueueSlot: aleatypes.QueueSlot(e.FreeSlot.QueueSlot),
+				QueueSlot: e.FreeSlot.QueueSlot,
 			}
 			at.endBcSpan(ts, slot)
 			at.endBcModSpan(ts, slot)
-		case *bcqueuepb.Event_Deliver:
-			slot := commontypes.SlotFromPb(e.Deliver.Slot)
+		case *bcqueuepbtypes.Event_Deliver:
+			slot := e.Deliver.Slot
 
 			if slot.QueueIdx == at.ownQueueIdx && slot.QueueSlot == at.nextBatchToCut {
 				at.startBatchCutStallSpan(ts, at.nextBatchToCut)
@@ -240,11 +240,11 @@ func (at *AleaTracer) interceptOne(event *eventpb.Event) error { // nolint: goco
 				}
 			}
 		}
-	case *eventpb.Event_BatchDb:
+	case *eventpbtypes.Event_BatchDb:
 		switch e := ev.BatchDb.Type.(type) {
-		case *batchdbpb.Event_Store:
+		case *batchdbpbtypes.Event_Store:
 			// register bc end here to capture batches obtained from FILLER messages too
-			id := string(e.Store.BatchId)
+			id := e.Store.BatchId
 			id = strings.TrimPrefix(id, "alea-")
 			idParts := strings.Split(id, ":")
 
@@ -265,13 +265,13 @@ func (at *AleaTracer) interceptOne(event *eventpb.Event) error { // nolint: goco
 			slot := commontypes.Slot{QueueIdx: aleatypes.QueueIdx(queueIdx), QueueSlot: aleatypes.QueueSlot(queueSlot)}
 			at.endBcSpan(ts, slot)
 		}
-	case *eventpb.Event_AleaAgreement:
+	case *eventpbtypes.Event_AleaAgreement:
 		switch e := ev.AleaAgreement.Type.(type) {
-		case *agevents.Event_InputValue:
+		case *ageventstypes.Event_InputValue:
 			at.endAgStallSpan(ts, e.InputValue.Round)
 			at.startAgSpan(ts, e.InputValue.Round)
 			at.agRunning = true
-		case *agevents.Event_Deliver:
+		case *ageventstypes.Event_Deliver:
 			at.endAgSpan(ts, e.Deliver.Round)
 			at.endAgModSpan(ts, e.Deliver.Round)
 
@@ -295,60 +295,60 @@ func (at *AleaTracer) interceptOne(event *eventpb.Event) error { // nolint: goco
 			}
 
 		}
-	case *eventpb.Event_Vcb:
+	case *eventpbtypes.Event_Vcb:
 		switch e := ev.Vcb.Type.(type) {
-		case *vcbpb.Event_InputValue:
+		case *vcbpbtypes.Event_InputValue:
 			slot := parseSlotFromModuleID(event.DestModule)
 			at.startBcSpan(ts, slot)
 			at.startBcComputeSigDataSpan(ts, slot)
-		case *vcbpb.Event_QuorumDone:
+		case *vcbpbtypes.Event_QuorumDone:
 			slot := parseSlotFromModuleID(e.QuorumDone.SrcModule)
 			at.endBcAwaitQuorumDoneSpan(ts, slot)
 			at.startBcAwaitAllDoneSpan(ts, slot)
-		case *vcbpb.Event_AllDone:
+		case *vcbpbtypes.Event_AllDone:
 			slot := parseSlotFromModuleID(e.AllDone.SrcModule)
 			at.endBcAwaitAllDoneSpan(ts, slot)
 			at.endBcSpan(ts, slot)
 		}
-	case *eventpb.Event_Transport:
+	case *eventpbtypes.Event_Transport:
 		switch e := ev.Transport.Type.(type) {
-		case *transportpb.Event_SendMessage:
+		case *transportpbtypes.Event_SendMessage:
 			switch msg := e.SendMessage.Msg.Type.(type) {
-			case *messagepb.Message_Vcb:
+			case *messagepbtypes.Message_Vcb:
 				slot := parseSlotFromModuleID(e.SendMessage.Msg.DestModule)
 				switch msg.Vcb.Type.(type) {
-				case *vcbpb.Message_EchoMessage:
+				case *vcbpbtypes.Message_EchoMessage:
 					at.startBcAwaitFinalSpan(ts, slot)
-				case *vcbpb.Message_SendMessage:
+				case *vcbpbtypes.Message_SendMessage:
 					at.startBcAwaitEchoSpan(ts, slot)
-				case *vcbpb.Message_FinalMessage:
+				case *vcbpbtypes.Message_FinalMessage:
 					at.startBcAwaitQuorumDoneSpan(ts, slot)
 				}
 			}
-		case *transportpb.Event_MessageReceived:
+		case *transportpbtypes.Event_MessageReceived:
 			switch msg := e.MessageReceived.Msg.Type.(type) {
-			case *messagepb.Message_Vcb:
+			case *messagepbtypes.Message_Vcb:
 				slot := parseSlotFromModuleID(event.DestModule)
 				switch msg.Vcb.Type.(type) {
-				case *vcbpb.Message_SendMessage:
+				case *vcbpbtypes.Message_SendMessage:
 					at.startBcComputeSigDataSpan(ts, slot)
-				case *vcbpb.Message_FinalMessage:
+				case *vcbpbtypes.Message_FinalMessage:
 					at.endBcAwaitFinalSpan(ts, slot)
 				}
 			}
 		}
-	case *eventpb.Event_Abba:
+	case *eventpbtypes.Event_Abba:
 		switch e := ev.Abba.Type.(type) {
-		case *abbapb.Event_Round:
+		case *abbapbtypes.Event_Round:
 			switch e2 := e.Round.Type.(type) {
-			case *abbapb.RoundEvent_InputValue:
-				abbaRoundID, err := at.parseAbbaRoundID(t.ModuleID(event.DestModule))
+			case *abbapbtypes.RoundEvent_InputValue:
+				abbaRoundID, err := at.parseAbbaRoundID(event.DestModule)
 				if err != nil {
 					return es.Errorf("invalid abba round id: %w", err)
 				}
 				at.startAbbaRoundSpan(ts, abbaRoundID)
-			case *abbapb.RoundEvent_Deliver:
-				agRoundStr := t.ModuleID(event.DestModule).StripParent("aag")
+			case *abbapbtypes.RoundEvent_Deliver:
+				agRoundStr := event.DestModule.StripParent("aag")
 				agRound, err := strconv.ParseUint(string(agRoundStr), 10, 64)
 				if err != nil {
 					return es.Errorf("invalid ag round number: %w", err)
@@ -365,103 +365,103 @@ func (at *AleaTracer) interceptOne(event *eventpb.Event) error { // nolint: goco
 				delete(at.agUndeliveredAbbaRounds[abbaRoundID.agRound], abbaRoundID.abbaRound)
 			}
 		}
-	case *eventpb.Event_Availability:
+	case *eventpbtypes.Event_Availability:
 		switch e := ev.Availability.Type.(type) {
-		case *availabilitypb.Event_RequestTransactions:
-			slot := *commontypes.SlotFromPb(e.RequestTransactions.Cert.Type.(*availabilitypb.Cert_Alea).Alea.Slot)
+		case *availabilitypbtypes.Event_RequestTransactions:
+			slot := *e.RequestTransactions.Cert.Type.(*availabilitypbtypes.Cert_Alea).Alea.Slot
 
 			at.startBfSpan(ts, slot)
 
-			ctxID := e.RequestTransactions.Origin.GetDsl().ContextID
+			ctxID := e.RequestTransactions.Origin.Type.(*availabilitypbtypes.RequestTransactionsOrigin_Dsl).Dsl.ContextID
 			at.bfWipSlotsCtxID[ctxID] = slot
-		case *availabilitypb.Event_ProvideTransactions:
-			ctxID := e.ProvideTransactions.Origin.GetDsl().ContextID
+		case *availabilitypbtypes.Event_ProvideTransactions:
+			ctxID := e.ProvideTransactions.Origin.Type.(*availabilitypbtypes.RequestTransactionsOrigin_Dsl).Dsl.ContextID
 			slot := at.bfWipSlotsCtxID[ctxID]
 			delete(at.bfWipSlotsCtxID, ctxID)
 
 			at.endBfSpan(ts, slot)
 			at.startDeliveryStalledSpan(ts, slot)
 		}
-	case *eventpb.Event_BatchFetcher:
+	case *eventpbtypes.Event_BatchFetcher:
 		switch e := ev.BatchFetcher.Type.(type) {
-		case *batchfetcherpb.Event_NewOrderedBatch:
+		case *batchfetcherpbtypes.Event_NewOrderedBatch:
 			slot := at.bfDeliverQueue[0]
 			at.bfDeliverQueue = at.bfDeliverQueue[1:]
 
 			at.endDeliveryStalledSpan(ts, slot)
 
 			for _, tx := range e.NewOrderedBatch.Txs {
-				at.endTxSpan(ts, tt.ClientID(tx.ClientId), tt.TxNo(tx.TxNo))
+				at.endTxSpan(ts, tx.ClientId, tx.TxNo)
 			}
 		}
-	case *eventpb.Event_Hasher:
+	case *eventpbtypes.Event_Hasher:
 		switch ev.Hasher.Type.(type) {
-		case *hasherpb.Event_ResultOne:
-			if strings.HasPrefix(event.DestModule, "abc-") {
+		case *hasherpbtypes.Event_ResultOne:
+			if strings.HasPrefix(string(event.DestModule), "abc-") {
 				slot := parseSlotFromModuleID(event.DestModule)
 				at.endBcComputeSigDataSpan(ts, slot)
 			}
 		}
-	case *eventpb.Event_ThreshCrypto:
+	case *eventpbtypes.Event_ThreshCrypto:
 		switch e := ev.ThreshCrypto.Type.(type) {
-		case *threshcryptopb.Event_SignShare:
-			originW, ok := e.SignShare.Origin.Type.(*threshcryptopb.SignShareOrigin_Dsl)
+		case *threshcryptopbtypes.Event_SignShare:
+			originW, ok := e.SignShare.Origin.Type.(*threshcryptopbtypes.SignShareOrigin_Dsl)
 			if !ok {
 				return nil
 			}
 
-			at.startThreshCryptoSpan(ts, "tc:signShare", t.ModuleID(e.SignShare.Origin.Module), dsl.ContextID(originW.Dsl.ContextID))
-		case *threshcryptopb.Event_SignShareResult:
-			originW, ok := e.SignShareResult.Origin.Type.(*threshcryptopb.SignShareOrigin_Dsl)
+			at.startThreshCryptoSpan(ts, "tc:signShare", e.SignShare.Origin.Module, dsl.ContextID(originW.Dsl.ContextID))
+		case *threshcryptopbtypes.Event_SignShareResult:
+			originW, ok := e.SignShareResult.Origin.Type.(*threshcryptopbtypes.SignShareOrigin_Dsl)
 			if !ok {
 				return nil
 			}
 
-			at.endThreshCryptoSpan(ts, "tc:signShare", t.ModuleID(e.SignShareResult.Origin.Module), dsl.ContextID(originW.Dsl.ContextID))
-		case *threshcryptopb.Event_VerifyShare:
-			originW, ok := e.VerifyShare.Origin.Type.(*threshcryptopb.VerifyShareOrigin_Dsl)
+			at.endThreshCryptoSpan(ts, "tc:signShare", e.SignShareResult.Origin.Module, dsl.ContextID(originW.Dsl.ContextID))
+		case *threshcryptopbtypes.Event_VerifyShare:
+			originW, ok := e.VerifyShare.Origin.Type.(*threshcryptopbtypes.VerifyShareOrigin_Dsl)
 			if !ok {
 				return nil
 			}
 
-			at.startThreshCryptoSpan(ts, "tc:verifyShare", t.ModuleID(e.VerifyShare.Origin.Module), dsl.ContextID(originW.Dsl.ContextID))
-		case *threshcryptopb.Event_VerifyShareResult:
-			originW, ok := e.VerifyShareResult.Origin.Type.(*threshcryptopb.VerifyShareOrigin_Dsl)
+			at.startThreshCryptoSpan(ts, "tc:verifyShare", e.VerifyShare.Origin.Module, dsl.ContextID(originW.Dsl.ContextID))
+		case *threshcryptopbtypes.Event_VerifyShareResult:
+			originW, ok := e.VerifyShareResult.Origin.Type.(*threshcryptopbtypes.VerifyShareOrigin_Dsl)
 			if !ok {
 				return nil
 			}
 
-			at.endThreshCryptoSpan(ts, "tc:verifyShare", t.ModuleID(e.VerifyShareResult.Origin.Module), dsl.ContextID(originW.Dsl.ContextID))
-		case *threshcryptopb.Event_VerifyFull:
-			originW, ok := e.VerifyFull.Origin.Type.(*threshcryptopb.VerifyFullOrigin_Dsl)
+			at.endThreshCryptoSpan(ts, "tc:verifyShare", e.VerifyShareResult.Origin.Module, dsl.ContextID(originW.Dsl.ContextID))
+		case *threshcryptopbtypes.Event_VerifyFull:
+			originW, ok := e.VerifyFull.Origin.Type.(*threshcryptopbtypes.VerifyFullOrigin_Dsl)
 			if !ok {
 				return nil
 			}
 
-			at.startThreshCryptoSpan(ts, "tc:verifyFull", t.ModuleID(e.VerifyFull.Origin.Module), dsl.ContextID(originW.Dsl.ContextID))
-		case *threshcryptopb.Event_VerifyFullResult:
-			originW, ok := e.VerifyFullResult.Origin.Type.(*threshcryptopb.VerifyFullOrigin_Dsl)
+			at.startThreshCryptoSpan(ts, "tc:verifyFull", e.VerifyFull.Origin.Module, dsl.ContextID(originW.Dsl.ContextID))
+		case *threshcryptopbtypes.Event_VerifyFullResult:
+			originW, ok := e.VerifyFullResult.Origin.Type.(*threshcryptopbtypes.VerifyFullOrigin_Dsl)
 			if !ok {
 				return nil
 			}
 
-			at.endThreshCryptoSpan(ts, "tc:verifyFull", t.ModuleID(e.VerifyFullResult.Origin.Module), dsl.ContextID(originW.Dsl.ContextID))
-		case *threshcryptopb.Event_Recover:
-			originW, ok := e.Recover.Origin.Type.(*threshcryptopb.RecoverOrigin_Dsl)
+			at.endThreshCryptoSpan(ts, "tc:verifyFull", e.VerifyFullResult.Origin.Module, dsl.ContextID(originW.Dsl.ContextID))
+		case *threshcryptopbtypes.Event_Recover:
+			originW, ok := e.Recover.Origin.Type.(*threshcryptopbtypes.RecoverOrigin_Dsl)
 			if !ok {
 				return nil
 			}
 
-			at.startThreshCryptoSpan(ts, "tc:recover", t.ModuleID(e.Recover.Origin.Module), dsl.ContextID(originW.Dsl.ContextID))
-		case *threshcryptopb.Event_RecoverResult:
-			originW, ok := e.RecoverResult.Origin.Type.(*threshcryptopb.RecoverOrigin_Dsl)
+			at.startThreshCryptoSpan(ts, "tc:recover", e.Recover.Origin.Module, dsl.ContextID(originW.Dsl.ContextID))
+		case *threshcryptopbtypes.Event_RecoverResult:
+			originW, ok := e.RecoverResult.Origin.Type.(*threshcryptopbtypes.RecoverOrigin_Dsl)
 			if !ok {
 				return nil
 			}
 
-			at.endThreshCryptoSpan(ts, "tc:recover", t.ModuleID(e.RecoverResult.Origin.Module), dsl.ContextID(originW.Dsl.ContextID))
+			at.endThreshCryptoSpan(ts, "tc:recover", e.RecoverResult.Origin.Module, dsl.ContextID(originW.Dsl.ContextID))
 
-			if strings.HasPrefix(e.RecoverResult.Origin.Module, "abc-") {
+			if strings.HasPrefix(string(e.RecoverResult.Origin.Module), "abc-") {
 				slot := parseSlotFromModuleID(e.RecoverResult.Origin.Module)
 				at.endBcAwaitEchoSpan(ts, slot)
 			}
@@ -482,8 +482,8 @@ func (at *AleaTracer) agCanDeliver() bool {
 	return false
 }
 
-func (at *AleaTracer) registerModStart(ts time.Duration, event *eventpb.Event) {
-	id := t.ModuleID(event.DestModule)
+func (at *AleaTracer) registerModStart(ts time.Duration, event *eventpbtypes.Event) {
+	id := event.DestModule
 	if id.IsSubOf("aag") {
 		id = id.Sub()
 
@@ -1026,12 +1026,12 @@ func (at *AleaTracer) writeSpan(s *span) {
 	}
 }
 
-func parseSlotFromModuleID(moduleIDStr string) commontypes.Slot {
-	if !strings.HasPrefix(moduleIDStr, "abc-") {
-		panic(es.Errorf("id is not from a bcqueue: %s", moduleIDStr))
+func parseSlotFromModuleID(moduleID t.ModuleID) commontypes.Slot {
+	if !strings.HasPrefix(string(moduleID), "abc-") {
+		panic(es.Errorf("id is not from a bcqueue: %s", moduleID))
 	}
 
-	modID := t.ModuleID(strings.TrimPrefix(moduleIDStr, "abc-"))
+	modID := t.ModuleID(strings.TrimPrefix(string(moduleID), "abc-"))
 	queueIdxStr := string(modID.Top())
 	queueSlotStr := string(modID.Sub().Top())
 
@@ -1051,12 +1051,12 @@ func parseSlotFromModuleID(moduleIDStr string) commontypes.Slot {
 	}
 }
 
-func parseQueueIdxFromModuleID(moduleIDStr string) aleatypes.QueueIdx {
-	if !strings.HasPrefix(moduleIDStr, "abc-") {
-		panic(es.Errorf("id is not from a bcqueue: %s", moduleIDStr))
+func parseQueueIdxFromModuleID(moduleID t.ModuleID) aleatypes.QueueIdx {
+	if !strings.HasPrefix(string(moduleID), "abc-") {
+		panic(es.Errorf("id is not from a bcqueue: %s", moduleID))
 	}
 
-	modID := t.ModuleID(strings.TrimPrefix(moduleIDStr, "abc-"))
+	modID := t.ModuleID(strings.TrimPrefix(string(moduleID), "abc-"))
 	queueIdxStr := string(modID.Top())
 
 	queueIdx, err := strconv.ParseUint(queueIdxStr, 10, 32)

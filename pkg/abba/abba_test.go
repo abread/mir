@@ -26,7 +26,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/modules"
 	abbadsl "github.com/filecoin-project/mir/pkg/pb/abbapb/dsl"
-	"github.com/filecoin-project/mir/pkg/pb/eventpb"
+	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 	"github.com/filecoin-project/mir/pkg/reliablenet"
 	"github.com/filecoin-project/mir/pkg/testsim"
 	"github.com/filecoin-project/mir/pkg/timer"
@@ -207,7 +207,7 @@ func newDeployment(ctx context.Context, conf *TestConfig) (*deploytest.Deploymen
 	var simulation *deploytest.Simulation
 	if conf.Transport == "sim" {
 		r := rand.New(rand.NewSource(conf.RandomSeed)) // nolint: gosec
-		eventDelayFn := func(e *eventpb.Event) time.Duration {
+		eventDelayFn := func(e *eventpbtypes.Event) time.Duration {
 			// TODO: Make min and max event processing delay configurable
 			return testsim.RandDuration(r, 0, time.Microsecond)
 		}

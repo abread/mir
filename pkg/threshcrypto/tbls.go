@@ -17,6 +17,7 @@ import (
 	es "github.com/go-errors/errors"
 	"golang.org/x/exp/slices"
 
+	"github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -269,12 +270,12 @@ func (inst *TBLSInst) UnmarshalFrom(r io.Reader) (int, error) {
 }
 
 // SignShare constructs a signature share for the message.
-func (inst *TBLSInst) SignShare(msg [][]byte) ([]byte, error) {
+func (inst *TBLSInst) SignShare(msg [][]byte) (tctypes.SigShare, error) {
 	return inst.threshScheme.Sign(inst.privShare, digest(msg))
 }
 
 // VerifyShare verifies that a signature share is for a given message from a given node.
-func (inst *TBLSInst) VerifyShare(msg [][]byte, rawSigShare []byte, nodeID t.NodeID) error {
+func (inst *TBLSInst) VerifyShare(msg [][]byte, rawSigShare tctypes.SigShare, nodeID t.NodeID) error {
 	sigShare := tbls.SigShare(rawSigShare)
 
 	idx, err := sigShare.Index()
@@ -290,13 +291,13 @@ func (inst *TBLSInst) VerifyShare(msg [][]byte, rawSigShare []byte, nodeID t.Nod
 }
 
 // VerifyFull verifies that a (full) signature is valid for a given message.
-func (inst *TBLSInst) VerifyFull(msg [][]byte, sigFull []byte) error {
+func (inst *TBLSInst) VerifyFull(msg [][]byte, sigFull tctypes.FullSig) error {
 	return inst.threshScheme.VerifyRecovered(inst.public.Commit(), digest(msg), sigFull)
 }
 
 // Recover recovers a full signature from a set of (previously validated) shares, that are known to be from
 // distinct nodes.
-func (inst *TBLSInst) Recover(_ [][]byte, sigShares [][]byte) ([]byte, error) {
+func (inst *TBLSInst) Recover(_ [][]byte, sigShares []tctypes.SigShare) (tctypes.FullSig, error) {
 	// We don't use inst.scheme.Recover to avoid validating sigShares twice
 
 	// This function is a modified version of the original implementation of inst.scheme.Recover

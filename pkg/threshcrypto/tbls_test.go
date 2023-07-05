@@ -11,6 +11,7 @@ import (
 	"golang.org/x/exp/rand"
 	"golang.org/x/exp/slices"
 
+	"github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 	"github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -92,7 +93,7 @@ func benchmarkRecover(b *testing.B, keygen TestKeygen) {
 	keys := keygen(2*F+1, N)
 	data := [][]byte{{1, 2, 3, 4, 5}, {4, 2}}
 
-	shares := make([][]byte, N)
+	shares := make([]tctypes.SigShare, N)
 	for i := range shares {
 		var err error
 		shares[i], err = keys[i].SignShare(data)
@@ -122,7 +123,7 @@ func benchmarkVerifyFull(b *testing.B, keygen TestKeygen) {
 	keys := keygen(2*F+1, N)
 	data := [][]byte{{1, 2, 3, 4, 5}, {4, 2}}
 
-	shares := make([][]byte, 2*F+1)
+	shares := make([]tctypes.SigShare, 2*F+1)
 	for i := range shares {
 		var err error
 		shares[i], err = keys[i].SignShare(data)
@@ -165,7 +166,7 @@ func testTCHappySmoke(t *testing.T, keygen TestKeygen) {
 
 	data := [][]byte{{1, 2, 3, 4, 5}, {4, 2}}
 
-	shares := make([][]byte, 3)
+	shares := make([]tctypes.SigShare, 3)
 	for i := range shares {
 		sh, err := keys[i].SignShare(data)
 		assert.NoError(t, err)
@@ -209,7 +210,7 @@ func testTCSadSmoke(t *testing.T, keygen TestKeygen) {
 
 	data := [][]byte{{1, 2, 3, 4, 5}, {4, 2}}
 
-	shares := make([][]byte, N)
+	shares := make([]tctypes.SigShare, N)
 	for i := range shares {
 		sh, err := keys[i].SignShare(data)
 		require.NoError(t, err)
@@ -218,7 +219,7 @@ func testTCSadSmoke(t *testing.T, keygen TestKeygen) {
 	}
 
 	// all of the same share is no good
-	_, err := keys[0].Recover(data, [][]byte{shares[0], shares[0], shares[0]})
+	_, err := keys[0].Recover(data, []tctypes.SigShare{shares[0], shares[0], shares[0]})
 	assert.Error(t, err)
 
 	// too little shares is no good
@@ -252,8 +253,8 @@ func TestTBLSMarshalling(t *testing.T) {
 	data := [][]byte{{1, 2, 3, 4, 5}, {4, 2}}
 
 	// produce all required shares using both sets of keys
-	sigShares := make([][]byte, N)
-	sigShares2 := make([][]byte, N)
+	sigShares := make([]tctypes.SigShare, N)
+	sigShares2 := make([]tctypes.SigShare, N)
 	for i := range sigShares {
 		var err error
 		sigShares[i], err = keys[i].SignShare(data)

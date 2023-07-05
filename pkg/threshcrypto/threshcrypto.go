@@ -10,11 +10,9 @@ import (
 
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/modules"
-	"github.com/filecoin-project/mir/pkg/pb/eventpb"
-	"github.com/filecoin-project/mir/pkg/pb/threshcryptopb"
+	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 	tcEvents "github.com/filecoin-project/mir/pkg/pb/threshcryptopb/events"
 	threshcryptopbtypes "github.com/filecoin-project/mir/pkg/pb/threshcryptopb/types"
-	t "github.com/filecoin-project/mir/pkg/types"
 )
 
 type ModuleParams struct {
@@ -35,12 +33,12 @@ type threshEventProcessor struct {
 	threshCrypto ThreshCrypto
 }
 
-func (c *threshEventProcessor) ApplyEvent(ctx context.Context, event *eventpb.Event) *events.EventList {
+func (c *threshEventProcessor) ApplyEvent(ctx context.Context, event *eventpbtypes.Event) *events.EventList {
 	switch e := event.Type.(type) {
-	case *eventpb.Event_Init:
+	case *eventpbtypes.Event_Init:
 		// no actions on init
 		return events.EmptyList()
-	case *eventpb.Event_ThreshCrypto:
+	case *eventpbtypes.Event_ThreshCrypto:
 		return c.applyTCEvent(ctx, e.ThreshCrypto)
 	default:
 		// Complain about all other incoming event types.
@@ -48,10 +46,10 @@ func (c *threshEventProcessor) ApplyEvent(ctx context.Context, event *eventpb.Ev
 	}
 }
 
-// apply a thresholdcryptopb.Event
-func (c *threshEventProcessor) applyTCEvent(_ context.Context, event *threshcryptopb.Event) *events.EventList {
+// apply a thresholdcryptopbtypes.Event
+func (c *threshEventProcessor) applyTCEvent(_ context.Context, event *threshcryptopbtypes.Event) *events.EventList {
 	switch e := event.Type.(type) {
-	case *threshcryptopb.Event_SignShare:
+	case *threshcryptopbtypes.Event_SignShare:
 		// Compute signature share
 
 		sigShare, err := c.threshCrypto.SignShare(e.SignShare.Data)
@@ -59,15 +57,15 @@ func (c *threshEventProcessor) applyTCEvent(_ context.Context, event *threshcryp
 			panic(es.Errorf("could not sign share: %w", err))
 		}
 
-		origin := threshcryptopbtypes.SignShareOriginFromPb(e.SignShare.Origin)
+		origin := e.SignShare.Origin
 		return events.ListOf(
-			tcEvents.SignShareResult(origin.Module, sigShare, origin).Pb(),
+			tcEvents.SignShareResult(origin.Module, sigShare, origin),
 		)
 
-	case *threshcryptopb.Event_VerifyShare:
+	case *threshcryptopbtypes.Event_VerifyShare:
 		// Verify signature share
 
-		err := c.threshCrypto.VerifyShare(e.VerifyShare.Data, e.VerifyShare.SignatureShare, t.NodeID(e.VerifyShare.NodeId))
+		err := c.threshCrypto.VerifyShare(e.VerifyShare.Data, e.VerifyShare.SignatureShare, e.VerifyShare.NodeId)
 
 		ok := err == nil
 		var errStr string
@@ -75,12 +73,12 @@ func (c *threshEventProcessor) applyTCEvent(_ context.Context, event *threshcryp
 			errStr = err.Error()
 		}
 
-		origin := threshcryptopbtypes.VerifyShareOriginFromPb(e.VerifyShare.Origin)
+		origin := e.VerifyShare.Origin
 		return events.ListOf(
-			tcEvents.VerifyShareResult(origin.Module, ok, errStr, origin).Pb(),
+			tcEvents.VerifyShareResult(origin.Module, ok, errStr, origin),
 		)
 
-	case *threshcryptopb.Event_VerifyFull:
+	case *threshcryptopbtypes.Event_VerifyFull:
 		// Verify full signature
 
 		err := c.threshCrypto.VerifyFull(e.VerifyFull.Data, e.VerifyFull.FullSignature)
@@ -91,12 +89,12 @@ func (c *threshEventProcessor) applyTCEvent(_ context.Context, event *threshcryp
 			errStr = err.Error()
 		}
 
-		origin := threshcryptopbtypes.VerifyFullOriginFromPb(e.VerifyFull.Origin)
+		origin := e.VerifyFull.Origin
 		return events.ListOf(
-			tcEvents.VerifyFullResult(origin.Module, ok, errStr, origin).Pb(),
+			tcEvents.VerifyFullResult(origin.Module, ok, errStr, origin),
 		)
 
-	case *threshcryptopb.Event_Recover:
+	case *threshcryptopbtypes.Event_Recover:
 		// Recover full signature from shares
 
 		fullSig, err := c.threshCrypto.Recover(e.Recover.Data, e.Recover.SignatureShares)
@@ -107,9 +105,9 @@ func (c *threshEventProcessor) applyTCEvent(_ context.Context, event *threshcryp
 			errStr = err.Error()
 		}
 
-		origin := threshcryptopbtypes.RecoverOriginFromPb(e.Recover.Origin)
+		origin := e.Recover.Origin
 		return events.ListOf(
-			tcEvents.RecoverResult(origin.Module, fullSig, ok, errStr, origin).Pb(),
+			tcEvents.RecoverResult(origin.Module, fullSig, ok, errStr, origin),
 		)
 	default:
 		// Complain about all other incoming event types.

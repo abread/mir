@@ -11,17 +11,15 @@ import (
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/modules"
-	"github.com/filecoin-project/mir/pkg/pb/eventpb"
 	eventpbevents "github.com/filecoin-project/mir/pkg/pb/eventpb/events"
 	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
-	"github.com/filecoin-project/mir/pkg/pb/messagepb"
 	messagepbtypes "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
-	"github.com/filecoin-project/mir/pkg/pb/reliablenetpb"
 	rnEvents "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/events"
-	rnpbmsg "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/messages"
 	rnetmsgs "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/messages/msgs"
-	"github.com/filecoin-project/mir/pkg/pb/transportpb"
+	rnetmsgstypes "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/messages/types"
+	reliablenetpbtypes "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/types"
 	transportpbevents "github.com/filecoin-project/mir/pkg/pb/transportpb/events"
+	transportpbtypes "github.com/filecoin-project/mir/pkg/pb/transportpb/types"
 	"github.com/filecoin-project/mir/pkg/reliablenet/rntypes"
 	timert "github.com/filecoin-project/mir/pkg/timer/types"
 	t "github.com/filecoin-project/mir/pkg/types"
@@ -50,7 +48,7 @@ func DefaultModuleParams(allNodes []t.NodeID) *ModuleParams {
 }
 
 type QueuedMessage struct {
-	Msg          *messagepb.Message
+	Msg          *messagepbtypes.Message
 	Destinations []t.NodeID
 	Ts           uint64 // nolint:stylecheck
 }
@@ -107,16 +105,16 @@ func (m *Module) ApplyEvents(evs *events.EventList) (*events.EventList, error) {
 
 func (m *Module) ImplementsModule() {}
 
-func (m *Module) applyEvent(event *eventpb.Event) (*events.EventList, error) {
+func (m *Module) applyEvent(event *eventpbtypes.Event) (*events.EventList, error) {
 	switch ev := event.Type.(type) {
-	case *eventpb.Event_Init:
+	case *eventpbtypes.Event_Init:
 		return &events.EventList{}, nil
-	case *eventpb.Event_ReliableNet:
+	case *eventpbtypes.Event_ReliableNet:
 		return m.applyRNEvent(ev.ReliableNet)
-	case *eventpb.Event_Transport:
+	case *eventpbtypes.Event_Transport:
 		switch e := ev.Transport.Type.(type) {
-		case *transportpb.Event_MessageReceived:
-			return m.applyMessage(e.MessageReceived.Msg, t.NodeID(e.MessageReceived.From))
+		case *transportpbtypes.Event_MessageReceived:
+			return m.applyMessage(e.MessageReceived.Msg, e.MessageReceived.From)
 		default:
 			return nil, es.Errorf("unsupported transport event type: %T", e)
 		}
@@ -125,35 +123,35 @@ func (m *Module) applyEvent(event *eventpb.Event) (*events.EventList, error) {
 	}
 }
 
-func (m *Module) applyRNEvent(event *reliablenetpb.Event) (*events.EventList, error) {
+func (m *Module) applyRNEvent(event *reliablenetpbtypes.Event) (*events.EventList, error) {
 	switch ev := event.Type.(type) {
-	case *reliablenetpb.Event_RetransmitAll:
+	case *reliablenetpbtypes.Event_RetransmitAll:
 		return m.retransmitAll()
-	case *reliablenetpb.Event_SendMessage:
-		return m.SendMessage(rntypes.MsgID(ev.SendMessage.MsgId), ev.SendMessage.Msg, t.NodeIDSlice(ev.SendMessage.Destinations))
-	case *reliablenetpb.Event_MarkModuleMsgsRecvd:
-		return m.MarkModuleMsgsRecvd(t.ModuleID(ev.MarkModuleMsgsRecvd.DestModule), t.NodeIDSlice(ev.MarkModuleMsgsRecvd.Destinations))
-	case *reliablenetpb.Event_MarkRecvd:
-		return m.MarkRecvd(t.ModuleID(ev.MarkRecvd.DestModule), rntypes.MsgID(ev.MarkRecvd.MsgId), t.NodeIDSlice(ev.MarkRecvd.Destinations))
-	case *reliablenetpb.Event_Ack:
-		return m.SendAck(t.ModuleID(ev.Ack.DestModule), rntypes.MsgID(ev.Ack.MsgId), t.NodeID(ev.Ack.Source))
+	case *reliablenetpbtypes.Event_SendMessage:
+		return m.SendMessage(ev.SendMessage.MsgId, ev.SendMessage.Msg, ev.SendMessage.Destinations)
+	case *reliablenetpbtypes.Event_MarkModuleMsgsRecvd:
+		return m.MarkModuleMsgsRecvd(ev.MarkModuleMsgsRecvd.DestModule, ev.MarkModuleMsgsRecvd.Destinations)
+	case *reliablenetpbtypes.Event_MarkRecvd:
+		return m.MarkRecvd(ev.MarkRecvd.DestModule, ev.MarkRecvd.MsgId, ev.MarkRecvd.Destinations)
+	case *reliablenetpbtypes.Event_Ack:
+		return m.SendAck(ev.Ack.DestModule, ev.Ack.MsgId, ev.Ack.Source)
 	default:
 		return nil, es.Errorf("unsupported reliablenet event type: %T", ev)
 	}
 }
 
-func (m *Module) applyMessage(message *messagepb.Message, from t.NodeID) (*events.EventList, error) {
-	wrappedMsg, ok := message.Type.(*messagepb.Message_ReliableNet)
+func (m *Module) applyMessage(message *messagepbtypes.Message, from t.NodeID) (*events.EventList, error) {
+	wrappedMsg, ok := message.Type.(*messagepbtypes.Message_ReliableNet)
 	if !ok {
 		return &events.EventList{}, nil
 	}
 
-	msg, ok := wrappedMsg.ReliableNet.Type.(*rnpbmsg.Message_Ack)
+	msg, ok := wrappedMsg.ReliableNet.Type.(*rnetmsgstypes.Message_Ack)
 	if !ok {
 		return &events.EventList{}, nil
 	}
 
-	return m.MarkRecvd(t.ModuleID(msg.Ack.MsgDestModule), rntypes.MsgID(msg.Ack.MsgId), []t.NodeID{from})
+	return m.MarkRecvd(msg.Ack.MsgDestModule, msg.Ack.MsgId, []t.NodeID{from})
 }
 
 func (m *Module) SendAck(msgDestModule t.ModuleID, msgID rntypes.MsgID, msgSource t.NodeID) (*events.EventList, error) {
@@ -167,7 +165,7 @@ func (m *Module) SendAck(msgDestModule t.ModuleID, msgID rntypes.MsgID, msgSourc
 			m.config.Net,
 			rnetmsgs.AckMessage(m.config.Self, msgDestModule, msgID),
 			[]t.NodeID{msgSource},
-		).Pb(),
+		),
 	), nil
 }
 
@@ -201,7 +199,7 @@ func (m *Module) retransmitAll() (*events.EventList, error) {
 			}
 
 			evsOut.PushBack(
-				transportpbevents.SendMessage(m.config.Net, messagepbtypes.MessageFromPb(qmsg.Msg), qmsg.Destinations).Pb(),
+				transportpbevents.SendMessage(m.config.Net, qmsg.Msg, qmsg.Destinations),
 			)
 			nRemaining--
 		}
@@ -211,13 +209,13 @@ func (m *Module) retransmitAll() (*events.EventList, error) {
 		m.config.Timer,
 		[]*eventpbtypes.Event{rnEvents.RetransmitAll(m.config.Self)},
 		timert.Duration(m.params.RetransmissionLoopInterval),
-	).Pb())
+	))
 
 	m.iterationCount++
 	return evsOut, nil
 }
 
-func (m *Module) SendMessage(id rntypes.MsgID, msg *messagepb.Message, destinations []t.NodeID) (*events.EventList, error) {
+func (m *Module) SendMessage(id rntypes.MsgID, msg *messagepbtypes.Message, destinations []t.NodeID) (*events.EventList, error) {
 	qmsg := &QueuedMessage{
 		Msg:          msg,
 		Destinations: destinations,
@@ -225,11 +223,11 @@ func (m *Module) SendMessage(id rntypes.MsgID, msg *messagepb.Message, destinati
 	}
 
 	listEl := m.queue.PushBack(qmsg)
-	m.ensureSubqueueIndexExists(t.ModuleID(msg.DestModule))
-	m.queueIndex[t.ModuleID(msg.DestModule)][id] = listEl
+	m.ensureSubqueueIndexExists(msg.DestModule)
+	m.queueIndex[msg.DestModule][id] = listEl
 
 	evsOut := events.ListOf(
-		transportpbevents.SendMessage(m.config.Net, messagepbtypes.MessageFromPb(msg), destinations).Pb(),
+		transportpbevents.SendMessage(m.config.Net, msg, destinations),
 	)
 
 	if !m.retransmitLoopScheduled {
@@ -238,7 +236,7 @@ func (m *Module) SendMessage(id rntypes.MsgID, msg *messagepb.Message, destinati
 			m.config.Timer,
 			[]*eventpbtypes.Event{rnEvents.RetransmitAll(m.config.Self)},
 			timert.Duration(m.params.RetransmissionLoopInterval),
-		).Pb())
+		))
 		m.retransmitLoopScheduled = true
 	}
 

@@ -10,7 +10,7 @@ import (
 // These are specific events that are not automatically generated but are necessary for the batchfetcher
 // to queue them and treat them in order.
 
-// Event creates an eventpb.Event out of an batchfetcherpb.Event.
+// Event creates an eventpbtypes.Event out of an batchfetcherpb.Event.
 func Event(dest t.ModuleID, ev *batchfetcherpbtypes.Event) *eventpbtypes.Event {
 	return &eventpbtypes.Event{
 		DestModule: dest,

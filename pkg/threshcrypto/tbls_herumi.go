@@ -10,6 +10,7 @@ import (
 	"golang.org/x/exp/slices"
 
 	"github.com/filecoin-project/mir/pkg/serializing"
+	"github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -85,13 +86,13 @@ func HerumiTBLSKeygen(T int, members []t.NodeID, randSource io.Reader) ([]*Herum
 }
 
 // SignShare constructs a signature share for the message.
-func (inst *HerumiTBLSInst) SignShare(msg [][]byte) ([]byte, error) {
+func (inst *HerumiTBLSInst) SignShare(msg [][]byte) (tctypes.SigShare, error) {
 	sig := inst.skShare.SignByte(flatten(msg))
 	return serializeHerumiSigShare(sig, uint64(inst.ownIdx)), nil
 }
 
 // VerifyShare verifies that a signature share is for a given message from a given node.
-func (inst *HerumiTBLSInst) VerifyShare(msg [][]byte, sigShare []byte, nodeID t.NodeID) error {
+func (inst *HerumiTBLSInst) VerifyShare(msg [][]byte, sigShare tctypes.SigShare, nodeID t.NodeID) error {
 	presumedID := slices.Index(inst.members, nodeID)
 	if presumedID == -1 {
 		return es.Errorf("invalid signer: %v", nodeID)
@@ -114,7 +115,7 @@ func (inst *HerumiTBLSInst) VerifyShare(msg [][]byte, sigShare []byte, nodeID t.
 }
 
 // VerifyFull verifies that a (full) signature is valid for a given message.
-func (inst *HerumiTBLSInst) VerifyFull(msg [][]byte, sigFull []byte) error {
+func (inst *HerumiTBLSInst) VerifyFull(msg [][]byte, sigFull tctypes.FullSig) error {
 	sig := bls.Sign{}
 	if err := sig.Deserialize(sigFull); err != nil {
 		return es.Errorf("error deserializing sig: %w", err)
@@ -129,7 +130,7 @@ func (inst *HerumiTBLSInst) VerifyFull(msg [][]byte, sigFull []byte) error {
 
 // Recover recovers a full signature from a set of (previously validated) shares, that are known to be from
 // distinct nodes.
-func (inst *HerumiTBLSInst) Recover(_ [][]byte, sigShares [][]byte) ([]byte, error) {
+func (inst *HerumiTBLSInst) Recover(_ [][]byte, sigShares []tctypes.SigShare) (tctypes.FullSig, error) {
 	fullSig := bls.Sign{}
 
 	if len(sigShares) < inst.T {

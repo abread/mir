@@ -19,14 +19,14 @@ type PassiveModule interface {
 
 func RoutedModule(rootID t.ModuleID, root PassiveModule, subRouter PassiveModule) PassiveModule {
 	return &routedModule{
-		rootID:    string(rootID),
+		rootID:    rootID,
 		root:      root,
 		subRouter: subRouter,
 	}
 }
 
 type routedModule struct {
-	rootID    string
+	rootID    t.ModuleID
 	root      PassiveModule
 	subRouter PassiveModule
 }

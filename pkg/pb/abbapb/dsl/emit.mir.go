@@ -13,25 +13,25 @@ import (
 // Module-specific dsl functions for emitting events.
 
 func InputValue(m dsl.Module, destModule types.ModuleID, input bool) {
-	dsl.EmitMirEvent(m, events.InputValue(destModule, input))
+	dsl.EmitEvent(m, events.InputValue(destModule, input))
 }
 
 func Deliver(m dsl.Module, destModule types.ModuleID, result bool, srcModule types.ModuleID) {
-	dsl.EmitMirEvent(m, events.Deliver(destModule, result, srcModule))
+	dsl.EmitEvent(m, events.Deliver(destModule, result, srcModule))
 }
 
 func RoundInputValue(m dsl.Module, destModule types.ModuleID, input bool) {
-	dsl.EmitMirEvent(m, events.RoundInputValue(destModule, input))
+	dsl.EmitEvent(m, events.RoundInputValue(destModule, input))
 }
 
 func RoundDeliver(m dsl.Module, destModule types.ModuleID, nextEstimate bool, roundNumber uint64, durationNoCoin time.Duration) {
-	dsl.EmitMirEvent(m, events.RoundDeliver(destModule, nextEstimate, roundNumber, durationNoCoin))
+	dsl.EmitEvent(m, events.RoundDeliver(destModule, nextEstimate, roundNumber, durationNoCoin))
 }
 
 func RoundFinishAll(m dsl.Module, destModule types.ModuleID, decision bool, unanimous bool) {
-	dsl.EmitMirEvent(m, events.RoundFinishAll(destModule, decision, unanimous))
+	dsl.EmitEvent(m, events.RoundFinishAll(destModule, decision, unanimous))
 }
 
 func Done(m dsl.Module, destModule types.ModuleID, srcModule types.ModuleID) {
-	dsl.EmitMirEvent(m, events.Done(destModule, srcModule))
+	dsl.EmitEvent(m, events.Done(destModule, srcModule))
 }

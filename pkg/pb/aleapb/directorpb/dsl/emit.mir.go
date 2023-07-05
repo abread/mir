@@ -14,13 +14,13 @@ import (
 // Module-specific dsl functions for emitting events.
 
 func Heartbeat(m dsl.Module, destModule types.ModuleID) {
-	dsl.EmitMirEvent(m, events.Heartbeat(destModule))
+	dsl.EmitEvent(m, events.Heartbeat(destModule))
 }
 
 func DoFillGap(m dsl.Module, destModule types.ModuleID, slot *types1.Slot) {
-	dsl.EmitMirEvent(m, events.DoFillGap(destModule, slot))
+	dsl.EmitEvent(m, events.DoFillGap(destModule, slot))
 }
 
 func Stats(m dsl.Module, destModule types.ModuleID, minAbbaRoundDurationEst time.Duration, ownBcDurationEst time.Duration, maxOwnBcDurationEst time.Duration, maxOwnBcQuorumFinishMargin time.Duration, maxOwnBcTotalFinishMargin time.Duration, maxExtBcDurationEst time.Duration, maxExtBcFinishMargin time.Duration) {
-	dsl.EmitMirEvent(m, events.Stats(destModule, minAbbaRoundDurationEst, ownBcDurationEst, maxOwnBcDurationEst, maxOwnBcQuorumFinishMargin, maxOwnBcTotalFinishMargin, maxExtBcDurationEst, maxExtBcFinishMargin))
+	dsl.EmitEvent(m, events.Stats(destModule, minAbbaRoundDurationEst, ownBcDurationEst, maxOwnBcDurationEst, maxOwnBcQuorumFinishMargin, maxOwnBcTotalFinishMargin, maxExtBcDurationEst, maxExtBcFinishMargin))
 }

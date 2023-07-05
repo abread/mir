@@ -3,7 +3,7 @@ package localclock
 import (
 	"time"
 
-	"github.com/filecoin-project/mir/pkg/pb/eventpb"
+	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 )
 
 var clock time.Time
@@ -20,7 +20,7 @@ func RefTime() time.Time {
 	return clock
 }
 
-func AttachTS(event *eventpb.Event) *eventpb.Event {
+func AttachTS(event *eventpbtypes.Event) *eventpbtypes.Event {
 	event.LocalTs = Now().Nanoseconds()
 	return event
 }

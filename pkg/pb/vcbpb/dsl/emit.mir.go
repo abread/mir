@@ -14,17 +14,17 @@ import (
 // Module-specific dsl functions for emitting events.
 
 func InputValue(m dsl.Module, destModule types.ModuleID, txs []*types1.Transaction) {
-	dsl.EmitMirEvent(m, events.InputValue(destModule, txs))
+	dsl.EmitEvent(m, events.InputValue(destModule, txs))
 }
 
 func Deliver(m dsl.Module, destModule types.ModuleID, txs []*types1.Transaction, txIds []types2.TxID, signature tctypes.FullSig, srcModule types.ModuleID) {
-	dsl.EmitMirEvent(m, events.Deliver(destModule, txs, txIds, signature, srcModule))
+	dsl.EmitEvent(m, events.Deliver(destModule, txs, txIds, signature, srcModule))
 }
 
 func QuorumDone(m dsl.Module, destModule types.ModuleID, srcModule types.ModuleID) {
-	dsl.EmitMirEvent(m, events.QuorumDone(destModule, srcModule))
+	dsl.EmitEvent(m, events.QuorumDone(destModule, srcModule))
 }
 
 func AllDone(m dsl.Module, destModule types.ModuleID, srcModule types.ModuleID) {
-	dsl.EmitMirEvent(m, events.AllDone(destModule, srcModule))
+	dsl.EmitEvent(m, events.AllDone(destModule, srcModule))
 }

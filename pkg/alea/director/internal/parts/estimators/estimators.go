@@ -20,14 +20,14 @@ import (
 type Estimators struct {
 	bcStartTimes map[commontypes.Slot]time.Time
 
-	ownBcDuration         util.Estimator
-	ownBcQuorumDoneMargin util.Estimator
-	ownBcTotalDoneMargin  util.Estimator
+	ownBcDuration         *util.Estimator
+	ownBcQuorumDoneMargin *util.Estimator
+	ownBcTotalDoneMargin  *util.Estimator
 
-	extBcDuration   util.ByzEstimator
-	extBcDoneMargin util.ByzEstimator
+	extBcDuration   *util.ByzEstimator
+	extBcDoneMargin *util.ByzEstimator
 
-	abbaRoundNoCoinDuration util.Estimator
+	abbaRoundNoCoinDuration *util.Estimator
 }
 
 func (e *Estimators) OwnBcMaxDurationEst() time.Duration {

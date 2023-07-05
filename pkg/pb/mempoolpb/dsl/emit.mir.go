@@ -24,11 +24,11 @@ func RequestBatch[C any](m dsl.Module, destModule types.ModuleID, timeout time.D
 		Type:   &types1.RequestBatchOrigin_Dsl{Dsl: dsl.MirOrigin(contextID)},
 	}
 
-	dsl.EmitMirEvent(m, events.RequestBatch(destModule, timeout, origin))
+	dsl.EmitEvent(m, events.RequestBatch(destModule, timeout, origin))
 }
 
 func NewBatch(m dsl.Module, destModule types.ModuleID, txIds []types2.TxID, txs []*types3.Transaction, origin *types1.RequestBatchOrigin) {
-	dsl.EmitMirEvent(m, events.NewBatch(destModule, txIds, txs, origin))
+	dsl.EmitEvent(m, events.NewBatch(destModule, txIds, txs, origin))
 }
 
 func RequestTransactions[C any](m dsl.Module, destModule types.ModuleID, txIds []types2.TxID, context *C) {
@@ -39,11 +39,11 @@ func RequestTransactions[C any](m dsl.Module, destModule types.ModuleID, txIds [
 		Type:   &types1.RequestTransactionsOrigin_Dsl{Dsl: dsl.MirOrigin(contextID)},
 	}
 
-	dsl.EmitMirEvent(m, events.RequestTransactions(destModule, txIds, origin))
+	dsl.EmitEvent(m, events.RequestTransactions(destModule, txIds, origin))
 }
 
 func TransactionsResponse(m dsl.Module, destModule types.ModuleID, present []bool, txs []*types3.Transaction, origin *types1.RequestTransactionsOrigin) {
-	dsl.EmitMirEvent(m, events.TransactionsResponse(destModule, present, txs, origin))
+	dsl.EmitEvent(m, events.TransactionsResponse(destModule, present, txs, origin))
 }
 
 func RequestTransactionIDs[C any](m dsl.Module, destModule types.ModuleID, txs []*types3.Transaction, context *C) {
@@ -54,11 +54,11 @@ func RequestTransactionIDs[C any](m dsl.Module, destModule types.ModuleID, txs [
 		Type:   &types1.RequestTransactionIDsOrigin_Dsl{Dsl: dsl.MirOrigin(contextID)},
 	}
 
-	dsl.EmitMirEvent(m, events.RequestTransactionIDs(destModule, txs, origin))
+	dsl.EmitEvent(m, events.RequestTransactionIDs(destModule, txs, origin))
 }
 
 func TransactionIDsResponse(m dsl.Module, destModule types.ModuleID, txIds []types2.TxID, origin *types1.RequestTransactionIDsOrigin) {
-	dsl.EmitMirEvent(m, events.TransactionIDsResponse(destModule, txIds, origin))
+	dsl.EmitEvent(m, events.TransactionIDsResponse(destModule, txIds, origin))
 }
 
 func RequestBatchID[C any](m dsl.Module, destModule types.ModuleID, txIds []types2.TxID, context *C) {
@@ -69,21 +69,21 @@ func RequestBatchID[C any](m dsl.Module, destModule types.ModuleID, txIds []type
 		Type:   &types1.RequestBatchIDOrigin_Dsl{Dsl: dsl.MirOrigin(contextID)},
 	}
 
-	dsl.EmitMirEvent(m, events.RequestBatchID(destModule, txIds, origin))
+	dsl.EmitEvent(m, events.RequestBatchID(destModule, txIds, origin))
 }
 
 func BatchIDResponse(m dsl.Module, destModule types.ModuleID, batchId types4.BatchID, origin *types1.RequestBatchIDOrigin) {
-	dsl.EmitMirEvent(m, events.BatchIDResponse(destModule, batchId, origin))
+	dsl.EmitEvent(m, events.BatchIDResponse(destModule, batchId, origin))
 }
 
 func NewTransactions(m dsl.Module, destModule types.ModuleID, transactions []*types3.Transaction) {
-	dsl.EmitMirEvent(m, events.NewTransactions(destModule, transactions))
+	dsl.EmitEvent(m, events.NewTransactions(destModule, transactions))
 }
 
 func BatchTimeout(m dsl.Module, destModule types.ModuleID, batchReqID uint64) {
-	dsl.EmitMirEvent(m, events.BatchTimeout(destModule, batchReqID))
+	dsl.EmitEvent(m, events.BatchTimeout(destModule, batchReqID))
 }
 
 func MarkDelivered(m dsl.Module, destModule types.ModuleID, txs []*types3.Transaction) {
-	dsl.EmitMirEvent(m, events.MarkDelivered(destModule, txs))
+	dsl.EmitEvent(m, events.MarkDelivered(destModule, txs))
 }

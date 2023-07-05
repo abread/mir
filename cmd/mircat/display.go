@@ -18,7 +18,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/eventlog"
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/modules"
-	"github.com/filecoin-project/mir/pkg/pb/eventpb"
+	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 	"github.com/filecoin-project/mir/pkg/pb/recordingpb"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
@@ -70,11 +70,13 @@ func displayEvents(args *arguments) error { //nolint:gocognit
 				time:   entry.Time,
 			}
 			// getting events from entry
-			for _, event := range entry.Events {
+			for _, eventPb := range entry.Events {
+				event := eventpbtypes.EventFromPb(eventPb)
+
 				metadata.index = uint64(index)
 
 				validEvent := args.selectedEventTypes.IsEventSelected(event)
-				_, validDest := args.selectedEventDests[event.DestModule]
+				_, validDest := args.selectedEventDests[string(event.DestModule)]
 				event = customTransform(event) // Apply custom transformation to event.
 
 				if validEvent && validDest && event != nil && index >= args.offset && (args.limit == 0 || index < args.offset+args.limit) {
@@ -104,8 +106,8 @@ func displayEvents(args *arguments) error { //nolint:gocognit
 }
 
 // Displays one event according to its type.
-func displayEvent(event *eventpb.Event, metadata eventMetadata) {
-	display(eventName(event), protojson.Format(event), metadata)
+func displayEvent(event *eventpbtypes.Event, metadata eventMetadata) {
+	display(eventName(event), protojson.Format(event.Pb()), metadata)
 }
 
 // Creates and returns a prefix tag for event display using event metadata

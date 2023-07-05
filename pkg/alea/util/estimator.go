@@ -13,8 +13,8 @@ type Estimator struct {
 	len           int
 }
 
-func NewEstimator(windowSize int) Estimator {
-	return Estimator{
+func NewEstimator(windowSize int) *Estimator {
+	return &Estimator{
 		samples:       make([]time.Duration, windowSize),
 		sortedSamples: make([]time.Duration, 0, windowSize),
 	}

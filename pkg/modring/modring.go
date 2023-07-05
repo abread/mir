@@ -12,10 +12,9 @@ import (
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/modules"
-	"github.com/filecoin-project/mir/pkg/pb/eventpb"
-	messagepbtypes "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
+	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 	modringpbtypes "github.com/filecoin-project/mir/pkg/pb/modringpb/types"
-	"github.com/filecoin-project/mir/pkg/pb/transportpb"
+	transportpbtypes "github.com/filecoin-project/mir/pkg/pb/transportpb/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 	"github.com/filecoin-project/mir/pkg/util/maputil"
 )
@@ -155,7 +154,7 @@ func (m *Module) splitEventsByDest(eventsIn *events.EventList) map[uint64]*event
 
 	eventsInIter := eventsIn.Iterator()
 	for event := eventsInIter.Next(); event != nil; event = eventsInIter.Next() {
-		subIDStr := t.ModuleID(event.DestModule).StripParent(m.ownID).Top()
+		subIDStr := event.DestModule.StripParent(m.ownID).Top()
 		subID, err := strconv.ParseUint(string(subIDStr), 10, 64)
 		if err != nil {
 			// m.logger.Log(logging.LevelWarn, "event received for invalid submodule id", "submoduleID", subIDStr)
@@ -200,12 +199,12 @@ func (m *Module) updateSubsAndFilterIncomingEvents(eventsByDest map[uint64]*even
 			// events are in the past, forward received messages to past message handler
 			it := eventsByDest[subID].Iterator()
 			for event := it.Next(); event != nil; event = it.Next() {
-				if ev, ok := event.Type.(*eventpb.Event_Transport); ok {
-					if e, ok := ev.Transport.Type.(*transportpb.Event_MessageReceived); ok {
+				if ev, ok := event.Type.(*eventpbtypes.Event_Transport); ok {
+					if e, ok := ev.Transport.Type.(*transportpbtypes.Event_MessageReceived); ok {
 						pastMsgs = append(pastMsgs, &modringpbtypes.PastMessage{
 							DestId:  subID,
-							From:    t.NodeID(e.MessageReceived.From),
-							Message: messagepbtypes.MessageFromPb(e.MessageReceived.Msg),
+							From:    e.MessageReceived.From,
+							Message: e.MessageReceived.Msg,
 						})
 					}
 				}
@@ -233,12 +232,12 @@ func (m *Module) updateSubsAndFilterIncomingEvents(eventsByDest map[uint64]*even
 			if oldEvs != nil {
 				it := oldEvs.Iterator()
 				for event := it.Next(); event != nil; event = it.Next() {
-					if ev, ok := event.Type.(*eventpb.Event_Transport); ok {
-						if e, ok := ev.Transport.Type.(*transportpb.Event_MessageReceived); ok {
+					if ev, ok := event.Type.(*eventpbtypes.Event_Transport); ok {
+						if e, ok := ev.Transport.Type.(*transportpbtypes.Event_MessageReceived); ok {
 							pastMsgs = append(pastMsgs, &modringpbtypes.PastMessage{
 								DestId:  oldID,
-								From:    t.NodeID(e.MessageReceived.From),
-								Message: messagepbtypes.MessageFromPb(e.MessageReceived.Msg),
+								From:    e.MessageReceived.From,
+								Message: e.MessageReceived.Msg,
 							})
 						}
 					}

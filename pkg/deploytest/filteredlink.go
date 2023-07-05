@@ -5,15 +5,15 @@ import (
 
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/net"
-	"github.com/filecoin-project/mir/pkg/pb/eventpb"
-	"github.com/filecoin-project/mir/pkg/pb/messagepb"
-	"github.com/filecoin-project/mir/pkg/pb/transportpb"
+	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
+	messagepbtypes "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
+	transportpbtypes "github.com/filecoin-project/mir/pkg/pb/transportpb/types"
 	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 	"github.com/filecoin-project/mir/pkg/util/sliceutil"
 )
 
-type TransportFilter = func(msg *messagepb.Message, source t.NodeID, dest t.NodeID) bool
+type TransportFilter = func(msg *messagepbtypes.Message, source t.NodeID, dest t.NodeID) bool
 
 type FilteredLink struct {
 	link   net.Transport
@@ -33,9 +33,9 @@ func NewFilteredTransport(inner net.Transport, ownID t.NodeID, filter TransportF
 	}
 }
 
-func getSendMessageEv(ev *eventpb.Event) (*transportpb.SendMessage, bool) {
-	if te, ok := ev.Type.(*eventpb.Event_Transport); ok {
-		if sme, ok := te.Transport.Type.(*transportpb.Event_SendMessage); ok {
+func getSendMessageEv(ev *eventpbtypes.Event) (*transportpbtypes.SendMessage, bool) {
+	if te, ok := ev.Type.(*eventpbtypes.Event_Transport); ok {
+		if sme, ok := te.Transport.Type.(*transportpbtypes.Event_SendMessage); ok {
 			return sme.SendMessage, true
 		}
 	}
@@ -52,8 +52,8 @@ func (fl *FilteredLink) ApplyEvents(
 	iter := eventList.Iterator()
 	for event := iter.Next(); event != nil; event = iter.Next() {
 		if ev, ok := getSendMessageEv(event); ok {
-			ev.Destinations = sliceutil.Filter(ev.Destinations, func(_ int, dest string) bool {
-				return fl.filter(ev.Msg, fl.ownID, t.NodeID(dest))
+			ev.Destinations = sliceutil.Filter(ev.Destinations, func(_ int, dest t.NodeID) bool {
+				return fl.filter(ev.Msg, fl.ownID, dest)
 			})
 
 			if len(ev.Destinations) > 0 {
@@ -70,7 +70,7 @@ func (fl *FilteredLink) ApplyEvents(
 // The ImplementsModule method only serves the purpose of indicating that this is a Module and must not be called.
 func (fl *FilteredLink) ImplementsModule() {}
 
-func (fl *FilteredLink) Send(dest t.NodeID, msg *messagepb.Message) error {
+func (fl *FilteredLink) Send(dest t.NodeID, msg *messagepbtypes.Message) error {
 	if fl.filter(msg, fl.ownID, dest) {
 		return fl.link.Send(dest, msg)
 	}

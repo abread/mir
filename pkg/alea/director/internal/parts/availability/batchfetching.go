@@ -146,7 +146,7 @@ func IncludeBatchFetching(
 		}
 
 		// TODO: adjust delay according to bc estimate. don't delay when bc slot was already freed
-		dsl.EmitMirEvent(m, eventpbevents.TimerDelay(mc.Timer, []*eventpbtypes.Event{
+		dsl.EmitEvent(m, eventpbevents.TimerDelay(mc.Timer, []*eventpbtypes.Event{
 			directorpbevents.DoFillGap(mc.Self, slot),
 		}, types.Duration(delay)))
 

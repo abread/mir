@@ -9,12 +9,12 @@ package events
 import (
 	"golang.org/x/exp/slices"
 
-	"github.com/filecoin-project/mir/pkg/pb/eventpb"
+	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 )
 
 // EventList represents a list of Events, e.g. as produced by a module.
 type EventList struct {
-	evs []*eventpb.Event
+	evs []*eventpbtypes.Event
 }
 
 // EmptyList returns an empty EventList.
@@ -25,12 +25,12 @@ func EmptyList() *EventList {
 
 func EmptyListWithCapacity(cap int) *EventList {
 	return &EventList{
-		evs: make([]*eventpb.Event, 0, cap),
+		evs: make([]*eventpbtypes.Event, 0, cap),
 	}
 }
 
 // ListOf returns EventList containing the given elements.
-func ListOf(events ...*eventpb.Event) *EventList {
+func ListOf(events ...*eventpbtypes.Event) *EventList {
 	return &EventList{
 		evs: events,
 	}
@@ -43,7 +43,7 @@ func (el *EventList) Len() int {
 
 // PushBack appends an event to the end of the list.
 // Returns the EventList itself, for the convenience of chaining multiple calls to PushBack.
-func (el *EventList) PushBack(event ...*eventpb.Event) *EventList {
+func (el *EventList) PushBack(event ...*eventpbtypes.Event) *EventList {
 	if len(el.evs) == cap(el.evs) {
 		el.grow(len(event))
 	}
@@ -54,7 +54,7 @@ func (el *EventList) PushBack(event ...*eventpb.Event) *EventList {
 }
 
 // PushBackSlice appends all events in newEvents to the end of the current EventList.
-func (el *EventList) PushBackSlice(events []*eventpb.Event) *EventList {
+func (el *EventList) PushBackSlice(events []*eventpbtypes.Event) *EventList {
 	return el.PushBack(events...)
 }
 
@@ -98,7 +98,7 @@ func (el *EventList) RemoveFront(n int) int {
 // Slice returns a slice representation of the current state of the list.
 // The returned slice only contains pointers to the events in this list, no deep copying is performed.
 // Any modifications performed on the events will affect the contents of both the EventList and the returned slice.
-func (el *EventList) Slice() []*eventpb.Event {
+func (el *EventList) Slice() []*eventpbtypes.Event {
 	return el.evs
 }
 
@@ -135,12 +135,12 @@ func (el *EventList) Iterator() *EventListIterator {
 // EventListIterator is an object returned from EventList.Iterator
 // used to iterate over the elements (Events) of an EventList using the iterator's Next method.
 type EventListIterator struct {
-	evSlice []*eventpb.Event
+	evSlice []*eventpbtypes.Event
 }
 
 // Next will return the next Event until the end of the associated EventList is encountered.
 // Thereafter, it will return nil.
-func (eli *EventListIterator) Next() *eventpb.Event {
+func (eli *EventListIterator) Next() *eventpbtypes.Event {
 	// Return nil if list has been exhausted.
 	if len(eli.evSlice) == 0 {
 		return nil

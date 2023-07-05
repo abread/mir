@@ -59,7 +59,7 @@ func newQueueController(mc ModuleConfig, params ModuleParams, tunables ModuleTun
 		}
 
 		// logger.Log(logging.LevelDebug, "starting broadcast", "queueSlot", queueSlot, "txs", txs)
-		dsl.EmitMirEvent(m, vcbpbevents.InputValue(
+		dsl.EmitEvent(m, vcbpbevents.InputValue(
 			mc.Self.Then(t.NewModuleIDFromInt(queueSlot)),
 			txs,
 		))
@@ -191,7 +191,7 @@ func newPastMsgHandler(mc ModuleConfig, params ModuleParams) modring.PastMessage
 				continue
 			}
 
-			evsOut.PushBack(transportpbevents.SendMessage(mc.Net, vcbpbmsgs.DoneMessage(msg.Message.DestModule), []t.NodeID{msg.From}).Pb())
+			evsOut.PushBack(transportpbevents.SendMessage(mc.Net, vcbpbmsgs.DoneMessage(msg.Message.DestModule), []t.NodeID{msg.From}))
 		}
 
 		return evsOut, nil
@@ -230,7 +230,7 @@ func newVcbGenerator(queueMc ModuleConfig, queueParams ModuleParams, nodeID t.No
 			bcqueuepbevents.BcStarted(queueMc.Consumer, &commontypes.Slot{
 				QueueIdx:  queueParams.QueueIdx,
 				QueueSlot: queueSlot,
-			}).Pb(),
+			}),
 		), nil
 	}
 }

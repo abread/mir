@@ -13,7 +13,7 @@ import (
 	"gopkg.in/alecthomas/kingpin.v2"
 
 	"github.com/filecoin-project/mir/pkg/eventlog"
-	"github.com/filecoin-project/mir/pkg/pb/eventpb"
+	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 	"github.com/filecoin-project/mir/pkg/pb/recordingpb"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
@@ -31,11 +31,11 @@ type evTypeTree struct {
 
 // Returns the list of event names and destinations present in the given eventlog file,
 // along with the total number of events present in the file.
-func getEventList(filenames *[]string) (*evTypeTree, map[string]struct{}, int, error) {
+func getEventList(filenames *[]string) (*evTypeTree, map[t.ModuleID]struct{}, int, error) {
 	events := &evTypeTree{
 		leaves: make(map[string]*evTypeTree),
 	}
-	eventDests := make(map[string]struct{})
+	eventDests := make(map[t.ModuleID]struct{})
 
 	totalCount := 0
 	for _, filename := range *filenames {
@@ -66,7 +66,9 @@ func getEventList(filenames *[]string) (*evTypeTree, map[string]struct{}, int, e
 		for entry, err = reader.ReadEntry(); err == nil; entry, err = reader.ReadEntry() {
 			// For each entry of the event log
 
-			for _, event := range entry.Events {
+			for _, eventPb := range entry.Events {
+				event := eventpbtypes.EventFromPb(eventPb)
+
 				// For each Event in the entry
 				cnt++
 
@@ -99,7 +101,7 @@ func getEventList(filenames *[]string) (*evTypeTree, map[string]struct{}, int, e
 
 var EventPrefix = regexp.MustCompile("^[^_]+_")
 
-func walkEventTypeName(event *eventpb.Event, f func(nameComponent string) bool) {
+func walkEventTypeName(event *eventpbtypes.Event, f func(nameComponent string) bool) {
 	evType := reflect.ValueOf(event.Type)
 	for evType.IsValid() && evType.Kind() == reflect.Pointer {
 		name := evType.Elem().Type().Name()
@@ -142,7 +144,7 @@ func derefGetFieldByName(val reflect.Value, fieldName string) reflect.Value {
 	return val.FieldByName(fieldName)
 }
 
-func eventName(event *eventpb.Event) string {
+func eventName(event *eventpbtypes.Event) string {
 	name := make([]string, 0, 1)
 	walkEventTypeName(event, func(nameComponent string) bool {
 		name = append(name, nameComponent)
@@ -153,7 +155,7 @@ func eventName(event *eventpb.Event) string {
 }
 
 // selected returns true if the given event has been selected by the user according to the given criteria.
-func (tt *evTypeTree) IsEventSelected(event *eventpb.Event) bool {
+func (tt *evTypeTree) IsEventSelected(event *eventpbtypes.Event) bool {
 	isSelected := true
 
 	tree := tt

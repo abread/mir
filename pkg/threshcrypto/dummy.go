@@ -5,6 +5,7 @@ import (
 
 	es "github.com/go-errors/errors"
 
+	"github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -22,13 +23,13 @@ type DummyCrypto struct {
 }
 
 // SignShare always returns the dummy signature DummySig, regardless of the data.
-func (dc *DummyCrypto) SignShare(_ [][]byte) ([]byte, error) {
+func (dc *DummyCrypto) SignShare(_ [][]byte) (tctypes.SigShare, error) {
 	return dc.buildSigShare(dc.NodeID), nil
 }
 
 // VerifyShare returns nil (i.e. success) only if signature share equals nodeID||DummySigShareSuffix.
 // data is ignored.
-func (dc *DummyCrypto) VerifyShare(_ [][]byte, sigShare []byte, nodeID t.NodeID) error {
+func (dc *DummyCrypto) VerifyShare(_ [][]byte, sigShare tctypes.SigShare, nodeID t.NodeID) error {
 	if !bytes.Equal(sigShare, dc.buildSigShare(nodeID)) {
 		return es.Errorf("dummy signature mismatch")
 	}
@@ -38,7 +39,7 @@ func (dc *DummyCrypto) VerifyShare(_ [][]byte, sigShare []byte, nodeID t.NodeID)
 
 // VerifyFull returns nil (i.e. success) only if signature equals DummySig.
 // data is ignored.
-func (dc *DummyCrypto) VerifyFull(data [][]byte, signature []byte) error {
+func (dc *DummyCrypto) VerifyFull(data [][]byte, signature tctypes.FullSig) error {
 	expectedSig := digest(data)
 
 	if !bytes.Equal(signature, expectedSig) {
@@ -50,7 +51,7 @@ func (dc *DummyCrypto) VerifyFull(data [][]byte, signature []byte) error {
 
 // Recovers full signature from signature shares if they are valid, otherwise an error is returned.
 // data is ignored.
-func (dc *DummyCrypto) Recover(data [][]byte, sigShares [][]byte) ([]byte, error) {
+func (dc *DummyCrypto) Recover(data [][]byte, sigShares []tctypes.SigShare) (tctypes.FullSig, error) {
 	for _, share := range sigShares {
 		nodeID := share[:(len(share) - len(dc.DummySigShareSuffix))]
 

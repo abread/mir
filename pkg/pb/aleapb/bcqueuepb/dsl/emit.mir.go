@@ -17,29 +17,29 @@ import (
 // Module-specific dsl functions for emitting events.
 
 func InputValue(m dsl.Module, destModule types.ModuleID, queueSlot aleatypes.QueueSlot, txs []*types1.Transaction) {
-	dsl.EmitMirEvent(m, events.InputValue(destModule, queueSlot, txs))
+	dsl.EmitEvent(m, events.InputValue(destModule, queueSlot, txs))
 }
 
 func Deliver(m dsl.Module, destModule types.ModuleID, slot *types2.Slot) {
-	dsl.EmitMirEvent(m, events.Deliver(destModule, slot))
+	dsl.EmitEvent(m, events.Deliver(destModule, slot))
 }
 
 func FreeSlot(m dsl.Module, destModule types.ModuleID, queueSlot aleatypes.QueueSlot) {
-	dsl.EmitMirEvent(m, events.FreeSlot(destModule, queueSlot))
+	dsl.EmitEvent(m, events.FreeSlot(destModule, queueSlot))
 }
 
 func PastVcbFinal(m dsl.Module, destModule types.ModuleID, queueSlot aleatypes.QueueSlot, txs []*types1.Transaction, signature tctypes.FullSig) {
-	dsl.EmitMirEvent(m, events.PastVcbFinal(destModule, queueSlot, txs, signature))
+	dsl.EmitEvent(m, events.PastVcbFinal(destModule, queueSlot, txs, signature))
 }
 
 func BcStarted(m dsl.Module, destModule types.ModuleID, slot *types2.Slot) {
-	dsl.EmitMirEvent(m, events.BcStarted(destModule, slot))
+	dsl.EmitEvent(m, events.BcStarted(destModule, slot))
 }
 
 func BcQuorumDone(m dsl.Module, destModule types.ModuleID, slot *types2.Slot, deliverDelta time.Duration) {
-	dsl.EmitMirEvent(m, events.BcQuorumDone(destModule, slot, deliverDelta))
+	dsl.EmitEvent(m, events.BcQuorumDone(destModule, slot, deliverDelta))
 }
 
 func BcAllDone(m dsl.Module, destModule types.ModuleID, slot *types2.Slot, quorumDoneDelta time.Duration) {
-	dsl.EmitMirEvent(m, events.BcAllDone(destModule, slot, quorumDoneDelta))
+	dsl.EmitEvent(m, events.BcAllDone(destModule, slot, quorumDoneDelta))
 }

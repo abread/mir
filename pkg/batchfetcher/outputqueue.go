@@ -29,7 +29,7 @@ func (oq *outputQueue) Flush(m dsl.Module) {
 		}
 
 		// Emit queued event.
-		dsl.EmitMirEvent(m, item.event)
+		dsl.EmitEvent(m, item.event)
 
 		// Remove item from queue.
 		oq.items = oq.items[1:]
