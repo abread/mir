@@ -207,12 +207,12 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 		} else {
 			state.ownAgConsecutiveDelivers = 0
 			// agreement is going fast, broadcast needs to catch up
-			state.targetOwnUnagreedBatches++
+			//state.targetOwnUnagreedBatches++
 		}
 
 		return nil
 	})
-	dsl.UponStateUpdates(m, func() error {
+	/*dsl.UponStateUpdates(m, func() error {
 		if state.ownAgConsecutiveDelivers > 5 {
 			// broadcast caught up, we can slow it down again
 			state.targetOwnUnagreedBatches /= 2
@@ -227,7 +227,7 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 		}
 
 		return nil
-	})
+	})*/
 
 	// =============================================================================================
 	// Batch Cutting / Own Queue Broadcast Control
@@ -260,7 +260,7 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 
 		// consider how many batches we need to deliver in each wait period
 		// this corrects for bad estimates
-		waitRoundCount /= state.targetOwnUnagreedBatches
+		//waitRoundCount /= state.targetOwnUnagreedBatches
 
 		// TODO: consider progress in current round too (will mean adjustments below)
 		timeToOwnQueueAgRound := est.AgMinDurationEst() * time.Duration(waitRoundCount)
