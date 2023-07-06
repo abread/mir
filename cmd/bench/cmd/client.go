@@ -115,6 +115,7 @@ func runClient(ctx context.Context) error {
 	}
 
 	ctxStats, stopStats := context.WithCancel(ctx)
+	defer stopStats()
 	ctx, stop := context.WithCancel(ctx)
 
 	client := clientFactories[clientType](
@@ -122,7 +123,7 @@ func runClient(ctx context.Context) error {
 		crypto.SHA256,
 		logger,
 	)
-	client.Connect(ctx, txReceiverAddrs)
+	client.Connect(ctxStats, txReceiverAddrs)
 	defer client.Disconnect()
 
 	clock := time.Now()
@@ -136,19 +137,25 @@ func runClient(ctx context.Context) error {
 	go func() {
 		time.Sleep(duration)
 		stop()
-		time.Sleep(10 * time.Second)
-		stopStats()
 	}()
 
 	limiter := rateLimiter.NewLimiter(rateLimiter.Limit(rate), 1)
 	txBytes := make([]byte, txSize)
+SendLoop:
 	for i := 0; ; i++ {
+		select {
+		case <-ctx.Done():
+			break SendLoop
+		default:
+		}
+
 		if err := limiter.Wait(ctx); err != nil {
 			if errors.Is(err, context.Canceled) {
 				err = nil
 			}
 			return err
 		}
+
 		rand.Read(txBytes) //nolint:gosec
 		logger.Log(logging.LevelDebug, fmt.Sprintf("Submitting transaction #%d", i))
 		if statFileName != "" {
@@ -161,6 +168,10 @@ func runClient(ctx context.Context) error {
 			return err
 		}
 	}
+
+	// sleep a bit before returning
+	time.Sleep(10 * time.Second)
+	return nil
 }
 
 func clientStats(ctx context.Context, txReceiverAddrs map[t.NodeID]string, clock time.Time, txs map[tt.TxNo]time.Duration, txsMutex *sync.Mutex) {
@@ -272,7 +283,7 @@ func populateClientStats(ctx context.Context, txReceiverAddr string, clock time.
 		if errors.Is(err, io.EOF) {
 			return
 		} else if err != nil {
-			fmt.Printf("error reading replica: %v", err)
+			fmt.Printf("error reading replica: %w", err)
 			return
 		}
 
