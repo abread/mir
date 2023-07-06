@@ -283,7 +283,7 @@ func populateClientStats(ctx context.Context, txReceiverAddr string, clock time.
 		if errors.Is(err, io.EOF) {
 			return
 		} else if err != nil {
-			fmt.Printf("error reading replica: %w", err)
+			fmt.Printf("error reading replica: %s", es.Wrap(err, 0).ErrorStack())
 			return
 		}
 
