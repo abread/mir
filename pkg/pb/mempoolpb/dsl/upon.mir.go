@@ -122,6 +122,12 @@ func UponNewTransactions(m dsl.Module, handler func(transactions []*types3.Trans
 	})
 }
 
+func UponBatchTimeout(m dsl.Module, handler func(batchReqID uint64) error) {
+	UponEvent[*types.Event_BatchTimeout](m, func(ev *types.BatchTimeout) error {
+		return handler(ev.BatchReqID)
+	})
+}
+
 func UponMarkDelivered(m dsl.Module, handler func(txs []*types3.Transaction) error) {
 	UponEvent[*types.Event_MarkDelivered](m, func(ev *types.MarkDelivered) error {
 		return handler(ev.Txs)

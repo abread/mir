@@ -28,7 +28,8 @@ message Event {
     RequestBatchID         request_batch_id         = 7;
     BatchIDResponse        batch_id_response        = 8;
     NewTransactions        new_transactions         = 9;
-    MarkDelivered          mark_delivered           = 10;
+    BatchTimeout           batch_timeout            = 10;
+    MarkDelivered          mark_delivered           = 11;
   }
 }
 
@@ -106,11 +107,19 @@ message BatchIDResponse {
   RequestBatchIDOrigin origin   = 2 [(mir.origin_response) = true];
 }
 
+// BatchTimeout is sent by the timer to the mempool when a batch request times out.
+message BatchTimeout {
+  option (mir.event) = true;
+
+  uint64 batchReqID = 1;
+}
+
 message MarkDelivered {
   option (mir.event) = true;
 
   repeated trantorpb.Transaction txs = 1;
 }
+
 
 // TODO: add events related to garbage collection.
 

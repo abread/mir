@@ -267,7 +267,7 @@ func NewAlea(
 	// Instantiate the Alea ordering protocol with default configuration.
 	// We use the Alea's default module configuration (the expected IDs of modules it interacts with)
 	// also to configure other modules of the system.
-	aleaConfig := alea.Config{
+	moduleConfig := alea.Config{
 		AleaDirector:  "adir",
 		BcQueuePrefix: "abc",
 		AleaAgreement: "aag",
@@ -282,7 +282,7 @@ func NewAlea(
 	}
 	aleaProtocolModules, err := alea.New(
 		ownID,
-		aleaConfig,
+		moduleConfig,
 		params.Alea,
 		startingCheckpoint,
 		logging.Decorate(logger, "Alea: "),
@@ -291,13 +291,13 @@ func NewAlea(
 		return nil, es.Errorf("error creating Alea protocol modules: %w", err)
 	}
 
-	aleaProtocolModules[aleaConfig.Net] = transport
-	aleaProtocolModules[aleaConfig.ReliableNet], err = reliablenet.New(
+	aleaProtocolModules[moduleConfig.Net] = transport
+	aleaProtocolModules[moduleConfig.ReliableNet], err = reliablenet.New(
 		ownID,
 		reliablenet.ModuleConfig{
-			Self:  aleaConfig.ReliableNet,
-			Net:   aleaConfig.Net,
-			Timer: aleaConfig.Timer,
+			Self:  moduleConfig.ReliableNet,
+			Net:   moduleConfig.Net,
+			Timer: moduleConfig.Timer,
 		},
 		params.ReliableNet,
 		logging.Decorate(logger, "ReliableNet: "),
@@ -306,35 +306,36 @@ func NewAlea(
 		return nil, es.Errorf("error creating reliablenet: %w", err)
 	}
 
-	aleaProtocolModules[aleaConfig.ThreshCrypto] = threshcrypto.New(ctx, params.ThreshCrypto, threshCrypto)
-	aleaProtocolModules[aleaConfig.Timer] = timer.New()
+	aleaProtocolModules[moduleConfig.ThreshCrypto] = threshcrypto.New(ctx, params.ThreshCrypto, threshCrypto)
+	aleaProtocolModules[moduleConfig.Timer] = timer.New()
 
 	// Use a simple mempool for incoming requests.
-	aleaProtocolModules[aleaConfig.Mempool] = simplemempool.NewModule(
+	aleaProtocolModules[moduleConfig.Mempool] = simplemempool.NewModule(
 		simplemempool.ModuleConfig{
-			Self:   aleaConfig.Mempool,
-			Hasher: aleaConfig.Hasher,
+			Self:   moduleConfig.Mempool,
+			Hasher: moduleConfig.Hasher,
+			Timer:  moduleConfig.Timer,
 		},
 		params.Mempool,
 		logging.Decorate(logger, "Mempool"),
 	)
 
 	// Use fake batch database that only stores batches in memory and does not persist them to disk.
-	aleaProtocolModules[aleaConfig.BatchDB] = fakebatchdb.NewModule(
+	aleaProtocolModules[moduleConfig.BatchDB] = fakebatchdb.NewModule(
 		fakebatchdb.ModuleConfig{
-			Self: aleaConfig.BatchDB,
+			Self: moduleConfig.BatchDB,
 		},
 	)
 
-	aleaProtocolModules[aleaConfig.Hasher] = mircrypto.NewHasher(ctx, mircrypto.DefaultHasherModuleParams(), hashImpl)
+	aleaProtocolModules[moduleConfig.Hasher] = mircrypto.NewHasher(ctx, mircrypto.DefaultHasherModuleParams(), hashImpl)
 
 	// Instantiate the batch fetcher module that transforms availability certificates ordered by Alea
 	// into batches of transactions that can be applied to the replicated application.
 	appID := t.ModuleID("app")
-	aleaProtocolModules[aleaConfig.Consumer] = batchfetcher.NewModule(
+	aleaProtocolModules[moduleConfig.Consumer] = batchfetcher.NewModule(
 		batchfetcher.ModuleConfig{
-			Self:         aleaConfig.Consumer,
-			Availability: aleaConfig.AleaDirector,
+			Self:         moduleConfig.Consumer,
+			Availability: moduleConfig.AleaDirector,
 			Checkpoint:   "",
 			Destination:  appID,
 		},
@@ -343,7 +344,7 @@ func NewAlea(
 		logging.Decorate(logger, "BatchFetcher: "),
 	)
 
-	aleaProtocolModules[appID] = appmodule.NewAppModule(app, transport, aleaConfig.AleaDirector)
+	aleaProtocolModules[appID] = appmodule.NewAppModule(app, transport, moduleConfig.AleaDirector)
 
 	return &System{
 		modules:            aleaProtocolModules,

@@ -82,6 +82,7 @@ package protos
 //go:generate std-gen "github.com/filecoin-project/mir/pkg/pb/apppb"
 //go:generate std-gen "github.com/filecoin-project/mir/pkg/pb/transportpb"
 //go:generate std-gen "github.com/filecoin-project/mir/pkg/pb/testerpb"
+//go:generate std-gen "github.com/filecoin-project/mir/pkg/pb/pingpongpb"
 //go:generate std-gen "github.com/filecoin-project/mir/pkg/pb/modringpb"
 //go:generate std-gen "github.com/filecoin-project/mir/pkg/pb/aleapb"
 //go:generate std-gen "github.com/filecoin-project/mir/pkg/pb/aleapb/common"

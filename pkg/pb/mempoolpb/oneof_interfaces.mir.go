@@ -50,6 +50,10 @@ func (w *Event_NewTransactions) Unwrap() *NewTransactions {
 	return w.NewTransactions
 }
 
+func (w *Event_BatchTimeout) Unwrap() *BatchTimeout {
+	return w.BatchTimeout
+}
+
 func (w *Event_MarkDelivered) Unwrap() *MarkDelivered {
 	return w.MarkDelivered
 }

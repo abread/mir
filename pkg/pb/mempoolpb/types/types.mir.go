@@ -54,6 +54,8 @@ func Event_TypeFromPb(pb mempoolpb.Event_Type) Event_Type {
 		return &Event_BatchIdResponse{BatchIdResponse: BatchIDResponseFromPb(pb.BatchIdResponse)}
 	case *mempoolpb.Event_NewTransactions:
 		return &Event_NewTransactions{NewTransactions: NewTransactionsFromPb(pb.NewTransactions)}
+	case *mempoolpb.Event_BatchTimeout:
+		return &Event_BatchTimeout{BatchTimeout: BatchTimeoutFromPb(pb.BatchTimeout)}
 	case *mempoolpb.Event_MarkDelivered:
 		return &Event_MarkDelivered{MarkDelivered: MarkDeliveredFromPb(pb.MarkDelivered)}
 	}
@@ -274,6 +276,30 @@ func (w *Event_NewTransactions) Pb() mempoolpb.Event_Type {
 
 func (*Event_NewTransactions) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*mempoolpb.Event_NewTransactions]()}
+}
+
+type Event_BatchTimeout struct {
+	BatchTimeout *BatchTimeout
+}
+
+func (*Event_BatchTimeout) isEvent_Type() {}
+
+func (w *Event_BatchTimeout) Unwrap() *BatchTimeout {
+	return w.BatchTimeout
+}
+
+func (w *Event_BatchTimeout) Pb() mempoolpb.Event_Type {
+	if w == nil {
+		return nil
+	}
+	if w.BatchTimeout == nil {
+		return &mempoolpb.Event_BatchTimeout{}
+	}
+	return &mempoolpb.Event_BatchTimeout{BatchTimeout: (w.BatchTimeout).Pb()}
+}
+
+func (*Event_BatchTimeout) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*mempoolpb.Event_BatchTimeout]()}
 }
 
 type Event_MarkDelivered struct {
@@ -661,6 +687,35 @@ func (m *BatchIDResponse) Pb() *mempoolpb.BatchIDResponse {
 
 func (*BatchIDResponse) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*mempoolpb.BatchIDResponse]()}
+}
+
+type BatchTimeout struct {
+	BatchReqID uint64
+}
+
+func BatchTimeoutFromPb(pb *mempoolpb.BatchTimeout) *BatchTimeout {
+	if pb == nil {
+		return nil
+	}
+	return &BatchTimeout{
+		BatchReqID: pb.BatchReqID,
+	}
+}
+
+func (m *BatchTimeout) Pb() *mempoolpb.BatchTimeout {
+	if m == nil {
+		return nil
+	}
+	pbMessage := &mempoolpb.BatchTimeout{}
+	{
+		pbMessage.BatchReqID = m.BatchReqID
+	}
+
+	return pbMessage
+}
+
+func (*BatchTimeout) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*mempoolpb.BatchTimeout]()}
 }
 
 type MarkDelivered struct {

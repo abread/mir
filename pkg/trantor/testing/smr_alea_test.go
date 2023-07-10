@@ -23,6 +23,7 @@ import (
 
 	"github.com/filecoin-project/mir"
 	"github.com/filecoin-project/mir/pkg/deploytest"
+	"github.com/filecoin-project/mir/pkg/eventmangler"
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
@@ -41,6 +42,10 @@ func TestIntegrationAlea(t *testing.T) {
 	defer goleak.VerifyNone(t,
 		goleak.IgnoreTopFunction("github.com/filecoin-project/mir/pkg/deploytest.newSimModule"),
 		goleak.IgnoreTopFunction("github.com/filecoin-project/mir/pkg/testsim.(*Chan).recv"),
+
+		// Problems with this started occurring after an update to a new version of the quic implementation.
+		// Assuming it has nothing to do with Mir or Trantor.
+		goleak.IgnoreTopFunction("github.com/libp2p/go-libp2p/p2p/transport/quicreuse.(*reuse).gc"),
 
 		// If an observable is not exhausted when checking an event trace...
 		goleak.IgnoreTopFunction("github.com/reactivex/rxgo/v2.Item.SendContext"),
@@ -263,6 +268,16 @@ func runIntegrationWithAleaConfig(tb testing.TB, conf *TestConfig) (heapObjects 
 	}
 
 	// Check event logs
+	if conf.CheckFunc != nil {
+		conf.CheckFunc(tb, deployment, conf)
+		return heapObjects, heapAlloc
+	}
+
+	if conf.ErrorExpected != nil {
+		require.Error(tb, conf.ErrorExpected)
+		return heapObjects, heapAlloc
+	}
+
 	require.NoError(tb, checkEventTraces(deployment.EventLogFiles(), conf.NumNetTXs*conf.NumClients+conf.NumFakeTXs))
 
 	for _, replica := range deployment.TestReplicas {
@@ -336,7 +351,7 @@ func newDeploymentAlea(ctx context.Context, conf *TestConfig) (*deploytest.Deplo
 	}
 	transportLayer, err := deploytest.NewLocalTransportLayer(simulation, conf.Transport, conf.NodeIDsWeight, logging.Decorate(everythingLogger, "LocalTransport: "))
 	if err != nil {
-		return nil, es.Errorf("error creating transport: %w", err)
+		return nil, es.Errorf("error creating local transport system: %w", err)
 	}
 
 	// TODO: fix for weighted stuff
@@ -346,20 +361,7 @@ func newDeploymentAlea(ctx context.Context, conf *TestConfig) (*deploytest.Deplo
 	nodeModules := make(map[types.NodeID]modules.Modules)
 	fakeApps := make(map[types.NodeID]*deploytest.FakeApp)
 
-	smrParams := trantor.DefaultParams(transportLayer.Membership())
-	smrParams.Mempool.MaxTransactionsInBatch = 16
-	smrParams.ReliableNet.RetransmissionLoopInterval = 250 * time.Millisecond
-	smrParams.Alea.MaxConcurrentVcbPerQueue = 2
-	smrParams.Alea.MaxOwnUnagreedBatchCount = 2
-	smrParams.Alea.MaxAbbaRoundLookahead = 1
-	smrParams.Alea.MaxAgRoundLookahead = 1
-
-	if conf.ParamsModifier != nil {
-		conf.ParamsModifier(&smrParams)
-	}
-
 	for i, nodeID := range nodeIDs {
-
 		nodeLogger := logging.NewMultiLogger(append(
 			[]logging.Logger{nodeFileLoggers[i]},
 			commonLoggers...,
@@ -367,15 +369,32 @@ func newDeploymentAlea(ctx context.Context, conf *TestConfig) (*deploytest.Deplo
 		nodeLogger = logging.Decorate(nodeLogger, fmt.Sprintf("Node %s: ", nodeID))
 		fakeApp := deploytest.NewFakeApp(logging.Decorate(nodeLogger, "FakeApp: "))
 
+		tConf := trantor.DefaultParams(transportLayer.Membership())
+		tConf.Alea.MaxConcurrentVcbPerQueue = 2
+		tConf.Alea.MaxOwnUnagreedBatchCount = 2
+		tConf.Alea.MaxAbbaRoundLookahead = 1
+		tConf.Alea.MaxAgRoundLookahead = 1
+
+		// Use small batches so even a few transactions keep being proposed even after epoch transitions.
+		tConf.Mempool.MaxTransactionsInBatch = 10
+		// Use small retransmission delay to stress-test the reliablenet module.
+		tConf.ReliableNet.RetransmissionLoopInterval = 250 * time.Millisecond
+		// Keep retransmission bursts low to avoid overloading the test system.
+		tConf.ReliableNet.MaxRetransmissionBurst = 4
+
+		if conf.ParamsModifier != nil {
+			conf.ParamsModifier(&tConf)
+		}
+
 		transport, err := transportLayer.Link(nodeID)
 		if err != nil {
 			return nil, es.Errorf("error initializing Mir transport: %w", err)
 		}
 		transport = deploytest.NewFilteredTransport(transport, nodeID, conf.TransportFilter)
 
-		tc, err := cryptoSystem.ThreshCrypto(nodeID)
+		localTCrypto, err := cryptoSystem.ThreshCrypto(nodeID)
 		if err != nil {
-			return nil, es.Errorf("failed to initialize threshcrypto: %w", err)
+			return nil, es.Errorf("error creating local threshcrypto system for node %v: %w", nodeID, err)
 		}
 
 		system, err := trantor.NewAlea(
@@ -383,13 +402,22 @@ func newDeploymentAlea(ctx context.Context, conf *TestConfig) (*deploytest.Deplo
 			nodeID,
 			transport,
 			nil,
-			tc,
+			localTCrypto,
 			appmodule.AppLogicFromStatic(fakeApp, transportLayer.Membership()),
-			smrParams,
+			tConf,
 			nodeLogger,
 		)
 		if err != nil {
 			return nil, es.Errorf("error initializing Alea: %w", err)
+		}
+
+		if conf.CrashedReplicas[i] {
+			err := trantor.PerturbMessages(&eventmangler.ModuleParams{
+				DropRate: 1,
+			}, trantor.DefaultModuleConfig().Net, system)
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		nodeModules[nodeID] = system.Modules()
