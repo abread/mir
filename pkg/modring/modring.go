@@ -225,7 +225,8 @@ func (m *Module) getSubByRingIdx(ringIdx int) (modules.PassiveModule, *events.Ev
 	subID := m.ring[ringIdx].subID
 
 	if !m.ring[ringIdx].isCurrent {
-		return nil, nil, es.Errorf("tried to init module after free: %v", subID)
+		// already out of view, no use initializing it
+		return nil, nil, nil
 	}
 
 	subFullID := m.ownID.Then(t.NewModuleIDFromInt(subID))
