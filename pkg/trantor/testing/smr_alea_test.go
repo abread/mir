@@ -66,7 +66,7 @@ func testIntegrationWithAlea(t *testing.T) {
 			&TestConfig{
 				NodeIDsWeight: deploytest.NewNodeIDsDefaultWeights(1),
 				Transport:     "fake",
-				Duration:      4 * time.Second,
+				Duration:      2 * time.Second,
 			}},
 		2: {"Submit 10 fake requests with 1 node",
 			&TestConfig{
@@ -74,14 +74,14 @@ func testIntegrationWithAlea(t *testing.T) {
 				Transport:     "fake",
 				NumFakeTXs:    10,
 				Directory:     "mirbft-deployment-test",
-				Duration:      4 * time.Second,
+				Duration:      2 * time.Second,
 			}},
 		5: {"Submit 10 fake requests with 4 nodes and libp2p networking",
 			&TestConfig{
 				NodeIDsWeight: deploytest.NewNodeIDsDefaultWeights(4),
 				Transport:     "libp2p",
 				NumFakeTXs:    10,
-				Duration:      15 * time.Second,
+				Duration:      5 * time.Second,
 			}},
 		6: {"Submit 10 requests with 1 node and libp2p networking",
 			&TestConfig{
@@ -89,7 +89,7 @@ func testIntegrationWithAlea(t *testing.T) {
 				NumClients:    1,
 				Transport:     "libp2p",
 				NumNetTXs:     10,
-				Duration:      10 * time.Second,
+				Duration:      5 * time.Second,
 			}},
 		7: {"Submit 10 requests with 4 nodes and libp2p networking",
 			&TestConfig{
@@ -98,31 +98,31 @@ func testIntegrationWithAlea(t *testing.T) {
 				NumClients:    1,
 				Transport:     "libp2p",
 				NumNetTXs:     10,
-				Duration:      20 * time.Second,
+				Duration:      5 * time.Second,
 			}},
 
 		// TODO: fix sim transport with non-transport active modules (threshcrypto breaks it)
 		/*8: {"Do nothing with 1 node in simulation",
 			&TestConfig{
 				NodeIDsWeight: deploytest.NewNodeIDsDefaultWeights(1),
-				Transport:   "sim",
-				Duration:    4 * time.Second,
+				Transport:     "sim",
+				Duration:      4 * time.Second,
 			}},
 		10: {"Submit 10 fake requests with 1 node in simulation",
 			&TestConfig{
 				NodeIDsWeight: deploytest.NewNodeIDsDefaultWeights(1),
-				Transport:       "sim",
-				NumFakeTXs: 10,
-				Directory:       "mirbft-deployment-test",
-				Duration:        4 * time.Second,
+				Transport:     "sim",
+				NumFakeTXs:    10,
+				Directory:     "mirbft-deployment-test",
+				Duration:      4 * time.Second,
 			}},
 		12: {"Submit 100 fake requests with 1 node in simulation",
 			&TestConfig{
 				NodeIDsWeight: deploytest.NewNodeIDsDefaultWeights(1),
-				NumClients:      0,
-				Transport:       "sim",
-				NumFakeTXs: 100,
-				Duration:        20 * time.Second,
+				NumClients:    0,
+				Transport:     "sim",
+				NumFakeTXs:    100,
+				Duration:      10 * time.Second,
 			}},*/
 
 		100: {"Submit 10 requests with 4 nodes and libp2p networking, with 1 replica not receiving broadcasts",
@@ -278,7 +278,7 @@ func runIntegrationWithAleaConfig(tb testing.TB, conf *TestConfig) (heapObjects 
 		return heapObjects, heapAlloc
 	}
 
-	require.NoError(tb, checkEventTraces(deployment.EventLogFiles(), conf.NumNetTXs*conf.NumClients+conf.NumFakeTXs))
+	assert.NoError(tb, checkEventTraces(deployment.EventLogFiles(), conf.NumNetTXs*conf.NumClients+conf.NumFakeTXs))
 
 	for _, replica := range deployment.TestReplicas {
 		// Check if all requests were delivered.
@@ -356,7 +356,7 @@ func newDeploymentAlea(ctx context.Context, conf *TestConfig) (*deploytest.Deplo
 
 	// TODO: fix for weighted stuff
 	F := (len(conf.NodeIDsWeight) - 1) / 3
-	cryptoSystem := deploytest.NewLocalThreshCryptoSystem("pseudo", nodeIDs, 2*F+1)
+	cryptoSystem := deploytest.NewLocalThreshCryptoSystem("dummy", nodeIDs, 2*F+1)
 
 	nodeModules := make(map[types.NodeID]modules.Modules)
 	fakeApps := make(map[types.NodeID]*deploytest.FakeApp)
