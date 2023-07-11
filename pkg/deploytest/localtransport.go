@@ -26,6 +26,11 @@ func NewLocalTransportLayer(sim *Simulation, transportType string, nodeIDsWeight
 	switch transportType {
 	case "sim":
 		messageDelayFn := func(from, to t.NodeID) time.Duration {
+			if from == to {
+				// local messages should see no delay
+				return 0
+			}
+
 			// TODO: Make min and max message delay configurable
 			return testsim.RandDuration(sim.Rand, 0, 10*time.Millisecond)
 		}
