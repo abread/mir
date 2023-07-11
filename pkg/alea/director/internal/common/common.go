@@ -19,6 +19,7 @@ type ModuleConfig struct {
 	Hasher        t.ModuleID
 	ThreshCrypto  t.ModuleID
 	Timer         t.ModuleID
+	Null          t.ModuleID
 }
 
 // ModuleParams sets the values for the parameters of an instance of the protocol.

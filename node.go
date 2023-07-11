@@ -101,8 +101,6 @@ func NewNode(
 		config.Logger = logging.Synchronize(config.Logger)
 	}
 
-	m[t.ModuleID("ignore")] = modules.NullPassive{}
-
 	// Return a new Node.
 	return &Node{
 		ID:     id,

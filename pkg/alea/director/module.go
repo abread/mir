@@ -17,7 +17,7 @@ type ModuleTunables = common.ModuleTunables
 func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, nodeID t.NodeID, logger logging.Logger) dsl.Module {
 	m := dsl.NewModule(mc.Self)
 
-	est := estimators.New(m, params, tunables, nodeID)
+	est := estimators.New(m, mc, params, tunables, nodeID)
 	general.Include(m, mc, params, tunables, nodeID, logger, est)
 	availability.Include(m, mc, params, logger, est)
 

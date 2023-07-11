@@ -57,7 +57,7 @@ func (e *Estimators) BcRuntime(slot commontypes.Slot) (time.Duration, bool) {
 	return 0, false
 }
 
-func New(m dsl.Module, params common.ModuleParams, tunables common.ModuleTunables, nodeID t.NodeID) *Estimators {
+func New(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, tunables common.ModuleTunables, nodeID t.NodeID) *Estimators {
 	N := len(params.AllNodes)
 	ownQueueIdx := aleatypes.QueueIdx(slices.Index(params.AllNodes, nodeID))
 
@@ -165,7 +165,7 @@ func New(m dsl.Module, params common.ModuleParams, tunables common.ModuleTunable
 	// Stats
 	dsl.UponStateUpdates(m, func() error {
 		// stats are reported after updates, and before ordering components around
-		directorpbdsl.Stats(m, "ignore", est.abbaRoundNoCoinDuration.MinEstimate(), est.ownBcDuration.Median(), est.ownBcDuration.MaxEstimate(), est.ownBcQuorumDoneMargin.MaxEstimate(), est.ownBcTotalDoneMargin.MaxEstimate(), est.extBcDuration.MaxEstimate(), est.extBcDoneMargin.MaxEstimate())
+		directorpbdsl.Stats(m, mc.Null, est.abbaRoundNoCoinDuration.MinEstimate(), est.ownBcDuration.Median(), est.ownBcDuration.MaxEstimate(), est.ownBcQuorumDoneMargin.MaxEstimate(), est.ownBcTotalDoneMargin.MaxEstimate(), est.extBcDuration.MaxEstimate(), est.extBcDoneMargin.MaxEstimate())
 		return nil
 	})
 

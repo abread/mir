@@ -30,6 +30,7 @@ type Config struct {
 	ReliableNet   t.ModuleID
 	ThreshCrypto  t.ModuleID
 	Timer         t.ModuleID
+	Null          t.ModuleID
 }
 
 // Params sets the values for the parameters of an instance of the protocol.
@@ -137,6 +138,7 @@ func New(ownID t.NodeID, config Config, params Params, startingChkp *checkpoint.
 			Hasher:        config.Hasher,
 			ThreshCrypto:  config.ThreshCrypto,
 			Timer:         config.Timer,
+			Null:          config.Null,
 		},
 		director.ModuleParams{
 			InstanceUID: append(params.InstanceUID, 'd'),

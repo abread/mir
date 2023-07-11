@@ -279,6 +279,7 @@ func NewAlea(
 		ReliableNet:   "rnet",
 		ThreshCrypto:  "tc",
 		Timer:         "timer",
+		Null:          "null",
 	}
 	aleaProtocolModules, err := alea.New(
 		ownID,
@@ -290,6 +291,8 @@ func NewAlea(
 	if err != nil {
 		return nil, es.Errorf("error creating Alea protocol modules: %w", err)
 	}
+
+	aleaProtocolModules[moduleConfig.Null] = modules.NullPassive{}
 
 	aleaProtocolModules[moduleConfig.Net] = transport
 	aleaProtocolModules[moduleConfig.ReliableNet], err = reliablenet.New(
