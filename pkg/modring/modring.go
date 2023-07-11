@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	es "github.com/go-errors/errors"
+	"golang.org/x/exp/slices"
 
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/logging"
@@ -16,6 +17,7 @@ import (
 	modringpbtypes "github.com/filecoin-project/mir/pkg/pb/modringpb/types"
 	"github.com/filecoin-project/mir/pkg/pb/transportpb"
 	t "github.com/filecoin-project/mir/pkg/types"
+	"github.com/filecoin-project/mir/pkg/util/maputil"
 )
 
 type Module struct {
@@ -64,7 +66,11 @@ func (m *Module) ImplementsModule() {}
 func (m *Module) ApplyEvents(eventsIn *events.EventList) (*events.EventList, error) {
 	// Note: this method is similar to ApplyEvents, but it only parallelizes execution across different
 	// modules, not all events.
-	subEventsIn, pastMsgs := m.splitEventsByDest(eventsIn)
+	subEventsByDest := m.splitEventsByDest(eventsIn)
+	subEventsIn, pastMsgs, err := m.updateSubsAndFilterIncomingEvents(subEventsByDest)
+	if err != nil {
+		return nil, err
+	}
 
 	resultChan := make(chan *events.EventList)
 	errorChan := make(chan error)
@@ -77,7 +83,7 @@ func (m *Module) ApplyEvents(eventsIn *events.EventList) (*events.EventList, err
 	// Note that the processing starts concurrently for all eventlists, and only the writing of the results is synchronized.
 	nSubs := 0
 	for i := 0; i < len(subEventsIn); i++ {
-		if subEventsIn[i].Len() == 0 {
+		if subEventsIn[i] == nil || subEventsIn[i].Len() == 0 {
 			continue
 		}
 
@@ -95,8 +101,8 @@ func (m *Module) ApplyEvents(eventsIn *events.EventList) (*events.EventList, err
 			oldEvsIn := subEventsIn[i]
 
 			subFullID := m.ownID.Then(t.NewModuleIDFromInt(m.ring[i].subID))
-			subEventsIn[i] = *events.ListOf(events.Init(subFullID))
-			subEventsIn[i].PushBackList(&oldEvsIn)
+			subEventsIn[i] = events.ListOf(events.Init(subFullID))
+			subEventsIn[i].PushBackList(oldEvsIn)
 
 			// queue extra init events for processing
 			eventsOut.PushBackList(extraInitEvs)
@@ -111,7 +117,7 @@ func (m *Module) ApplyEvents(eventsIn *events.EventList) (*events.EventList, err
 			} else {
 				errorChan <- es.Errorf("failed to process submodule #%d events: %w", j, err)
 			}
-		}(m, &subEventsIn[i], i)
+		}(m, subEventsIn[i], i)
 		nSubs++
 	}
 
@@ -144,9 +150,8 @@ func (m *Module) ApplyEvents(eventsIn *events.EventList) (*events.EventList, err
 	return eventsOut, nil
 }
 
-func (m *Module) splitEventsByDest(eventsIn *events.EventList) ([]events.EventList, []*modringpbtypes.PastMessage) {
-	subEventsIn := make([]events.EventList, len(m.ring))
-	pastMsgs := make([]*modringpbtypes.PastMessage, 0)
+func (m *Module) splitEventsByDest(eventsIn *events.EventList) map[uint64]*events.EventList {
+	res := make(map[uint64]*events.EventList, len(m.ring))
 
 	eventsInIter := eventsIn.Iterator()
 	for event := eventsInIter.Next(); event != nil; event = eventsInIter.Next() {
@@ -163,44 +168,42 @@ func (m *Module) splitEventsByDest(eventsIn *events.EventList) ([]events.EventLi
 			continue
 		}
 
-		idx := subID % uint64(len(m.ring))
-
-		if subID < m.minID && m.ring[idx].subID != subID {
-			if ev, ok := event.Type.(*eventpb.Event_Transport); ok {
-				if e, ok := ev.Transport.Type.(*transportpb.Event_MessageReceived); ok {
-					pastMsgs = append(pastMsgs, &modringpbtypes.PastMessage{
-						DestId:  subID,
-						From:    t.NodeID(e.MessageReceived.From),
-						Message: messagepbtypes.MessageFromPb(e.MessageReceived.Msg),
-					})
-				}
-			}
-			continue
-		}
-
 		if subID > m.minID+uint64(len(m.ring))-1 {
 			// m.logger.Log(logging.LevelDebug, "event received for out-of-view (future) submodule", "submoduleID", subID)
 			continue
 		}
 
-		if m.ring[idx].subID != subID && !m.ring[idx].isCurrent && subID >= m.minID {
-			oldID := m.ring[idx].subID
+		evList, ok := res[subID]
+		if !ok {
+			res[subID] = &events.EventList{}
+			evList = res[subID]
+		}
 
-			// garbage-collect old module and advance view
-			m.ring[idx] = submodule{
-				mod:       nil,
-				subID:     subID,
-				isCurrent: true,
-			}
-			// m.logger.Log(logging.LevelDebug, "freed submodule", "submoduleID", oldID)
+		evList.PushBack(event)
+	}
 
-			// must flush previously buffered events to past message handler
-			it := subEventsIn[idx].Iterator()
-			for ev := it.Next(); ev != nil; ev = it.Next() {
+	return res
+}
+
+func (m *Module) updateSubsAndFilterIncomingEvents(eventsByDest map[uint64]*events.EventList) ([]*events.EventList, []*modringpbtypes.PastMessage, error) {
+	evsIn := make([]*events.EventList, len(m.ring))
+	var pastMsgs []*modringpbtypes.PastMessage
+
+	// go through incoming event destinations in descending order
+	// this way, we will not setup a submodule only to garbage-collect it in a later iteration
+	incomingEvsSubIDs := maputil.GetKeys(eventsByDest)
+	slices.SortFunc(incomingEvsSubIDs, func(a, b uint64) bool { return b < a })
+	for _, subID := range incomingEvsSubIDs {
+		idx := subID % uint64(len(m.ring))
+
+		if m.ring[idx].subID > subID {
+			// events are in the past, forward received messages to past message handler
+			it := eventsByDest[subID].Iterator()
+			for event := it.Next(); event != nil; event = it.Next() {
 				if ev, ok := event.Type.(*eventpb.Event_Transport); ok {
 					if e, ok := ev.Transport.Type.(*transportpb.Event_MessageReceived); ok {
 						pastMsgs = append(pastMsgs, &modringpbtypes.PastMessage{
-							DestId:  oldID,
+							DestId:  subID,
 							From:    t.NodeID(e.MessageReceived.From),
 							Message: messagepbtypes.MessageFromPb(e.MessageReceived.Msg),
 						})
@@ -208,13 +211,49 @@ func (m *Module) splitEventsByDest(eventsIn *events.EventList) ([]events.EventLi
 				}
 			}
 
-			subEventsIn[idx] = events.EventList{}
+			continue
+		}
+		// no future events reach this code, so all events here are current
+
+		if m.ring[idx].subID < subID {
+			// event is current, but must garbage collect old submodule first
+			oldID := m.ring[idx].subID
+			oldEvs := evsIn[idx]
+
+			// garbage-collect old module and advance view
+			m.ring[idx] = submodule{
+				mod:       nil,
+				subID:     subID,
+				isCurrent: true,
+			}
+			evsIn[idx] = nil
+			// m.logger.Log(logging.LevelDebug, "freed submodule", "submoduleID", oldID)
+
+			// must flush previously buffered events to past message handler
+			if oldEvs != nil {
+				it := oldEvs.Iterator()
+				for event := it.Next(); event != nil; event = it.Next() {
+					if ev, ok := event.Type.(*eventpb.Event_Transport); ok {
+						if e, ok := ev.Transport.Type.(*transportpb.Event_MessageReceived); ok {
+							pastMsgs = append(pastMsgs, &modringpbtypes.PastMessage{
+								DestId:  oldID,
+								From:    t.NodeID(e.MessageReceived.From),
+								Message: messagepbtypes.MessageFromPb(e.MessageReceived.Msg),
+							})
+						}
+					}
+				}
+			}
 		}
 
-		subEventsIn[idx].PushBack(event)
+		if evsIn[idx] != nil {
+			return nil, nil, es.Errorf("inconsistency in updateSubsAndFilterIncomingEvents: tried to assign events to the same ring position twice")
+		}
+
+		evsIn[idx] = eventsByDest[subID]
 	}
 
-	return subEventsIn, pastMsgs
+	return evsIn, pastMsgs, nil
 }
 
 func (m *Module) getSubByRingIdx(ringIdx int) (modules.PassiveModule, *events.EventList, error) {
