@@ -9,7 +9,7 @@ import (
 )
 
 // DummyCrypto represents a dummy MirModule module that
-// always produces the same dummy byte slices specified at instantiation as the full signature.
+// always produces a SHA256 hash of the data as the full signature.
 // Signature shares always consist of the nodeID followed by a preset suffix (DummySigShareSuffix)
 // Verification of these dummy signatures always succeeds.
 // This is intended as a stub for testing purposes.
@@ -19,9 +19,6 @@ type DummyCrypto struct {
 
 	// Current node ID
 	NodeID t.NodeID
-
-	// The only accepted full signature
-	DummySigFull []byte
 }
 
 // SignShare always returns the dummy signature DummySig, regardless of the data.
@@ -41,8 +38,10 @@ func (dc *DummyCrypto) VerifyShare(_ [][]byte, sigShare []byte, nodeID t.NodeID)
 
 // VerifyFull returns nil (i.e. success) only if signature equals DummySig.
 // data is ignored.
-func (dc *DummyCrypto) VerifyFull(_ [][]byte, signature []byte) error {
-	if !bytes.Equal(signature, dc.DummySigFull) {
+func (dc *DummyCrypto) VerifyFull(data [][]byte, signature []byte) error {
+	expectedSig := digest(data)
+
+	if !bytes.Equal(signature, expectedSig) {
 		return es.Errorf("dummy signature mismatch")
 	}
 
@@ -60,7 +59,7 @@ func (dc *DummyCrypto) Recover(data [][]byte, sigShares [][]byte) ([]byte, error
 		}
 	}
 
-	return dc.DummySigFull, nil
+	return digest(data), nil
 }
 
 // construct the dummy signature share for a nodeID

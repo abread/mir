@@ -35,7 +35,6 @@ func (cs *localPseudoThreshCryptoSystem) ThreshCrypto(id t.NodeID) (threshcrypto
 		return &threshcrypto.DummyCrypto{
 			DummySigShareSuffix: []byte("sigshare"),
 			NodeID:              id,
-			DummySigFull:        []byte("fullthreshsig"),
 		}, nil
 	} else {
 		return nil, es.Errorf("unknown local crypto system type: %v (must be pseudo or dummy)", cs.cryptoType)
