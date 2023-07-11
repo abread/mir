@@ -3,6 +3,8 @@
 package mempoolpbdsl
 
 import (
+	"time"
+
 	types4 "github.com/filecoin-project/mir/pkg/availability/multisigcollector/types"
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
 	types1 "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
@@ -24,9 +26,9 @@ func UponEvent[W types.Event_TypeWrapper[Ev], Ev any](m dsl.Module, handler func
 	})
 }
 
-func UponRequestBatch(m dsl.Module, handler func(origin *types.RequestBatchOrigin) error) {
+func UponRequestBatch(m dsl.Module, handler func(timeout time.Duration, origin *types.RequestBatchOrigin) error) {
 	UponEvent[*types.Event_RequestBatch](m, func(ev *types.RequestBatch) error {
-		return handler(ev.Origin)
+		return handler(ev.Timeout, ev.Origin)
 	})
 }
 

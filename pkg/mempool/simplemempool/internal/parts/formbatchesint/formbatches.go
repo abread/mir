@@ -2,6 +2,7 @@ package formbatchesint
 
 import (
 	"math/rand"
+	"time"
 
 	es "github.com/go-errors/errors"
 
@@ -243,7 +244,7 @@ func IncludeBatchCreation(
 		return nil
 	})
 
-	mpdsl.UponRequestBatch(m, func(origin *mppbtypes.RequestBatchOrigin) error {
+	mpdsl.UponRequestBatch(m, func(timeout time.Duration, origin *mppbtypes.RequestBatchOrigin) error {
 		if haveFullBatch() {
 			cutBatch(origin)
 		} else {
@@ -251,7 +252,7 @@ func IncludeBatchCreation(
 			eventpbdsl.TimerDelay(m,
 				mc.Timer,
 				[]*eventpbtypes.Event{mpevents.BatchTimeout(mc.Self, uint64(reqID))},
-				timertypes.Duration(params.BatchTimeout),
+				timertypes.Duration(timeout),
 			)
 		}
 		return nil

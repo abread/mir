@@ -74,7 +74,7 @@ func IncludeCreatingCertificates(
 			receivedSig: make(map[t.NodeID]bool),
 			sigs:        make(map[t.NodeID][]byte),
 		}
-		mempooldsl.RequestBatch(m, mc.Mempool, &requestBatchFromMempoolContext{reqID})
+		mempooldsl.RequestBatch(m, mc.Mempool, params.BatchTimeout, &requestBatchFromMempoolContext{reqID})
 		return nil
 	})
 

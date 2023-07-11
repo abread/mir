@@ -3,6 +3,8 @@
 package mempoolpbtypes
 
 import (
+	"time"
+
 	mirreflect "github.com/filecoin-project/mir/codegen/mirreflect"
 	types1 "github.com/filecoin-project/mir/codegen/model/types"
 	types3 "github.com/filecoin-project/mir/pkg/availability/multisigcollector/types"
@@ -387,7 +389,8 @@ func (*NewTransactions) MirReflect() mirreflect.Type {
 }
 
 type RequestBatch struct {
-	Origin *RequestBatchOrigin
+	Timeout time.Duration
+	Origin  *RequestBatchOrigin
 }
 
 func RequestBatchFromPb(pb *mempoolpb.RequestBatch) *RequestBatch {
@@ -395,7 +398,8 @@ func RequestBatchFromPb(pb *mempoolpb.RequestBatch) *RequestBatch {
 		return nil
 	}
 	return &RequestBatch{
-		Origin: RequestBatchOriginFromPb(pb.Origin),
+		Timeout: (time.Duration)(pb.Timeout),
+		Origin:  RequestBatchOriginFromPb(pb.Origin),
 	}
 }
 
@@ -405,6 +409,7 @@ func (m *RequestBatch) Pb() *mempoolpb.RequestBatch {
 	}
 	pbMessage := &mempoolpb.RequestBatch{}
 	{
+		pbMessage.Timeout = (int64)(m.Timeout)
 		if m.Origin != nil {
 			pbMessage.Origin = (m.Origin).Pb()
 		}

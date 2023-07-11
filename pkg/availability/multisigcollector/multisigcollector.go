@@ -2,6 +2,7 @@ package multisigcollector
 
 import (
 	"math"
+	"time"
 
 	"github.com/filecoin-project/mir/pkg/availability/multisigcollector/internal/parts/batchreconstruction"
 	"github.com/filecoin-project/mir/pkg/availability/multisigcollector/internal/parts/certcreation"
@@ -28,8 +29,9 @@ type ModuleParams = common.ModuleParams
 // are left empty (zero values for their corresponding type).
 func DefaultParamsTemplate() ModuleParams {
 	return ModuleParams{
-		Limit:       5,           // Number of sub-certificates in one availability certificate.
-		MaxRequests: math.MaxInt, // By default, have the availability module run (basically) forever.
+		Limit:        5,           // Number of sub-certificates in one availability certificate.
+		MaxRequests:  math.MaxInt, // By default, have the availability module run (basically) forever.
+		BatchTimeout: 100 * time.Millisecond,
 	}
 }
 

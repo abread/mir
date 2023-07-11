@@ -1,6 +1,8 @@
 package formbatchesext
 
 import (
+	"time"
+
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/mempool/simplemempool/common"
 	mpdsl "github.com/filecoin-project/mir/pkg/pb/mempoolpb/dsl"
@@ -21,7 +23,7 @@ func IncludeBatchCreation(
 		return nil
 	})
 
-	mpdsl.UponRequestBatch(m, func(origin *mppbtypes.RequestBatchOrigin) error {
+	mpdsl.UponRequestBatch(m, func(_ time.Duration, origin *mppbtypes.RequestBatchOrigin) error {
 		txs := fetchTransactions()
 		mpdsl.RequestTransactionIDs(m, mc.Self, txs, &requestTxIDsContext{
 			txs:    txs,

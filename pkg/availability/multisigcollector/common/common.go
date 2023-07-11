@@ -1,6 +1,8 @@
 package common
 
 import (
+	"time"
+
 	msctypes "github.com/filecoin-project/mir/pkg/availability/multisigcollector/types"
 	cryptopbtypes "github.com/filecoin-project/mir/pkg/pb/cryptopb/types"
 	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
@@ -29,6 +31,13 @@ type ModuleConfig struct {
 // ModuleParams sets the values for the parameters of an instance of the protocol.
 // All replicas are expected to use identical module parameters.
 type ModuleParams struct {
+	// Maximal time between receiving a batch request and emitting a batch.
+	// On reception of a batch request, the mempool generally waits
+	// until it contains enough transactions to fill a batch (by number or by payload size)
+	// and only then emits the new batch.
+	// If no batch has been filled by BatchTimeout, the mempool emits a non-full (even a completely empty) batch.
+	BatchTimeout time.Duration
+
 	InstanceUID []byte                     // unique identifier for this instance used to prevent replay attacks
 	Membership  *trantorpbtypes.Membership // the list of participating nodes
 	Limit       int                        // the maximum number of certificates to generate before a request is completed

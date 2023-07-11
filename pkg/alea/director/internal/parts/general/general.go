@@ -58,7 +58,6 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 	ownQueueIdx := aleatypes.QueueIdx(slices.Index(params.AllNodes, nodeID))
 
 	N := len(params.AllNodes)
-	F := (N - 1) / 3
 
 	dsl.UponInit(m, func() error {
 		return nil
@@ -206,28 +205,10 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 			state.ownAgConsecutiveDelivers++
 		} else {
 			state.ownAgConsecutiveDelivers = 0
-			// agreement is going fast, broadcast needs to catch up
-			//state.targetOwnUnagreedBatches++
 		}
 
 		return nil
 	})
-	/*dsl.UponStateUpdates(m, func() error {
-		if state.ownAgConsecutiveDelivers > 5 {
-			// broadcast caught up, we can slow it down again
-			state.targetOwnUnagreedBatches /= 2
-
-			if state.targetOwnUnagreedBatches == 0 {
-				state.targetOwnUnagreedBatches = 1
-			}
-		}
-
-		if state.targetOwnUnagreedBatches > tunables.MaxOwnUnagreedBatchCount {
-			state.targetOwnUnagreedBatches = tunables.MaxOwnUnagreedBatchCount
-		}
-
-		return nil
-	})*/
 
 	// =============================================================================================
 	// Batch Cutting / Own Queue Broadcast Control
@@ -236,7 +217,8 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 	// upon init, cut a new batch
 	dsl.UponInit(m, func() error {
 		state.stalledBatchCut = false
-		mempooldsl.RequestBatch[struct{}](m, mc.Mempool, nil)
+		// first batch should be cut ASAP
+		mempooldsl.RequestBatch[struct{}](m, mc.Mempool, time.Duration(0), nil)
 
 		return nil
 	})
@@ -248,8 +230,8 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 		// agQueueHeads[ownQueueIdx] is the next slot to be agreed on
 		unagreedOwnBatchCount := uint64(state.bcOwnQueueHead - state.agQueueHeads[ownQueueIdx])
 
-		if !state.stalledBatchCut || unagreedOwnBatchCount >= uint64(state.targetOwnUnagreedBatches) {
-			// batch cut in progress, or enough are cut already
+		if !state.stalledBatchCut || unagreedOwnBatchCount >= uint64(tunables.MaxOwnUnagreedBatchCount) {
+			// batch broadcast in progress or enough batches are cut already
 			return nil
 		}
 
@@ -257,6 +239,7 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 		if waitRoundCount < 0 {
 			waitRoundCount += N
 		}
+		waitRoundCount += N * int(unagreedOwnBatchCount)
 
 		// consider how many batches we need to deliver in each wait period
 		// this corrects for bad estimates
@@ -267,22 +250,17 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 		bcRuntimeEst := est.OwnBcMaxDurationEst()
 
 		// We have a lot of time before we reach our agreement round. Let the batch fill up!
-		// We must also guarantee F+1 nodes have undelivered batches, or that agreement is currently progressing,
-		// otherwise an attacker can stall the system by not sending their batch to enough nodes.
-		// Additionally, we don't want to delay a batch indefinitely in the presence of bad estimates: if agreement for our slot fails, we took too long!
-		if timeToOwnQueueAgRound > bcRuntimeEst && (state.ownAgConsecutiveDelivers > 0 || unagreedOwnBatchCount > 0) && (!state.stalledAgRound || state.agCanDeliver(F+1)) {
+		timeout := time.Duration(0)
+		if timeToOwnQueueAgRound > bcRuntimeEst {
 			// ensure we are woken up to create a batch before we run out of time
-			maxDelay := timeToOwnQueueAgRound - bcRuntimeEst
-			logger.Log(logging.LevelDebug, "stalling batch cut", "max delay", maxDelay)
-			state.wakeUpAfter(maxDelay)
-
-			return nil
+			timeout = timeToOwnQueueAgRound - bcRuntimeEst
+			logger.Log(logging.LevelDebug, "allowing batch cut to stall", "max delay", timeout)
 		}
 
 		// logger.Log(logging.LevelDebug, "requesting more transactions")
 		state.stalledBatchCut = false
 
-		mempooldsl.RequestBatch[struct{}](m, mc.Mempool, nil)
+		mempooldsl.RequestBatch[struct{}](m, mc.Mempool, timeout, nil)
 		return nil
 	})
 	mempooldsl.UponNewBatch(m, func(txIDs []tt.TxID, txs []*trantorpbtypes.Transaction, ctx *struct{}) error {

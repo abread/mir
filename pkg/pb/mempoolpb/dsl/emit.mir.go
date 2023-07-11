@@ -3,6 +3,8 @@
 package mempoolpbdsl
 
 import (
+	"time"
+
 	types4 "github.com/filecoin-project/mir/pkg/availability/multisigcollector/types"
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
 	events "github.com/filecoin-project/mir/pkg/pb/mempoolpb/events"
@@ -14,7 +16,7 @@ import (
 
 // Module-specific dsl functions for emitting events.
 
-func RequestBatch[C any](m dsl.Module, destModule types.ModuleID, context *C) {
+func RequestBatch[C any](m dsl.Module, destModule types.ModuleID, timeout time.Duration, context *C) {
 	contextID := m.DslHandle().StoreContext(context)
 
 	origin := &types1.RequestBatchOrigin{
@@ -22,7 +24,7 @@ func RequestBatch[C any](m dsl.Module, destModule types.ModuleID, context *C) {
 		Type:   &types1.RequestBatchOrigin_Dsl{Dsl: dsl.MirOrigin(contextID)},
 	}
 
-	dsl.EmitMirEvent(m, events.RequestBatch(destModule, origin))
+	dsl.EmitMirEvent(m, events.RequestBatch(destModule, timeout, origin))
 }
 
 func NewBatch(m dsl.Module, destModule types.ModuleID, txIds []types2.TxID, txs []*types3.Transaction, origin *types1.RequestBatchOrigin) {
