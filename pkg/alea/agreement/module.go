@@ -272,7 +272,7 @@ func newAgController(mc ModuleConfig, logger logging.Logger, state *state, agRou
 	dsl.UponStateUpdates(m, func() error {
 		for round, input := range state.pendingInput {
 			if agRounds.IsInView(round) {
-				logger.Log(logging.LevelDebug, "inputting value to agreement round", "agRound", round, "value", input)
+				logger.Log(logging.LevelDebug, "inputting value to agreement round", "agRound", round, "value", input.input)
 				dsl.EmitMirEvent(m, abbapbevents.InputValue(
 					mc.agRoundModuleID(round),
 					input.input,
