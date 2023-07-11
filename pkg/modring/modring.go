@@ -263,11 +263,6 @@ func (m *Module) getSubByRingIdx(ringIdx int) (modules.PassiveModule, *events.Ev
 
 	subID := m.ring[ringIdx].subID
 
-	if !m.ring[ringIdx].isCurrent {
-		// already out of view, no use initializing it
-		return nil, nil, nil
-	}
-
 	subFullID := m.ownID.Then(t.NewModuleIDFromInt(subID))
 	sub, extraInitEvs, err := (m.generator)(subFullID, subID)
 	if err != nil {
