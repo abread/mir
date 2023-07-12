@@ -24,9 +24,6 @@ func NewEstimator(windowSize int) Estimator {
 func (e *Estimator) AddSample(sample time.Duration) {
 	e.samples[e.tailIdx] = sample
 	e.tailIdx = (e.tailIdx + 1) % len(e.samples)
-	if e.len < len(e.samples) {
-		e.len++
-	}
 
 	if e.len == len(e.samples) {
 		// replace value in sorted samples with new one
@@ -47,6 +44,10 @@ func (e *Estimator) AddSample(sample time.Duration) {
 	} else {
 		// max len not reached yet, append new sample
 		e.sortedSamples = append(e.sortedSamples, sample)
+	}
+
+	if e.len < len(e.samples) {
+		e.len++
 	}
 
 	// re-sort samples
