@@ -123,7 +123,7 @@ func runClient(ctx context.Context) error {
 		crypto.SHA256,
 		logger,
 	)
-	client.Connect(ctxStats, txReceiverAddrs)
+	client.Connect(ctx, txReceiverAddrs)
 	defer client.Disconnect()
 
 	clock := time.Now()
