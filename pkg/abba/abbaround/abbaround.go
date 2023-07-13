@@ -212,12 +212,15 @@ func New(mc ModuleConfig, params ModuleParams, nodeID t.NodeID, logger logging.L
 			return nil
 		}
 
+		if state.isNiceConfValuesCount(&params) && state.relCoinRecoverStartTime == 0 {
+			state.relCoinRecoverStartTime = time.Since(timeRef)
+		}
+
 		if state.isNiceConfValuesCount(&params) && state.ownCoinShare != nil {
 			// logger.Log(logging.LevelDebug, "received enough support for CONF(C subset of values)", "values", state.values)
 
 			// 9. sample coin
 			state.phase = phaseTossingCoin
-			state.relCoinRecoverStartTime = time.Since(timeRef)
 
 			// logger.Log(logging.LevelDebug, "tossing coin", "ownShare", state.ownCoinShare)
 			rnetdsl.SendMessage(m, mc.ReliableNet,

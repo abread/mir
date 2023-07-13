@@ -198,7 +198,7 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 	// upon init, cut a new batch
 	dsl.UponInit(m, func() error {
 		state.stalledBatchCut = false
-		// first batch should be cut ASAP
+		est.MarkBcStartedNow(commontypes.Slot{QueueIdx: ownQueueIdx, QueueSlot: 0})
 		mempooldsl.RequestBatch[struct{}](m, mc.Mempool, nil)
 
 		return nil
@@ -212,7 +212,7 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 		unagreedOwnBatchCount := uint64(state.bcOwnQueueHead - state.agQueueHeads[ownQueueIdx])
 
 		if !state.stalledBatchCut || unagreedOwnBatchCount >= uint64(tunables.MaxOwnUnagreedBatchCount) {
-			// batch broadcast in progress or enough batches are cut already
+			// batch cut in progress, or enough are cut already
 			return nil
 		}
 
@@ -242,6 +242,7 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 		// logger.Log(logging.LevelDebug, "requesting more transactions")
 		state.stalledBatchCut = false
 
+		est.MarkBcStartedNow(commontypes.Slot{QueueIdx: ownQueueIdx, QueueSlot: state.bcOwnQueueHead})
 		mempooldsl.RequestBatch[struct{}](m, mc.Mempool, nil)
 		return nil
 	})

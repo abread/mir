@@ -57,6 +57,10 @@ func (e *Estimators) BcRuntime(slot commontypes.Slot) (time.Duration, bool) {
 	return 0, false
 }
 
+func (e *Estimators) MarkBcStartedNow(slot commontypes.Slot) {
+	e.bcStartTimes[slot] = time.Now()
+}
+
 func New(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, tunables common.ModuleTunables, nodeID t.NodeID) *Estimators {
 	N := len(params.AllNodes)
 	ownQueueIdx := aleatypes.QueueIdx(slices.Index(params.AllNodes, nodeID))
@@ -78,7 +82,9 @@ func New(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, tunab
 	// Bc Duration Estimation
 	// =============================================================================================
 	bcqueuepbdsl.UponBcStarted(m, func(slot *commontypes.Slot) error {
-		est.bcStartTimes[*slot] = time.Now()
+		if _, ok := est.bcStartTimes[*slot]; !ok {
+			est.bcStartTimes[*slot] = time.Now()
+		}
 
 		return nil
 	})
