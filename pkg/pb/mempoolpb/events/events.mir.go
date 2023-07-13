@@ -3,8 +3,6 @@
 package mempoolpbevents
 
 import (
-	"time"
-
 	types5 "github.com/filecoin-project/mir/pkg/availability/multisigcollector/types"
 	types2 "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 	types1 "github.com/filecoin-project/mir/pkg/pb/mempoolpb/types"
@@ -13,15 +11,14 @@ import (
 	types "github.com/filecoin-project/mir/pkg/types"
 )
 
-func RequestBatch(destModule types.ModuleID, timeout time.Duration, origin *types1.RequestBatchOrigin) *types2.Event {
+func RequestBatch(destModule types.ModuleID, origin *types1.RequestBatchOrigin) *types2.Event {
 	return &types2.Event{
 		DestModule: destModule,
 		Type: &types2.Event_Mempool{
 			Mempool: &types1.Event{
 				Type: &types1.Event_RequestBatch{
 					RequestBatch: &types1.RequestBatch{
-						Timeout: timeout,
-						Origin:  origin,
+						Origin: origin,
 					},
 				},
 			},

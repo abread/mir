@@ -1,6 +1,8 @@
 package simplemempool
 
 import (
+	"time"
+
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/mempool/simplemempool/common"
@@ -25,6 +27,7 @@ func DefaultModuleParams() *ModuleParams {
 		MinTransactionsInBatch: 0,
 		MaxTransactionsInBatch: 1024,
 		MaxPayloadInBatch:      1024 * 1024, // 1 MiB
+		BatchTimeout:           100 * time.Millisecond,
 		TxFetcher:              nil,
 	}
 }
