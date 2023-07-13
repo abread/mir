@@ -80,7 +80,7 @@ func DefaultParams(membership *trantorpbtypes.Membership) Params {
 		InstanceUID:              []byte{42},
 		Membership:               membership,
 		MaxConcurrentVcbPerQueue: 32,
-		MaxOwnUnagreedBatchCount: 2,
+		MaxOwnUnagreedBatchCount: 8,
 		MaxAbbaRoundLookahead:    4,
 		MaxAgRoundLookahead:      32,
 		EstimateWindowSize:       32,
