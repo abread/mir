@@ -165,6 +165,15 @@ SendLoop:
 			nextTxNo++
 		}
 		if err := client.SubmitTransaction(txBytes); err != nil {
+			if errors.Is(err, io.EOF) {
+				select {
+				case <-ctx.Done():
+					return nil
+				default:
+					return err
+				}
+
+			}
 			return err
 		}
 	}
