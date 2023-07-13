@@ -9,7 +9,6 @@ import (
 type Estimator struct {
 	samples       []time.Duration
 	sortedSamples []time.Duration
-	headIdx       int
 	tailIdx       int
 	len           int
 }
@@ -22,25 +21,26 @@ func NewEstimator(windowSize int) Estimator {
 }
 
 func (e *Estimator) AddSample(sample time.Duration) {
+	removedValue := e.samples[e.tailIdx]
 	e.samples[e.tailIdx] = sample
 	e.tailIdx = (e.tailIdx + 1) % len(e.samples)
 
 	if e.len == len(e.samples) {
 		// replace value in sorted samples with new one
-		toRemove := e.samples[e.headIdx]
 		samplesView := e.sortedSamples
-		for samplesView[0] != toRemove {
+		for samplesView[0] != removedValue {
+			if len(samplesView) == 1 {
+				panic("sample not found in sorted samples")
+			}
+
 			middleIdx := len(samplesView) / 2
-			if samplesView[middleIdx] > toRemove {
+			if samplesView[middleIdx] > removedValue {
 				samplesView = samplesView[:middleIdx+1]
 			} else {
 				samplesView = samplesView[middleIdx:]
 			}
 		}
 		samplesView[0] = sample
-
-		// update main samples ring
-		e.headIdx = (e.headIdx + 1) % len(e.samples)
 	} else {
 		// max len not reached yet, append new sample
 		e.sortedSamples = append(e.sortedSamples, sample)
