@@ -224,7 +224,6 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 		// consider how many batches we have pending delivery
 		waitRoundCount += int(unagreedOwnBatchCount) * N
 
-		// TODO: consider progress in current round too (will mean adjustments below)
 		timeToOwnQueueAgRound := est.AgMinDurationEst() * time.Duration(waitRoundCount)
 		bcRuntimeEst := est.OwnBcMaxDurationEst()
 
