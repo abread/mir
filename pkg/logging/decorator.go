@@ -1,6 +1,8 @@
 package logging
 
-import "fmt"
+import (
+	"fmt"
+)
 
 type decoratedLogger struct {
 	logger Logger
@@ -22,6 +24,11 @@ func (dl *decoratedLogger) IsConcurrent() bool {
 }
 
 func Decorate(logger Logger, prefix string, args ...interface{}) Logger {
+	if logger == NilLogger {
+		// optimization: keep logging nothing
+		return logger
+	}
+
 	return &decoratedLogger{
 		prefix: prefix,
 		logger: logger,

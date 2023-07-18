@@ -57,7 +57,7 @@ func CreateQueues(mcTemplate ConfigTemplate, paramsTemplate ParamsTemplate, tuna
 			QueueOwner: paramsTemplate.AllNodes[idx],
 		}
 
-		mod, err := bcqueue.New(mc, params, tunables, nodeID, logging.Decorate(logger, "BcQueue: ", "queueIdx", idx))
+		mod, err := bcqueue.New(mc, params, tunables, nodeID, logging.Decorate(logger, "BcQueue: ", "queueIdx", params.QueueIdx, "queueOwner", params.QueueOwner))
 		if err != nil {
 			return nil, err
 		}
