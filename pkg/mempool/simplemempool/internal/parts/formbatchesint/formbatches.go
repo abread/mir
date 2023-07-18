@@ -152,6 +152,9 @@ func IncludeBatchCreation(
 			}
 		}
 
+		// don't let client progress accumulate too many watermarks
+		state.clientProgress.GarbageCollect()
+
 		return nil
 	})
 
@@ -254,6 +257,7 @@ func IncludeBatchCreation(
 				timertypes.Duration(params.BatchTimeout),
 			)
 		}
+
 		return nil
 	})
 
