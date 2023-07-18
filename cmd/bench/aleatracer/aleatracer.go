@@ -588,7 +588,9 @@ func (at *AleaTracer) endBcSpan(ts time.Duration, slot commontypes.Slot) {
 
 	delete(at.wipBcSpan, slot)
 
-	at.endBcAwaitEchoSpan(ts, slot)
+	if slot.QueueIdx == at.ownQueueIdx {
+		at.endBcAwaitEchoSpan(ts, slot)
+	}
 	at.endBcAwaitFinalSpan(ts, slot)
 	at.endBcComputeSigDataSpan(ts, slot)
 	delete(at.wipBcAwaitEchoSpan, slot)
