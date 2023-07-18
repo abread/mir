@@ -451,6 +451,12 @@ func (at *AleaTracer) interceptOne(event *eventpbtypes.Event) error { // nolint:
 			if !ok {
 				return nil
 			}
+			if strings.HasPrefix(string(e.Recover.Origin.Module), "abc-") {
+				slot := parseSlotFromModuleID(e.Recover.Origin.Module)
+				if slot.QueueIdx == at.ownQueueIdx {
+					at.endBcAwaitEchoSpan(ts, slot)
+				}
+			}
 
 			at.startThreshCryptoSpan(ts, "tc:recover", e.Recover.Origin.Module, dsl.ContextID(originW.Dsl.ContextID))
 		case *threshcryptopbtypes.Event_RecoverResult:
@@ -460,11 +466,6 @@ func (at *AleaTracer) interceptOne(event *eventpbtypes.Event) error { // nolint:
 			}
 
 			at.endThreshCryptoSpan(ts, "tc:recover", e.RecoverResult.Origin.Module, dsl.ContextID(originW.Dsl.ContextID))
-
-			if strings.HasPrefix(string(e.RecoverResult.Origin.Module), "abc-") {
-				slot := parseSlotFromModuleID(e.RecoverResult.Origin.Module)
-				at.endBcAwaitEchoSpan(ts, slot)
-			}
 		}
 	}
 
