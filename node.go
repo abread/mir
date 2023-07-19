@@ -242,56 +242,57 @@ func (n *Node) process(ctx context.Context) error { //nolint:gocyclo
 	// Start processing module events.
 	n.startModules(ctx, &wg)
 
-	// This loop shovels events between the appropriate channels, until a stopping condition is satisfied.
+	// Initialize slices of select cases and the corresponding reactions to each case being selected.
+	// Since these are needed in every iteration, and quickly become a hotspot for allocations, we will reuse them.
+	// The common select cases/reactions will be reused, but the rest will be recreated in each iteration
+	selectCases := make([]reflect.SelectCase, 3+len(n.pendingEvents.buffers))
+	selectReactions := make([]func(receivedVal reflect.Value), 3+len(n.pendingEvents.buffers))
+
+	// If the context has been canceled, set the corresponding stopping value at the Node's WorkErrorNotifier,
+	// making the processing stop when the WorkErrorNotifier's channel is selected the next time.
+	selectCases[0] = reflect.SelectCase{
+		Dir:  reflect.SelectRecv,
+		Chan: reflect.ValueOf(ctx.Done()),
+	}
+	selectReactions[0] = func(_ reflect.Value) {
+		// TODO: Use a different error here to distinguish this case from calling Node.Stop()
+		n.workErrNotifier.Fail(ErrStopped)
+	}
+
+	// Add events produced by modules and debugger to the eventBuffer buffers and handle logical time.
+	selectCases[1] = reflect.SelectCase{
+		Dir:  reflect.SelectRecv,
+		Chan: reflect.ValueOf(n.eventsIn),
+	}
+	selectReactions[1] = func(newEventsVal reflect.Value) {
+		n.statsLock.Lock()
+		defer n.statsLock.Unlock()
+
+		newEvents := newEventsVal.Interface().(*events.EventList)
+		if err := n.pendingEvents.Add(newEvents); err != nil {
+			n.workErrNotifier.Fail(err)
+		}
+
+		// Keep track of the size of the input buffer.
+		// When it exceeds the PauseInputThreshold, pause the input from active modules.
+		if n.pendingEvents.totalEvents > n.Config.PauseInputThreshold {
+			n.pauseInput()
+		}
+	}
+
+	// If an error occurred, stop processing.
 	var returnErr error
+	selectCases[2] = reflect.SelectCase{
+		Dir:  reflect.SelectRecv,
+		Chan: reflect.ValueOf(n.workErrNotifier.ExitC()),
+	}
+	selectReactions[2] = func(_ reflect.Value) {
+		returnErr = n.workErrNotifier.Err()
+	}
+
+	// This loop shovels events between the appropriate channels, until a stopping condition is satisfied.
 	for returnErr == nil {
-
-		// Initialize slices of select cases and the corresponding reactions to each case being selected.
-		selectCases := make([]reflect.SelectCase, 0, 3+len(n.pendingEvents.buffers))
-		selectReactions := make([]func(receivedVal reflect.Value), 0, 3+len(n.pendingEvents.buffers))
-
-		// If the context has been canceled, set the corresponding stopping value at the Node's WorkErrorNotifier,
-		// making the processing stop when the WorkErrorNotifier's channel is selected the next time.
-		selectCases = append(selectCases, reflect.SelectCase{
-			Dir:  reflect.SelectRecv,
-			Chan: reflect.ValueOf(ctx.Done()),
-		})
-		selectReactions = append(selectReactions, func(_ reflect.Value) {
-			// TODO: Use a different error here to distinguish this case from calling Node.Stop()
-			n.workErrNotifier.Fail(ErrStopped)
-		})
-
-		// Add events produced by modules and debugger to the eventBuffer buffers and handle logical time.
-
-		selectCases = append(selectCases, reflect.SelectCase{
-			Dir:  reflect.SelectRecv,
-			Chan: reflect.ValueOf(n.eventsIn),
-		})
-		selectReactions = append(selectReactions, func(newEventsVal reflect.Value) {
-			n.statsLock.Lock()
-			defer n.statsLock.Unlock()
-
-			newEvents := newEventsVal.Interface().(*events.EventList)
-			if err := n.pendingEvents.Add(newEvents); err != nil {
-				n.workErrNotifier.Fail(err)
-			}
-
-			// Keep track of the size of the input buffer.
-			// When it exceeds the PauseInputThreshold, pause the input from active modules.
-			if n.pendingEvents.totalEvents > n.Config.PauseInputThreshold {
-				n.pauseInput()
-			}
-		})
-
-		// If an error occurred, stop processing.
-
-		selectCases = append(selectCases, reflect.SelectCase{
-			Dir:  reflect.SelectRecv,
-			Chan: reflect.ValueOf(n.workErrNotifier.ExitC()),
-		})
-		selectReactions = append(selectReactions, func(_ reflect.Value) {
-			returnErr = n.workErrNotifier.Err()
-		})
+		i := 3 // selectCases/Reactions already contains the first three cases/reactions above
 
 		// For each generic event buffer in eventBuffer that contains events to be submitted to its corresponding module,
 		// create a selectCase for writing those events to the module's work channel.
@@ -303,11 +304,11 @@ func (n *Node) process(ctx context.Context) error { //nolint:gocyclo
 				numEvents := eventBatch.Len()
 
 				// Create case for writing in the work channel.
-				selectCases = append(selectCases, reflect.SelectCase{
+				selectCases[i] = reflect.SelectCase{
 					Dir:  reflect.SelectSend,
 					Chan: reflect.ValueOf(n.workChans[moduleID]),
 					Send: reflect.ValueOf(eventBatch),
-				})
+				}
 
 				// Create a copy of moduleID to use in the reaction function.
 				// If we used moduleID directly in the function definition, it would correspond to the loop variable
@@ -316,7 +317,7 @@ func (n *Node) process(ctx context.Context) error { //nolint:gocyclo
 
 				// React to writing to a work channel by emptying the corresponding event buffer
 				// (i.e., removing events just written to the channel from the buffer).
-				selectReactions = append(selectReactions, func(_ reflect.Value) {
+				selectReactions[i] = func(_ reflect.Value) {
 					n.statsLock.Lock()
 					defer n.statsLock.Unlock()
 
@@ -330,14 +331,15 @@ func (n *Node) process(ctx context.Context) error { //nolint:gocyclo
 					}
 
 					n.dispatchStats.AddDispatch(mID, numEvents)
-				})
+				}
+
+				i++
 			}
 		}
 		n.statsLock.Unlock()
 
 		// Choose one case from above and execute the corresponding reaction.
-
-		chosenCase, receivedValue, _ := reflect.Select(selectCases)
+		chosenCase, receivedValue, _ := reflect.Select(selectCases[:i])
 		selectReactions[chosenCase](receivedValue)
 	}
 
