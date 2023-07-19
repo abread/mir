@@ -247,8 +247,8 @@ func (n *Node) process(ctx context.Context) error { //nolint:gocyclo
 	for returnErr == nil {
 
 		// Initialize slices of select cases and the corresponding reactions to each case being selected.
-		selectCases := make([]reflect.SelectCase, 0)
-		selectReactions := make([]func(receivedVal reflect.Value), 0)
+		selectCases := make([]reflect.SelectCase, 0, 3+len(n.pendingEvents.buffers))
+		selectReactions := make([]func(receivedVal reflect.Value), 0, 3+len(n.pendingEvents.buffers))
 
 		// If the context has been canceled, set the corresponding stopping value at the Node's WorkErrorNotifier,
 		// making the processing stop when the WorkErrorNotifier's channel is selected the next time.
