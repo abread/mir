@@ -34,12 +34,18 @@ func (cp *ClientProgress) CanAdd(clID tt.ClientID, txNo tt.TxNo) bool {
 	return cp.ClientTrackers[clID].CanAdd(txNo)
 }
 
-func (cp *ClientProgress) GarbageCollect() map[tt.ClientID]tt.TxNo {
+func (cp *ClientProgress) GarbageCollectGetWatermarks() map[tt.ClientID]tt.TxNo {
 	lowWMs := make(map[tt.ClientID]tt.TxNo)
 	for clientID, cwmt := range cp.ClientTrackers {
 		lowWMs[clientID] = cwmt.GarbageCollect()
 	}
 	return lowWMs
+}
+
+func (cp *ClientProgress) GarbageCollect() {
+	for _, cwmt := range cp.ClientTrackers {
+		cwmt.GarbageCollect()
+	}
 }
 
 func (cp *ClientProgress) DslStruct() *trantorpbtypes.ClientProgress {
