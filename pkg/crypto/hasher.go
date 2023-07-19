@@ -28,7 +28,7 @@ func DefaultHasherModuleParams() *HasherModuleParams {
 	}
 }
 
-func NewHasher(ctx context.Context, params *HasherModuleParams, hashImpl HashImpl) modules.Module {
+func NewHasher(ctx context.Context, params *HasherModuleParams, hashImpl HashImpl) modules.ActiveModule {
 	return modules.NewGoRoutinePoolModule(ctx, &hasherEventProc{hashImpl}, params.NumWorkers)
 }
 
@@ -36,11 +36,11 @@ type hasherEventProc struct {
 	hashImpl HashImpl
 }
 
-func (hasher *hasherEventProc) ApplyEvent(event *eventpbtypes.Event) (*events.EventList, error) {
+func (hasher *hasherEventProc) ApplyEvent(_ context.Context, event *eventpbtypes.Event) *events.EventList {
 	switch e := event.Type.(type) {
 	case *eventpbtypes.Event_Init:
 		// no actions on init
-		return events.EmptyList(), nil
+		return events.EmptyList()
 	case *eventpbtypes.Event_Hasher:
 		switch e := e.Hasher.Type.(type) {
 		case *hasherpbtypes.Event_Request:
@@ -49,20 +49,20 @@ func (hasher *hasherEventProc) ApplyEvent(event *eventpbtypes.Event) (*events.Ev
 				e.Request.Origin.Module,
 				hasher.computeDigests(e.Request.Data),
 				e.Request.Origin,
-			)), nil
+			))
 		case *hasherpbtypes.Event_RequestOne:
 			// Return a single computed digests.
 			return events.ListOf(hasherpbevents.ResultOne(
 				e.RequestOne.Origin.Module,
 				hasher.computeDigests([]*hasherpbtypes.HashData{e.RequestOne.Data})[0],
 				e.RequestOne.Origin,
-			)), nil
+			))
 		default:
-			return nil, es.Errorf("unexpected hasher event type: %T", e)
+			panic(es.Errorf("unexpected hasher event type: %T", e))
 		}
 	default:
 		// Complain about all other incoming event types.
-		return nil, es.Errorf("unexpected type of Hash event: %T", event.Type)
+		panic(es.Errorf("unexpected type of Hash event: %T", event.Type))
 	}
 }
 
