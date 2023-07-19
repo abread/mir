@@ -3,8 +3,6 @@ package modules
 import (
 	"context"
 	"runtime/debug"
-	"sync"
-	"sync/atomic"
 
 	es "github.com/go-errors/errors"
 
@@ -111,108 +109,24 @@ func ApplyEventsConcurrently(
 }
 
 type EventProcessor interface {
-	ApplyEvent(ctx context.Context, ev *eventpbtypes.Event) *events.EventList
+	ApplyEvent(ev *eventpbtypes.Event) (*events.EventList, error)
 }
 
 type poolModule struct {
 	processor  EventProcessor
-	inputChan  chan *eventpbtypes.Event
-	outputChan chan *events.EventList
-
-	wg sync.WaitGroup
-
-	// ensures events are serialized
-	// ApplyEvents will spawn a goroutine with some seqno. This goroutine will wait for nextInputSeqNo
-	// to be its seqno, then push all its input to inputChan, and aftewards increment nextInputSeqNo
-	// and signal other routines to try to make progress.
-	// Sequence numbers are assigned from lastFutureInputSeqNo.
-	nextInputReady       *sync.Cond // protects nextInputSeqNo
-	nextInputSeqNo       uint64
-	lastFutureInputSeqNo uint64 // must be manipulated with atomics
 }
 
-func NewGoRoutinePoolModule(ctx context.Context, processor EventProcessor, workers int) ActiveModule {
-	mod := &poolModule{
+func NewGoRoutinePoolModule(ctx context.Context, processor EventProcessor, workers int) PassiveModule {
+	m := &poolModule{
 		processor:  processor,
-		inputChan:  make(chan *eventpbtypes.Event, workers),
-		outputChan: make(chan *events.EventList, workers*2),
-
-		nextInputReady: sync.NewCond(&sync.Mutex{}),
-		nextInputSeqNo: 1, // 0 will never be used
-	}
-	doneChan := ctx.Done()
-
-	for i := 0; i < workers; i++ {
-		mod.wg.Add(1)
-		go func() {
-			defer mod.wg.Done()
-		Loop:
-			for {
-				select {
-				case <-doneChan:
-					break Loop
-				case ev := <-mod.inputChan:
-					select {
-					case mod.outputChan <- processor.ApplyEvent(ctx, ev):
-						continue
-					case <-doneChan:
-						break Loop
-					}
-				}
-			}
-		}()
 	}
 
-	go func() {
-		mod.wg.Wait()
-		close(mod.outputChan) // the simulation needs the output channel to be closed to complete (?)
-	}()
-
-	return mod
+	return m
 }
 
 func (m *poolModule) ImplementsModule() {}
-func (m *poolModule) EventsOut() <-chan *events.EventList {
-	return m.outputChan
-}
-func (m *poolModule) ApplyEvents(ctx context.Context, events *events.EventList) error {
-	seqno := atomic.AddUint64(&m.lastFutureInputSeqNo, 1)
-
-	m.wg.Add(1)
-	isNotDone := true
-	select {
-	case _, isNotDone = <-ctx.Done():
-	default:
-	}
-	if !isNotDone {
-		m.wg.Done()
-		return nil
-	}
-
-	go func() {
-		defer m.wg.Done()
-
-		m.nextInputReady.L.Lock()
-		defer m.nextInputReady.L.Unlock()
-
-		for m.nextInputSeqNo != seqno {
-			m.nextInputReady.Wait()
-		}
-
-		it := events.Iterator()
-	InputLoop:
-		for ev := it.Next(); ev != nil; ev = it.Next() {
-			select {
-			case <-ctx.Done():
-				break InputLoop
-			case m.inputChan <- ev:
-			}
-		}
-
-		m.nextInputSeqNo++
-		m.nextInputReady.Broadcast()
-	}()
-	return nil
+func (m *poolModule) ApplyEvents(events *events.EventList) (*events.EventList, error) {
+	return ApplyEventsConcurrently(events, m.processor.ApplyEvent)
 }
 
 // applySafely is a wrapper around an event processing function that catches its panic and returns it as an error.
