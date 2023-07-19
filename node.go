@@ -290,6 +290,10 @@ func (n *Node) process(ctx context.Context) error { //nolint:gocyclo
 		returnErr = n.workErrNotifier.Err()
 	}
 
+	// The event-shoveling loop below is a hot path, and shouldn't waste time with map iteration
+	// therefore, we precompute the keys and values of the map, and iterate over them in the loop.
+	moduleIDs, buffers := maputil.GetKeysAndValues(n.pendingEvents.buffers)
+
 	// This loop shovels events between the appropriate channels, until a stopping condition is satisfied.
 	for returnErr == nil {
 		i := 3 // selectCases/Reactions already contains the first three cases/reactions above
@@ -297,9 +301,11 @@ func (n *Node) process(ctx context.Context) error { //nolint:gocyclo
 		// For each generic event buffer in eventBuffer that contains events to be submitted to its corresponding module,
 		// create a selectCase for writing those events to the module's work channel.
 		n.statsLock.Lock()
-		for moduleID, buffer := range n.pendingEvents.buffers {
-			if buffer.Len() > 0 {
+		for bufIdx := range buffers {
+			buffer := buffers[bufIdx]
+			moduleID := moduleIDs[bufIdx]
 
+			if buffer.Len() > 0 {
 				eventBatch := buffer.Head(n.Config.MaxEventBatchSize)
 				numEvents := eventBatch.Len()
 
@@ -321,7 +327,7 @@ func (n *Node) process(ctx context.Context) error { //nolint:gocyclo
 					n.statsLock.Lock()
 					defer n.statsLock.Unlock()
 
-					n.pendingEvents.buffers[mID].RemoveFront(numEvents)
+					buffer.RemoveFront(numEvents)
 
 					// Keep track of the size of the event buffer.
 					// Whenever it drops below the ResumeInputThreshold, resume input.
