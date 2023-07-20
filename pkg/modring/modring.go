@@ -100,7 +100,8 @@ func (m *Module) ApplyEvents(eventsIn *events.EventList) (*events.EventList, err
 			oldEvsIn := subEventsIn[i]
 
 			subFullID := m.ownID.Then(t.NewModuleIDFromInt(m.ring[i].subID))
-			subEventsIn[i] = events.ListOf(events.Init(subFullID))
+			subEventsIn[i] = events.EmptyListWithCapacity(1 + oldEvsIn.Len())
+			subEventsIn[i].PushBack(events.Init(subFullID))
 			subEventsIn[i].PushBackList(oldEvsIn)
 
 			// queue extra init events for processing
