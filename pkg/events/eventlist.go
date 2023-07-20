@@ -43,28 +43,36 @@ func (el *EventList) Len() int {
 
 // PushBack appends an event to the end of the list.
 // Returns the EventList itself, for the convenience of chaining multiple calls to PushBack.
-func (el *EventList) PushBack(event ...*eventpbtypes.Event) *EventList {
+func (el *EventList) PushBack(event *eventpbtypes.Event) *EventList {
 	if len(el.evs) == cap(el.evs) {
-		el.grow(len(event))
+		// grow into duplicate capacity
+		el.ReserveExtraSpace(len(el.evs))
 	}
 
-	el.evs = append(el.evs, event...)
+	el.evs = append(el.evs, event)
 
 	return el
 }
 
 // PushBackSlice appends all events in newEvents to the end of the current EventList.
 func (el *EventList) PushBackSlice(events []*eventpbtypes.Event) *EventList {
-	return el.PushBack(events...)
+	if cap(el.evs)-len(el.evs) < len(events) {
+		// grow into exact size for the new elements
+		el.ReserveExtraSpace(len(events))
+	}
+
+	el.evs = append(el.evs, events...)
+
+	return el
 }
 
 // PushBackList appends all events in newEvents to the end of the current EventList.
 func (el *EventList) PushBackList(newEvents *EventList) *EventList {
-	return el.PushBack(newEvents.evs...)
+	return el.PushBackSlice(newEvents.evs)
 }
 
-func (el *EventList) grow(szHint int) {
-	el.evs = slices.Grow(el.evs, szHint)
+func (el *EventList) ReserveExtraSpace(sz int) {
+	el.evs = slices.Grow(el.evs, sz)
 }
 
 // Head returns the first up to n events in the list as a new list.
@@ -104,24 +112,23 @@ func (el *EventList) Slice() []*eventpbtypes.Event {
 
 // StripFollowUps collects all follow-up Events of the Events in the list.
 // It returns two lists:
-// 1. An EventList containing the same events as this list, but with all follow-up events removed.
-// 2. An EventList containing only those follow-up events.
+// 1. The current EventList containing the same events, with all follow-up events removed.
+// 2. A new EventList containing only those follow-up events.
 func (el *EventList) StripFollowUps() (*EventList, *EventList) {
 	// Create list of follow-up Events.
 	followUps := EventList{}
 
-	// Create a new EventList for events with follow-ups removed.
-	plainEvents := EventList{}
-
 	// Populate list by follow-up events
 	for _, event := range el.evs {
-		plainEvent, strippedEvents := Strip(event)
-		plainEvents.PushBack(plainEvent)
-		followUps.PushBackList(strippedEvents)
+		followUpEvs := event.Next
+		followUps.PushBackSlice(followUpEvs)
+
+		// Remove follow-up events from current event.
+		event.Next = nil
 	}
 
 	// Return populated list of follow-up events.
-	return &plainEvents, &followUps
+	return el, &followUps
 }
 
 // Iterator returns a pointer to an EventListIterator object used to iterate over the events in this list,
