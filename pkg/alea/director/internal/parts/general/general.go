@@ -157,7 +157,7 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 
 				if bcRuntime, ok := est.BcRuntime(slot); ok {
 					if nextQueueIdx == ownQueueIdx && bcRuntime < est.OwnBcMedianDurationEstNoMargin() {
-						logger.Log(logging.LevelDebug, "stalling agreement input for own batch")
+						//logger.Log(logging.LevelDebug, "stalling agreement input for own batch")
 						return nil
 					}
 
@@ -174,7 +174,7 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 						// schedule a timer to guarantee we reprocess the previous conditions
 						// and eventually let agreement make progress, even if this broadcast
 						// stalls indefinitely
-						logger.Log(logging.LevelDebug, "stalling agreement input", "maxDelay", maxTimeToWait)
+						// logger.Log(logging.LevelDebug, "stalling agreement input", "maxDelay", maxTimeToWait)
 						state.wakeUpAfter(maxTimeToWait)
 
 						return nil
@@ -232,7 +232,7 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 		if timeToOwnQueueAgRound > bcRuntimeEst && (unagreedOwnBatchCount > 0 || state.agCanDeliver(F+1)) {
 			// ensure we are woken up to create a batch before we run out of time
 			maxDelay := timeToOwnQueueAgRound - bcRuntimeEst
-			logger.Log(logging.LevelDebug, "stalling batch cut", "max delay", maxDelay)
+			// logger.Log(logging.LevelDebug, "stalling batch cut", "max delay", maxDelay)
 			state.wakeUpAfter(maxDelay)
 
 			return nil
