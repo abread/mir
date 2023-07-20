@@ -66,8 +66,16 @@ func (el *EventList) PushBack(event *eventpbtypes.Event) {
 // PushBackSlice appends all events in newEvents to the end of the current EventList.
 func (el *EventList) PushBackSlice(events []*eventpbtypes.Event) {
 	if cap(el.evs)-len(el.evs) < len(events) {
-		// grow into exact size for the new elements
-		el.ReserveExtraSpace(len(events))
+		// grow into max(min(duplicate capacity, growth cap), needed capacity for new elements)
+		sz := len(el.evs)
+		if sz > eventListMaxGrowth {
+			sz = eventListMaxGrowth
+		}
+		if sz < len(events) {
+			sz = len(events)
+		}
+
+		el.ReserveExtraSpace(sz)
 	}
 
 	el.evs = append(el.evs, events...)
