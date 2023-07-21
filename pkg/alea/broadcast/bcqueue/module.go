@@ -174,8 +174,8 @@ func newQueueController(mc ModuleConfig, params ModuleParams, tunables ModuleTun
 }
 
 func newPastMsgHandler(mc ModuleConfig, params ModuleParams) modring.PastMessagesHandler {
-	return func(pastMessages []*modringpbtypes.PastMessage) (*events.EventList, error) {
-		evsOut := &events.EventList{}
+	return func(pastMessages []*modringpbtypes.PastMessage) (events.EventList, error) {
+		evsOut := events.EmptyList()
 		for _, msg := range pastMessages {
 			vcbMsgW, ok := msg.Message.Type.(*messagepbtypes.Message_Vcb)
 			if !ok {
@@ -198,7 +198,7 @@ func newPastMsgHandler(mc ModuleConfig, params ModuleParams) modring.PastMessage
 	}
 }
 
-func newVcbGenerator(queueMc ModuleConfig, queueParams ModuleParams, nodeID t.NodeID, logger logging.Logger) func(id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
+func newVcbGenerator(queueMc ModuleConfig, queueParams ModuleParams, nodeID t.NodeID, logger logging.Logger) func(id t.ModuleID, idx uint64) (modules.PassiveModule, events.EventList, error) {
 	baseConfig := vcb.ModuleConfig{
 		Self:         "INVALID",
 		Consumer:     queueMc.Self,
@@ -215,7 +215,7 @@ func newVcbGenerator(queueMc ModuleConfig, queueParams ModuleParams, nodeID t.No
 		Leader:      queueParams.QueueOwner,
 	}
 
-	return func(id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
+	return func(id t.ModuleID, idx uint64) (modules.PassiveModule, events.EventList, error) {
 		mc := baseConfig
 		mc.Self = id
 

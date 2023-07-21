@@ -38,7 +38,7 @@ type Transport struct {
 	connectionsLock sync.RWMutex
 	stop            chan struct{}
 
-	incomingMessages chan *events.EventList
+	incomingMessages chan events.EventList
 }
 
 func NewTransport(params Params, ownID t.NodeID, h host.Host, logger logging.Logger) *Transport {
@@ -49,14 +49,14 @@ func NewTransport(params Params, ownID t.NodeID, h host.Host, logger logging.Log
 		logger:           logger,
 		connections:      make(map[t.NodeID]connection),
 		nodeIDs:          make(map[peer.ID]t.NodeID),
-		incomingMessages: make(chan *events.EventList),
+		incomingMessages: make(chan events.EventList),
 		stop:             make(chan struct{}),
 	}
 }
 
 func (tr *Transport) ImplementsModule() {}
 
-func (tr *Transport) ApplyEvents(_ context.Context, eventList *events.EventList) error {
+func (tr *Transport) ApplyEvents(_ context.Context, eventList events.EventList) error {
 	iter := eventList.Iterator()
 	for event := iter.Next(); event != nil; event = iter.Next() {
 
@@ -82,7 +82,7 @@ func (tr *Transport) ApplyEvents(_ context.Context, eventList *events.EventList)
 	return nil
 }
 
-func (tr *Transport) EventsOut() <-chan *events.EventList {
+func (tr *Transport) EventsOut() <-chan events.EventList {
 	return tr.incomingMessages
 }
 

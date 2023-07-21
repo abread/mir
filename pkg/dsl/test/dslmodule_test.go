@@ -126,8 +126,8 @@ func TestDslModule_ApplyEvents(t *testing.T) {
 	mc := defaultSimpleModuleConfig()
 
 	tests := map[string]struct {
-		eventsIn  *events.EventList
-		eventsOut *events.EventList
+		eventsIn  events.EventList
+		eventsOut events.EventList
 		err       error
 	}{
 		"empty": {

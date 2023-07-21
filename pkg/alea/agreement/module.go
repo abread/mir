@@ -339,15 +339,15 @@ func newAgController(mc ModuleConfig, logger logging.Logger, state *state, agRou
 	return m
 }
 
-func newPastMessageHandler(mc ModuleConfig) func(pastMessages []*modringpbtypes.PastMessage) (*events.EventList, error) {
-	return func(pastMessages []*modringpbtypes.PastMessage) (*events.EventList, error) {
+func newPastMessageHandler(mc ModuleConfig) func(pastMessages []*modringpbtypes.PastMessage) (events.EventList, error) {
+	return func(pastMessages []*modringpbtypes.PastMessage) (events.EventList, error) {
 		return events.ListOf(
 			agreementpbevents.StaleMsgsRecvd(mc.Self, pastMessages),
 		), nil
 	}
 }
 
-func newAbbaGenerator(agMc ModuleConfig, agParams ModuleParams, agTunables ModuleTunables, nodeID t.NodeID, logger logging.Logger) func(id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
+func newAbbaGenerator(agMc ModuleConfig, agParams ModuleParams, agTunables ModuleTunables, nodeID t.NodeID, logger logging.Logger) func(id t.ModuleID, idx uint64) (modules.PassiveModule, events.EventList, error) {
 	params := abba.ModuleParams{
 		InstanceUID: agParams.InstanceUID, // TODO: review
 		AllNodes:    agParams.AllNodes,
@@ -356,7 +356,7 @@ func newAbbaGenerator(agMc ModuleConfig, agParams ModuleParams, agTunables Modul
 		MaxRoundLookahead: agTunables.MaxAbbaRoundLookahead,
 	}
 
-	return func(id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
+	return func(id t.ModuleID, idx uint64) (modules.PassiveModule, events.EventList, error) {
 		mc := abba.ModuleConfig{
 			Self:         id,
 			Consumer:     agMc.Self,
@@ -367,11 +367,10 @@ func newAbbaGenerator(agMc ModuleConfig, agParams ModuleParams, agTunables Modul
 
 		mod, err := abba.NewModule(mc, params, tunables, nodeID, logging.Decorate(logger, "Abba: ", "agRound", idx))
 		if err != nil {
-			return nil, nil, err
+			return nil, events.EmptyList(), err
 		}
 
-		initialEvs := &events.EventList{}
-		return mod, initialEvs, nil
+		return mod, events.EmptyList(), nil
 	}
 }
 

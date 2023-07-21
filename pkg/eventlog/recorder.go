@@ -26,12 +26,12 @@ import (
 )
 
 type EventRecord struct {
-	Events *events.EventList
+	Events events.EventList
 	Time   int64
 }
 
 func (record *EventRecord) Filter(predicate func(event *eventpbtypes.Event) bool) EventRecord {
-	filtered := &events.EventList{}
+	filtered := events.EmptyListWithCapacity(record.Events.Len() / 2)
 
 	iter := record.Events.Iterator()
 	for event := iter.Next(); event != nil; event = iter.Next() {
@@ -152,7 +152,7 @@ func NewRecorder(
 // If there is no room in the buffer, it blocks.  If draining the buffer
 // to the output stream has completed (successfully or otherwise), Intercept
 // returns an error.
-func (i *Recorder) Intercept(events *events.EventList) error {
+func (i *Recorder) Intercept(events events.EventList) error {
 
 	// Avoid nil dereference if Intercept is called on a nil *Recorder and simply do nothing.
 	// This can happen if a pointer type to *Recorder is assigned to a variable with the interface type Interceptor.

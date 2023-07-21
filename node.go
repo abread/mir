@@ -34,12 +34,12 @@ type Node struct {
 	// E.g., all modules' output events are written in this channel,
 	// from where the Node processor reads and redistributes the events to their respective pendingEvents buffers.
 	// External events are also funneled through this channel towards the pendingEvents buffers.
-	eventsIn chan *events.EventList
+	eventsIn chan events.EventList
 
 	// During debugging, Events that would normally be inserted in the pendingEvents event buffer
 	// (and thus inserted in the event loop) are written to this channel instead if it is not nil.
 	// If this channel is nil, those Events are discarded.
-	debugOut chan *events.EventList
+	debugOut chan events.EventList
 
 	// All the modules that are part of the node.
 	modules modules.Modules
@@ -124,8 +124,8 @@ func NewNode(
 		ID:     id,
 		Config: config,
 
-		eventsIn: make(chan *events.EventList),
-		debugOut: make(chan *events.EventList),
+		eventsIn: make(chan events.EventList),
+		debugOut: make(chan events.EventList),
 
 		workChans:   newWorkChans(m),
 		modules:     m,
@@ -150,7 +150,7 @@ func NewNode(
 // and, if the eventsOut argument is not nil, written to eventsOut instead.
 // Note that if the caller supplies such a channel, the caller is expected to read from it.
 // Otherwise, the Node's execution might block while writing to the channel.
-func (n *Node) Debug(ctx context.Context, eventsOut chan *events.EventList) error {
+func (n *Node) Debug(ctx context.Context, eventsOut chan events.EventList) error {
 
 	// When done, indicate to the Stop method that it can return.
 	defer close(n.stopped)
@@ -167,7 +167,7 @@ func (n *Node) Debug(ctx context.Context, eventsOut chan *events.EventList) erro
 }
 
 // InjectEvents inserts a list of Events in the Node.
-func (n *Node) InjectEvents(ctx context.Context, events *events.EventList) error {
+func (n *Node) InjectEvents(ctx context.Context, events events.EventList) error {
 	for _, ev := range events.Slice() {
 		localclock.AttachTS(ev)
 	}
@@ -268,7 +268,7 @@ func (n *Node) process(ctx context.Context) error { //nolint:gocyclo
 		n.statsLock.Lock()
 		defer n.statsLock.Unlock()
 
-		newEvents := newEventsVal.Interface().(*events.EventList)
+		newEvents := newEventsVal.Interface().(events.EventList)
 		if err := n.pendingEvents.Add(newEvents); err != nil {
 			n.workErrNotifier.Fail(err)
 		}
@@ -361,7 +361,7 @@ func (n *Node) startModules(ctx context.Context, wg *sync.WaitGroup) {
 
 		// For each module, we start a worker function reads a single work item (EventList) and processes it.
 		wg.Add(1)
-		go func(mID t.ModuleID, m modules.Module, workChan chan *events.EventList) {
+		go func(mID t.ModuleID, m modules.Module, workChan chan events.EventList) {
 			n.Config.Logger.Log(logging.LevelInfo, "module started", "ID", mID.Pb())
 			defer n.Config.Logger.Log(logging.LevelInfo, "module finished", "ID", mID.Pb())
 			defer wg.Done()
@@ -433,8 +433,8 @@ func (n *Node) startModules(ctx context.Context, wg *sync.WaitGroup) {
 // - an error occurred in the Node and was announced through the Node's workErrorNotifier.
 func (n *Node) importEvents(
 	ctx context.Context,
-	eventSource <-chan *events.EventList,
-	eventSink chan<- *events.EventList,
+	eventSource <-chan events.EventList,
+	eventSink chan<- events.EventList,
 ) {
 	for {
 
@@ -482,7 +482,7 @@ func (n *Node) importEvents(
 // Note: The passed Events should be free of any follow-up Events,
 // as those will be intercepted separately when processed.
 // Make sure to call the Strip method of the EventList before passing it to interceptEvents.
-func (n *Node) interceptEvents(events *events.EventList) {
+func (n *Node) interceptEvents(events events.EventList) {
 
 	// ATTENTION: n.interceptor is an interface type. If it is assigned the nil value of a concrete type,
 	// this condition will evaluate to true, and Intercept(events) will be called on nil.
@@ -523,8 +523,8 @@ func (n *Node) inputIsPaused() bool {
 	return n.inputPaused
 }
 
-func createInitEvents(m modules.Modules) *events.EventList {
-	initEvents := events.EmptyList()
+func createInitEvents(m modules.Modules) events.EventList {
+	initEvents := events.EmptyListWithCapacity(len(m))
 	for moduleID := range m {
 		initEvents.PushBack(localclock.AttachTS(events.Init(moduleID)))
 	}

@@ -33,11 +33,11 @@ type echoModule struct {
 
 func (em *echoModule) ImplementsModule() {}
 
-func (em *echoModule) ApplyEvents(evts *events.EventList) (*events.EventList, error) {
+func (em *echoModule) ApplyEvents(evts events.EventList) (events.EventList, error) {
 	return modules.ApplyEventsSequentially(evts, em.applyEvent)
 }
 
-func (em *echoModule) applyEvent(event *eventpbtypes.Event) (*events.EventList, error) {
+func (em *echoModule) applyEvent(event *eventpbtypes.Event) (events.EventList, error) {
 
 	// Convenience variable
 	destModuleID := event.DestModule
@@ -49,7 +49,7 @@ func (em *echoModule) applyEvent(event *eventpbtypes.Event) (*events.EventList, 
 	case *eventpbtypes.Event_TestingString:
 		return events.ListOf(events.TestingString(destModuleID.Top(), em.prefix+e.TestingString.GetValue())), nil
 	default:
-		return nil, es.Errorf("unknown echo module event type: %T", e)
+		return events.EmptyList(), es.Errorf("unknown echo module event type: %T", e)
 	}
 }
 

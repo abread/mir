@@ -6,5 +6,5 @@ import (
 )
 
 type ModuleImpl interface {
-	Event(ev *eventpbtypes.Event) (*events.EventList, error)
+	Event(ev *eventpbtypes.Event) (events.EventList, error)
 }

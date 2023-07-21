@@ -16,14 +16,14 @@ import (
 
 // workChans represents input channels for the modules within the Node.
 // the Node.process() method writes events to these channels to route them between the Node's modules.
-type workChans map[t.ModuleID]chan *events.EventList
+type workChans map[t.ModuleID]chan events.EventList
 
 // Allocate and return a new workChans structure.
 func newWorkChans(modules modules.Modules) workChans {
-	wc := make(map[t.ModuleID]chan *events.EventList)
+	wc := make(map[t.ModuleID]chan events.EventList)
 
 	for moduleID := range modules {
-		wc[moduleID] = make(chan *events.EventList)
+		wc[moduleID] = make(chan events.EventList)
 	}
 
 	return wc
@@ -48,11 +48,11 @@ func newWorkChans(modules modules.Modules) workChans {
 func (n *Node) processModuleEvents(
 	ctx context.Context,
 	module modules.Module,
-	eventSource <-chan *events.EventList,
-	eventSink chan<- *events.EventList,
+	eventSource <-chan events.EventList,
+	eventSink chan<- events.EventList,
 	sw *Stopwatch,
 ) (bool, error) {
-	var eventsIn *events.EventList
+	var eventsIn events.EventList
 	var inputOpen bool
 
 	// Read input.
@@ -69,18 +69,18 @@ func (n *Node) processModuleEvents(
 
 	// Remove follow-up Events from the input EventList,
 	// in order to re-insert them in the processing loop after the input events have been processed.
-	plainEvents, followUps := eventsIn.StripFollowUps()
+	followUps := eventsIn.StripFollowUps()
 	eventsOut := followUps // Follow-up events go directly to the output after the plainEvents are processed.
 
 	sw.Start()
 
 	// Intercept the (stripped of all follow-ups) events that are about to be processed.
 	// This is only for debugging / diagnostic purposes.
-	n.interceptEvents(plainEvents)
+	n.interceptEvents(eventsIn)
 
 	// In Trace mode, log all events.
 	if n.Config.Logger.MinLevel() <= logging.LevelTrace {
-		iter := plainEvents.Iterator()
+		iter := eventsIn.Iterator()
 		for event := iter.Next(); event != nil; event = iter.Next() {
 			n.Config.Logger.Log(logging.LevelTrace,
 				fmt.Sprintf("Event for module %v: %v", event.DestModule, event.Type))
@@ -94,9 +94,9 @@ func (n *Node) processModuleEvents(
 		// For a passive module, synchronously apply all events and
 		// add potential resulting events to the output EventList.
 
-		var newEvents *events.EventList
+		var newEvents events.EventList
 		var err error
-		if newEvents, err = safelyApplyEventsPassive(m, plainEvents); err != nil {
+		if newEvents, err = safelyApplyEventsPassive(m, eventsIn); err != nil {
 			return false, err
 		}
 
@@ -109,7 +109,7 @@ func (n *Node) processModuleEvents(
 	case modules.ActiveModule:
 		// For an active module, only submit the events to the module and let it output the result asynchronously.
 
-		if err := safelyApplyEventsActive(ctx, m, plainEvents); err != nil {
+		if err := safelyApplyEventsActive(ctx, m, eventsIn); err != nil {
 			return false, err
 		}
 
@@ -143,8 +143,8 @@ func (n *Node) processModuleEvents(
 
 func safelyApplyEventsPassive(
 	module modules.PassiveModule,
-	events *events.EventList,
-) (result *events.EventList, err error) {
+	events events.EventList,
+) (result events.EventList, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			if rErr, ok := r.(error); ok {
@@ -158,7 +158,7 @@ func safelyApplyEventsPassive(
 	return module.ApplyEvents(events)
 }
 
-func safelyApplyEventsActive(ctx context.Context, module modules.ActiveModule, events *events.EventList) (err error) {
+func safelyApplyEventsActive(ctx context.Context, module modules.ActiveModule, events events.EventList) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			if rErr, ok := r.(error); ok {

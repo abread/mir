@@ -62,53 +62,53 @@ func New(ownID t.ModuleID, ringSize int, params ModuleParams, logger logging.Log
 
 func (m *Module) ImplementsModule() {}
 
-func (m *Module) ApplyEvents(eventsIn *events.EventList) (*events.EventList, error) {
+func (m *Module) ApplyEvents(eventsIn events.EventList) (events.EventList, error) {
 	// Note: this method is similar to ApplyEvents, but it only parallelizes execution across different
 	// modules, not all events.
 	subEventsByDest := m.splitEventsByDest(eventsIn)
 	subEventsIn, pastMsgs, err := m.updateSubsAndFilterIncomingEvents(subEventsByDest)
 	if err != nil {
-		return nil, err
+		return events.EmptyList(), err
 	}
 
-	resultChan := make(chan *events.EventList)
+	resultChan := make(chan events.EventList)
 	errorChan := make(chan error)
 
 	// The event processing results will be aggregated here
-	eventsOut := &events.EventList{}
+	eventsOut := events.EventList{}
 	var firstError error
 
 	// Start one concurrent worker for each submodule
 	// Note that the processing starts concurrently for all eventlists, and only the writing of the results is synchronized.
 	nSubs := 0
 	for i := 0; i < len(subEventsIn); i++ {
-		if subEventsIn[i] == nil || subEventsIn[i].Len() == 0 {
+		if subEventsIn[i].Len() == 0 {
 			continue
 		}
 
-		mod, extraInitEvs, err := m.getSubByRingIdx(i)
+		mod, initEvs, err := m.getSubByRingIdx(i)
 		if err != nil {
 			firstError = err
 			break
 		}
 		if mod == nil {
-			return nil, fmt.Errorf("consistency error: ring idx %d is broken", i)
+			return events.EmptyList(), fmt.Errorf("consistency error: ring idx %d is broken", i)
 		}
 
-		if extraInitEvs != nil {
-			// created module, prepend init event
+		if initEvs.Len() > 0 {
+			// created module, extract init event, and prepend it to the input event list
 			oldEvsIn := subEventsIn[i]
 
-			subFullID := m.ownID.Then(t.NewModuleIDFromInt(m.ring[i].subID))
 			subEventsIn[i] = events.EmptyListWithCapacity(1 + oldEvsIn.Len())
-			subEventsIn[i].PushBack(events.Init(subFullID))
+			subEventsIn[i].PushBackList(initEvs.Head(1))
 			subEventsIn[i].PushBackList(oldEvsIn)
 
 			// queue extra init events for processing
-			eventsOut.PushBackList(extraInitEvs)
+			initEvs.RemoveFront(1) // remove init event that will be processed directly
+			eventsOut.PushBackList(initEvs)
 		}
 
-		go func(modring *Module, evsIn *events.EventList, j int) {
+		go func(modring *Module, evsIn events.EventList, j int) {
 			// Apply the input event
 			res, err := multiApplySafely(mod, evsIn)
 
@@ -135,13 +135,13 @@ func (m *Module) ApplyEvents(eventsIn *events.EventList) (*events.EventList, err
 
 	// Return the resulting events or an error.
 	if firstError != nil {
-		return nil, firstError
+		return events.EmptyList(), firstError
 	}
 
 	if len(pastMsgs) > 0 && m.pastMsgHandler != nil {
 		evsOut, err := (m.pastMsgHandler)(pastMsgs)
 		if err != nil {
-			return nil, err
+			return events.EmptyList(), err
 		}
 
 		eventsOut.PushBackList(evsOut)
@@ -150,7 +150,7 @@ func (m *Module) ApplyEvents(eventsIn *events.EventList) (*events.EventList, err
 	return eventsOut, nil
 }
 
-func (m *Module) splitEventsByDest(eventsIn *events.EventList) map[uint64]*events.EventList {
+func (m *Module) splitEventsByDest(eventsIn events.EventList) map[uint64]*events.EventList {
 	res := make(map[uint64]*events.EventList, len(m.ring))
 
 	eventsInIter := eventsIn.Iterator()
@@ -175,18 +175,17 @@ func (m *Module) splitEventsByDest(eventsIn *events.EventList) map[uint64]*event
 
 		evList, ok := res[subID]
 		if !ok {
-			res[subID] = &events.EventList{}
-			evList = res[subID]
+			evList = &events.EventList{}
+			res[subID] = evList
 		}
-
 		evList.PushBack(event)
 	}
 
 	return res
 }
 
-func (m *Module) updateSubsAndFilterIncomingEvents(eventsByDest map[uint64]*events.EventList) ([]*events.EventList, []*modringpbtypes.PastMessage, error) {
-	evsIn := make([]*events.EventList, len(m.ring))
+func (m *Module) updateSubsAndFilterIncomingEvents(eventsByDest map[uint64]*events.EventList) ([]events.EventList, []*modringpbtypes.PastMessage, error) {
+	evsIn := make([]events.EventList, len(m.ring))
 	var pastMsgs []*modringpbtypes.PastMessage
 
 	// go through incoming event destinations in descending order
@@ -226,39 +225,37 @@ func (m *Module) updateSubsAndFilterIncomingEvents(eventsByDest map[uint64]*even
 				subID:     subID,
 				isCurrent: true,
 			}
-			evsIn[idx] = nil
+			evsIn[idx] = events.EmptyList()
 			// m.logger.Log(logging.LevelDebug, "freed submodule", "submoduleID", oldID)
 
 			// must flush previously buffered events to past message handler
-			if oldEvs != nil {
-				it := oldEvs.Iterator()
-				for event := it.Next(); event != nil; event = it.Next() {
-					if ev, ok := event.Type.(*eventpbtypes.Event_Transport); ok {
-						if e, ok := ev.Transport.Type.(*transportpbtypes.Event_MessageReceived); ok {
-							pastMsgs = append(pastMsgs, &modringpbtypes.PastMessage{
-								DestId:  oldID,
-								From:    e.MessageReceived.From,
-								Message: e.MessageReceived.Msg,
-							})
-						}
+			it := oldEvs.Iterator()
+			for event := it.Next(); event != nil; event = it.Next() {
+				if ev, ok := event.Type.(*eventpbtypes.Event_Transport); ok {
+					if e, ok := ev.Transport.Type.(*transportpbtypes.Event_MessageReceived); ok {
+						pastMsgs = append(pastMsgs, &modringpbtypes.PastMessage{
+							DestId:  oldID,
+							From:    e.MessageReceived.From,
+							Message: e.MessageReceived.Msg,
+						})
 					}
 				}
 			}
 		}
 
-		if evsIn[idx] != nil {
+		if evsIn[idx].Len() > 0 {
 			return nil, nil, es.Errorf("inconsistency in updateSubsAndFilterIncomingEvents: tried to assign events to the same ring position twice")
 		}
 
-		evsIn[idx] = eventsByDest[subID]
+		evsIn[idx] = *eventsByDest[subID]
 	}
 
 	return evsIn, pastMsgs, nil
 }
 
-func (m *Module) getSubByRingIdx(ringIdx int) (modules.PassiveModule, *events.EventList, error) {
+func (m *Module) getSubByRingIdx(ringIdx int) (modules.PassiveModule, events.EventList, error) {
 	if m.ring[ringIdx].mod != nil {
-		return m.ring[ringIdx].mod, nil, nil
+		return m.ring[ringIdx].mod, events.EmptyList(), nil
 	}
 
 	subID := m.ring[ringIdx].subID
@@ -266,13 +263,17 @@ func (m *Module) getSubByRingIdx(ringIdx int) (modules.PassiveModule, *events.Ev
 	subFullID := m.ownID.Then(t.NewModuleIDFromInt(subID))
 	sub, extraInitEvs, err := (m.generator)(subFullID, subID)
 	if err != nil {
-		return nil, nil, err
+		return nil, events.EmptyList(), err
 	}
+
+	initEvs := events.EmptyListWithCapacity(extraInitEvs.Len())
+	initEvs.PushBack(events.Init(subFullID))
+	initEvs.PushBackList(extraInitEvs)
 
 	m.ring[ringIdx].mod = sub
 
 	// m.logger.Log(logging.LevelDebug, "initialized submodule", "submoduleID", subID)
-	return m.ring[ringIdx].mod, extraInitEvs, err
+	return m.ring[ringIdx].mod, initEvs, err
 }
 
 func (m *Module) AdvanceViewToAtLeastSubmodule(id uint64) error {
@@ -342,8 +343,8 @@ func (m *Module) IsInExtendedView(id uint64) bool {
 // multiApplySafely is a wrapper around an event processing function that catches its panic and returns it as an error.
 func multiApplySafely(
 	module modules.PassiveModule,
-	events *events.EventList,
-) (result *events.EventList, err error) {
+	events events.EventList,
+) (result events.EventList, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			if rErr, ok := r.(error); ok {

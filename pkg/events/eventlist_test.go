@@ -10,7 +10,7 @@ import (
 
 func TestEventList_Constructors(t *testing.T) {
 	testCases := map[string]struct {
-		list     *EventList
+		list     EventList
 		expected []*eventpbtypes.Event
 	}{
 		"EmptyList":    {EmptyList(), nil},

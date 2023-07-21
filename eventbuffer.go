@@ -26,7 +26,7 @@ func newEventBuffer(modules modules.Modules) eventBuffer {
 	}
 
 	for moduleID := range modules {
-		wi.buffers[moduleID] = events.EmptyList()
+		wi.buffers[moduleID] = &events.EventList{}
 	}
 
 	return wi
@@ -35,7 +35,7 @@ func newEventBuffer(modules modules.Modules) eventBuffer {
 // Add adds events produced by modules to the eventBuffer buffer.
 // According to their DestModule fields, the events are distributed to the appropriate internal sub-buffers.
 // When Add returns a non-nil error, any subset of the events may have been added.
-func (eb *eventBuffer) Add(events *events.EventList) error {
+func (eb *eventBuffer) Add(events events.EventList) error {
 	// Note that this MUST be a pointer receiver.
 	// Otherwise, we'd increment a copy of the event counter rather than the counter itself.
 	iter := events.Iterator()

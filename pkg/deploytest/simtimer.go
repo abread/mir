@@ -20,7 +20,7 @@ import (
 
 type simTimerModule struct {
 	*SimNode
-	eventsOut chan *events.EventList
+	eventsOut chan events.EventList
 	processes map[tt.RetentionIndex]*testsim.Process
 }
 
@@ -28,19 +28,19 @@ type simTimerModule struct {
 func NewSimTimerModule(node *SimNode) modules.ActiveModule {
 	return &simTimerModule{
 		SimNode:   node,
-		eventsOut: make(chan *events.EventList, 1),
+		eventsOut: make(chan events.EventList, 1),
 		processes: map[tt.RetentionIndex]*testsim.Process{},
 	}
 }
 
 func (m *simTimerModule) ImplementsModule() {}
 
-func (m *simTimerModule) EventsOut() <-chan *events.EventList {
+func (m *simTimerModule) EventsOut() <-chan events.EventList {
 	return m.eventsOut
 }
 
-func (m *simTimerModule) ApplyEvents(ctx context.Context, eventList *events.EventList) error {
-	_, err := modules.ApplyEventsSequentially(eventList, func(e *eventpbtypes.Event) (*events.EventList, error) {
+func (m *simTimerModule) ApplyEvents(ctx context.Context, eventList events.EventList) error {
+	_, err := modules.ApplyEventsSequentially(eventList, func(e *eventpbtypes.Event) (events.EventList, error) {
 		return events.EmptyList(), m.applyEvent(ctx, e)
 	})
 	return err
@@ -70,7 +70,7 @@ func (m *simTimerModule) applyEvent(ctx context.Context, e *eventpbtypes.Event) 
 	return nil
 }
 
-func (m *simTimerModule) delay(ctx context.Context, eventList *events.EventList, d types.Duration) {
+func (m *simTimerModule) delay(ctx context.Context, eventList events.EventList, d types.Duration) {
 	proc := m.Spawn()
 
 	done := make(chan struct{})
@@ -102,7 +102,7 @@ func (m *simTimerModule) delay(ctx context.Context, eventList *events.EventList,
 	}()
 }
 
-func (m *simTimerModule) repeat(ctx context.Context, eventList *events.EventList, d types.Duration, retIdx tt.RetentionIndex) {
+func (m *simTimerModule) repeat(ctx context.Context, eventList events.EventList, d types.Duration, retIdx tt.RetentionIndex) {
 	proc := m.Spawn()
 	m.processes[retIdx] = proc
 

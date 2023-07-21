@@ -33,7 +33,7 @@ type threshEventProcessor struct {
 	threshCrypto ThreshCrypto
 }
 
-func (c *threshEventProcessor) ApplyEvent(ctx context.Context, event *eventpbtypes.Event) *events.EventList {
+func (c *threshEventProcessor) ApplyEvent(ctx context.Context, event *eventpbtypes.Event) events.EventList {
 	switch e := event.Type.(type) {
 	case *eventpbtypes.Event_Init:
 		// no actions on init
@@ -47,7 +47,7 @@ func (c *threshEventProcessor) ApplyEvent(ctx context.Context, event *eventpbtyp
 }
 
 // apply a thresholdcryptopbtypes.Event
-func (c *threshEventProcessor) applyTCEvent(_ context.Context, event *threshcryptopbtypes.Event) *events.EventList {
+func (c *threshEventProcessor) applyTCEvent(_ context.Context, event *threshcryptopbtypes.Event) events.EventList {
 	switch e := event.Type.(type) {
 	case *threshcryptopbtypes.Event_SignShare:
 		// Compute signature share

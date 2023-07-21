@@ -39,7 +39,7 @@ type FakeLink struct {
 
 func (fl *FakeLink) ApplyEvents(
 	ctx context.Context,
-	eventList *events.EventList,
+	eventList events.EventList,
 ) error {
 	iter := eventList.Iterator()
 	for event := iter.Next(); event != nil; event = iter.Next() {
@@ -92,7 +92,7 @@ func (fl *FakeLink) Send(dest t.NodeID, msg *messagepbtypes.Message) error {
 	return nil
 }
 
-func (fl *FakeLink) EventsOut() <-chan *events.EventList {
+func (fl *FakeLink) EventsOut() <-chan events.EventList {
 	return fl.FakeTransport.NodeSinks[fl.Source]
 }
 
@@ -100,24 +100,24 @@ var _ LocalTransportLayer = &FakeTransport{}
 
 type FakeTransport struct {
 	// Buffers is source x dest
-	Buffers       map[t.NodeID]map[t.NodeID]chan *events.EventList
-	NodeSinks     map[t.NodeID]chan *events.EventList
+	Buffers       map[t.NodeID]map[t.NodeID]chan events.EventList
+	NodeSinks     map[t.NodeID]chan events.EventList
 	logger        logging.Logger
 	nodeIDsWeight map[t.NodeID]types.VoteWeight
 }
 
 func NewFakeTransport(nodeIDsWeight map[t.NodeID]types.VoteWeight) *FakeTransport {
-	buffers := make(map[t.NodeID]map[t.NodeID]chan *events.EventList)
-	nodeSinks := make(map[t.NodeID]chan *events.EventList)
+	buffers := make(map[t.NodeID]map[t.NodeID]chan events.EventList)
+	nodeSinks := make(map[t.NodeID]chan events.EventList)
 	for sourceID := range nodeIDsWeight {
-		buffers[sourceID] = make(map[t.NodeID]chan *events.EventList)
+		buffers[sourceID] = make(map[t.NodeID]chan events.EventList)
 		for destID := range nodeIDsWeight {
 			if sourceID == destID {
 				continue
 			}
-			buffers[sourceID][destID] = make(chan *events.EventList, 10000)
+			buffers[sourceID][destID] = make(chan events.EventList, 10000)
 		}
-		nodeSinks[sourceID] = make(chan *events.EventList)
+		nodeSinks[sourceID] = make(chan events.EventList)
 	}
 
 	return &FakeTransport{
@@ -167,7 +167,7 @@ func (ft *FakeTransport) Close() {}
 
 func (fl *FakeLink) CloseOldConnections(_ *trantorpbtypes.Membership) {}
 
-func (ft *FakeTransport) RecvC(dest t.NodeID) <-chan *events.EventList {
+func (ft *FakeTransport) RecvC(dest t.NodeID) <-chan events.EventList {
 	return ft.NodeSinks[dest]
 }
 
@@ -185,7 +185,7 @@ func (fl *FakeLink) Connect(_ *trantorpbtypes.Membership) {
 			fl.wg.Done()
 			continue
 		}
-		go func(destID t.NodeID, buffer chan *events.EventList) {
+		go func(destID t.NodeID, buffer chan events.EventList) {
 			defer fl.wg.Done()
 			for {
 				select {

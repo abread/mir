@@ -59,9 +59,9 @@ func debug(args *arguments) error {
 	defer stopNode()
 
 	// Create channel for node output events and start printing its contents.
-	var nodeOutput chan *events.EventList
+	var nodeOutput chan events.EventList
 	if args.showNodeEvents {
-		nodeOutput = make(chan *events.EventList)
+		nodeOutput = make(chan events.EventList)
 		go printNodeOutput(nodeOutput)
 	} else {
 		nodeOutput = nil
@@ -232,7 +232,7 @@ func stopBeforeNext(event *eventpbtypes.Event, metadata eventMetadata) {
 
 // printNodeOutput reads all events output by a node from the given eventChan channel
 // and prints them to standard output.
-func printNodeOutput(eventChan chan *events.EventList) {
+func printNodeOutput(eventChan chan events.EventList) {
 	for receivedEvents, ok := <-eventChan; ok; receivedEvents, ok = <-eventChan {
 		fmt.Printf("========================================\n")
 		fmt.Printf("Node produced the following events:\n\n")

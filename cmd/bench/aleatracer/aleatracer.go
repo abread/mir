@@ -71,7 +71,7 @@ type AleaTracer struct {
 
 	txTracker *clientprogress.ClientProgress
 
-	inChan chan *events.EventList
+	inChan chan events.EventList
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
 	out    io.Writer
@@ -134,7 +134,7 @@ func NewAleaTracer(ctx context.Context, ownQueueIdx aleatypes.QueueIdx, nodeCoun
 
 		txTracker: clientprogress.NewClientProgress(logging.NilLogger),
 
-		inChan: make(chan *events.EventList, nodeCount*16),
+		inChan: make(chan events.EventList, nodeCount*16),
 		cancel: cancel,
 		out:    out,
 	}
@@ -181,7 +181,7 @@ func (at *AleaTracer) Stop() {
 	at.wg.Wait()
 }
 
-func (at *AleaTracer) Intercept(evs *events.EventList) error {
+func (at *AleaTracer) Intercept(evs events.EventList) error {
 	at.inChan <- evs
 	return nil
 }

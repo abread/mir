@@ -193,17 +193,17 @@ func TestNode_Backpressure(t *testing.T) {
 
 // The babbler is a simple ActiveModule that just produces batches of dummy events at a given rate.
 type blabber struct {
-	flood          chan *events.EventList // Output channel for batches of dummy events.
-	batchSize      uint64                 // Number of events output at once.
-	period         time.Duration          // Time between batches.
-	totalSubmitted uint64                 // Counter for total number of submitted events.
-	stop           chan struct{}          // Stop channel.
-	wg             sync.WaitGroup         // WaitGroup to control stopping of the goroutine.
+	flood          chan events.EventList // Output channel for batches of dummy events.
+	batchSize      uint64                // Number of events output at once.
+	period         time.Duration         // Time between batches.
+	totalSubmitted uint64                // Counter for total number of submitted events.
+	stop           chan struct{}         // Stop channel.
+	wg             sync.WaitGroup        // WaitGroup to control stopping of the goroutine.
 }
 
 func newBlabber(batchSize uint64, period time.Duration) *blabber {
 	return &blabber{
-		flood:     make(chan *events.EventList),
+		flood:     make(chan events.EventList),
 		batchSize: batchSize,
 		period:    period,
 		stop:      make(chan struct{}),
@@ -242,11 +242,11 @@ func (b *blabber) Close() {
 
 func (b *blabber) ImplementsModule() {}
 
-func (b *blabber) ApplyEvents(_ context.Context, _ *events.EventList) error {
+func (b *blabber) ApplyEvents(_ context.Context, _ events.EventList) error {
 	return nil
 }
 
-func (b *blabber) EventsOut() <-chan *events.EventList {
+func (b *blabber) EventsOut() <-chan events.EventList {
 	return b.flood
 }
 
@@ -269,8 +269,8 @@ func (c *consumer) ImplementsModule() {}
 
 // ApplyEvents increments a counter and sleeps for a given duration (set at module instantiation)
 // for each event in the given list.
-func (c *consumer) ApplyEvents(evts *events.EventList) (*events.EventList, error) {
-	evtsOut, err := modules.ApplyEventsSequentially(evts, func(event *eventpbtypes.Event) (*events.EventList, error) {
+func (c *consumer) ApplyEvents(evts events.EventList) (events.EventList, error) {
+	evtsOut, err := modules.ApplyEventsSequentially(evts, func(event *eventpbtypes.Event) (events.EventList, error) {
 		atomic.AddUint64(&c.numProcessed, 1)
 		time.Sleep(c.delay)
 		return events.EmptyList(), nil

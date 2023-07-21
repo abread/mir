@@ -10,7 +10,7 @@ import (
 type NullPassive struct {
 }
 
-func (n NullPassive) ApplyEvents(_ *events.EventList) (*events.EventList, error) {
+func (n NullPassive) ApplyEvents(_ events.EventList) (events.EventList, error) {
 	return events.EmptyList(), nil
 }
 
@@ -19,14 +19,14 @@ func (n NullPassive) ImplementsModule() {}
 
 // The NullActive module is an ActiveModule that ignores all incoming events and never produces any events.
 type NullActive struct {
-	outChan <-chan *events.EventList
+	outChan <-chan events.EventList
 }
 
-func (n NullActive) ApplyEvents(_ context.Context, _ *events.EventList) error {
+func (n NullActive) ApplyEvents(_ context.Context, _ events.EventList) error {
 	return nil
 }
 
-func (n NullActive) EventsOut() <-chan *events.EventList {
+func (n NullActive) EventsOut() <-chan events.EventList {
 	return n.outChan
 }
 

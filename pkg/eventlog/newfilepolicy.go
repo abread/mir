@@ -38,7 +38,7 @@ func EventTrackerLogger(newFile func(event *eventpbtypes.Event) bool) func(time 
 				result = append(result, *currentChunk)
 				currentChunk = &EventRecord{
 					Time:   record.Time,
-					Events: events.EmptyList().PushBack(event),
+					Events: events.ListOf(event),
 				}
 			} else {
 				currentChunk.Events.PushBack(event)

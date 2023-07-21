@@ -45,9 +45,9 @@ func getSendMessageEv(ev *eventpbtypes.Event) (*transportpbtypes.SendMessage, bo
 
 func (fl *FilteredLink) ApplyEvents(
 	ctx context.Context,
-	eventList *events.EventList,
+	eventList events.EventList,
 ) error {
-	filtered := events.EmptyList()
+	filtered := events.EmptyListWithCapacity(eventList.Len())
 
 	iter := eventList.Iterator()
 	for event := iter.Next(); event != nil; event = iter.Next() {
@@ -77,7 +77,7 @@ func (fl *FilteredLink) Send(dest t.NodeID, msg *messagepbtypes.Message) error {
 	return nil
 }
 
-func (fl *FilteredLink) EventsOut() <-chan *events.EventList {
+func (fl *FilteredLink) EventsOut() <-chan events.EventList {
 	return fl.link.EventsOut()
 }
 

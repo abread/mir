@@ -19,7 +19,7 @@ type dslModuleImpl struct {
 	eventHandlers            map[reflect.Type][]func(ev *eventpbtypes.Event) error
 	stateUpdateHandlers      []func() error
 	stateUpdateBatchHandlers []func() error
-	outputEvents             *events.EventList
+	outputEvents             events.EventList
 	// contextStore is used to store and recover context on asynchronous operations such as signature verification.
 	contextStore cs.ContextStore[any]
 	// eventCleanupContextIDs is used to dispose of the used up entries in contextStore.
@@ -52,7 +52,7 @@ func NewModule(moduleID t.ModuleID) Module {
 		moduleID:               moduleID,
 		defaultEventHandler:    failExceptForInitAndTransport,
 		eventHandlers:          make(map[reflect.Type][]func(ev *eventpbtypes.Event) error),
-		outputEvents:           &events.EventList{},
+		outputEvents:           events.EventList{},
 		contextStore:           cs.NewSequentialContextStore[any](),
 		eventCleanupContextIDs: make(map[ContextID]struct{}),
 	}
@@ -150,7 +150,7 @@ func EmitEvent(m Module, ev *eventpbtypes.Event) {
 
 // ApplyEvents applies a list of input events to the module, making it advance its state
 // and returns a (potentially empty) list of output events that the application of the input events results in.
-func (m *dslModuleImpl) ApplyEvents(evs *events.EventList) (*events.EventList, error) {
+func (m *dslModuleImpl) ApplyEvents(evs events.EventList) (events.EventList, error) {
 	// Run event handlers.
 	iter := evs.Iterator()
 	for ev := iter.Next(); ev != nil; ev = iter.Next() {
@@ -160,7 +160,7 @@ func (m *dslModuleImpl) ApplyEvents(evs *events.EventList) (*events.EventList, e
 		if !ok {
 			err := m.defaultEventHandler(ev)
 			if err != nil {
-				return nil, err
+				return events.EmptyList(), err
 			}
 		}
 
@@ -168,7 +168,7 @@ func (m *dslModuleImpl) ApplyEvents(evs *events.EventList) (*events.EventList, e
 		for _, h := range handlers {
 			err := h(ev)
 			if err != nil {
-				return nil, err
+				return events.EmptyList(), err
 			}
 		}
 
@@ -176,7 +176,7 @@ func (m *dslModuleImpl) ApplyEvents(evs *events.EventList) (*events.EventList, e
 		for _, h := range m.stateUpdateHandlers {
 			err := h()
 			if err != nil {
-				return nil, err
+				return events.EmptyList(), err
 			}
 		}
 	}
@@ -186,7 +186,7 @@ func (m *dslModuleImpl) ApplyEvents(evs *events.EventList) (*events.EventList, e
 		err := condition()
 
 		if err != nil {
-			return nil, err
+			return events.EmptyList(), err
 		}
 	}
 
@@ -199,7 +199,7 @@ func (m *dslModuleImpl) ApplyEvents(evs *events.EventList) (*events.EventList, e
 	}
 
 	outputEvents := m.outputEvents
-	m.outputEvents = &events.EventList{}
+	m.outputEvents = events.EventList{}
 	return outputEvents, nil
 }
 

@@ -71,23 +71,25 @@ func New(id t.ModuleID, params ModuleParams, logger logging.Logger) *FactoryModu
 
 func (fm *FactoryModule) ImplementsModule() {}
 
-func (fm *FactoryModule) ApplyEvents(evts *events.EventList) (*events.EventList, error) {
+func (fm *FactoryModule) ApplyEvents(evts events.EventList) (events.EventList, error) {
 	// TODO: Perform event processing in parallel (applyEvent will need to be made thread-safe).
 	//       The idea is to have one internal thread per submodule, distribute the events to them through channels,
 	//       and wait until all are processed.
 
 	eventsOut, err := modules.ApplyEventsSequentially(evts, fm.applyEvent)
 	if err != nil {
-		return nil, err
+		return events.EmptyList(), err
 	}
 	submoduleEventsOut, err := fm.applySubmodulesEvents()
 	if err != nil {
-		return nil, err
+		return events.EmptyList(), err
 	}
-	return eventsOut.PushBackList(submoduleEventsOut), nil
+
+	eventsOut.PushBackList(submoduleEventsOut)
+	return eventsOut, nil
 }
 
-func (fm *FactoryModule) applyEvent(event *eventpbtypes.Event) (*events.EventList, error) {
+func (fm *FactoryModule) applyEvent(event *eventpbtypes.Event) (events.EventList, error) {
 	if event.DestModule == fm.ownID {
 		switch e := event.Type.(type) {
 		case *eventpbtypes.Event_Init:
@@ -98,7 +100,7 @@ func (fm *FactoryModule) applyEvent(event *eventpbtypes.Event) (*events.EventLis
 			// (as the factory event might change the submodules themselves).
 			submoduleOutputEvts, err := fm.applySubmodulesEvents()
 			if err != nil {
-				return nil, err
+				return events.EmptyList(), err
 			}
 
 			// Apply the factory event itself, appending its output to the result of submodule event processing.
@@ -106,20 +108,24 @@ func (fm *FactoryModule) applyEvent(event *eventpbtypes.Event) (*events.EventLis
 			case *factorypbtypes.Event_NewModule:
 				evOut, err := fm.applyNewModule(e.NewModule)
 				if err != nil {
-					return nil, err
+					return events.EmptyList(), err
 				}
-				return submoduleOutputEvts.PushBackList(evOut), nil
+
+				submoduleOutputEvts.PushBackList(evOut)
+				return submoduleOutputEvts, nil
 			case *factorypbtypes.Event_GarbageCollect:
 				evOut, err := fm.applyGarbageCollect(e.GarbageCollect)
 				if err != nil {
-					return nil, err
+					return events.EmptyList(), err
 				}
-				return submoduleOutputEvts.PushBackList(evOut), nil
+
+				submoduleOutputEvts.PushBackList(evOut)
+				return submoduleOutputEvts, nil
 			default:
-				return nil, es.Errorf("unsupported factory event subtype: %T", e)
+				return events.EmptyList(), es.Errorf("unsupported factory event subtype: %T", e)
 			}
 		default:
-			return nil, es.Errorf("unsupported event type for factory module: %T", e)
+			return events.EmptyList(), es.Errorf("unsupported event type for factory module: %T", e)
 		}
 	}
 
@@ -134,34 +140,34 @@ func (fm *FactoryModule) applyEvent(event *eventpbtypes.Event) (*events.EventLis
 func (fm *FactoryModule) bufferSubmoduleEvent(event *eventpbtypes.Event) {
 	smID := event.DestModule
 	if _, ok := fm.eventBuffer[smID]; !ok {
-		fm.eventBuffer[smID] = events.EmptyList()
+		fm.eventBuffer[smID] = &events.EventList{}
 	}
 
-	fm.eventBuffer[smID] = fm.eventBuffer[smID].PushBack(event)
+	fm.eventBuffer[smID].PushBack(event)
 }
 
 // applySubmodulesEvents applies all buffered events to the existing submodules,
 // returns the first encountered error if any,
 // or the full list of outgoing events after applying all the events to each of the submodules
-func (fm *FactoryModule) applySubmodulesEvents() (*events.EventList, error) {
+func (fm *FactoryModule) applySubmodulesEvents() (events.EventList, error) {
 	eventsOut := events.EmptyList()
 	errChan := make(chan error)
-	evtsChan := make(chan *events.EventList)
+	evtsChan := make(chan events.EventList)
 
 	// Apply submodule events concurrently to their respective submodules.
 	existingSubmodules := 0
 	for smID, eventList := range fm.eventBuffer {
 		if submodule, ok := fm.submodules[smID]; !ok {
 			// If the target submodule does not exist (yet), buffer its incoming messages.
-			fm.bufferEarlyMsgs(eventList)
+			fm.bufferEarlyMsgs(*eventList)
 		} else {
 			// Otherwise, call the submodule's ApplyEvents method in the background.
 			existingSubmodules++
-			go func(submodule modules.PassiveModule, eventList *events.EventList) {
+			go func(submodule modules.PassiveModule, eventList events.EventList) {
 				evtsOut, err := submodule.ApplyEvents(eventList)
 				errChan <- err
 				evtsChan <- evtsOut
-			}(submodule, eventList)
+			}(submodule, *eventList)
 		}
 	}
 
@@ -169,7 +175,7 @@ func (fm *FactoryModule) applySubmodulesEvents() (*events.EventList, error) {
 	for i := 0; i < existingSubmodules; i++ {
 		err := <-errChan
 		if err != nil {
-			return nil, err
+			return events.EmptyList(), err
 		}
 		eventsOut.PushBackList(<-evtsChan)
 	}
@@ -180,7 +186,7 @@ func (fm *FactoryModule) applySubmodulesEvents() (*events.EventList, error) {
 
 // bufferEarlyMsgs buffers message events for later application.
 // It is used when receiving early messages for submodules that do not exist yet.
-func (fm *FactoryModule) bufferEarlyMsgs(eventList *events.EventList) {
+func (fm *FactoryModule) bufferEarlyMsgs(eventList events.EventList) {
 	iter := eventList.Iterator()
 	for event := iter.Next(); event != nil; event = iter.Next() {
 		fm.tryBuffering(event)
@@ -216,7 +222,7 @@ func (fm *FactoryModule) tryBuffering(event *eventpbtypes.Event) {
 	}
 }
 
-func (fm *FactoryModule) applyNewModule(newModule *factorypbtypes.NewModule) (*events.EventList, error) {
+func (fm *FactoryModule) applyNewModule(newModule *factorypbtypes.NewModule) (events.EventList, error) {
 
 	// Convenience variables
 	id := newModule.ModuleId
@@ -224,7 +230,7 @@ func (fm *FactoryModule) applyNewModule(newModule *factorypbtypes.NewModule) (*e
 
 	// The new module's ID must have the factory's ID as a prefix.
 	if id.Top() != fm.ownID {
-		return nil, es.Errorf("submodule (%v) must have the factory's ID (%v) as a prefix", id, fm.ownID)
+		return events.EmptyList(), es.Errorf("submodule (%v) must have the factory's ID (%v) as a prefix", id, fm.ownID)
 	}
 
 	// Skip creation of submodules that should have been already garbage-collected.
@@ -238,7 +244,7 @@ func (fm *FactoryModule) applyNewModule(newModule *factorypbtypes.NewModule) (*e
 	if submodule, err := fm.generator(id, newModule.Params); err == nil {
 		fm.submodules[id] = submodule
 	} else {
-		return nil, err
+		return events.EmptyList(), err
 	}
 
 	// Assign the newly created submodule to its retention index.
@@ -247,7 +253,7 @@ func (fm *FactoryModule) applyNewModule(newModule *factorypbtypes.NewModule) (*e
 	// Initialize new submodule.
 	eventsOut, err := fm.submodules[id].ApplyEvents(events.ListOf(events.Init(id)))
 	if err != nil {
-		return nil, err
+		return events.EmptyList(), err
 	}
 
 	// Get messages for the new submodule that arrived early and have been buffered.
@@ -264,7 +270,7 @@ func (fm *FactoryModule) applyNewModule(newModule *factorypbtypes.NewModule) (*e
 	// Apply buffered messages
 	results, err := fm.submodules[id].ApplyEvents(bufferedMessages)
 	if err != nil {
-		return nil, err
+		return events.EmptyList(), err
 	}
 	eventsOut.PushBackList(results)
 
@@ -272,7 +278,7 @@ func (fm *FactoryModule) applyNewModule(newModule *factorypbtypes.NewModule) (*e
 	return eventsOut, nil
 }
 
-func (fm *FactoryModule) applyGarbageCollect(gc *factorypbtypes.GarbageCollect) (*events.EventList, error) {
+func (fm *FactoryModule) applyGarbageCollect(gc *factorypbtypes.GarbageCollect) (events.EventList, error) {
 	// While the new retention index is larger than the current one
 	for gc.RetentionIndex > fm.retIdx {
 

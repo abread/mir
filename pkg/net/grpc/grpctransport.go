@@ -53,7 +53,7 @@ type Transport struct {
 
 	// Channel to which all incoming messages are written.
 	// This channel is also returned by the ReceiveChan() method.
-	incomingMessages chan *events.EventList
+	incomingMessages chan events.EventList
 
 	// For each node ID, stores a gRPC message sink, calling the Send() method of which sends a message to that node.
 	clients map[t.NodeID]GrpcTransport_ListenClient
@@ -95,7 +95,7 @@ func NewTransport(id t.NodeID, addrStr string, l logging.Logger) (*Transport, er
 	return &Transport{
 		ownID:            id,
 		ownAddr:          addr,
-		incomingMessages: make(chan *events.EventList),
+		incomingMessages: make(chan events.EventList),
 		clients:          make(map[t.NodeID]GrpcTransport_ListenClient),
 		conns:            make(map[t.NodeID]*grpc.ClientConn),
 		logger:           l,
@@ -105,13 +105,13 @@ func NewTransport(id t.NodeID, addrStr string, l logging.Logger) (*Transport, er
 // The ImplementsModule method only serves the purpose of indicating that this is a Module and must not be called.
 func (gt *Transport) ImplementsModule() {}
 
-func (gt *Transport) EventsOut() <-chan *events.EventList {
+func (gt *Transport) EventsOut() <-chan events.EventList {
 	return gt.incomingMessages
 }
 
 func (gt *Transport) ApplyEvents(
 	ctx context.Context,
-	eventList *events.EventList,
+	eventList events.EventList,
 ) error {
 	iter := eventList.Iterator()
 	for event := iter.Next(); event != nil; event = iter.Next() {

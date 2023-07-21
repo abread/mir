@@ -316,7 +316,7 @@ func newCountingApp(isLeader bool) *countingApp {
 	return app
 }
 
-func (app *countingApp) ApplyEvents(evs *events.EventList) (*events.EventList, error) {
+func (app *countingApp) ApplyEvents(evs events.EventList) (events.EventList, error) {
 	return app.module.ApplyEvents(evs)
 }
 

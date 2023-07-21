@@ -32,11 +32,11 @@ func NewPingPong(ownID t.NodeID) *Pingpong {
 
 func (p *Pingpong) ImplementsModule() {}
 
-func (p *Pingpong) ApplyEvents(evts *events.EventList) (*events.EventList, error) {
+func (p *Pingpong) ApplyEvents(evts events.EventList) (events.EventList, error) {
 	return modules.ApplyEventsSequentially(evts, p.applyEvent)
 }
 
-func (p *Pingpong) applyEvent(event *eventpbtypes.Event) (*events.EventList, error) {
+func (p *Pingpong) applyEvent(event *eventpbtypes.Event) (events.EventList, error) {
 	switch e := event.Type.(type) {
 	case *eventpbtypes.Event_Init:
 		return p.applyInit()
@@ -45,21 +45,21 @@ func (p *Pingpong) applyEvent(event *eventpbtypes.Event) (*events.EventList, err
 		case *transportpbtypes.Event_MessageReceived:
 			return p.applyMessageReceived(e.MessageReceived)
 		default:
-			return nil, errors.Errorf("unknown transport event type: %T", e)
+			return events.EmptyList(), errors.Errorf("unknown transport event type: %T", e)
 		}
 	case *eventpbtypes.Event_PingPong:
 		switch e := e.PingPong.Type.(type) {
 		case *pingpongpbtypes.Event_PingTime:
 			return p.applyPingTime(e.PingTime)
 		default:
-			return nil, errors.Errorf("unknown pingpong event type: %T", e)
+			return events.EmptyList(), errors.Errorf("unknown pingpong event type: %T", e)
 		}
 	default:
-		return nil, errors.Errorf("unknown event type: %T", event.Type)
+		return events.EmptyList(), errors.Errorf("unknown event type: %T", event.Type)
 	}
 }
 
-func (p *Pingpong) applyInit() (*events.EventList, error) {
+func (p *Pingpong) applyInit() (events.EventList, error) {
 	p.nextSn = 0
 	timerEvent := eventpbevents.TimerRepeat(
 		"timer",
@@ -70,11 +70,11 @@ func (p *Pingpong) applyInit() (*events.EventList, error) {
 	return events.ListOf(timerEvent), nil
 }
 
-func (p *Pingpong) applyPingTime(_ *pingpongpbtypes.PingTime) (*events.EventList, error) {
+func (p *Pingpong) applyPingTime(_ *pingpongpbtypes.PingTime) (events.EventList, error) {
 	return p.sendPing()
 }
 
-func (p *Pingpong) sendPing() (*events.EventList, error) {
+func (p *Pingpong) sendPing() (events.EventList, error) {
 	var destID t.NodeID
 	if p.ownID == "0" {
 		destID = "1"
@@ -88,7 +88,7 @@ func (p *Pingpong) sendPing() (*events.EventList, error) {
 	return events.ListOf(sendMsgEvent), nil
 }
 
-func (p *Pingpong) applyMessageReceived(msg *transportpbtypes.MessageReceived) (*events.EventList, error) {
+func (p *Pingpong) applyMessageReceived(msg *transportpbtypes.MessageReceived) (events.EventList, error) {
 	switch message := msg.Msg.Type.(type) {
 	case *messagepbtypes.Message_Pingpong:
 		switch m := message.Pingpong.Type.(type) {
@@ -97,21 +97,21 @@ func (p *Pingpong) applyMessageReceived(msg *transportpbtypes.MessageReceived) (
 		case *pingpongpbtypes.Message_Pong:
 			return p.applyPong(m.Pong, msg.From)
 		default:
-			return nil, errors.Errorf("unknown pingpong message type: %T", m)
+			return events.EmptyList(), errors.Errorf("unknown pingpong message type: %T", m)
 		}
 	default:
-		return nil, errors.Errorf("unknown message type: %T", message)
+		return events.EmptyList(), errors.Errorf("unknown message type: %T", message)
 	}
 }
 
-func (p *Pingpong) applyPing(ping *pingpongpbtypes.Ping, from t.NodeID) (*events.EventList, error) {
+func (p *Pingpong) applyPing(ping *pingpongpbtypes.Ping, from t.NodeID) (events.EventList, error) {
 	fmt.Printf("Received ping from %s: %d\n", from, ping.SeqNr)
 	pong := PongMessage("pingpong", ping.SeqNr)
 	sendMsgEvent := transportpbevents.SendMessage("transport", pong, []t.NodeID{from})
 	return events.ListOf(sendMsgEvent), nil
 }
 
-func (p *Pingpong) applyPong(pong *pingpongpbtypes.Pong, from t.NodeID) (*events.EventList, error) {
+func (p *Pingpong) applyPong(pong *pingpongpbtypes.Pong, from t.NodeID) (events.EventList, error) {
 	fmt.Printf("Received pong from %s: %d\n", from, pong.SeqNr)
 	return events.EmptyList(), nil
 }

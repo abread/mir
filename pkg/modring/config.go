@@ -11,8 +11,8 @@ type ModuleConfig struct {
 	Self t.ModuleID
 }
 
-type ModuleGenerator func(id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error)
-type PastMessagesHandler func(pastMessages []*modringpbtypes.PastMessage) (*events.EventList, error)
+type ModuleGenerator func(id t.ModuleID, idx uint64) (modules.PassiveModule, events.EventList, error)
+type PastMessagesHandler func(pastMessages []*modringpbtypes.PastMessage) (events.EventList, error)
 
 type ModuleParams struct {
 	Generator      ModuleGenerator

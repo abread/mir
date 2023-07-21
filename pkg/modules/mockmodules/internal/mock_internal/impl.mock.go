@@ -37,10 +37,10 @@ func (m *MockModuleImpl) EXPECT() *MockModuleImplMockRecorder {
 }
 
 // Event mocks base method.
-func (m *MockModuleImpl) Event(ev *types.Event) (*events.EventList, error) {
+func (m *MockModuleImpl) Event(ev *types.Event) (events.EventList, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Event", ev)
-	ret0, _ := ret[0].(*events.EventList)
+	ret0, _ := ret[0].(events.EventList)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

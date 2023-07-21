@@ -14,7 +14,7 @@ type PassiveModule interface {
 
 	// ApplyEvents applies a list of input events to the module, making it advance its state
 	// and returns a (potentially empty) list of output events that the application of the input events results in.
-	ApplyEvents(events *events.EventList) (*events.EventList, error)
+	ApplyEvents(events events.EventList) (events.EventList, error)
 }
 
 func RoutedModule(rootID t.ModuleID, root PassiveModule, subRouter PassiveModule) PassiveModule {
@@ -32,9 +32,9 @@ type routedModule struct {
 }
 
 func (m *routedModule) ImplementsModule() {}
-func (m *routedModule) ApplyEvents(evs *events.EventList) (*events.EventList, error) {
-	rootEvsIn := &events.EventList{}
-	subRouterEvsIn := &events.EventList{}
+func (m *routedModule) ApplyEvents(evs events.EventList) (events.EventList, error) {
+	rootEvsIn := events.EmptyList()
+	subRouterEvsIn := events.EmptyList()
 
 	it := evs.Iterator()
 	for ev := it.Next(); ev != nil; ev = it.Next() {
@@ -49,12 +49,14 @@ func (m *routedModule) ApplyEvents(evs *events.EventList) (*events.EventList, er
 	subRouterEvsOut, subRouterErr := applyAllSafely(m.subRouter, subRouterEvsIn)
 
 	if subRouterErr != nil {
-		return nil, subRouterErr
+		return events.EmptyList(), subRouterErr
 	} else if rootErr != nil {
-		return nil, rootErr
+		return events.EmptyList(), rootErr
 	}
 
-	return rootEvsOut.PushBackList(subRouterEvsOut), nil
+	rootEvsOut.PushBackList(subRouterEvsOut)
+
+	return rootEvsOut, nil
 }
 
 func MultiApplyModule(subs []PassiveModule) PassiveModule {
@@ -68,22 +70,22 @@ type multiApplyModule struct {
 }
 
 func (m *multiApplyModule) ImplementsModule() {}
-func (m *multiApplyModule) ApplyEvents(evs *events.EventList) (*events.EventList, error) {
-	allEvsOut := &events.EventList{}
+func (m *multiApplyModule) ApplyEvents(evs events.EventList) (events.EventList, error) {
+	allEvsOut := events.EmptyList()
 
 	for _, sub := range m.subs {
 		evsOut, err := applyAllSafely(sub, evs)
 		if err != nil {
-			return nil, err
+			return events.EmptyList(), err
 		}
 
-		allEvsOut = allEvsOut.PushBackList(evsOut)
+		allEvsOut.PushBackList(evsOut)
 	}
 
 	return allEvsOut, nil
 }
 
-func applyAllSafely(m PassiveModule, evs *events.EventList) (result *events.EventList, err error) {
+func applyAllSafely(m PassiveModule, evs events.EventList) (result events.EventList, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			if rErr, ok := r.(error); ok {

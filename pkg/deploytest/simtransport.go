@@ -76,7 +76,7 @@ type simTransportModule struct {
 	*SimTransport
 	*SimNode
 	id       t.NodeID
-	outChan  chan *events.EventList
+	outChan  chan events.EventList
 	simChan  *testsim.Chan
 	stopChan chan struct{}
 }
@@ -86,7 +86,7 @@ func newModule(t *SimTransport, id t.NodeID, node *SimNode) *simTransportModule 
 		SimTransport: t,
 		SimNode:      node,
 		id:           id,
-		outChan:      make(chan *events.EventList, 1),
+		outChan:      make(chan events.EventList, 1),
 		simChan:      testsim.NewChan(),
 		stopChan:     make(chan struct{}),
 	}
@@ -119,8 +119,8 @@ func (m *simTransportModule) WaitFor(_ int) error {
 	return nil
 }
 
-func (m *simTransportModule) ApplyEvents(ctx context.Context, eventList *events.EventList) error {
-	_, err := modules.ApplyEventsSequentially(eventList, func(e *eventpbtypes.Event) (*events.EventList, error) {
+func (m *simTransportModule) ApplyEvents(ctx context.Context, eventList events.EventList) error {
+	_, err := modules.ApplyEventsSequentially(eventList, func(e *eventpbtypes.Event) (events.EventList, error) {
 		return events.EmptyList(), m.applyEvent(ctx, e)
 	})
 	return err
@@ -182,7 +182,7 @@ func (m *simTransportModule) sendMessage(msg *messagepbtypes.Message, target t.N
 	}()
 }
 
-func (m *simTransportModule) EventsOut() <-chan *events.EventList {
+func (m *simTransportModule) EventsOut() <-chan events.EventList {
 	return m.outChan
 }
 

@@ -13,11 +13,11 @@ type NullTransport struct{}
 
 func (n *NullTransport) ImplementsModule() {}
 
-func (n *NullTransport) ApplyEvents(_ context.Context, _ *events.EventList) error {
+func (n *NullTransport) ApplyEvents(_ context.Context, _ events.EventList) error {
 	return nil
 }
 
-func (n *NullTransport) EventsOut() <-chan *events.EventList {
+func (n *NullTransport) EventsOut() <-chan events.EventList {
 	return nil
 }
 

@@ -12,6 +12,11 @@ import (
 	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 )
 
+const (
+	eventListMaxGrowth = 128
+	eventListMinGrowth = 2
+)
+
 // EventList represents a list of Events, e.g. as produced by a module.
 type EventList struct {
 	evs []*eventpbtypes.Event
@@ -19,56 +24,58 @@ type EventList struct {
 
 // EmptyList returns an empty EventList.
 // TODO: consider passing EventList by value here and everywhere else.
-func EmptyList() *EventList {
-	return &EventList{}
+func EmptyList() EventList {
+	return EventList{}
 }
 
-func EmptyListWithCapacity(cap int) *EventList {
-	return &EventList{
+func EmptyListWithCapacity(cap int) EventList {
+	return EventList{
 		evs: make([]*eventpbtypes.Event, 0, cap),
 	}
 }
 
 // ListOf returns EventList containing the given elements.
-func ListOf(events ...*eventpbtypes.Event) *EventList {
-	return &EventList{
+func ListOf(events ...*eventpbtypes.Event) EventList {
+	return EventList{
 		evs: events,
 	}
 }
 
 // Len returns the number of events in the EventList.
-func (el *EventList) Len() int {
+func (el EventList) Len() int {
 	return len(el.evs)
 }
 
 // PushBack appends an event to the end of the list.
-// Returns the EventList itself, for the convenience of chaining multiple calls to PushBack.
-func (el *EventList) PushBack(event *eventpbtypes.Event) *EventList {
+func (el *EventList) PushBack(event *eventpbtypes.Event) {
 	if len(el.evs) == cap(el.evs) {
-		// grow into duplicate capacity
-		el.ReserveExtraSpace(len(el.evs))
+		// grow into max(min(duplicate capacity, max growth), min growth)
+		sz := len(el.evs)
+		if sz > eventListMaxGrowth {
+			sz = eventListMaxGrowth
+		} else if sz == 0 {
+			sz = eventListMinGrowth
+		}
+
+		el.ReserveExtraSpace(sz)
 	}
 
 	el.evs = append(el.evs, event)
-
-	return el
 }
 
 // PushBackSlice appends all events in newEvents to the end of the current EventList.
-func (el *EventList) PushBackSlice(events []*eventpbtypes.Event) *EventList {
+func (el *EventList) PushBackSlice(events []*eventpbtypes.Event) {
 	if cap(el.evs)-len(el.evs) < len(events) {
 		// grow into exact size for the new elements
 		el.ReserveExtraSpace(len(events))
 	}
 
 	el.evs = append(el.evs, events...)
-
-	return el
 }
 
 // PushBackList appends all events in newEvents to the end of the current EventList.
-func (el *EventList) PushBackList(newEvents *EventList) *EventList {
-	return el.PushBackSlice(newEvents.evs)
+func (el *EventList) PushBackList(newEvents EventList) {
+	el.PushBackSlice(newEvents.evs)
 }
 
 func (el *EventList) ReserveExtraSpace(sz int) {
@@ -77,14 +84,14 @@ func (el *EventList) ReserveExtraSpace(sz int) {
 
 // Head returns the first up to n events in the list as a new list.
 // The original list is not modified.
-func (el *EventList) Head(n int) *EventList {
+func (el EventList) Head(n int) EventList {
 	if n >= len(el.evs) {
-		return &EventList{
+		return EventList{
 			evs: el.evs,
 		}
 	}
 
-	return &EventList{
+	return EventList{
 		evs: el.evs[:n],
 	}
 }
@@ -106,15 +113,14 @@ func (el *EventList) RemoveFront(n int) int {
 // Slice returns a slice representation of the current state of the list.
 // The returned slice only contains pointers to the events in this list, no deep copying is performed.
 // Any modifications performed on the events will affect the contents of both the EventList and the returned slice.
-func (el *EventList) Slice() []*eventpbtypes.Event {
+func (el EventList) Slice() []*eventpbtypes.Event {
 	return el.evs
 }
 
-// StripFollowUps collects all follow-up Events of the Events in the list.
-// It returns two lists:
-// 1. The current EventList containing the same events, with all follow-up events removed.
-// 2. A new EventList containing only those follow-up events.
-func (el *EventList) StripFollowUps() (*EventList, *EventList) {
+// StripFollowUps collects all follow-up Events of the Events in a new EventList, removing them from
+// the events in the original list.
+// It returns a new EventList containing the collected follow-up events.
+func (el *EventList) StripFollowUps() EventList {
 	// Create list of follow-up Events.
 	followUps := EventList{}
 
@@ -128,13 +134,13 @@ func (el *EventList) StripFollowUps() (*EventList, *EventList) {
 	}
 
 	// Return populated list of follow-up events.
-	return el, &followUps
+	return followUps
 }
 
 // Iterator returns a pointer to an EventListIterator object used to iterate over the events in this list,
 // starting from the beginning of the list.
-func (el *EventList) Iterator() *EventListIterator {
-	return &EventListIterator{
+func (el EventList) Iterator() EventListIterator {
+	return EventListIterator{
 		evSlice: el.evs,
 	}
 }

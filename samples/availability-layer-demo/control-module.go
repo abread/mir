@@ -24,19 +24,19 @@ import (
 )
 
 type controlModule struct {
-	eventsOut           chan *events.EventList
+	eventsOut           chan events.EventList
 	readyForNextCommand chan struct{}
 }
 
 func newControlModule() modules.ActiveModule {
 	return &controlModule{
-		eventsOut: make(chan *events.EventList),
+		eventsOut: make(chan events.EventList),
 	}
 }
 
 func (m *controlModule) ImplementsModule() {}
 
-func (m *controlModule) ApplyEvents(_ context.Context, events *events.EventList) error {
+func (m *controlModule) ApplyEvents(_ context.Context, events events.EventList) error {
 	iter := events.Iterator()
 	for event := iter.Next(); event != nil; event = iter.Next() {
 		switch event := event.Type.(type) {
@@ -74,7 +74,7 @@ func (m *controlModule) ApplyEvents(_ context.Context, events *events.EventList)
 	return nil
 }
 
-func (m *controlModule) EventsOut() <-chan *events.EventList {
+func (m *controlModule) EventsOut() <-chan events.EventList {
 	return m.eventsOut
 }
 

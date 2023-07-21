@@ -30,7 +30,7 @@ type ActiveModule interface {
 	// spawned by ApplyEvents.
 	//
 	// The Node never invokes an ApplyEvents concurrently.
-	ApplyEvents(ctx context.Context, events *events.EventList) error
+	ApplyEvents(ctx context.Context, events events.EventList) error
 
 	// EventsOut returns a channel to which output events produced by the ActiveModule's implementation will be written.
 	//
@@ -40,5 +40,5 @@ type ActiveModule interface {
 	// The node might decide at any moment to stop reading from eventsOut for an arbitrary amount of time
 	// (e.g. if the Node's internal event buffers become full and the Node needs to wait until they free up).
 	// Even then, calls to ApplyEvents must be non-blocking.
-	EventsOut() <-chan *events.EventList
+	EventsOut() <-chan events.EventList
 }

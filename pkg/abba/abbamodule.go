@@ -195,9 +195,9 @@ func newController(mc ModuleConfig, params ModuleParams, logger logging.Logger, 
 	return m
 }
 
-func newRoundGenerator(controllerMc ModuleConfig, controllerParams ModuleParams, nodeID t.NodeID, logger logging.Logger) func(id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
+func newRoundGenerator(controllerMc ModuleConfig, controllerParams ModuleParams, nodeID t.NodeID, logger logging.Logger) func(id t.ModuleID, idx uint64) (modules.PassiveModule, events.EventList, error) {
 
-	return func(id t.ModuleID, idx uint64) (modules.PassiveModule, *events.EventList, error) {
+	return func(id t.ModuleID, idx uint64) (modules.PassiveModule, events.EventList, error) {
 		mc := abbaround.ModuleConfig{
 			Self:         id,
 			Consumer:     controllerMc.Self,
@@ -214,8 +214,7 @@ func newRoundGenerator(controllerMc ModuleConfig, controllerParams ModuleParams,
 
 		mod := abbaround.New(mc, params, nodeID, logging.Decorate(logger, "Abba Round: ", "abbaRound", idx))
 
-		initialEvs := &events.EventList{}
-		return mod, initialEvs, nil
+		return mod, events.EmptyList(), nil
 	}
 }
 

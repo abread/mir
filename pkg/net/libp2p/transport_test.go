@@ -220,8 +220,8 @@ func (m *mockLibp2pCommunication) testEventuallyNoStreams(nodeIDs ...types.NodeI
 	}
 }
 
-func (m *mockLibp2pCommunication) testThatSenderIs(events *events.EventList, nodeID types.NodeID) {
-	tEvent, valid := events.Iterator().Next().Type.(*eventpbtypes.Event_Transport)
+func (m *mockLibp2pCommunication) testThatSenderIs(events events.EventList, nodeID types.NodeID) {
+	tEvent, valid := events.Slice()[0].Type.(*eventpbtypes.Event_Transport)
 	require.True(m.t, valid)
 	msg, valid := tEvent.Transport.Type.(*transportpbtypes.Event_MessageReceived)
 	require.True(m.t, valid)
@@ -976,7 +976,7 @@ func TestMessagingWithNewNodes(t *testing.T) {
 		}
 	}
 
-	receiver := func(nodeID types.NodeID, events chan *events.EventList, stop chan struct{}) {
+	receiver := func(nodeID types.NodeID, events chan events.EventList, stop chan struct{}) {
 		defer receivers.Done()
 
 		for {
@@ -987,7 +987,7 @@ func TestMessagingWithNewNodes(t *testing.T) {
 				if !ok {
 					return
 				}
-				_, valid := e.Iterator().Next().Type.(*eventpbtypes.Event_Transport).Transport.Type.(*transportpbtypes.Event_MessageReceived)
+				_, valid := e.Slice()[0].Type.(*eventpbtypes.Event_Transport).Transport.Type.(*transportpbtypes.Event_MessageReceived)
 				require.Equal(m.t, true, valid)
 				atomic.AddInt64(&received, 1)
 			}

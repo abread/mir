@@ -20,11 +20,11 @@ func New(crypto Crypto) *MirModule {
 	return &MirModule{crypto: crypto}
 }
 
-func (c *MirModule) ApplyEvents(eventsIn *events.EventList) (*events.EventList, error) {
+func (c *MirModule) ApplyEvents(eventsIn events.EventList) (events.EventList, error) {
 	return modules.ApplyEventsConcurrently(eventsIn, c.ApplyEvent)
 }
 
-func (c *MirModule) ApplyEvent(event *eventpbtypes.Event) (*events.EventList, error) {
+func (c *MirModule) ApplyEvent(event *eventpbtypes.Event) (events.EventList, error) {
 	switch e := event.Type.(type) {
 	case *eventpbtypes.Event_Init:
 		// no actions on init
@@ -36,7 +36,7 @@ func (c *MirModule) ApplyEvent(event *eventpbtypes.Event) (*events.EventList, er
 
 			signature, err := c.crypto.Sign(e.SignRequest.Data.Data)
 			if err != nil {
-				return nil, err
+				return events.EmptyList(), err
 			}
 			return events.ListOf(
 				cryptopbevents.SignResult(
@@ -85,11 +85,11 @@ func (c *MirModule) ApplyEvent(event *eventpbtypes.Event) (*events.EventList, er
 			)), nil
 
 		default:
-			return nil, es.Errorf("unexpected type of crypto event: %T", e)
+			return events.EmptyList(), es.Errorf("unexpected type of crypto event: %T", e)
 		}
 	default:
 		// Complain about all other incoming event types.
-		return nil, es.Errorf("unexpected type of MirModule event: %T", event.Type)
+		return events.EmptyList(), es.Errorf("unexpected type of MirModule event: %T", event.Type)
 	}
 }
 

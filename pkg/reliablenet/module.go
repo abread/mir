@@ -99,16 +99,16 @@ func (m *Module) CountPendingMessages() int {
 	return m.queue.Len()
 }
 
-func (m *Module) ApplyEvents(evs *events.EventList) (*events.EventList, error) {
+func (m *Module) ApplyEvents(evs events.EventList) (events.EventList, error) {
 	return modules.ApplyEventsSequentially(evs, m.applyEvent)
 }
 
 func (m *Module) ImplementsModule() {}
 
-func (m *Module) applyEvent(event *eventpbtypes.Event) (*events.EventList, error) {
+func (m *Module) applyEvent(event *eventpbtypes.Event) (events.EventList, error) {
 	switch ev := event.Type.(type) {
 	case *eventpbtypes.Event_Init:
-		return &events.EventList{}, nil
+		return events.EmptyList(), nil
 	case *eventpbtypes.Event_ReliableNet:
 		return m.applyRNEvent(ev.ReliableNet)
 	case *eventpbtypes.Event_Transport:
@@ -116,14 +116,14 @@ func (m *Module) applyEvent(event *eventpbtypes.Event) (*events.EventList, error
 		case *transportpbtypes.Event_MessageReceived:
 			return m.applyMessage(e.MessageReceived.Msg, e.MessageReceived.From)
 		default:
-			return nil, es.Errorf("unsupported transport event type: %T", e)
+			return events.EmptyList(), es.Errorf("unsupported transport event type: %T", e)
 		}
 	default:
-		return nil, es.Errorf("unsupported event type: %T", ev)
+		return events.EmptyList(), es.Errorf("unsupported event type: %T", ev)
 	}
 }
 
-func (m *Module) applyRNEvent(event *reliablenetpbtypes.Event) (*events.EventList, error) {
+func (m *Module) applyRNEvent(event *reliablenetpbtypes.Event) (events.EventList, error) {
 	switch ev := event.Type.(type) {
 	case *reliablenetpbtypes.Event_RetransmitAll:
 		return m.retransmitAll()
@@ -136,25 +136,25 @@ func (m *Module) applyRNEvent(event *reliablenetpbtypes.Event) (*events.EventLis
 	case *reliablenetpbtypes.Event_Ack:
 		return m.SendAck(ev.Ack.DestModule, ev.Ack.MsgId, ev.Ack.Source)
 	default:
-		return nil, es.Errorf("unsupported reliablenet event type: %T", ev)
+		return events.EmptyList(), es.Errorf("unsupported reliablenet event type: %T", ev)
 	}
 }
 
-func (m *Module) applyMessage(message *messagepbtypes.Message, from t.NodeID) (*events.EventList, error) {
+func (m *Module) applyMessage(message *messagepbtypes.Message, from t.NodeID) (events.EventList, error) {
 	wrappedMsg, ok := message.Type.(*messagepbtypes.Message_ReliableNet)
 	if !ok {
-		return &events.EventList{}, nil
+		return events.EmptyList(), nil
 	}
 
 	msg, ok := wrappedMsg.ReliableNet.Type.(*rnetmsgstypes.Message_Ack)
 	if !ok {
-		return &events.EventList{}, nil
+		return events.EmptyList(), nil
 	}
 
 	return m.MarkRecvd(msg.Ack.MsgDestModule, msg.Ack.MsgId, []t.NodeID{from})
 }
 
-func (m *Module) SendAck(msgDestModule t.ModuleID, msgID rntypes.MsgID, msgSource t.NodeID) (*events.EventList, error) {
+func (m *Module) SendAck(msgDestModule t.ModuleID, msgID rntypes.MsgID, msgSource t.NodeID) (events.EventList, error) {
 	if msgSource == m.ownID {
 		// fast path for local messages
 		return m.MarkRecvd(msgDestModule, msgID, []t.NodeID{msgSource})
@@ -169,7 +169,7 @@ func (m *Module) SendAck(msgDestModule t.ModuleID, msgID rntypes.MsgID, msgSourc
 	), nil
 }
 
-func (m *Module) retransmitAll() (*events.EventList, error) {
+func (m *Module) retransmitAll() (events.EventList, error) {
 	evsOut := events.EmptyList()
 
 	if m.queue.Len() == 0 {
@@ -215,7 +215,7 @@ func (m *Module) retransmitAll() (*events.EventList, error) {
 	return evsOut, nil
 }
 
-func (m *Module) SendMessage(id rntypes.MsgID, msg *messagepbtypes.Message, destinations []t.NodeID) (*events.EventList, error) {
+func (m *Module) SendMessage(id rntypes.MsgID, msg *messagepbtypes.Message, destinations []t.NodeID) (events.EventList, error) {
 	qmsg := &QueuedMessage{
 		Msg:          msg,
 		Destinations: destinations,
@@ -255,7 +255,7 @@ func (m *Module) ensureSubqueueIndexExists(destModule t.ModuleID) {
 	}
 }
 
-func (m *Module) MarkModuleMsgsRecvd(destModule t.ModuleID, destinations []t.NodeID) (*events.EventList, error) {
+func (m *Module) MarkModuleMsgsRecvd(destModule t.ModuleID, destinations []t.NodeID) (events.EventList, error) {
 	// optimization for all destinations
 	if len(destinations) == len(m.params.AllNodes) {
 		for id, subqueueIndex := range m.queueIndex {
@@ -269,7 +269,7 @@ func (m *Module) MarkModuleMsgsRecvd(destModule t.ModuleID, destinations []t.Nod
 			delete(m.queueIndex, id)
 		}
 
-		return &events.EventList{}, nil
+		return events.EmptyList(), nil
 	}
 
 	for modID, subqueueIndex := range m.queueIndex {
@@ -294,10 +294,10 @@ func (m *Module) MarkModuleMsgsRecvd(destModule t.ModuleID, destinations []t.Nod
 		}
 	}
 
-	return &events.EventList{}, nil
+	return events.EmptyList(), nil
 }
 
-func (m *Module) MarkRecvd(destModule t.ModuleID, messageID rntypes.MsgID, destinations []t.NodeID) (*events.EventList, error) {
+func (m *Module) MarkRecvd(destModule t.ModuleID, messageID rntypes.MsgID, destinations []t.NodeID) (events.EventList, error) {
 	if subqueueIndex, present := m.queueIndex[destModule]; present {
 		if listEl, present := subqueueIndex[messageID]; present {
 			qmsg := listEl.Value.(*QueuedMessage)
@@ -316,5 +316,5 @@ func (m *Module) MarkRecvd(destModule t.ModuleID, messageID rntypes.MsgID, desti
 		}
 	}
 
-	return &events.EventList{}, nil
+	return events.EmptyList(), nil
 }

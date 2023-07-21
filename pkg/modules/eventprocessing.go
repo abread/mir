@@ -17,9 +17,9 @@ import (
 // The EventLists returned by applyEvent are aggregated in a single EventList (in order of creation)
 // and returned by ApplyEventsSequentially.
 func ApplyEventsSequentially(
-	eventsIn *events.EventList,
-	applyEvent func(*eventpbtypes.Event) (*events.EventList, error),
-) (*events.EventList, error) {
+	eventsIn events.EventList,
+	applyEvent func(*eventpbtypes.Event) (events.EventList, error),
+) (events.EventList, error) {
 
 	eventsOut := events.EmptyList()
 
@@ -27,7 +27,7 @@ func ApplyEventsSequentially(
 	for event := iter.Next(); event != nil; event = iter.Next() {
 		evts, err := applyEvent(event)
 		if err != nil {
-			return nil, err
+			return events.EmptyList(), err
 		}
 		eventsOut.PushBackList(evts)
 	}
@@ -45,15 +45,15 @@ func ApplyEventsSequentially(
 // If one or more errors occur during processing, ApplyEventsConcurrently returns the first of them,
 // along with an empty EventList.
 func ApplyEventsConcurrently(
-	eventsIn *events.EventList,
-	applyEvent func(*eventpbtypes.Event) (*events.EventList, error),
-) (*events.EventList, error) {
+	eventsIn events.EventList,
+	applyEvent func(*eventpbtypes.Event) (events.EventList, error),
+) (events.EventList, error) {
 
 	// Initialize channels into which the results of each invocation of applyEvent will be written.
-	results := make([]chan *events.EventList, eventsIn.Len())
+	results := make([]chan events.EventList, eventsIn.Len())
 	errors := make([]chan error, eventsIn.Len())
 	for i := 0; i < eventsIn.Len(); i++ {
-		results[i] = make(chan *events.EventList)
+		results[i] = make(chan events.EventList)
 		errors[i] = make(chan error)
 	}
 
@@ -90,9 +90,8 @@ func ApplyEventsConcurrently(
 		//            as they are being written by the worker goroutines, otherwise the system gets stuck.
 
 		// Read results from common channel and add it to the accumulator.
-		if evList := <-results[i]; evList != nil {
-			eventsOut.PushBackList(evList)
-		}
+		evList := <-results[i]
+		eventsOut.PushBackList(evList)
 
 		// Read error from common channel.
 		// We only consider the first error, as ApplyEventsConcurrently only returns a single error.
@@ -105,19 +104,19 @@ func ApplyEventsConcurrently(
 
 	// Return the resulting events or an error.
 	if firstError != nil {
-		return nil, firstError
+		return events.EmptyList(), firstError
 	}
 	return eventsOut, nil
 }
 
 type EventProcessor interface {
-	ApplyEvent(ctx context.Context, ev *eventpbtypes.Event) *events.EventList
+	ApplyEvent(ctx context.Context, ev *eventpbtypes.Event) events.EventList
 }
 
 type poolModule struct {
 	processor  EventProcessor
 	inputChan  chan *eventpbtypes.Event
-	outputChan chan *events.EventList
+	outputChan chan events.EventList
 
 	wg sync.WaitGroup
 
@@ -135,7 +134,7 @@ func NewGoRoutinePoolModule(ctx context.Context, processor EventProcessor, worke
 	mod := &poolModule{
 		processor:  processor,
 		inputChan:  make(chan *eventpbtypes.Event, workers),
-		outputChan: make(chan *events.EventList, workers*2),
+		outputChan: make(chan events.EventList, workers*2),
 
 		nextInputReady: sync.NewCond(&sync.Mutex{}),
 		nextInputSeqNo: 1, // 0 will never be used
@@ -172,10 +171,10 @@ func NewGoRoutinePoolModule(ctx context.Context, processor EventProcessor, worke
 }
 
 func (m *poolModule) ImplementsModule() {}
-func (m *poolModule) EventsOut() <-chan *events.EventList {
+func (m *poolModule) EventsOut() <-chan events.EventList {
 	return m.outputChan
 }
-func (m *poolModule) ApplyEvents(ctx context.Context, events *events.EventList) error {
+func (m *poolModule) ApplyEvents(ctx context.Context, events events.EventList) error {
 	seqno := atomic.AddUint64(&m.lastFutureInputSeqNo, 1)
 
 	m.wg.Add(1)
@@ -218,8 +217,8 @@ func (m *poolModule) ApplyEvents(ctx context.Context, events *events.EventList) 
 // applySafely is a wrapper around an event processing function that catches its panic and returns it as an error.
 func applySafely(
 	event *eventpbtypes.Event,
-	processingFunc func(*eventpbtypes.Event) (*events.EventList, error),
-) (result *events.EventList, err error) {
+	processingFunc func(*eventpbtypes.Event) (events.EventList, error),
+) (result events.EventList, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			if rErr, ok := r.(error); ok {
