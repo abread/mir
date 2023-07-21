@@ -246,48 +246,63 @@ func IncludeBatchCreation(
 		return nil
 	})
 
-	mpdsl.UponRequestBatch(m, func(origin *mppbtypes.RequestBatchOrigin) error {
-		if haveFullBatch() {
-			cutBatch(origin)
-		} else {
-			reqID := storePendingRequest(origin)
-			eventpbdsl.TimerDelay(m,
-				mc.Timer,
-				[]*eventpbtypes.Event{mpevents.BatchTimeout(mc.Self, uint64(reqID))},
-				timertypes.Duration(params.BatchTimeout),
-			)
-		}
-
-		return nil
-	})
-
-	mpdsl.UponBatchTimeout(m, func(batchReqID uint64) error {
-
-		reqID := int(batchReqID)
-
-		// Load the request origin.
-		_, ok := state.PendingBatchRequests[reqID]
-
-		if ok {
-			if haveMinBatch() {
-				// If request is still pending, respond to it.
-				servePendingReq(reqID)
+	if params.BatchTimeout > 0 {
+		mpdsl.UponRequestBatch(m, func(origin *mppbtypes.RequestBatchOrigin) error {
+			if haveFullBatch() {
+				cutBatch(origin)
 			} else {
-				// If a request is still pending, but we still don't have enough transactions,
-				// mark the request as critical.
-				if state.FirstPendingNonCriticalBatchReqID <= reqID {
-					// Note: we assume all prior requests to also be critical.
-					// The timeout is the same for all, so this is a safe assumption.
-					state.FirstPendingNonCriticalBatchReqID = reqID + 1
-				}
+				reqID := storePendingRequest(origin)
+
+				eventpbdsl.TimerDelay(m,
+					mc.Timer,
+					[]*eventpbtypes.Event{mpevents.BatchTimeout(mc.Self, uint64(reqID))},
+					timertypes.Duration(params.BatchTimeout),
+				)
 			}
-		} else {
-			// Ignore timeout if request has already been served.
-			logger.Log(logging.LevelDebug, "Ignoring outdated batch timeout.",
-				"batchReqID", reqID)
-		}
-		return nil
-	})
+
+			return nil
+		})
+
+		mpdsl.UponBatchTimeout(m, func(batchReqID uint64) error {
+
+			reqID := int(batchReqID)
+
+			// Load the request origin.
+			_, ok := state.PendingBatchRequests[reqID]
+
+			if ok {
+				if haveMinBatch() {
+					// If request is still pending, respond to it.
+					servePendingReq(reqID)
+				} else {
+					// If a request is still pending, but we still don't have enough transactions,
+					// mark the request as critical.
+					if state.FirstPendingNonCriticalBatchReqID <= reqID {
+						// Note: we assume all prior requests to also be critical.
+						// The timeout is the same for all, so this is a safe assumption.
+						state.FirstPendingNonCriticalBatchReqID = reqID + 1
+					}
+				}
+			} else {
+				// Ignore timeout if request has already been served.
+				logger.Log(logging.LevelDebug, "Ignoring outdated batch timeout.",
+					"batchReqID", reqID)
+			}
+			return nil
+		})
+
+	} else {
+		mpdsl.UponRequestBatch(m, func(origin *mppbtypes.RequestBatchOrigin) error {
+			if haveMinBatch() {
+				cutBatch(origin)
+			} else {
+				reqID := storePendingRequest(origin)
+				state.FirstPendingNonCriticalBatchReqID = reqID
+			}
+
+			return nil
+		})
+	}
 }
 
 // Context data structures
