@@ -263,6 +263,7 @@ func NewAlea(
 	}
 	params.Mempool.RandSeed = int64(slices.Index(params.Alea.AllNodes(), ownID))
 	params.Mempool.IncomingTxBucketCount = len(params.Alea.Membership.Nodes)
+	params.Mempool.BatchTimeout = 0
 
 	// Instantiate the Alea ordering protocol with default configuration.
 	// We use the Alea's default module configuration (the expected IDs of modules it interacts with)
