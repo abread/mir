@@ -291,61 +291,86 @@ func (n *Node) process(ctx context.Context) error { //nolint:gocyclo
 	}
 
 	// The event-shoveling loop below is a hot path, and shouldn't waste time with map iteration
-	// therefore, we precompute the keys and values of the map, and iterate over them in the loop.
-	moduleIDs, buffers := maputil.GetKeysAndValues(n.pendingEvents.buffers)
+	// therefore, we precompute the cases and reactions, and just choose the ones we want in the loop
+	buffers := make([]*events.EventList, len(n.pendingEvents.buffers))
+	pendingEventCounts := make([]*int, len(n.pendingEvents.buffers))
+	i := 0
+	for mID, buf := range n.pendingEvents.buffers {
+		// copy the loop variables to avoid the loop variable being captured by the closure
+		moduleID := mID
+		buffer := buf
+
+		initialCount := 0
+		count := &initialCount
+		pendingEventCounts[i] = count
+		buffers[i] = buffer
+
+		selectCases[3+i] = reflect.SelectCase{
+			Dir:  reflect.SelectSend,
+			Chan: reflect.ValueOf(n.workChans[moduleID]),
+			// Send: reflect.ValueOf(eventBatch), -> will be updated in even shoveling loop
+		}
+
+		// React to writing to a work channel by emptying the corresponding event buffer
+		// (i.e., removing events just written to the channel from the buffer).
+		selectReactions[3+i] = func(_ reflect.Value) {
+			n.statsLock.Lock()
+			defer n.statsLock.Unlock()
+
+			numEvents := *count
+			buffer.RemoveFront(numEvents)
+
+			// Keep track of the size of the event buffer.
+			// Whenever it drops below the ResumeInputThreshold, resume input.
+			n.pendingEvents.totalEvents -= numEvents
+			if n.pendingEvents.totalEvents <= n.Config.ResumeInputThreshold {
+				n.resumeInput()
+			}
+
+			n.dispatchStats.AddDispatch(moduleID, numEvents)
+		}
+		i++
+	}
 
 	// This loop shovels events between the appropriate channels, until a stopping condition is satisfied.
 	for returnErr == nil {
-		i := 3 // selectCases/Reactions already contains the first three cases/reactions above
-
 		// For each generic event buffer in eventBuffer that contains events to be submitted to its corresponding module,
-		// create a selectCase for writing those events to the module's work channel.
+		// update the selectCase for writing those events to the module's work channel.
 		n.statsLock.Lock()
-		for bufIdx := range buffers {
-			buffer := buffers[bufIdx]
-			moduleID := moduleIDs[bufIdx]
-
+		for i, buffer := range buffers {
 			if buffer.Len() > 0 {
 				eventBatch := buffer.Head(n.Config.MaxEventBatchSize)
-				numEvents := eventBatch.Len()
-
-				// Create case for writing in the work channel.
-				selectCases[i] = reflect.SelectCase{
-					Dir:  reflect.SelectSend,
-					Chan: reflect.ValueOf(n.workChans[moduleID]),
-					Send: reflect.ValueOf(eventBatch),
-				}
-
-				// Create a copy of moduleID to use in the reaction function.
-				// If we used moduleID directly in the function definition, it would correspond to the loop variable
-				// and have the same value for all cases after the loop finishes iterating.
-				var mID = moduleID
-
-				// React to writing to a work channel by emptying the corresponding event buffer
-				// (i.e., removing events just written to the channel from the buffer).
-				selectReactions[i] = func(_ reflect.Value) {
-					n.statsLock.Lock()
-					defer n.statsLock.Unlock()
-
-					buffer.RemoveFront(numEvents)
-
-					// Keep track of the size of the event buffer.
-					// Whenever it drops below the ResumeInputThreshold, resume input.
-					n.pendingEvents.totalEvents -= numEvents
-					if n.pendingEvents.totalEvents <= n.Config.ResumeInputThreshold {
-						n.resumeInput()
-					}
-
-					n.dispatchStats.AddDispatch(mID, numEvents)
-				}
-
-				i++
+				*pendingEventCounts[i] = eventBatch.Len()
+				selectCases[3+i].Send = reflect.ValueOf(eventBatch)
+			} else {
+				*pendingEventCounts[i] = 0
 			}
 		}
 		n.statsLock.Unlock()
 
+		// Move module's select cases/reactions with no events to the end of the slice, and note how many with events there are.
+		i := 0
+		j := len(buffers) - 1
+		for i < j {
+			for j >= i && *pendingEventCounts[j] == 0 {
+				j--
+			}
+			for i <= j && *pendingEventCounts[i] > 0 {
+				i++
+			}
+			if i >= j {
+				break
+			}
+
+			// Swap the select cases/reactions and metatada at i and j
+			selectCases[3+i], selectCases[3+j] = selectCases[3+j], selectCases[3+i]
+			selectReactions[3+i], selectReactions[3+j] = selectReactions[3+j], selectReactions[3+i]
+			buffers[i], buffers[j] = buffers[j], buffers[i]
+			pendingEventCounts[i], pendingEventCounts[j] = pendingEventCounts[j], pendingEventCounts[i]
+		}
+
 		// Choose one case from above and execute the corresponding reaction.
-		chosenCase, receivedValue, _ := reflect.Select(selectCases[:i])
+		chosenCase, receivedValue, _ := reflect.Select(selectCases[:3+i])
 		selectReactions[chosenCase](receivedValue)
 	}
 
