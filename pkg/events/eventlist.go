@@ -12,11 +12,6 @@ import (
 	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 )
 
-const (
-	eventListMaxGrowth = 128
-	eventListMinGrowth = 2
-)
-
 // EventList represents a list of Events, e.g. as produced by a module.
 type EventList struct {
 	evs []*eventpbtypes.Event
@@ -48,17 +43,9 @@ func (el EventList) Len() int {
 
 // PushBack appends an event to the end of the list.
 func (el *EventList) PushBack(event *eventpbtypes.Event) {
-	if len(el.evs) == cap(el.evs) {
-		// grow into max(min(duplicate capacity, max growth), min growth)
-		sz := len(el.evs)
-		if sz > eventListMaxGrowth {
-			sz = eventListMaxGrowth
-		} else if sz == 0 {
-			sz = eventListMinGrowth
-		}
-
-		el.ReserveExtraSpace(sz)
-	}
+	// Note: a previous to ammortize the cost of growing the slice by growing it by a factor of 2 was not successful.
+	// Hypothesis: PushBack() is called often, but only in EventLists that don't grow much.
+	// The ones that do grow a lot are the ones that are created by concatenating multiple EventLists/slices.
 
 	el.evs = append(el.evs, event)
 }
@@ -66,8 +53,20 @@ func (el *EventList) PushBack(event *eventpbtypes.Event) {
 // PushBackSlice appends all events in newEvents to the end of the current EventList.
 func (el *EventList) PushBackSlice(events []*eventpbtypes.Event) {
 	if cap(el.evs)-len(el.evs) < len(events) {
+		// Unlike the situation in PushBack(), this kind of EventList seems  to often sees many reallocations to larger sizes.
+		// We ammortize the cost of growing the slice by growing it by a factor of 2.
+
+		sz := len(el.evs)
+		if sz < len(events) {
+			sz = len(events)
+		} else if sz > 2*len(events) {
+			// limit growth to 2x the size of the new elements
+			// this is to avoid growing too much when the list is large
+			sz = 2 * len(events)
+		}
+
 		// grow into exact size for the new elements
-		el.ReserveExtraSpace(len(events))
+		el.ReserveExtraSpace(sz)
 	}
 
 	el.evs = append(el.evs, events...)
