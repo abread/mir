@@ -24,6 +24,8 @@ type dslModuleImpl struct {
 	contextStore cs.ContextStore[any]
 	// eventCleanupContextIDs is used to dispose of the used up entries in contextStore.
 	eventCleanupContextIDs map[ContextID]struct{}
+
+	outputEventsSizeHint int
 }
 
 // Handle is used to manage internal state of the dsl module.
@@ -55,6 +57,8 @@ func NewModule(moduleID t.ModuleID) Module {
 		outputEvents:           events.EventList{},
 		contextStore:           cs.NewSequentialContextStore[any](),
 		eventCleanupContextIDs: make(map[ContextID]struct{}),
+
+		outputEventsSizeHint: 1,
 	}
 }
 
@@ -199,7 +203,11 @@ func (m *dslModuleImpl) ApplyEvents(evs events.EventList) (events.EventList, err
 	}
 
 	outputEvents := m.outputEvents
-	m.outputEvents = events.EventList{}
+
+	// Reset output events.
+	m.outputEventsSizeHint = (m.outputEvents.Len() + m.outputEventsSizeHint) / 2
+	m.outputEvents = events.EmptyListWithCapacity(m.outputEventsSizeHint)
+
 	return outputEvents, nil
 }
 
