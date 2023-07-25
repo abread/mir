@@ -18,7 +18,6 @@ type EventList struct {
 }
 
 // EmptyList returns an empty EventList.
-// TODO: consider passing EventList by value here and everywhere else.
 func EmptyList() EventList {
 	return EventList{}
 }
@@ -43,31 +42,14 @@ func (el EventList) Len() int {
 
 // PushBack appends an event to the end of the list.
 func (el *EventList) PushBack(event *eventpbtypes.Event) {
-	// Note: a previous to ammortize the cost of growing the slice by growing it by a factor of 2 was not successful.
-	// Hypothesis: PushBack() is called often, but only in EventLists that don't grow much.
-	// The ones that do grow a lot are the ones that are created by concatenating multiple EventLists/slices.
+	// Note: a previous attempt to ammortize the cost of growing the slice by growing it by a factor of 2 was not successful.
 
 	el.evs = append(el.evs, event)
 }
 
 // PushBackSlice appends all events in newEvents to the end of the current EventList.
 func (el *EventList) PushBackSlice(events []*eventpbtypes.Event) {
-	if cap(el.evs)-len(el.evs) < len(events) {
-		// Unlike the situation in PushBack(), this kind of EventList seems  to often sees many reallocations to larger sizes.
-		// We ammortize the cost of growing the slice by growing it by a factor of 2.
-
-		sz := len(el.evs)
-		if sz < len(events) {
-			sz = len(events)
-		} else if sz > 2*len(events) {
-			// limit growth to 2x the size of the new elements
-			// this is to avoid growing too much when the list is large
-			sz = 2 * len(events)
-		}
-
-		// grow into exact size for the new elements
-		el.ReserveExtraSpace(sz)
-	}
+	// Note: a previous attempt to ammortize the cost of growing the slice by growing it by a factor of 2 was not successful.
 
 	el.evs = append(el.evs, events...)
 }
