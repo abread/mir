@@ -265,7 +265,7 @@ func (conn *remoteConnection) process() {
 			case msg := <-conn.msgBuffer:
 				// Encode message to a byte slice.
 				var err error
-				msgData, err = encodeMessage(msg, conn.ownID)
+				msgData, err = encodeMessage(msg)
 				if err != nil {
 					conn.logger.Log(logging.LevelError, "Could not encode message. Disconnecting.", "err", err)
 					return
@@ -346,13 +346,13 @@ func (conn *remoteConnection) closeStream() {
 	}
 }
 
-func encodeMessage(msg *messagepbtypes.Message, nodeID t.NodeID) ([]byte, error) {
+func encodeMessage(msg *messagepbtypes.Message) ([]byte, error) {
 	p, err := proto.Marshal(msg.Pb())
 	if err != nil {
 		return nil, es.Errorf("failed to marshal message: %w", err)
 	}
 
-	tm := TransportMessage{nodeID.Pb(), p}
+	tm := TransportMessage{p}
 	buf := new(bytes.Buffer)
 	if err = tm.MarshalCBOR(buf); err != nil {
 		return nil, es.Errorf("failed to CBOR marshal message: %w", err)

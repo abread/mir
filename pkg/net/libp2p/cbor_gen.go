@@ -3,11 +3,10 @@
 package libp2p
 
 import (
+	"fmt"
 	"io"
 	"math"
 	"sort"
-
-	es "github.com/go-errors/errors"
 
 	cid "github.com/ipfs/go-cid"
 	cbg "github.com/whyrusleeping/cbor-gen"
@@ -19,7 +18,7 @@ var _ = cid.Undef
 var _ = math.E
 var _ = sort.Sort
 
-var lengthBufTransportMessage = []byte{130}
+var lengthBufTransportMessage = []byte{129}
 
 func (t *TransportMessage) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -30,18 +29,6 @@ func (t *TransportMessage) MarshalCBOR(w io.Writer) error {
 	cw := cbg.NewCborWriter(w)
 
 	if _, err := cw.Write(lengthBufTransportMessage); err != nil {
-		return err
-	}
-
-	// t.Sender (string) (string)
-	if len(t.Sender) > cbg.MaxLength {
-		return xerrors.Errorf("Value in field t.Sender was too long")
-	}
-
-	if err := cw.WriteMajorTypeHeader(cbg.MajTextString, uint64(len(t.Sender))); err != nil {
-		return err
-	}
-	if _, err := io.WriteString(w, string(t.Sender)); err != nil {
 		return err
 	}
 
@@ -76,23 +63,13 @@ func (t *TransportMessage) UnmarshalCBOR(r io.Reader) (err error) {
 	}()
 
 	if maj != cbg.MajArray {
-		return es.Errorf("cbor input should be of type array")
+		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 2 {
-		return es.Errorf("cbor input had wrong number of fields")
+	if extra != 1 {
+		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
-	// t.Sender (string) (string)
-
-	{
-		sval, err := cbg.ReadString(cr)
-		if err != nil {
-			return err
-		}
-
-		t.Sender = string(sval)
-	}
 	// t.Payload ([]uint8) (slice)
 
 	maj, extra, err = cr.ReadHeader()
@@ -101,10 +78,10 @@ func (t *TransportMessage) UnmarshalCBOR(r io.Reader) (err error) {
 	}
 
 	if extra > cbg.ByteArrayMaxLen {
-		return es.Errorf("t.Payload: byte array too large (%d)", extra)
+		return fmt.Errorf("t.Payload: byte array too large (%d)", extra)
 	}
 	if maj != cbg.MajByteString {
-		return es.Errorf("expected byte array")
+		return fmt.Errorf("expected byte array")
 	}
 
 	if extra > 0 {

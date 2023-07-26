@@ -23,7 +23,6 @@ import (
 )
 
 type TransportMessage struct {
-	Sender  string
 	Payload []byte
 }
 
@@ -282,17 +281,10 @@ func (tr *Transport) handleIncomingConnection(s network.Stream) {
 func (tr *Transport) readAndProcessMessages(s network.Stream, nodeID t.NodeID, peerID peer.ID) {
 	for {
 		// Read message from the network.
-		msg, sender, err := readAndDecode(s)
+		msg, err := readAndDecode(s)
 		if err != nil {
 			tr.logger.Log(logging.LevelDebug, "Failed reading message. Stopping incoming connection",
 				"remotePeer", peerID, "err", err)
-			return
-		}
-
-		// Sanity check. TODO: Remove the `sender` completely and infer it from the PeerID.
-		if sender != nodeID {
-			tr.logger.Log(logging.LevelWarn, "Remote node identity mismatch. Stopping incoming connection.",
-				"expectedNodeID", nodeID, "declaredNodeID", sender, "remotePeerID", peerID)
 			return
 		}
 
@@ -301,28 +293,28 @@ func (tr *Transport) readAndProcessMessages(s network.Stream, nodeID t.NodeID, p
 		//       instead of sending each individual message as a list of length one.
 		case tr.incomingMessages <- events.ListOf(transportpbevents.MessageReceived(
 			t.ModuleID(msg.DestModule),
-			sender,
+			nodeID,
 			messagepbtypes.MessageFromPb(msg),
 		)):
 			// Nothing to do in this case message has written to the receiving channel.
 		case <-tr.stop:
 			tr.logger.Log(logging.LevelError, "Shutdown. Stopping incoming connection.",
-				"nodeID", sender, "remotePeer", peerID)
+				"nodeID", nodeID, "remotePeer", peerID)
 			return
 		}
 	}
 }
 
-func readAndDecode(s network.Stream) (*messagepb.Message, t.NodeID, error) {
+func readAndDecode(s network.Stream) (*messagepb.Message, error) {
 	var tm TransportMessage
 	err := tm.UnmarshalCBOR(s)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
 	var msg messagepb.Message
 	if err := proto.Unmarshal(tm.Payload, &msg); err != nil {
-		return nil, "", err
+		return nil, err
 	}
-	return &msg, t.NodeID(tm.Sender), nil
+	return &msg, nil
 }
