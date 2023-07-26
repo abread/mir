@@ -216,6 +216,8 @@ func (conn *remoteConnection) tryConnecting(ctx context.Context) error {
 	conn.stream = stream
 	conn.connectedCond.Broadcast()
 	conn.connectedCond.L.Unlock()
+
+	conn.logger.Log(logging.LevelWarn, "Connected to peer.", "peer", conn.addrInfo.ID.String())
 	return nil
 }
 
