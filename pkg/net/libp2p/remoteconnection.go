@@ -253,16 +253,6 @@ func (conn *remoteConnection) process() {
 				conn.logger.Log(logging.LevelWarn, "Gave up connecting", "err", err)
 				return
 			}
-
-			heartbeat, err := encodeHeartbeat(conn.ownID)
-			if err != nil {
-				conn.logger.Log(logging.LevelWarn, "failed to serialize heartbeat", "err", err)
-				return
-			}
-			if err := conn.writeDataToStream(heartbeat); err != nil {
-				conn.logger.Log(logging.LevelWarn, "failed to send heartbeat", "err", err)
-				return
-			}
 		}
 
 		// Get the next message and encode it if there is no pending unsent message.
@@ -364,15 +354,6 @@ func encodeMessage(msg *messagepbtypes.Message, nodeID t.NodeID) ([]byte, error)
 	buf := new(bytes.Buffer)
 	if err = tm.MarshalCBOR(buf); err != nil {
 		return nil, es.Errorf("failed to CBOR marshal message: %w", err)
-	}
-	return buf.Bytes(), nil
-}
-
-func encodeHeartbeat(nodeID t.NodeID) ([]byte, error) {
-	tm := TransportMessage{nodeID.Pb(), []byte{}}
-	buf := new(bytes.Buffer)
-	if err := tm.MarshalCBOR(buf); err != nil {
-		return nil, es.Errorf("failed to CBOR marshal hearbeat: %w", err)
 	}
 	return buf.Bytes(), nil
 }
