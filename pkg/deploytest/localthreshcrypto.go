@@ -23,7 +23,7 @@ type localPseudoThreshCryptoSystem struct {
 }
 
 // NewLocalCryptoSystem creates an instance of LocalCryptoSystem suitable for tests.
-// In the current implementation, cryptoType can only be "pseudo".
+// In the current implementation, cryptoType can only be "pseudo", "dummy" or "pseudo-purego".
 func NewLocalThreshCryptoSystem(cryptoType string, nodeIDs []t.NodeID, threshold int) LocalThreshCryptoSystem {
 	return &localPseudoThreshCryptoSystem{cryptoType, nodeIDs, threshold}
 }
@@ -31,6 +31,8 @@ func NewLocalThreshCryptoSystem(cryptoType string, nodeIDs []t.NodeID, threshold
 func (cs *localPseudoThreshCryptoSystem) ThreshCrypto(id t.NodeID) (threshcrypto.ThreshCrypto, error) {
 	if cs.cryptoType == "pseudo" {
 		return threshcrypto.HerumiTBLSPseudo(cs.nodeIDs, cs.threshold, id, mirCrypto.DefaultPseudoSeed)
+	} else if cs.cryptoType == "pseudo-purego" {
+		return threshcrypto.TBLSPseudo(cs.nodeIDs, cs.threshold, id, mirCrypto.DefaultPseudoSeed)
 	} else if cs.cryptoType == "dummy" {
 		return &threshcrypto.DummyCrypto{
 			DummySigShareSuffix: []byte("sigshare"),

@@ -34,7 +34,7 @@ func NewLocalCryptoSystem(cryptoType string, nodeIDs []t.NodeID, _ logging.Logge
 }
 
 func (cs *localPseudoCryptoSystem) Crypto(id t.NodeID) (mirCrypto.Crypto, error) {
-	if cs.cryptoType == "pseudo" {
+	if cs.cryptoType == "pseudo" || cs.cryptoType == "pseudo-purego" {
 		return mirCrypto.InsecureCryptoForTestingOnly(cs.nodeIDs, id, &cs.localKeyPairs)
 	} else if cs.cryptoType == "dummy" {
 		return &mirCrypto.DummyCrypto{
