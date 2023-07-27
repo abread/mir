@@ -28,8 +28,9 @@ func DefaultHasherModuleParams() *HasherModuleParams {
 	}
 }
 
-func NewHasher(ctx context.Context, params *HasherModuleParams, hashImpl HashImpl) modules.ActiveModule {
-	return modules.NewGoRoutinePoolModule(ctx, &hasherEventProc{hashImpl}, params.NumWorkers)
+func NewHasher(_ context.Context, _ *HasherModuleParams, hashImpl HashImpl) modules.Module {
+	return &hasherEventProc{hashImpl}
+	//return modules.NewGoRoutinePoolModule(ctx, &hasherEventProc{hashImpl}, params.NumWorkers)
 }
 
 type hasherEventProc struct {
@@ -65,6 +66,14 @@ func (hasher *hasherEventProc) ApplyEvent(_ context.Context, event *eventpbtypes
 		panic(es.Errorf("unexpected type of Hash event: %T", event.Type))
 	}
 }
+
+func (hasher *hasherEventProc) ApplyEvents(evs events.EventList) (events.EventList, error) {
+	return modules.ApplyEventsSequentially(evs, func(e *eventpbtypes.Event) (events.EventList, error) {
+		return hasher.ApplyEvent(context.Background(), e), nil
+	})
+}
+
+func (hasher *hasherEventProc) ImplementsModule() {}
 
 func (hasher *hasherEventProc) computeDigests(allData []*hasherpbtypes.HashData) [][]byte {
 	// Create a slice for the resulting digests containing one element for each data item to be hashed.
