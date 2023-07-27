@@ -164,13 +164,8 @@ func runNode(ctx context.Context) error {
 	if err != nil {
 		return es.Errorf("could not parse port from own address: %w", err)
 	}
-	addrStr := fmt.Sprintf("/ip4/0.0.0.0/tcp/%s", portStr)
-	listenAddr, err := multiaddr.NewMultiaddr(addrStr)
-	if err != nil {
-		return es.Errorf("could not create listen address: %w", err)
-	}
 	h, err := libp2p.NewDummyHostWithPrivKey(
-		t.NodeAddress(libp2p.NewDummyMultiaddr(ownNumericID, listenAddr)),
+		portStr,
 		libp2p.NewDummyHostKey(ownNumericID),
 	)
 	if err != nil {

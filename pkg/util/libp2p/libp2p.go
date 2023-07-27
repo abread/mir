@@ -17,16 +17,16 @@ import (
 
 // NewDummyHostWithPrivKey creates new dummy libp2p host with an identity
 // determined by the private key given as an input.
-func NewDummyHostWithPrivKey(listenAddr t.NodeAddress, privKey libp2pcrypto.PrivKey) (host.Host, error) {
-
-	libp2pPeerID, err := peer.AddrInfoFromP2pAddr(listenAddr)
+func NewDummyHostWithPrivKey(port string, privKey libp2pcrypto.PrivKey) (host.Host, error) {
+	listenAddrs, err := listenAddrsForPort(port)
 	if err != nil {
-		return nil, es.Errorf("failed to get own libp2p addr info: %w", err)
+		return nil, err
 	}
+
 	return libp2p.New(
 		libp2p.Identity(privKey),
 		libp2p.DefaultTransports,
-		libp2p.ListenAddrs(libp2pPeerID.Addrs[0]),
+		listenAddrs,
 	)
 }
 
@@ -159,4 +159,27 @@ func NewFakeMultiaddr(numericID, port int) multiaddr.Multiaddr {
 	}
 
 	return addrs[0]
+}
+
+func listenAddrsForPort(port string) (libp2p.Option, error) {
+	addrs := []string{
+		"/ip4/0.0.0.0/tcp/%s",
+		"/ip4/0.0.0.0/udp/%s/quic",
+		"/ip4/0.0.0.0/udp/%s/quic-v1",
+		"/ip4/0.0.0.0/udp/%s/quic-v1/webtransport",
+		"/ip6/::/tcp/%s",
+		"/ip6/::/udp/%s/quic",
+		"/ip6/::/udp/%s/quic-v1",
+		"/ip6/::/udp/%s/quic-v1/webtransport",
+	}
+	listenAddrs := make([]multiaddr.Multiaddr, 0, len(addrs))
+	for _, s := range addrs {
+		addr, err := multiaddr.NewMultiaddr(fmt.Sprintf(s, port))
+		if err != nil {
+			return nil, err
+		}
+		listenAddrs = append(listenAddrs, addr)
+	}
+
+	return libp2p.ListenAddrs(listenAddrs...), nil
 }

@@ -136,11 +136,6 @@ func run() error {
 	if err != nil {
 		return es.Errorf("could not parse port from own address: %w", err)
 	}
-	addrStr := fmt.Sprintf("/ip4/0.0.0.0/tcp/%s", portStr)
-	listenAddr, err := multiaddr.NewMultiaddr(addrStr)
-	if err != nil {
-		return es.Errorf("could not create listen address: %w", err)
-	}
 
 	// We use the default SMR parameters. The initial membership is, regardless of the starting checkpoint,
 	// always the very first membership at sequence number 0. It is part of the system configuration.
@@ -149,7 +144,7 @@ func run() error {
 
 	// Create a dummy libp2p host for network communication (this is why we need a numeric ID)
 	h, err := libp2p.NewDummyHostWithPrivKey(
-		t.NodeAddress(libp2p.NewDummyMultiaddr(ownNumericID, listenAddr)),
+		portStr,
 		libp2p.NewDummyHostKey(ownNumericID),
 	)
 	if err != nil {
