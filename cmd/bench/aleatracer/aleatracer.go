@@ -331,6 +331,7 @@ func (at *AleaTracer) interceptOne(event *eventpbtypes.Event) error { // nolint:
 				slot := parseSlotFromModuleID(event.DestModule)
 				switch msg.Vcb.Type.(type) {
 				case *vcbpbtypes.Message_SendMessage:
+					at.startBcSpan(ts, slot)
 					at.startBcComputeSigDataSpan(ts, slot)
 				case *vcbpbtypes.Message_FinalMessage:
 					at.endBcAwaitFinalSpan(ts, slot)
