@@ -25,30 +25,21 @@ func DefaultModuleParams() *ModuleParams {
 	}
 }
 
-func New(_ context.Context, _ *ModuleParams, threshCrypto ThreshCrypto) modules.Module {
-	return &threshEventProcessor{threshCrypto}
-	//return modules.NewGoRoutinePoolModule(ctx, &threshEventProcessor{threshCrypto}, params.NumWorkers)
+func New(ctx context.Context, params *ModuleParams, threshCrypto ThreshCrypto) modules.ActiveModule {
+	return modules.NewGoRoutinePoolModule(ctx, &threshEventProcessor{threshCrypto}, params.NumWorkers)
 }
 
 type threshEventProcessor struct {
 	threshCrypto ThreshCrypto
 }
 
-func (c *threshEventProcessor) ApplyEvents(evs events.EventList) (events.EventList, error) {
-	return modules.ApplyEventsSequentially(evs, func(e *eventpbtypes.Event) (events.EventList, error) {
-		return c.ApplyEvent(context.Background(), e), nil
-	})
-}
-
-func (c *threshEventProcessor) ImplementsModule() {}
-
-func (c *threshEventProcessor) ApplyEvent(_ context.Context, event *eventpbtypes.Event) events.EventList {
+func (c *threshEventProcessor) ApplyEvent(ctx context.Context, event *eventpbtypes.Event) events.EventList {
 	switch e := event.Type.(type) {
 	case *eventpbtypes.Event_Init:
 		// no actions on init
 		return events.EmptyList()
 	case *eventpbtypes.Event_ThreshCrypto:
-		return c.applyTCEvent(e.ThreshCrypto)
+		return c.applyTCEvent(ctx, e.ThreshCrypto)
 	default:
 		// Complain about all other incoming event types.
 		panic(es.Errorf("unexpected type of event in threshcrypto MirModule: %T", event.Type))
@@ -56,7 +47,7 @@ func (c *threshEventProcessor) ApplyEvent(_ context.Context, event *eventpbtypes
 }
 
 // apply a thresholdcryptopbtypes.Event
-func (c *threshEventProcessor) applyTCEvent(event *threshcryptopbtypes.Event) events.EventList {
+func (c *threshEventProcessor) applyTCEvent(_ context.Context, event *threshcryptopbtypes.Event) events.EventList {
 	switch e := event.Type.(type) {
 	case *threshcryptopbtypes.Event_SignShare:
 		// Compute signature share
