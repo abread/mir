@@ -1,7 +1,10 @@
 package modules
 
 import (
+	"fmt"
+	"os"
 	"runtime/debug"
+	"time"
 
 	es "github.com/go-errors/errors"
 
@@ -31,6 +34,8 @@ type routedModule struct {
 	subRouter PassiveModule
 }
 
+var ref = time.Now()
+
 func (m *routedModule) ImplementsModule() {}
 func (m *routedModule) ApplyEvents(evs events.EventList) (events.EventList, error) {
 	rootEvsIn := events.EmptyList()
@@ -45,8 +50,15 @@ func (m *routedModule) ApplyEvents(evs events.EventList) (events.EventList, erro
 		}
 	}
 
+	tStart := time.Since(ref)
+	nIn := rootEvsIn.Len()
 	rootEvsOut, rootErr := applyAllSafely(m.root, rootEvsIn)
+	fmt.Fprintf(os.Stderr, "tr,%s,root,%d,%d\n", m.rootID, nIn, time.Since(ref)-tStart)
+
+	tStart = time.Since(ref)
+	nIn = subRouterEvsIn.Len()
 	subRouterEvsOut, subRouterErr := applyAllSafely(m.subRouter, subRouterEvsIn)
+	fmt.Fprintf(os.Stderr, "tr,%s,sub,%d,%d\n", m.rootID, nIn, time.Since(ref)-tStart)
 
 	if subRouterErr != nil {
 		return events.EmptyList(), subRouterErr
@@ -73,8 +85,12 @@ func (m *multiApplyModule) ImplementsModule() {}
 func (m *multiApplyModule) ApplyEvents(evs events.EventList) (events.EventList, error) {
 	allEvsOut := events.EmptyList()
 
-	for _, sub := range m.subs {
+	nIn := evs.Len()
+	for i, sub := range m.subs {
+		tStart := time.Since(ref)
 		evsOut, err := applyAllSafely(sub, evs)
+		fmt.Fprintf(os.Stderr, "tm,%d,%d,%d\n", i, nIn, time.Since(ref)-tStart)
+
 		if err != nil {
 			return events.EmptyList(), err
 		}
