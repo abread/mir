@@ -164,10 +164,6 @@ func New(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, tunab
 		return nil
 	})
 
-	// =============================================================================================
-	// Abba Coin Crypto Duration Estimation
-	// =============================================================================================
-
 	// Stats
 	dsl.UponStateUpdates(m, func() error {
 		// stats are reported after updates, and before ordering components around
