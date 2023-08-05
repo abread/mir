@@ -279,12 +279,13 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 				timert.Duration(d),
 			)
 
-			// clear coalesced timer for next batch of events
-			state.nextCoalescedTimerDuration = 0
+			state.lastScheduledWakeup = now + d
 		}
 
 		state.lastWakeUp = now
-		state.lastScheduledWakeup = now + d
+
+		// clear coalesced timer for next batch of events
+		state.nextCoalescedTimerDuration = math.MaxInt64
 
 		return nil
 	})
