@@ -15,12 +15,14 @@ import (
 	batchfetcherpb "github.com/filecoin-project/mir/pkg/pb/batchfetcherpb"
 	bcbpb "github.com/filecoin-project/mir/pkg/pb/bcbpb"
 	checkpointpb "github.com/filecoin-project/mir/pkg/pb/checkpointpb"
+	chkpvalidatorpb "github.com/filecoin-project/mir/pkg/pb/checkpointpb/chkpvalidatorpb"
 	cryptopb "github.com/filecoin-project/mir/pkg/pb/cryptopb"
 	factorypb "github.com/filecoin-project/mir/pkg/pb/factorypb"
 	hasherpb "github.com/filecoin-project/mir/pkg/pb/hasherpb"
 	isspb "github.com/filecoin-project/mir/pkg/pb/isspb"
 	mempoolpb "github.com/filecoin-project/mir/pkg/pb/mempoolpb"
 	ordererpb "github.com/filecoin-project/mir/pkg/pb/ordererpb"
+	pprepvalidatorpb "github.com/filecoin-project/mir/pkg/pb/ordererpb/pprepvalidatorpb"
 	pingpongpb "github.com/filecoin-project/mir/pkg/pb/pingpongpb"
 	reliablenetpb "github.com/filecoin-project/mir/pkg/pb/reliablenetpb"
 	testerpb "github.com/filecoin-project/mir/pkg/pb/testerpb"
@@ -98,6 +100,14 @@ func (w *Event_App) Unwrap() *apppb.Event {
 
 func (w *Event_Transport) Unwrap() *transportpb.Event {
 	return w.Transport
+}
+
+func (w *Event_ChkpValidator) Unwrap() *chkpvalidatorpb.Event {
+	return w.ChkpValidator
+}
+
+func (w *Event_PprepValiadtor) Unwrap() *pprepvalidatorpb.Event {
+	return w.PprepValiadtor
 }
 
 func (w *Event_ReliableNet) Unwrap() *reliablenetpb.Event {

@@ -54,6 +54,10 @@ func (w *Event_BatchTimeout) Unwrap() *BatchTimeout {
 	return w.BatchTimeout
 }
 
+func (w *Event_NewEpoch) Unwrap() *NewEpoch {
+	return w.NewEpoch
+}
+
 func (w *Event_MarkDelivered) Unwrap() *MarkDelivered {
 	return w.MarkDelivered
 }

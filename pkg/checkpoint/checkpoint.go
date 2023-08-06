@@ -9,7 +9,6 @@ import (
 
 	"github.com/filecoin-project/mir/pkg/clientprogress"
 	"github.com/filecoin-project/mir/pkg/crypto"
-	issconfig "github.com/filecoin-project/mir/pkg/iss/config"
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/pb/checkpointpb"
 	checkpointpbtypes "github.com/filecoin-project/mir/pkg/pb/checkpointpb/types"
@@ -194,13 +193,13 @@ func (sc *StableCheckpoint) VerifyCert(h crypto.HashImpl, v Verifier, membership
 
 // Verify makes the necessary checks to verify a checkpoint
 func (sc *StableCheckpoint) Verify(
-	params *issconfig.ModuleParams,
+	configOffset int,
 	hashImpl crypto.HashImpl,
 	chkpVerifier Verifier,
 	membership *trantorpbtypes.Membership,
 ) error {
 
-	if err := sc.SyntacticCheck(params); err != nil {
+	if err := sc.SyntacticCheck(configOffset); err != nil {
 		return es.Errorf("invalid checkpoint: %w", err)
 	}
 
@@ -228,10 +227,6 @@ func (sc *StableCheckpoint) verifyMembershipConsistency(membership *trantorpbtyp
 		for nodeID, node := range chkpMembership.Nodes {
 			if _, ok := membershipConsistency[nodeID]; !ok {
 				membershipConsistency[nodeID] = node
-				// check that internal nodeID is consistent with key nodeID
-				if nodeID != node.Id {
-					return es.Errorf("inconsistent membership parameters: nodeID %v does not match internal nodeID %v", nodeID, node.Id)
-				}
 			} else {
 				// check that all parameters are consistent
 				if !reflect.DeepEqual(membershipConsistency[nodeID], node) {
@@ -277,7 +272,7 @@ func hash(data [][]byte, hasher crypto.HashImpl) []byte {
 
 // SyntacticCheck checks whether the stable checkpoint is well-formed.
 func (sc *StableCheckpoint) SyntacticCheck(
-	params *issconfig.ModuleParams,
+	configOffset int,
 ) error {
 
 	if sc.StateSnapshot() == nil {
@@ -297,14 +292,27 @@ func (sc *StableCheckpoint) SyntacticCheck(
 	}
 
 	// Check if checkpoint contains the configured number of configurations.
-	if len(sc.Memberships()) != params.ConfigOffset+1 {
+	if len(sc.Memberships()) != configOffset+1 {
 		return es.Errorf("invalid checkpoint: number of memberships %v does not match expected %v",
-			params.ConfigOffset+1,
+			configOffset+1,
 			len(sc.Memberships()))
+	}
+
+	// Check the contained memberships for validity.
+	for _, membership := range sc.Memberships() {
+		if err := membutil.Valid(membership); err != nil {
+			return es.Errorf("invalid membership: %w", err)
+		}
 	}
 
 	if sc.PreviousMembership() == nil {
 		return es.Errorf("previous membership is nil")
+	}
+
+	if sc.Epoch() > 0 {
+		if err := membutil.Valid(sc.PreviousMembership()); err != nil {
+			return es.Errorf("invalid previous membership: %w", err)
+		}
 	}
 
 	if sc.Certificate() == nil {

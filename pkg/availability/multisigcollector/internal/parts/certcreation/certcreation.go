@@ -10,17 +10,16 @@ import (
 	mscpbdsl "github.com/filecoin-project/mir/pkg/pb/availabilitypb/mscpb/dsl"
 	mscpbmsgs "github.com/filecoin-project/mir/pkg/pb/availabilitypb/mscpb/msgs"
 	mscpbtypes "github.com/filecoin-project/mir/pkg/pb/availabilitypb/mscpb/types"
-	cryptopbdsl "github.com/filecoin-project/mir/pkg/pb/cryptopb/dsl"
-	transportpbdsl "github.com/filecoin-project/mir/pkg/pb/transportpb/dsl"
-	tt "github.com/filecoin-project/mir/pkg/trantor/types"
-	"github.com/filecoin-project/mir/pkg/util/membutil"
-	"github.com/filecoin-project/mir/pkg/util/sliceutil"
-
 	apbtypes "github.com/filecoin-project/mir/pkg/pb/availabilitypb/types"
+	cryptopbdsl "github.com/filecoin-project/mir/pkg/pb/cryptopb/dsl"
 	mempooldsl "github.com/filecoin-project/mir/pkg/pb/mempoolpb/dsl"
+	transportpbdsl "github.com/filecoin-project/mir/pkg/pb/transportpb/dsl"
 	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
+	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 	"github.com/filecoin-project/mir/pkg/util/maputil"
+	"github.com/filecoin-project/mir/pkg/util/membutil"
+	"github.com/filecoin-project/mir/pkg/util/sliceutil"
 )
 
 // certCreationState represents the state related to this part of the module.
@@ -74,7 +73,7 @@ func IncludeCreatingCertificates(
 			receivedSig: make(map[t.NodeID]bool),
 			sigs:        make(map[t.NodeID][]byte),
 		}
-		mempooldsl.RequestBatch(m, mc.Mempool, &requestBatchFromMempoolContext{reqID})
+		mempooldsl.RequestBatch(m, mc.Mempool, params.EpochNr, &requestBatchFromMempoolContext{reqID})
 		return nil
 	})
 
@@ -85,7 +84,7 @@ func IncludeCreatingCertificates(
 			reqOrigin: origin,
 		})
 
-		respondIfReady(m, &state, params)
+		respondIfReady(m, &state, params.Membership)
 		if len(state.certificates) == 0 {
 			apbdsl.ComputeCert(m, mc.Self)
 		}
@@ -165,7 +164,7 @@ func IncludeCreatingCertificates(
 		newDue := membutil.HaveWeakQuorum(params.Membership, maputil.GetKeys(cert.sigs)) // keep this here...
 
 		if len(state.requestStates) > 0 {
-			respondIfReady(m, &state, params) // ... because this call changes the state
+			respondIfReady(m, &state, params.Membership) // ... because this call changes the state
 		}
 
 		if newDue && len(state.certificates) < params.Limit {
@@ -205,7 +204,7 @@ func IncludeCreatingCertificates(
 
 	// When the id of the batch is computed, store the batch persistently.
 	mempooldsl.UponBatchIDResponse(m, func(batchID msctypes.BatchID, context *computeIDOfReceivedBatchContext) error {
-		batchdbpbdsl.StoreBatch(m, mc.BatchDB, batchID, context.txIDs, context.txs, nil, /*metadata*/
+		batchdbpbdsl.StoreBatch(m, mc.BatchDB, batchID, context.txs, tt.RetentionIndex(params.EpochNr), nil,
 			&storeBatchContext{context.sourceID, context.reqID, batchID})
 		// TODO minor optimization: start computing cert without waiting for reply (maybe do not even get a reply from batchdb)
 		return nil
@@ -225,11 +224,11 @@ func IncludeCreatingCertificates(
 	})
 }
 
-func respondIfReady(m dsl.Module, state *certCreationState, params *common.ModuleParams) {
+func respondIfReady(m dsl.Module, state *certCreationState, membership *trantorpbtypes.Membership) {
 
 	// Select certificates with enough signatures.
 	finishedCerts := maputil.RemoveAll(state.certificates, func(_ requestID, cert *certificate) bool {
-		return membutil.HaveWeakQuorum(params.Membership, maputil.GetKeys(cert.sigs))
+		return membutil.HaveWeakQuorum(membership, maputil.GetKeys(cert.sigs))
 	})
 
 	// Return immediately if there are no finished certificates.

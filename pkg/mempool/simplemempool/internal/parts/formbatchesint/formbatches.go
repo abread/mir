@@ -1,8 +1,24 @@
+// The batch creation implemented here works as follows:
+//
+// The mempool keeps the incoming transactions in a list in the order of arrival.
+// At the same time, the mempool keeps track of all the transactions that already have been delivered.
+// This information is stored in the ClientProgress object that is updated at the beginning of every epoch.
+// The mempool never keeps transactions that have already been delivered
+// and prunes the stored ones each time ClientProgress is updated.
+//
+// In order to not emit a transaction twice in the same epoch, the mempool keeps track of epochs
+// and uses iterators to retrieve transactions from the stored transaction list.
+// In each epoch, after updating the ClientProgress and pruning delivered transactions,
+// it creates a new iterator that it uses for reading the remaining stored transactions from the beginning.
+//
+// If another module that has already advanced to a new epoch requests a batch
+// while the mempool still has not advanced to that epoch, it risks using an old iterator for a new batch request.
+// To this end, batch requests are also tagged with an epoch and the mempool only handles them in their proper epoch,
+// buffers them if necessary.
+
 package formbatchesint
 
 import (
-	"math/rand"
-
 	es "github.com/go-errors/errors"
 
 	"github.com/filecoin-project/mir/pkg/clientprogress"
@@ -11,26 +27,55 @@ import (
 	"github.com/filecoin-project/mir/pkg/mempool/simplemempool/common"
 	eventpbdsl "github.com/filecoin-project/mir/pkg/pb/eventpb/dsl"
 	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
-	mpdsl "github.com/filecoin-project/mir/pkg/pb/mempoolpb/dsl"
-	mpevents "github.com/filecoin-project/mir/pkg/pb/mempoolpb/events"
+	mppbdsl "github.com/filecoin-project/mir/pkg/pb/mempoolpb/dsl"
+	mppbevents "github.com/filecoin-project/mir/pkg/pb/mempoolpb/events"
 	mppbtypes "github.com/filecoin-project/mir/pkg/pb/mempoolpb/types"
 	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	"github.com/filecoin-project/mir/pkg/serializing"
 	timertypes "github.com/filecoin-project/mir/pkg/timer/types"
 	tt "github.com/filecoin-project/mir/pkg/trantor/types"
+	"github.com/filecoin-project/mir/pkg/util/indexedlist"
 )
 
 type State struct {
 	*common.State
 
-	// Transactions received, but not yet emitted in any batch.
-	NewTxIDsBuckets [][]tt.TxID
+	// The current epoch.
+	// If a batch requests from a higher epoch is received, it needs to be buffered until its epoch is reached.
+	Epoch tt.EpochNr
+
+	// Progress made by all clients so far.
+	// This data structure is used to avoid storing transactions that have already been delivered.
+	ClientProgress *clientprogress.ClientProgress
 
 	// Combined total payload size of all the transactions in the mempool.
 	TotalPayloadSize int
 
-	// Pending batch requests, i.e., batch requests that have not yet been satisfied.
+	// The cummulative number of payload bytes of transactions that have not been output in batches in this epoch.
+	// At the beginning of each epoch, this value is reset to TotalPayloadSize.
+	UnproposedPayloadSize int
+
+	// Number of transactions that have not yet been output in batches in the current epoch.
+	// At the beginning of each epoch, this value is reset to Transactions.Len().
+	NumUnproposed int
+
+	// Iterator over the list transactions in the mempool.
+	// At the start of each epoch, the iterator is reset to the start of the list.
+	// This is necessary for re-emitting transactions that already have been emitted in the previous epoch
+	// But failed to be agreed upon.
+	Iterator *indexedlist.Iterator[tt.TxID, *trantorpbtypes.Transaction]
+
+	// EarlyBatchRequests stores batch requests with a higher epoch number than the current epoch.
+	// In Trantor, this can happen in a corner case
+	// when advancing to a new epoch is delayed by the processing of the batch fetcher.
+	// Note that these are different from PendingBatchRequests,
+	// which are this epoch's batch requests waiting for a batch to fill (or a timeout)
+	EarlyBatchRequests map[tt.EpochNr][]*mppbtypes.RequestBatchOrigin
+
+	// Pending batch requests, i.e., this epoch's batch requests that have not yet been satisfied.
 	// They are indexed by order of arrival.
+	// Note that this only concerns batch requests from the current epoch.
+	// Requests from future epochs are buffered separately.
 	PendingBatchRequests map[int]*mppbtypes.RequestBatchOrigin
 
 	// Index of the oldest pending batch request.
@@ -43,15 +88,10 @@ type State struct {
 
 	// Index to assign to the next new pending batch request.
 	NextPendingBatchReqID int
-
-	bucketRng      rand.Rand
-	pendingTxCount int
-
-	clientProgress *clientprogress.ClientProgress
 }
 
 // IncludeBatchCreation registers event handlers for processing NewRequests and RequestBatch events.
-func IncludeBatchCreation(
+func IncludeBatchCreation( // nolint:gocognit
 	m dsl.Module,
 	mc common.ModuleConfig,
 	params *common.ModuleParams,
@@ -59,101 +99,62 @@ func IncludeBatchCreation(
 	logger logging.Logger,
 ) {
 	state := &State{
-		State: commonState,
-
-		NewTxIDsBuckets: make([][]tt.TxID, params.IncomingTxBucketCount),
-
+		State:                             commonState,
+		Epoch:                             0,
+		ClientProgress:                    clientprogress.NewClientProgress(logger),
 		TotalPayloadSize:                  0,
+		UnproposedPayloadSize:             0,
+		NumUnproposed:                     0,
+		Iterator:                          commonState.Transactions.Iterator(0),
+		EarlyBatchRequests:                make(map[tt.EpochNr][]*mppbtypes.RequestBatchOrigin),
 		PendingBatchRequests:              make(map[int]*mppbtypes.RequestBatchOrigin),
 		FirstPendingBatchReqID:            0,
 		FirstPendingNonCriticalBatchReqID: 0,
 		NextPendingBatchReqID:             0,
-
-		bucketRng:      *rand.New(rand.NewSource(params.RandSeed)), // nolint: gosec
-		clientProgress: clientprogress.NewClientProgress(logging.NilLogger),
 	}
 
 	// cutBatch creates a new batch from whatever transactions are available in the mempool
 	// (even if the batch ends up empty), and emits it as an event associated with the given origin.
 	cutBatch := func(origin *mppbtypes.RequestBatchOrigin) {
-		var txIDs []tt.TxID
-		var txs []*trantorpbtypes.Transaction
-
 		batchSize := 0
 		txCount := 0
 
-		bucketStartIdx := state.bucketRng.Intn(len(state.NewTxIDsBuckets))
-	BatchFillLoop:
-		for bucketOffset := 0; bucketOffset < len(state.NewTxIDsBuckets); bucketOffset++ {
-			bucketIdx := (bucketStartIdx + bucketOffset) % len(state.NewTxIDsBuckets)
-			bucket := &state.NewTxIDsBuckets[bucketIdx]
-			bucketTxCount := 0
-
-			for _, txID := range *bucket {
-				tx := state.TxByID[txID]
-
-				// Stop adding TXs if count or size limit has been reached.
-				if txCount == params.MaxTransactionsInBatch || batchSize+len(tx.Data) > params.MaxPayloadInBatch {
-					break BatchFillLoop
-				}
-
-				txIDs = append(txIDs, txID)
-				txs = append(txs, tx)
-				batchSize += len(tx.Data)
+		txIDs, txs, _ := state.Iterator.NextWhile(func(txID tt.TxID, tx *trantorpbtypes.Transaction) bool {
+			if txCount < params.MaxTransactionsInBatch && batchSize+len(tx.Data) <= params.MaxPayloadInBatch {
 				txCount++
-
-				bucketTxCount++
+				state.NumUnproposed--
+				batchSize += len(tx.Data)
+				state.UnproposedPayloadSize -= len(tx.Data)
+				return true
 			}
-
-			for _, txID := range (*bucket)[:bucketTxCount] {
-				delete(state.TxByID, txID)
-			}
-
-			*bucket = (*bucket)[bucketTxCount:]
-		}
-
-		state.TotalPayloadSize -= batchSize
-		state.pendingTxCount -= txCount
+			return false
+		})
 
 		if len(txs) < params.MinTransactionsInBatch {
 			panic(es.Errorf("batch too small: %d", len(txs)))
 		}
-
-		mpdsl.NewBatch(m, origin.Module, txIDs, txs, origin)
+		mppbdsl.NewBatch(m, origin.Module, txIDs, txs, origin)
 	}
 
-	mpdsl.UponMarkDelivered(m, func(txs []*trantorpbtypes.Transaction) error {
+	mppbdsl.UponMarkDelivered(m, func(txs []*trantorpbtypes.Transaction) error {
 		for _, tx := range txs {
-			state.clientProgress.Add(tx.ClientId, tx.TxNo)
+			state.ClientProgress.Add(tx.ClientId, tx.TxNo)
 		}
 
-		mpdsl.RequestTransactionIDs[markDeliveredContext](m, mc.Self, txs, nil)
+		mppbdsl.RequestTransactionIDs[markDeliveredContext](m, mc.Self, txs, nil)
 		return nil
 	})
-	mpdsl.UponTransactionIDsResponse(m, func(txIDs []tt.TxID, context *markDeliveredContext) error {
-		for _, txID := range txIDs {
-			tx, ok := state.TxByID[txID]
-			if !ok {
-				continue
-			}
+	mppbdsl.UponTransactionIDsResponse(m, func(txIDs []tt.TxID, context *markDeliveredContext) error {
+		_, removedTxs := state.Transactions.Remove(txIDs)
 
+		for _, tx := range removedTxs {
 			state.TotalPayloadSize -= len(tx.Data)
-			state.pendingTxCount--
-
-			delete(state.TxByID, txID)
-
-			bucketIdx := txBucketIdx(len(state.NewTxIDsBuckets), txID)
-			for i, id := range state.NewTxIDsBuckets[bucketIdx] {
-				if txID == id {
-					bucket := state.NewTxIDsBuckets[bucketIdx]
-					// TODO: may be better served by a different data structure
-					state.NewTxIDsBuckets[bucketIdx] = append(bucket[:i], bucket[i+1:]...)
-				}
-			}
+			state.UnproposedPayloadSize -= len(tx.Data)
+			state.NumUnproposed--
 		}
 
 		// don't let client progress accumulate too many watermarks
-		state.clientProgress.GarbageCollect()
+		state.ClientProgress.GarbageCollect()
 
 		return nil
 	})
@@ -168,13 +169,13 @@ func IncludeBatchCreation(
 
 	// Returns true if the mempool contains enough transactions for a full batch.
 	haveFullBatch := func() bool {
-		return state.pendingTxCount >= params.MaxTransactionsInBatch ||
-			state.TotalPayloadSize >= params.MaxPayloadInBatch
+		return state.NumUnproposed >= params.MaxTransactionsInBatch ||
+			state.UnproposedPayloadSize >= params.MaxPayloadInBatch
 	}
 
 	// Returns true if the mempool contains enough transactions for a min-sized batch.
 	haveMinBatch := func() bool {
-		return state.pendingTxCount >= params.MinTransactionsInBatch
+		return state.NumUnproposed >= params.MinTransactionsInBatch
 	}
 
 	// Cuts a new batch for a batch request with the given ID and updates the corresponding internal data structures.
@@ -194,48 +195,112 @@ func IncludeBatchCreation(
 		}
 	}
 
-	mpdsl.UponNewTransactions(m, func(txs []*trantorpbtypes.Transaction) error {
+	var handleNewBatchRequest func(origin *mppbtypes.RequestBatchOrigin)
+	if params.BatchTimeout > 0 {
+		handleNewBatchRequest = func(origin *mppbtypes.RequestBatchOrigin) {
+			if haveFullBatch() {
+				cutBatch(origin)
+			} else {
+				reqID := storePendingRequest(origin)
+				eventpbdsl.TimerDelay(m,
+					mc.Timer,
+					[]*eventpbtypes.Event{mppbevents.BatchTimeout(mc.Self, uint64(reqID))},
+					timertypes.Duration(params.BatchTimeout),
+				)
+			}
+		}
+	} else {
+		handleNewBatchRequest = func(origin *mppbtypes.RequestBatchOrigin) {
+			if haveMinBatch() {
+				cutBatch(origin)
+			} else {
+				reqID := storePendingRequest(origin)
+				// no need for timer, just mark request as critical
+				state.FirstPendingNonCriticalBatchReqID = reqID + 1
+			}
+		}
+	}
+
+	mppbdsl.UponNewEpoch(m,
+		func(epochNr tt.EpochNr, clientProgress *trantorpbtypes.ClientProgress) error {
+
+			// Update the local view of the epoch number.
+			state.Epoch = epochNr
+
+			// Garbage-collect the old iterator and create a new one.
+			state.Transactions.GarbageCollect(tt.RetentionIndex(epochNr))
+			state.Iterator = state.Transactions.Iterator(tt.RetentionIndex(epochNr))
+
+			// Update client progress and prune delivered transactions.
+			// TODO: This might be inefficient, especially if there are many transactions in the mempool.
+			//   A potential solution would be to keep an index of pending transactions similar to
+			//   ClientProgress - for each client, list of pending transactions sorted by TxNo - that
+			//   would make pruning significantly more efficient.
+			state.ClientProgress.LoadPb(clientProgress.Pb())
+			_, removedTXs := state.Transactions.RemoveSelected(func(txID tt.TxID, tx *trantorpbtypes.Transaction) bool {
+				return state.ClientProgress.Contains(tx.ClientId, tx.TxNo)
+			})
+			for _, tx := range removedTXs {
+				state.TotalPayloadSize -= len(tx.Data)
+			}
+
+			// Reset trackers of unproposed transactions.
+			state.NumUnproposed = state.Transactions.Len()
+			state.UnproposedPayloadSize = state.TotalPayloadSize
+
+			// Garbage-collect outdated buffered early batch requests, if any,
+			// and process the buffered up-to-date ones.
+			for epoch, batchReqs := range state.EarlyBatchRequests {
+				if epoch < state.Epoch {
+					delete(state.EarlyBatchRequests, epoch)
+				} else if epoch == state.Epoch {
+					for _, batchReq := range batchReqs {
+						handleNewBatchRequest(batchReq)
+					}
+				}
+			}
+
+			return nil
+		},
+	)
+
+	mppbdsl.UponNewTransactions(m, func(txs []*trantorpbtypes.Transaction) error {
 		filteredTxs := make([]*trantorpbtypes.Transaction, 0, len(txs))
 		for _, tx := range txs {
-			if state.clientProgress.CanAdd(tx.ClientId, tx.TxNo) {
+			// Only save transactions with payload not larger than the batch limit
+			// (as they would not fit in any batch, even if no other transactions were present).
+			if len(tx.Data) > params.MaxPayloadInBatch {
+				logger.Log(logging.LevelWarn, "Discarding transaction. Payload larger than batch limit.",
+					"MaxPayloadInBatch", params.MaxPayloadInBatch, "PayloadSize", len(tx.Data))
+				continue
+			}
+
+			if !state.ClientProgress.Contains(tx.ClientId, tx.TxNo) {
 				filteredTxs = append(filteredTxs, tx)
 			}
 		}
 
-		mpdsl.RequestTransactionIDs(m, mc.Self, filteredTxs, &requestTxIDsContext{filteredTxs})
+		if len(filteredTxs) > 0 {
+			mppbdsl.RequestTransactionIDs(m, mc.Self, filteredTxs, &requestTxIDsContext{filteredTxs})
+		}
 		return nil
 	})
 
-	mpdsl.UponTransactionIDsResponse(m, func(txIDs []tt.TxID, context *requestTxIDsContext) error {
-		for i, txID := range txIDs {
-			if _, ok := state.TxByID[txIDs[i]]; !ok {
-				tx := context.txs[i]
+	mppbdsl.UponTransactionIDsResponse(m, func(txIDs []tt.TxID, context *requestTxIDsContext) error {
+		_, addedTxs := state.Transactions.Append(txIDs, context.txs)
+		for _, tx := range addedTxs {
 
-				// Discard transactions with payload larger than batch limit
-				// (as they would not fit in any batch, even if no other transactions were present).
-				if len(tx.Data) > params.MaxPayloadInBatch {
-					logger.Log(logging.LevelWarn, "Discarding transaction. Payload larger than batch limit.",
-						"MaxPayloadInBatch", params.MaxPayloadInBatch, "PayloadSize", len(tx.Data))
-					continue
-				}
-
-				// discard old txs again (in case they were delivered while we were computing tx IDs)
-				if !state.clientProgress.CanAdd(tx.ClientId, tx.TxNo) {
-					continue
-				}
-
-				state.TxByID[txID] = tx
-				state.TotalPayloadSize += len(tx.Data)
-
-				// distribute txs among buckets
-				bucketIdx := txBucketIdx(len(state.NewTxIDsBuckets), txID)
-				state.NewTxIDsBuckets[bucketIdx] = append(state.NewTxIDsBuckets[bucketIdx], txID)
-
-				state.pendingTxCount++
+			// Discard transactions that have already been delivered in a previous epoch.
+			if state.ClientProgress.Contains(tx.ClientId, tx.TxNo) {
+				continue
 			}
+
+			state.TotalPayloadSize += len(tx.Data)
+			state.UnproposedPayloadSize += len(tx.Data)
+			state.NumUnproposed++
 		}
 
-		// ensure critical requests are served, even if not enough batches are yet available
+		// ensure critical requests are served, even if not enough txs are available to completely fill a batch
 		for haveMinBatch() && state.FirstPendingBatchReqID < state.FirstPendingNonCriticalBatchReqID {
 			servePendingReq(state.FirstPendingBatchReqID)
 		}
@@ -246,63 +311,45 @@ func IncludeBatchCreation(
 		return nil
 	})
 
-	if params.BatchTimeout > 0 {
-		mpdsl.UponRequestBatch(m, func(origin *mppbtypes.RequestBatchOrigin) error {
-			if haveFullBatch() {
-				cutBatch(origin)
-			} else {
-				reqID := storePendingRequest(origin)
+	mppbdsl.UponRequestBatch(m, func(epoch tt.EpochNr, origin *mppbtypes.RequestBatchOrigin) error {
+		if epoch == state.Epoch {
+			// Only handle batch requests from the current epoch.
+			handleNewBatchRequest(origin)
+		} else if epoch > state.Epoch {
+			// Buffer requests from future epochs.
+			state.EarlyBatchRequests[epoch] = append(state.EarlyBatchRequests[epoch], origin)
+			// TODO: Write tests that explore this code path.
+		} // (Requests from past epochs are ignored.)
+		return nil
+	})
 
-				eventpbdsl.TimerDelay(m,
-					mc.Timer,
-					[]*eventpbtypes.Event{mpevents.BatchTimeout(mc.Self, uint64(reqID))},
-					timertypes.Duration(params.BatchTimeout),
-				)
-			}
+	mppbdsl.UponBatchTimeout(m, func(batchReqID uint64) error {
 
-			return nil
-		})
+		reqID := int(batchReqID)
 
-		mpdsl.UponBatchTimeout(m, func(batchReqID uint64) error {
+		// Load the request origin.
+		_, ok := state.PendingBatchRequests[reqID]
 
-			reqID := int(batchReqID)
-
-			// Load the request origin.
-			_, ok := state.PendingBatchRequests[reqID]
-
-			if ok {
-				if haveMinBatch() {
-					// If request is still pending, respond to it.
-					servePendingReq(reqID)
-				} else {
-					// If a request is still pending, but we still don't have enough transactions,
-					// mark the request as critical.
-					if state.FirstPendingNonCriticalBatchReqID <= reqID {
-						// Note: we assume all prior requests to also be critical.
-						// The timeout is the same for all, so this is a safe assumption.
-						state.FirstPendingNonCriticalBatchReqID = reqID + 1
-					}
-				}
-			} else {
-				// Ignore timeout if request has already been served.
-				logger.Log(logging.LevelDebug, "Ignoring outdated batch timeout.",
-					"batchReqID", reqID)
-			}
-			return nil
-		})
-
-	} else {
-		mpdsl.UponRequestBatch(m, func(origin *mppbtypes.RequestBatchOrigin) error {
+		if ok {
 			if haveMinBatch() {
-				cutBatch(origin)
+				// If request is still pending, respond to it.
+				servePendingReq(reqID)
 			} else {
-				reqID := storePendingRequest(origin)
-				state.FirstPendingNonCriticalBatchReqID = reqID
+				// If a request is still pending, but we still don't have enough transactions,
+				// mark the request as critical.
+				if state.FirstPendingNonCriticalBatchReqID <= reqID {
+					// Note: we assume all prior requests to also be critical.
+					// The timeout is the same for all, so this is a safe assumption.
+					state.FirstPendingNonCriticalBatchReqID = reqID + 1
+				}
 			}
-
-			return nil
-		})
-	}
+		} else {
+			// Ignore timeout if request has already been served.
+			logger.Log(logging.LevelDebug, "Ignoring outdated batch timeout.",
+				"batchReqID", reqID)
+		}
+		return nil
+	})
 }
 
 // Context data structures

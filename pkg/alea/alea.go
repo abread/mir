@@ -117,9 +117,10 @@ func New(ownID t.NodeID, config Config, params Params, startingChkp *checkpoint.
 	// each operation this is probably best to encode in the threshcrypto module, since weighted
 	// threshold crypto schemes seem to exist (see "An Efficient and Secure Weighted Threshold
 	// Signcryption Scheme", Chien-Hua Tsai, Journal of Internet Technology, 2019)
+	w := params.Membership.Nodes[ownID].Weight
 	for _, identity := range params.Membership.Nodes {
-		if identity.Weight != 1 {
-			return nil, es.Errorf("alea does not support weighted voting (yet): node %v cannot have weight != 1", identity.Id)
+		if identity.Weight != w {
+			return nil, es.Errorf("alea does not support weighted voting (yet): node %v cannot have weight %v != %v (own weight)", identity.Id, identity.Weight, w)
 		}
 	}
 

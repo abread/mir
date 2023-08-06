@@ -257,7 +257,8 @@ func IncludeBatchFetching(
 		rnetdsl.MarkRecvd(m, mc.ReliableNet, mc.Self, FillGapMsgID(context.slot), params.AllNodes)
 
 		// store batch asynchronously
-		batchdbdsl.StoreBatch(m, mc.BatchDB, util.FormatAleaBatchID(context.slot), context.txIDs, context.txs, context.signature /*metadata*/, context)
+		// TODO: proper epochs (retention index)
+		batchdbdsl.StoreBatch(m, mc.BatchDB, util.FormatAleaBatchID(context.slot), context.txs, tt.RetentionIndex(0), context.signature /*metadata*/, context)
 
 		// send response to requests
 		// logger.Log(logging.LevelDebug, "satisfying delayed requests with FILLER", "queueIdx", context.slot.QueueIdx, "queueSlot", context.slot.QueueSlot)

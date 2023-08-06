@@ -199,7 +199,9 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 	dsl.UponInit(m, func() error {
 		state.stalledBatchCut = false
 		est.MarkBcStartedNow(commontypes.Slot{QueueIdx: ownQueueIdx, QueueSlot: 0})
-		mempooldsl.RequestBatch[struct{}](m, mc.Mempool, nil)
+
+		// TODO: proper epochs
+		mempooldsl.RequestBatch[struct{}](m, mc.Mempool, tt.EpochNr(0), nil)
 
 		return nil
 	})
@@ -242,7 +244,9 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 		state.stalledBatchCut = false
 
 		est.MarkBcStartedNow(commontypes.Slot{QueueIdx: ownQueueIdx, QueueSlot: state.bcOwnQueueHead})
-		mempooldsl.RequestBatch[struct{}](m, mc.Mempool, nil)
+
+		// TODO: proper epochs
+		mempooldsl.RequestBatch[struct{}](m, mc.Mempool, tt.EpochNr(0), nil)
 		return nil
 	})
 	mempooldsl.UponNewBatch(m, func(txIDs []tt.TxID, txs []*trantorpbtypes.Transaction, ctx *struct{}) error {

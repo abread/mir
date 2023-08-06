@@ -17,13 +17,35 @@ type ModuleConfig struct {
 }
 
 type moduleState struct {
-	BatchStore       map[msctypes.BatchID]batchInfo
-	TransactionStore map[tt.TxID]*trantorpbtypes.Transaction
+
+	// batchStore stores the actual batch data.
+	batchStore map[msctypes.BatchID]*batch
+
+	// batchesByRetIdx is an index that stores a set of batches associated with each particular retention index
+	// that has not yet been garbage-collected.
+	// Upon garbage-collection of a particular retention index, all the batches stored here under that retention index
+	// are deleted, unless they are also associated with a higher retention index.
+	// Using a set of batches rather than a list prevents duplicate entries.
+	batchesByRetIdx map[tt.RetentionIndex]map[msctypes.BatchID]struct{}
+
+	// retIdx is the lowest retention index that has not yet been garbage-collected.
+	retIdx tt.RetentionIndex
 }
 
-type batchInfo struct {
-	txIDs    []tt.TxID
+type batch struct {
+
+	// Transactions in the batch.
+	txs []*trantorpbtypes.Transaction
+
+	// Batch metadata
 	metadata []byte
+
+	// The maximal retention index with which the batch was stored.
+	// Note that the same batch can be stored in the batchDB (under the same batch ID)
+	// multiple times if, e.g., multiple nodes propose the same transactions in different epoch in Trantor.
+	// Thus, when garbage-collecting, we must not delete a batch that still needs to be retained
+	// for a higher retention index.
+	maxRetIdx tt.RetentionIndex
 }
 
 // NewModule returns a new module for a fake batch database.
@@ -32,39 +54,68 @@ func NewModule(mc ModuleConfig) modules.Module {
 	m := dsl.NewModule(mc.Self)
 
 	state := moduleState{
-		BatchStore:       make(map[msctypes.BatchID]batchInfo),
-		TransactionStore: make(map[tt.TxID]*trantorpbtypes.Transaction),
+		batchStore:      make(map[msctypes.BatchID]*batch),
+		batchesByRetIdx: make(map[tt.RetentionIndex]map[msctypes.BatchID]struct{}),
+		retIdx:          0,
 	}
 
 	// On StoreBatch request, just store the data in the local memory.
-	batchdbpbdsl.UponStoreBatch(m, func(batchID msctypes.BatchID, txIDs []tt.TxID, txs []*trantorpbtypes.Transaction, metadata []byte, origin *batchdbpbtypes.StoreBatchOrigin) error {
-		state.BatchStore[batchID] = batchInfo{
-			txIDs:    txIDs,
-			metadata: metadata,
+	batchdbpbdsl.UponStoreBatch(m, func(
+		batchID msctypes.BatchID,
+		txs []*trantorpbtypes.Transaction,
+		retIdx tt.RetentionIndex,
+		metadata []byte,
+		origin *batchdbpbtypes.StoreBatchOrigin,
+	) error {
+
+		// Only save the batch if its retention index has not yet been garbage-collected.
+		if retIdx >= state.retIdx {
+			// Check if we already have the batch.
+			b, ok := state.batchStore[batchID]
+			if !ok || b.maxRetIdx < retIdx {
+				// If we do not, or if the stored batch's retention index is lower,
+				// store the received batch with the up-to-date retention index
+				state.batchStore[batchID] = &batch{txs, metadata, retIdx}
+			}
+
+			if _, ok := state.batchesByRetIdx[retIdx]; !ok {
+				state.batchesByRetIdx[retIdx] = make(map[msctypes.BatchID]struct{})
+			}
+			state.batchesByRetIdx[retIdx][batchID] = struct{}{}
 		}
 
-		for i, txID := range txIDs {
-			state.TransactionStore[txID] = txs[i]
-		}
-
+		// Note that we emit a BatchStored event even if the batch's retention index was too low
+		// (and thus the batch was not actually stored).
+		// However, since this situation is indistinguishable from
+		// storing the batch and immediately garbage-collecting it,
+		// it is simpler to report success to the module that produced the StoreBatch event
+		// (rather than creating a whole different code branch with no real utility).
 		batchdbpbdsl.BatchStored(m, origin.Module, origin)
 		return nil
 	})
 
 	// On LookupBatch request, just check the local map.
 	batchdbpbdsl.UponLookupBatch(m, func(batchID msctypes.BatchID, origin *batchdbpbtypes.LookupBatchOrigin) error {
-		info, found := state.BatchStore[batchID]
+
+		storedBatch, found := state.batchStore[batchID]
 		if !found {
 			batchdbpbdsl.LookupBatchResponse(m, origin.Module, false, nil, nil, origin)
 			return nil
 		}
 
-		txs := make([]*trantorpbtypes.Transaction, len(info.txIDs))
-		for i, txID := range info.txIDs {
-			txs[i] = state.TransactionStore[txID]
-		}
+		batchdbpbdsl.LookupBatchResponse(m, origin.Module, true, storedBatch.txs, storedBatch.metadata, origin)
+		return nil
+	})
 
-		batchdbpbdsl.LookupBatchResponse(m, origin.Module, true, txs, info.metadata, origin)
+	batchdbpbdsl.UponGarbageCollect(m, func(retentionIndex tt.RetentionIndex) error {
+		for ; state.retIdx < retentionIndex; state.retIdx++ {
+			for batchID := range state.batchesByRetIdx[state.retIdx] {
+				if state.batchStore[batchID].maxRetIdx <= state.retIdx {
+					delete(state.batchStore, batchID)
+				}
+			}
+			delete(state.batchesByRetIdx, state.retIdx)
+		}
 		return nil
 	})
 

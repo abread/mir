@@ -79,7 +79,8 @@ func newQueueController(mc ModuleConfig, params ModuleParams, tunables ModuleTun
 			QueueSlot: aleatypes.QueueSlot(queueSlot),
 		}
 
-		batchdbdsl.StoreBatch(m, mc.BatchDB, aleaCommon.FormatAleaBatchID(slot), txIds, txs, signature, slot)
+		// TODO: proper epochs (retention index)
+		batchdbdsl.StoreBatch(m, mc.BatchDB, aleaCommon.FormatAleaBatchID(slot), txs, tt.RetentionIndex(0), signature, slot)
 		return nil
 	})
 

@@ -46,7 +46,7 @@ func debug(args *arguments) error {
 			Id:     nID,
 			Addr:   libp2p.NewDummyHostAddr(0, 0).String(),
 			Key:    nil,
-			Weight: 1,
+			Weight: "1",
 		}
 	}
 
@@ -173,6 +173,7 @@ func debuggerNode(id t.NodeID, membership *trantorpbtypes.Membership) (*mir.Node
 			Self:         "iss",
 			App:          "batchfetcher",
 			Availability: "availability",
+			BatchDB:      "batchdb",
 			Checkpoint:   "checkpointing",
 			Net:          "net",
 			Ordering:     "ordering",

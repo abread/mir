@@ -30,7 +30,7 @@ require (
 	github.com/go-errors/errors v1.4.2
 	github.com/herumi/bls-eth-go-binary v1.29.1
 	github.com/ipfs/go-cid v0.4.1
-	github.com/libp2p/go-yamux/v3 v3.1.2
+	github.com/libp2p/go-yamux/v4 v4.0.1
 	github.com/mattn/go-sqlite3 v1.14.16
 	github.com/multiformats/go-multiaddr v0.10.1
 	github.com/reactivex/rxgo/v2 v2.5.0
@@ -81,7 +81,6 @@ require (
 	github.com/libp2p/go-nat v0.2.0 // indirect
 	github.com/libp2p/go-netroute v0.2.1 // indirect
 	github.com/libp2p/go-reuseport v0.3.0 // indirect
-	github.com/libp2p/go-yamux/v4 v4.0.1 // indirect
 	github.com/marten-seemann/tcp v0.0.0-20210406111302-dfbc87cc63fd // indirect
 	github.com/mattn/go-colorable v0.1.2 // indirect
 	github.com/mattn/go-isatty v0.0.19 // indirect

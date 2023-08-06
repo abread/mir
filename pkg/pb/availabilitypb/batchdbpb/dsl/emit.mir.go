@@ -29,7 +29,7 @@ func LookupBatchResponse(m dsl.Module, destModule types.ModuleID, found bool, tx
 	dsl.EmitEvent(m, events.LookupBatchResponse(destModule, found, txs, metadata, origin))
 }
 
-func StoreBatch[C any](m dsl.Module, destModule types.ModuleID, batchId types1.BatchID, txIds []types4.TxID, txs []*types3.Transaction, metadata []uint8, context *C) {
+func StoreBatch[C any](m dsl.Module, destModule types.ModuleID, batchId types1.BatchID, txs []*types3.Transaction, retentionIndex types4.RetentionIndex, metadata []uint8, context *C) {
 	contextID := m.DslHandle().StoreContext(context)
 
 	origin := &types2.StoreBatchOrigin{
@@ -37,9 +37,13 @@ func StoreBatch[C any](m dsl.Module, destModule types.ModuleID, batchId types1.B
 		Type:   &types2.StoreBatchOrigin_Dsl{Dsl: dsl.MirOrigin(contextID)},
 	}
 
-	dsl.EmitEvent(m, events.StoreBatch(destModule, batchId, txIds, txs, metadata, origin))
+	dsl.EmitEvent(m, events.StoreBatch(destModule, batchId, txs, retentionIndex, metadata, origin))
 }
 
 func BatchStored(m dsl.Module, destModule types.ModuleID, origin *types2.StoreBatchOrigin) {
 	dsl.EmitEvent(m, events.BatchStored(destModule, origin))
+}
+
+func GarbageCollect(m dsl.Module, destModule types.ModuleID, retentionIndex types4.RetentionIndex) {
+	dsl.EmitEvent(m, events.GarbageCollect(destModule, retentionIndex))
 }

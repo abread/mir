@@ -168,7 +168,14 @@ func IncludeBatchReconstruction(
 			return nil
 		}
 
-		batchdbpbdsl.StoreBatch(m, mc.BatchDB, batchID, context.txIDs, context.txs, []byte{} /*metadata*/, &storeBatchContext{})
+		batchdbpbdsl.StoreBatch(m,
+			mc.BatchDB,
+			batchID,
+			context.txs,
+			tt.RetentionIndex(params.EpochNr),
+			nil,
+			&storeBatchContext{},
+		)
 		saveAndFinish(m, context.reqID, context.txs, context.batchID, requestState.ReqOrigin, &state)
 
 		return nil
