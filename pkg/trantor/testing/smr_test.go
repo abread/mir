@@ -83,7 +83,7 @@ type TestConfig struct {
 }
 
 func testIntegrationWithISS(tt *testing.T) {
-	tests := []struct {
+	tests := map[int]struct {
 		Desc   string // test description
 		Config *TestConfig
 	}{
