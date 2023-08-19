@@ -20,7 +20,6 @@ message Event {
 
     Heartbeat heartbeat = 1;
     DoFillGap fill_gap  = 2;
-    Stats stats = 3;
   }
 }
 
@@ -32,16 +31,4 @@ message DoFillGap {
   option (mir.event) = true;
 
   common.Slot slot = 1;
-}
-
-message Stats {
-  option (mir.event) = true;
-
-  int64  min_abba_round_duration_est     = 1 [(mir.type) = "time.Duration"];
-  int64  own_bc_duration_est             = 2 [(mir.type) = "time.Duration"];
-  int64  max_own_bc_duration_est         = 3 [(mir.type) = "time.Duration"];
-  int64  max_own_bc_quorum_finish_margin = 4 [(mir.type) = "time.Duration"];
-  int64  max_own_bc_total_finish_margin  = 5 [(mir.type) = "time.Duration"];
-  int64  max_ext_bc_duration_est         = 6 [(mir.type) = "time.Duration"];
-  int64  max_ext_bc_finish_margin        = 7 [(mir.type) = "time.Duration"];
 }

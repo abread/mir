@@ -14,7 +14,6 @@ import (
 	"time"
 
 	ageventstypes "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents/types"
-	directorpbtypes "github.com/filecoin-project/mir/pkg/pb/aleapb/directorpb/types"
 	threshcryptopbtypes "github.com/filecoin-project/mir/pkg/pb/threshcryptopb/types"
 	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 
@@ -34,14 +33,6 @@ type Stats struct {
 	agRoundFalseDelivers uint64
 	bcDelivers           uint64
 	threshQueueSize      int
-
-	minAbbaRoundDurationEst    time.Duration
-	ownBcDurationEst           time.Duration
-	maxOwnBcDurationEst        time.Duration
-	maxOwnBcQuorumFinishMargin time.Duration
-	maxOwnBcTotalFinishMargin  time.Duration
-	maxExtBcDurationEst        time.Duration
-	maxExtBcFinishMargin       time.Duration
 }
 
 type txKey struct {
@@ -105,20 +96,6 @@ func (s *Stats) DeliveredBcSlot() {
 	s.bcDelivers++
 }
 
-func (s *Stats) DirectorStats(stats *directorpbtypes.Stats) {
-	s.lock.Lock()
-
-	s.minAbbaRoundDurationEst = stats.MinAbbaRoundDurationEst
-	s.ownBcDurationEst = stats.OwnBcDurationEst
-	s.maxOwnBcDurationEst = stats.MaxOwnBcDurationEst
-	s.maxOwnBcQuorumFinishMargin = stats.MaxOwnBcQuorumFinishMargin
-	s.maxOwnBcTotalFinishMargin = stats.MaxOwnBcTotalFinishMargin
-	s.maxExtBcDurationEst = stats.MaxExtBcDurationEst
-	s.maxExtBcFinishMargin = stats.MaxExtBcFinishMargin
-
-	s.lock.Unlock()
-}
-
 func (s *Stats) ThreshCryptoEvent(ev *threshcryptopbtypes.Event) {
 	var delta int
 
@@ -163,13 +140,6 @@ func (s *Stats) WriteCSVHeader(w *csv.Writer) {
 		"agRoundFalseDelivers",
 		"bcDelivers",
 		"threshQueueSize",
-		"minAbbaRoundDuration",
-		"ownBcDuration",
-		"maxOwnBcDuration",
-		"maxOwnBcQuorumFinishMargin",
-		"maxOwnBcTotalFinishMargin",
-		"maxExtBcDuration",
-		"maxExtBcFinishMargin",
 	}
 	_ = w.Write(record)
 }
@@ -190,13 +160,6 @@ func (s *Stats) WriteCSVRecordAndReset(w *csv.Writer, d time.Duration) {
 	agRoundFalseDelivers := s.agRoundFalseDelivers
 	bcDelivers := s.bcDelivers
 	threshQueueSize := s.threshQueueSize
-	minAbbaRoundDurationEst := s.minAbbaRoundDurationEst
-	ownBcDurationEst := s.ownBcDurationEst
-	maxOwnBcDurationEst := s.maxOwnBcDurationEst
-	maxOwnBcQuorumFinishMargin := s.maxOwnBcQuorumFinishMargin
-	maxOwnBcTotalFinishMargin := s.maxOwnBcTotalFinishMargin
-	maxExtBcDurationEst := s.maxExtBcDurationEst
-	maxExtBcFinishMargin := s.maxExtBcFinishMargin
 
 	if s.timestampedTransactions == 0 {
 		avgLatency = math.NaN()
@@ -235,13 +198,6 @@ func (s *Stats) WriteCSVRecordAndReset(w *csv.Writer, d time.Duration) {
 		strconv.FormatUint(agRoundFalseDelivers, 10),
 		strconv.FormatUint(bcDelivers, 10),
 		strconv.FormatInt(int64(threshQueueSize), 10),
-		fmt.Sprintf("%.6f", minAbbaRoundDurationEst.Seconds()),
-		fmt.Sprintf("%.6f", ownBcDurationEst.Seconds()),
-		fmt.Sprintf("%.6f", maxOwnBcDurationEst.Seconds()),
-		fmt.Sprintf("%.6f", maxOwnBcQuorumFinishMargin.Seconds()),
-		fmt.Sprintf("%.6f", maxOwnBcTotalFinishMargin.Seconds()),
-		fmt.Sprintf("%.6f", maxExtBcDurationEst.Seconds()),
-		fmt.Sprintf("%.6f", maxExtBcFinishMargin.Seconds()),
 	}
 	_ = w.Write(record)
 }

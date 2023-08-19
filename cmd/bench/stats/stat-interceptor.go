@@ -8,7 +8,6 @@ import (
 	"github.com/filecoin-project/mir/pkg/events"
 	ageventstypes "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents/types"
 	bcqueuepbtypes "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/types"
-	directorpbtypes "github.com/filecoin-project/mir/pkg/pb/aleapb/directorpb/types"
 	batchfetcherpbtypes "github.com/filecoin-project/mir/pkg/pb/batchfetcherpb/types"
 	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 	mempoolpbtypes "github.com/filecoin-project/mir/pkg/pb/mempoolpb/types"
@@ -70,10 +69,6 @@ func (i *StatInterceptor) Intercept(events events.EventList) error {
 		case *eventpbtypes.Event_AleaBcqueue:
 			if _, ok := e.AleaBcqueue.Type.(*bcqueuepbtypes.Event_Deliver); ok {
 				i.Stats.DeliveredBcSlot()
-			}
-		case *eventpbtypes.Event_AleaDirector:
-			if e2, ok := e.AleaDirector.Type.(*directorpbtypes.Event_Stats); ok {
-				i.Stats.DirectorStats(e2.Stats)
 			}
 		case *eventpbtypes.Event_ThreshCrypto:
 			i.Stats.ThreshCryptoEvent(e.ThreshCrypto)

@@ -3,8 +3,6 @@
 package directorpbtypes
 
 import (
-	"time"
-
 	mirreflect "github.com/filecoin-project/mir/codegen/mirreflect"
 	types "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
 	directorpb "github.com/filecoin-project/mir/pkg/pb/aleapb/directorpb"
@@ -35,8 +33,6 @@ func Event_TypeFromPb(pb directorpb.Event_Type) Event_Type {
 		return &Event_Heartbeat{Heartbeat: HeartbeatFromPb(pb.Heartbeat)}
 	case *directorpb.Event_FillGap:
 		return &Event_FillGap{FillGap: DoFillGapFromPb(pb.FillGap)}
-	case *directorpb.Event_Stats:
-		return &Event_Stats{Stats: StatsFromPb(pb.Stats)}
 	}
 	return nil
 }
@@ -87,30 +83,6 @@ func (w *Event_FillGap) Pb() directorpb.Event_Type {
 
 func (*Event_FillGap) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*directorpb.Event_FillGap]()}
-}
-
-type Event_Stats struct {
-	Stats *Stats
-}
-
-func (*Event_Stats) isEvent_Type() {}
-
-func (w *Event_Stats) Unwrap() *Stats {
-	return w.Stats
-}
-
-func (w *Event_Stats) Pb() directorpb.Event_Type {
-	if w == nil {
-		return nil
-	}
-	if w.Stats == nil {
-		return &directorpb.Event_Stats{}
-	}
-	return &directorpb.Event_Stats{Stats: (w.Stats).Pb()}
-}
-
-func (*Event_Stats) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*directorpb.Event_Stats]()}
 }
 
 func EventFromPb(pb *directorpb.Event) *Event {
@@ -193,51 +165,4 @@ func (m *DoFillGap) Pb() *directorpb.DoFillGap {
 
 func (*DoFillGap) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*directorpb.DoFillGap]()}
-}
-
-type Stats struct {
-	MinAbbaRoundDurationEst    time.Duration
-	OwnBcDurationEst           time.Duration
-	MaxOwnBcDurationEst        time.Duration
-	MaxOwnBcQuorumFinishMargin time.Duration
-	MaxOwnBcTotalFinishMargin  time.Duration
-	MaxExtBcDurationEst        time.Duration
-	MaxExtBcFinishMargin       time.Duration
-}
-
-func StatsFromPb(pb *directorpb.Stats) *Stats {
-	if pb == nil {
-		return nil
-	}
-	return &Stats{
-		MinAbbaRoundDurationEst:    (time.Duration)(pb.MinAbbaRoundDurationEst),
-		OwnBcDurationEst:           (time.Duration)(pb.OwnBcDurationEst),
-		MaxOwnBcDurationEst:        (time.Duration)(pb.MaxOwnBcDurationEst),
-		MaxOwnBcQuorumFinishMargin: (time.Duration)(pb.MaxOwnBcQuorumFinishMargin),
-		MaxOwnBcTotalFinishMargin:  (time.Duration)(pb.MaxOwnBcTotalFinishMargin),
-		MaxExtBcDurationEst:        (time.Duration)(pb.MaxExtBcDurationEst),
-		MaxExtBcFinishMargin:       (time.Duration)(pb.MaxExtBcFinishMargin),
-	}
-}
-
-func (m *Stats) Pb() *directorpb.Stats {
-	if m == nil {
-		return nil
-	}
-	pbMessage := &directorpb.Stats{}
-	{
-		pbMessage.MinAbbaRoundDurationEst = (int64)(m.MinAbbaRoundDurationEst)
-		pbMessage.OwnBcDurationEst = (int64)(m.OwnBcDurationEst)
-		pbMessage.MaxOwnBcDurationEst = (int64)(m.MaxOwnBcDurationEst)
-		pbMessage.MaxOwnBcQuorumFinishMargin = (int64)(m.MaxOwnBcQuorumFinishMargin)
-		pbMessage.MaxOwnBcTotalFinishMargin = (int64)(m.MaxOwnBcTotalFinishMargin)
-		pbMessage.MaxExtBcDurationEst = (int64)(m.MaxExtBcDurationEst)
-		pbMessage.MaxExtBcFinishMargin = (int64)(m.MaxExtBcFinishMargin)
-	}
-
-	return pbMessage
-}
-
-func (*Stats) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*directorpb.Stats]()}
 }

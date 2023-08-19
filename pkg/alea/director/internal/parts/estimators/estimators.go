@@ -13,7 +13,6 @@ import (
 	ageventsdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents/dsl"
 	bcqueuepbdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/dsl"
 	commontypes "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
-	directorpbdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/directorpb/dsl"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -161,13 +160,6 @@ func New(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, tunab
 	// =============================================================================================
 	ageventsdsl.UponInnerAbbaRoundTime(m, func(durationNoCoin time.Duration) error {
 		est.abbaRoundNoCoinDuration.AddSample(durationNoCoin)
-		return nil
-	})
-
-	// Stats
-	dsl.UponStateUpdates(m, func() error {
-		// stats are reported after updates, and before ordering components around
-		directorpbdsl.Stats(m, mc.Null, est.abbaRoundNoCoinDuration.MinEstimate(), est.ownBcDuration.Median(), est.ownBcDuration.MaxEstimate(), est.ownBcQuorumDoneMargin.MaxEstimate(), est.ownBcTotalDoneMargin.MaxEstimate(), est.extBcDuration.MaxEstimate(), est.extBcDoneMargin.MaxEstimate())
 		return nil
 	})
 

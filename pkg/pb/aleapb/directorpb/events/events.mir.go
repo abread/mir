@@ -3,8 +3,6 @@
 package directorpbevents
 
 import (
-	"time"
-
 	types3 "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
 	types2 "github.com/filecoin-project/mir/pkg/pb/aleapb/directorpb/types"
 	types1 "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
@@ -32,27 +30,6 @@ func DoFillGap(destModule types.ModuleID, slot *types3.Slot) *types1.Event {
 				Type: &types2.Event_FillGap{
 					FillGap: &types2.DoFillGap{
 						Slot: slot,
-					},
-				},
-			},
-		},
-	}
-}
-
-func Stats(destModule types.ModuleID, minAbbaRoundDurationEst time.Duration, ownBcDurationEst time.Duration, maxOwnBcDurationEst time.Duration, maxOwnBcQuorumFinishMargin time.Duration, maxOwnBcTotalFinishMargin time.Duration, maxExtBcDurationEst time.Duration, maxExtBcFinishMargin time.Duration) *types1.Event {
-	return &types1.Event{
-		DestModule: destModule,
-		Type: &types1.Event_AleaDirector{
-			AleaDirector: &types2.Event{
-				Type: &types2.Event_Stats{
-					Stats: &types2.Stats{
-						MinAbbaRoundDurationEst:    minAbbaRoundDurationEst,
-						OwnBcDurationEst:           ownBcDurationEst,
-						MaxOwnBcDurationEst:        maxOwnBcDurationEst,
-						MaxOwnBcQuorumFinishMargin: maxOwnBcQuorumFinishMargin,
-						MaxOwnBcTotalFinishMargin:  maxOwnBcTotalFinishMargin,
-						MaxExtBcDurationEst:        maxExtBcDurationEst,
-						MaxExtBcFinishMargin:       maxExtBcFinishMargin,
 					},
 				},
 			},
