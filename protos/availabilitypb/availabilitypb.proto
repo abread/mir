@@ -8,7 +8,7 @@ import "contextstorepb/contextstorepb.proto";
 import "dslpb/dslpb.proto";
 import "availabilitypb/mscpb/mscpb.proto";
 import "trantorpb/trantorpb.proto";
-import "aleapb/aleapb.proto";
+import "aleapb/bcpb/bcpb.proto";
 
 import "mir/codegen_extensions.proto";
 
@@ -127,7 +127,7 @@ message Cert {
 
   oneof type {
     mscpb.Certs mscs = 1;
-    aleapb.Cert alea = 2;
+    aleapb.bcpb.Cert alea = 2;
   }
 }
 

@@ -15,11 +15,10 @@ import (
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/logging"
 	aagdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents/dsl"
+	bcpbtypes "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/types"
 	bcqueuepbdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/dsl"
-	commontypes "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
 	directorpbdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/directorpb/dsl"
 	directorpbevents "github.com/filecoin-project/mir/pkg/pb/aleapb/directorpb/events"
-	aleapbtypes "github.com/filecoin-project/mir/pkg/pb/aleapb/types"
 	availabilitypbtypes "github.com/filecoin-project/mir/pkg/pb/availabilitypb/types"
 	eventpbdsl "github.com/filecoin-project/mir/pkg/pb/eventpb/dsl"
 	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
@@ -72,13 +71,13 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 	// Delivery
 	// =============================================================================================
 
-	bcqueuepbdsl.UponDeliver(m, func(slot *commontypes.Slot) error {
+	bcqueuepbdsl.UponDeliver(m, func(slot *bcpbtypes.Slot) error {
 		if slot.QueueSlot >= state.agQueueHeads[slot.QueueIdx] {
 			// slot wasn't delivered yet by agreement component
 			// logger.Log(logging.LevelDebug, "marking slot as ready for delivery", "queueIdx", slot.QueueIdx, "queueSlot", slot.QueueSlot)
 			state.slotsReadyToDeliver[slot.QueueIdx][slot.QueueSlot] = struct{}{}
 		} else {
-			bcqueuepbdsl.FreeSlot(m, bcutil.BcQueueModuleID(mc.BcQueuePrefix, slot.QueueIdx), slot.QueueSlot)
+			bcqueuepbdsl.FreeSlot(m, bcutil.BcQueueModuleID(mc.AleaBc, slot.QueueIdx), slot.QueueSlot)
 		}
 
 		return nil
@@ -92,7 +91,7 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 		}
 
 		queueIdx := aleatypes.QueueIdx(round % uint64(N))
-		slot := &commontypes.Slot{
+		slot := &bcpbtypes.Slot{
 			QueueIdx:  queueIdx,
 			QueueSlot: state.agQueueHeads[queueIdx],
 		}
@@ -101,7 +100,7 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 		logger.Log(logging.LevelDebug, "delivering cert", "agreementRound", round, "queueIdx", slot.QueueIdx, "queueSlot", slot.QueueSlot)
 		isspbdsl.DeliverCert(m, mc.Consumer, tt.SeqNr(round), &availabilitypbtypes.Cert{
 			Type: &availabilitypbtypes.Cert_Alea{
-				Alea: &aleapbtypes.Cert{
+				Alea: &bcpbtypes.Cert{
 					Slot: slot,
 				},
 			},
@@ -113,7 +112,7 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 		// remove tracked slot readiness (don't want to run out of memory)
 		// also free broadcast slot to allow broadcast component to make progress
 		delete(state.slotsReadyToDeliver[slot.QueueIdx], slot.QueueSlot)
-		bcqueuepbdsl.FreeSlot(m, bcutil.BcQueueModuleID(mc.BcQueuePrefix, slot.QueueIdx), slot.QueueSlot)
+		bcqueuepbdsl.FreeSlot(m, bcutil.BcQueueModuleID(mc.AleaBc, slot.QueueIdx), slot.QueueSlot)
 
 		return nil
 	})
@@ -150,7 +149,7 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 		if canDeliverSomething {
 			_, bcDone := state.slotsReadyToDeliver[nextQueueIdx][nextQueueSlot]
 			if !bcDone {
-				slot := commontypes.Slot{
+				slot := bcpbtypes.Slot{
 					QueueIdx:  nextQueueIdx,
 					QueueSlot: nextQueueSlot,
 				}
@@ -198,7 +197,7 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 	// upon init, cut a new batch
 	dsl.UponInit(m, func() error {
 		state.stalledBatchCut = false
-		est.MarkBcStartedNow(commontypes.Slot{QueueIdx: ownQueueIdx, QueueSlot: 0})
+		est.MarkBcStartedNow(bcpbtypes.Slot{QueueIdx: ownQueueIdx, QueueSlot: 0})
 
 		// TODO: proper epochs
 		mempooldsl.RequestBatch[struct{}](m, mc.Mempool, tt.EpochNr(0), nil)
@@ -243,7 +242,7 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 		// logger.Log(logging.LevelDebug, "requesting more transactions")
 		state.stalledBatchCut = false
 
-		est.MarkBcStartedNow(commontypes.Slot{QueueIdx: ownQueueIdx, QueueSlot: state.bcOwnQueueHead})
+		est.MarkBcStartedNow(bcpbtypes.Slot{QueueIdx: ownQueueIdx, QueueSlot: state.bcOwnQueueHead})
 
 		// TODO: proper epochs
 		mempooldsl.RequestBatch[struct{}](m, mc.Mempool, tt.EpochNr(0), nil)
@@ -256,11 +255,11 @@ func Include(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, t
 
 		// logger.Log(logging.LevelDebug, "new batch", "nTransactions", len(txs))
 
-		bcqueuepbdsl.InputValue(m, bcutil.BcQueueModuleID(mc.BcQueuePrefix, ownQueueIdx), state.bcOwnQueueHead, txs)
+		bcqueuepbdsl.InputValue(m, bcutil.BcQueueModuleID(mc.AleaBc, ownQueueIdx), state.bcOwnQueueHead, txs)
 		state.bcOwnQueueHead++
 		return nil
 	})
-	bcqueuepbdsl.UponDeliver(m, func(slot *commontypes.Slot) error {
+	bcqueuepbdsl.UponDeliver(m, func(slot *bcpbtypes.Slot) error {
 		if slot.QueueIdx == ownQueueIdx && slot.QueueSlot == state.bcOwnQueueHead-1 {
 			// new batch was delivered
 			state.stalledBatchCut = true

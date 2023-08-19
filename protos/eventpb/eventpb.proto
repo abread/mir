@@ -25,8 +25,9 @@ import "transportpb/transportpb.proto";
 import "testerpb/testerpb.proto";
 import "vcbpb/vcbpb.proto";
 import "abbapb/abbapb.proto";
-import "aleapb/agreementpb/agevents/agevents.proto";
+import "aleapb/bcpb/bcpb.proto";
 import "aleapb/bcqueuepb/bcqueuepb.proto";
+import "aleapb/agreementpb/agevents/agevents.proto";
 import "aleapb/directorpb/directorpb.proto";
 import "reliablenetpb/reliablenetpb.proto";
 
@@ -64,13 +65,14 @@ message Event {
          transportpb.Event transport       = 23;
      chkpvalidatorpb.Event chkp_validator  = 24;
     pprepvalidatorpb.Event pprep_valiadtor = 25;
-       reliablenetpb.Event reliable_net  = 26;
-               vcbpb.Event vcb           = 27;
-              abbapb.Event abba          = 28;
+       reliablenetpb.Event reliable_net    = 26;
+               vcbpb.Event vcb             = 27;
+              abbapb.Event abba            = 28;
 
-    aleapb.agreementpb.Event alea_agreement = 29;
+           aleapb.bcpb.Event alea_bc        = 29;
       aleapb.bcqueuepb.Event alea_bcqueue   = 30;
-     aleapb.directorpb.Event alea_director  = 31;
+    aleapb.agreementpb.Event alea_agreement = 31;
+     aleapb.directorpb.Event alea_director  = 32;
 
 
     // Events for code samples

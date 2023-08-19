@@ -6,8 +6,8 @@ import (
 	"time"
 
 	aleatypes "github.com/filecoin-project/mir/pkg/alea/aleatypes"
+	types4 "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/types"
 	types3 "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/types"
-	types4 "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
 	types2 "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 	types1 "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	tctypes "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"

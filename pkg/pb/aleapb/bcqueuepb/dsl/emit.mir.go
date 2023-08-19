@@ -7,8 +7,8 @@ import (
 
 	aleatypes "github.com/filecoin-project/mir/pkg/alea/aleatypes"
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
+	types2 "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/types"
 	events "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/events"
-	types2 "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
 	types1 "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	tctypes "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 	types "github.com/filecoin-project/mir/pkg/types"

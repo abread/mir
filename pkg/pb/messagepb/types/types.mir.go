@@ -6,7 +6,7 @@ import (
 	mirreflect "github.com/filecoin-project/mir/codegen/mirreflect"
 	types8 "github.com/filecoin-project/mir/pkg/pb/abbapb/types"
 	types10 "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/types"
-	types9 "github.com/filecoin-project/mir/pkg/pb/aleapb/types"
+	types9 "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/types"
 	types3 "github.com/filecoin-project/mir/pkg/pb/availabilitypb/mscpb/types"
 	types2 "github.com/filecoin-project/mir/pkg/pb/bcbpb/types"
 	types5 "github.com/filecoin-project/mir/pkg/pb/checkpointpb/types"
@@ -57,8 +57,8 @@ func Message_TypeFromPb(pb messagepb.Message_Type) Message_Type {
 		return &Message_Vcb{Vcb: types7.MessageFromPb(pb.Vcb)}
 	case *messagepb.Message_Abba:
 		return &Message_Abba{Abba: types8.MessageFromPb(pb.Abba)}
-	case *messagepb.Message_Alea:
-		return &Message_Alea{Alea: types9.MessageFromPb(pb.Alea)}
+	case *messagepb.Message_AleaBroadcast:
+		return &Message_AleaBroadcast{AleaBroadcast: types9.MessageFromPb(pb.AleaBroadcast)}
 	case *messagepb.Message_AleaAgreement:
 		return &Message_AleaAgreement{AleaAgreement: types10.MessageFromPb(pb.AleaAgreement)}
 	case *messagepb.Message_ReliableNet:
@@ -259,28 +259,28 @@ func (*Message_Abba) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*messagepb.Message_Abba]()}
 }
 
-type Message_Alea struct {
-	Alea *types9.Message
+type Message_AleaBroadcast struct {
+	AleaBroadcast *types9.Message
 }
 
-func (*Message_Alea) isMessage_Type() {}
+func (*Message_AleaBroadcast) isMessage_Type() {}
 
-func (w *Message_Alea) Unwrap() *types9.Message {
-	return w.Alea
+func (w *Message_AleaBroadcast) Unwrap() *types9.Message {
+	return w.AleaBroadcast
 }
 
-func (w *Message_Alea) Pb() messagepb.Message_Type {
+func (w *Message_AleaBroadcast) Pb() messagepb.Message_Type {
 	if w == nil {
 		return nil
 	}
-	if w.Alea == nil {
-		return &messagepb.Message_Alea{}
+	if w.AleaBroadcast == nil {
+		return &messagepb.Message_AleaBroadcast{}
 	}
-	return &messagepb.Message_Alea{Alea: (w.Alea).Pb()}
+	return &messagepb.Message_AleaBroadcast{AleaBroadcast: (w.AleaBroadcast).Pb()}
 }
 
-func (*Message_Alea) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*messagepb.Message_Alea]()}
+func (*Message_AleaBroadcast) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*messagepb.Message_AleaBroadcast]()}
 }
 
 type Message_AleaAgreement struct {

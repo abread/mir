@@ -5,7 +5,7 @@ package availabilitypbtypes
 import (
 	mirreflect "github.com/filecoin-project/mir/codegen/mirreflect"
 	types1 "github.com/filecoin-project/mir/codegen/model/types"
-	types6 "github.com/filecoin-project/mir/pkg/pb/aleapb/types"
+	types6 "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/types"
 	availabilitypb "github.com/filecoin-project/mir/pkg/pb/availabilitypb"
 	types5 "github.com/filecoin-project/mir/pkg/pb/availabilitypb/mscpb/types"
 	types3 "github.com/filecoin-project/mir/pkg/pb/contextstorepb/types"

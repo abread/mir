@@ -4,8 +4,6 @@ package aleapb.directorpb;
 
 option go_package = "github.com/filecoin-project/mir/pkg/pb/aleapb/directorpb";
 
-import "aleapb/common/common.proto";
-
 import "mir/codegen_extensions.proto";
 
 // ============================================================
@@ -19,16 +17,9 @@ message Event {
     option (mir.event_type) = true;
 
     Heartbeat heartbeat = 1;
-    DoFillGap fill_gap  = 2;
   }
 }
 
 message Heartbeat {
   option (mir.event) = true;
-}
-
-message DoFillGap {
-  option (mir.event) = true;
-
-  common.Slot slot = 1;
 }

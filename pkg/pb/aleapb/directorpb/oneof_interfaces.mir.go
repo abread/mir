@@ -12,7 +12,3 @@ type Event_TypeWrapper[T any] interface {
 func (w *Event_Heartbeat) Unwrap() *Heartbeat {
 	return w.Heartbeat
 }
-
-func (w *Event_FillGap) Unwrap() *DoFillGap {
-	return w.FillGap
-}

@@ -4,8 +4,8 @@ package messagepb
 
 import (
 	abbapb "github.com/filecoin-project/mir/pkg/pb/abbapb"
-	aleapb "github.com/filecoin-project/mir/pkg/pb/aleapb"
 	agreementpb "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb"
+	bcpb "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb"
 	mscpb "github.com/filecoin-project/mir/pkg/pb/availabilitypb/mscpb"
 	bcbpb "github.com/filecoin-project/mir/pkg/pb/bcbpb"
 	checkpointpb "github.com/filecoin-project/mir/pkg/pb/checkpointpb"
@@ -55,8 +55,8 @@ func (w *Message_Abba) Unwrap() *abbapb.Message {
 	return w.Abba
 }
 
-func (w *Message_Alea) Unwrap() *aleapb.Message {
-	return w.Alea
+func (w *Message_AleaBroadcast) Unwrap() *bcpb.Message {
+	return w.AleaBroadcast
 }
 
 func (w *Message_AleaAgreement) Unwrap() *agreementpb.Message {

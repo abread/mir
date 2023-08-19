@@ -3,7 +3,7 @@
 package availabilitypb
 
 import (
-	aleapb "github.com/filecoin-project/mir/pkg/pb/aleapb"
+	bcpb "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb"
 	mscpb "github.com/filecoin-project/mir/pkg/pb/availabilitypb/mscpb"
 	contextstorepb "github.com/filecoin-project/mir/pkg/pb/contextstorepb"
 	dslpb "github.com/filecoin-project/mir/pkg/pb/dslpb"
@@ -100,6 +100,6 @@ func (w *Cert_Mscs) Unwrap() *mscpb.Certs {
 	return w.Mscs
 }
 
-func (w *Cert_Alea) Unwrap() *aleapb.Cert {
+func (w *Cert_Alea) Unwrap() *bcpb.Cert {
 	return w.Alea
 }

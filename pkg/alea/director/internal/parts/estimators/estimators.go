@@ -11,13 +11,13 @@ import (
 	"github.com/filecoin-project/mir/pkg/alea/util"
 	"github.com/filecoin-project/mir/pkg/dsl"
 	ageventsdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents/dsl"
+	bcpbtypes "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/types"
 	bcqueuepbdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/dsl"
-	commontypes "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
 type Estimators struct {
-	bcStartTimes map[commontypes.Slot]time.Time
+	bcStartTimes map[bcpbtypes.Slot]time.Time
 
 	ownBcDuration         *util.Estimator
 	ownBcQuorumDoneMargin *util.Estimator
@@ -48,7 +48,7 @@ func (e *Estimators) AgMinDurationEst() time.Duration {
 	return e.abbaRoundNoCoinDuration.MinEstimate() / 3
 }
 
-func (e *Estimators) BcRuntime(slot commontypes.Slot) (time.Duration, bool) {
+func (e *Estimators) BcRuntime(slot bcpbtypes.Slot) (time.Duration, bool) {
 	if startTime, ok := e.bcStartTimes[slot]; ok {
 		return time.Since(startTime), true
 	}
@@ -56,7 +56,7 @@ func (e *Estimators) BcRuntime(slot commontypes.Slot) (time.Duration, bool) {
 	return 0, false
 }
 
-func (e *Estimators) MarkBcStartedNow(slot commontypes.Slot) {
+func (e *Estimators) MarkBcStartedNow(slot bcpbtypes.Slot) {
 	e.bcStartTimes[slot] = time.Now()
 }
 
@@ -65,7 +65,7 @@ func New(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, tunab
 	ownQueueIdx := aleatypes.QueueIdx(slices.Index(params.AllNodes, nodeID))
 
 	est := &Estimators{
-		bcStartTimes: make(map[commontypes.Slot]time.Time, (N-1)*tunables.MaxConcurrentVcbPerQueue+tunables.MaxOwnUnagreedBatchCount),
+		bcStartTimes: make(map[bcpbtypes.Slot]time.Time, (N-1)*tunables.MaxConcurrentVcbPerQueue+tunables.MaxOwnUnagreedBatchCount),
 
 		ownBcDuration:         util.NewEstimator(tunables.EstimateWindowSize),
 		ownBcQuorumDoneMargin: util.NewEstimator(tunables.EstimateWindowSize),
@@ -80,14 +80,14 @@ func New(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, tunab
 	// =============================================================================================
 	// Bc Duration Estimation
 	// =============================================================================================
-	bcqueuepbdsl.UponBcStarted(m, func(slot *commontypes.Slot) error {
+	bcqueuepbdsl.UponBcStarted(m, func(slot *bcpbtypes.Slot) error {
 		if _, ok := est.bcStartTimes[*slot]; !ok {
 			est.bcStartTimes[*slot] = time.Now()
 		}
 
 		return nil
 	})
-	bcqueuepbdsl.UponDeliver(m, func(slotRef *commontypes.Slot) error {
+	bcqueuepbdsl.UponDeliver(m, func(slotRef *bcpbtypes.Slot) error {
 		slot := *slotRef
 
 		startTime, ok := est.bcStartTimes[slot]
@@ -111,12 +111,12 @@ func New(m dsl.Module, mc common.ModuleConfig, params common.ModuleParams, tunab
 	// =============================================================================================
 	// Bc Finish Duration Estimation
 	// =============================================================================================
-	bcqueuepbdsl.UponBcQuorumDone(m, func(slot *commontypes.Slot, deliverDelta time.Duration) error {
+	bcqueuepbdsl.UponBcQuorumDone(m, func(slot *bcpbtypes.Slot, deliverDelta time.Duration) error {
 		// adjust own bc estimate margin
 		est.ownBcQuorumDoneMargin.AddSample(deliverDelta)
 		return nil
 	})
-	bcqueuepbdsl.UponBcAllDone(m, func(slot *commontypes.Slot, quorumDoneDelta time.Duration) error {
+	bcqueuepbdsl.UponBcAllDone(m, func(slot *bcpbtypes.Slot, quorumDoneDelta time.Duration) error {
 		// adjust own bc estimate margin
 		// this pertains to the last F nodes, so we must limit it based on the quorum margin
 		withoutTotal := float64(est.ownBcDuration.MaxEstimate() + est.ownBcQuorumDoneMargin.MaxEstimate())

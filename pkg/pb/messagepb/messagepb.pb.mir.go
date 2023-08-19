@@ -16,7 +16,7 @@ func (*Message) ReflectTypeOptions() []reflect.Type {
 		reflect.TypeOf((*Message_Orderer)(nil)),
 		reflect.TypeOf((*Message_Vcb)(nil)),
 		reflect.TypeOf((*Message_Abba)(nil)),
-		reflect.TypeOf((*Message_Alea)(nil)),
+		reflect.TypeOf((*Message_AleaBroadcast)(nil)),
 		reflect.TypeOf((*Message_AleaAgreement)(nil)),
 		reflect.TypeOf((*Message_ReliableNet)(nil)),
 	}

@@ -7,6 +7,7 @@ import (
 
 	abbapb "github.com/filecoin-project/mir/pkg/pb/abbapb"
 	agevents "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents"
+	bcpb "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb"
 	bcqueuepb "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb"
 	directorpb "github.com/filecoin-project/mir/pkg/pb/aleapb/directorpb"
 	apppb "github.com/filecoin-project/mir/pkg/pb/apppb"
@@ -122,12 +123,16 @@ func (w *Event_Abba) Unwrap() *abbapb.Event {
 	return w.Abba
 }
 
-func (w *Event_AleaAgreement) Unwrap() *agevents.Event {
-	return w.AleaAgreement
+func (w *Event_AleaBc) Unwrap() *bcpb.Event {
+	return w.AleaBc
 }
 
 func (w *Event_AleaBcqueue) Unwrap() *bcqueuepb.Event {
 	return w.AleaBcqueue
+}
+
+func (w *Event_AleaAgreement) Unwrap() *agevents.Event {
+	return w.AleaAgreement
 }
 
 func (w *Event_AleaDirector) Unwrap() *directorpb.Event {

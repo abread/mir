@@ -1,0 +1,82 @@
+syntax = "proto3";
+
+package aleapb.bcpb;
+
+option go_package = "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb";
+
+import "trantorpb/trantorpb.proto";
+
+import "mir/codegen_extensions.proto";
+import "net/codegen_extensions.proto";
+
+// ============================================================
+// Events
+// ============================================================
+
+message Event {
+  option (mir.event_class) = true;
+
+  oneof type {
+    option (mir.event_type) = true;
+
+    DoFillGap fill_gap  = 1;
+  }
+}
+
+message DoFillGap {
+  option (mir.event) = true;
+
+  Slot slot = 1;
+}
+
+// ============================================================
+// Messages
+// ============================================================
+
+message Message {
+  option (net.message_class) = true;
+
+  oneof type {
+    option (net.message_type) = true;
+
+    FillGapMessage fill_gap_message = 1;
+    FillerMessage  filler_message   = 2;
+  }
+}
+
+message FillGapMessage {
+  option (net.message) = true;
+
+  Slot slot = 1;
+}
+
+message FillerMessage {
+  option (net.message) = true;
+
+  Slot                           slot      = 1;
+  repeated trantorpb.Transaction txs       = 2;
+  bytes                          signature = 3 [(mir.type) = "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes.FullSig"];
+}
+
+// ============================================================
+// Structs
+// ============================================================
+
+message Slot {
+  option (mir.struct) = true;
+
+  uint32 queue_idx = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/alea/aleatypes.QueueIdx"];
+  uint64 queue_slot = 2 [(mir.type) = "github.com/filecoin-project/mir/pkg/alea/aleatypes.QueueSlot"];
+}
+
+// Availability certificate
+message Cert {
+  option (mir.struct) = true;
+
+  Slot slot = 1;
+
+  // hash of hashes of txids in batch
+  bytes batch_digest = 2;
+
+  bytes signature = 3 [(mir.type) = "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes.FullSig"];
+}

@@ -4,7 +4,6 @@ package directorpbtypes
 
 import (
 	mirreflect "github.com/filecoin-project/mir/codegen/mirreflect"
-	types "github.com/filecoin-project/mir/pkg/pb/aleapb/common/types"
 	directorpb "github.com/filecoin-project/mir/pkg/pb/aleapb/directorpb"
 	reflectutil "github.com/filecoin-project/mir/pkg/util/reflectutil"
 )
@@ -31,8 +30,6 @@ func Event_TypeFromPb(pb directorpb.Event_Type) Event_Type {
 	switch pb := pb.(type) {
 	case *directorpb.Event_Heartbeat:
 		return &Event_Heartbeat{Heartbeat: HeartbeatFromPb(pb.Heartbeat)}
-	case *directorpb.Event_FillGap:
-		return &Event_FillGap{FillGap: DoFillGapFromPb(pb.FillGap)}
 	}
 	return nil
 }
@@ -59,30 +56,6 @@ func (w *Event_Heartbeat) Pb() directorpb.Event_Type {
 
 func (*Event_Heartbeat) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*directorpb.Event_Heartbeat]()}
-}
-
-type Event_FillGap struct {
-	FillGap *DoFillGap
-}
-
-func (*Event_FillGap) isEvent_Type() {}
-
-func (w *Event_FillGap) Unwrap() *DoFillGap {
-	return w.FillGap
-}
-
-func (w *Event_FillGap) Pb() directorpb.Event_Type {
-	if w == nil {
-		return nil
-	}
-	if w.FillGap == nil {
-		return &directorpb.Event_FillGap{}
-	}
-	return &directorpb.Event_FillGap{FillGap: (w.FillGap).Pb()}
-}
-
-func (*Event_FillGap) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*directorpb.Event_FillGap]()}
 }
 
 func EventFromPb(pb *directorpb.Event) *Event {
@@ -134,35 +107,4 @@ func (m *Heartbeat) Pb() *directorpb.Heartbeat {
 
 func (*Heartbeat) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*directorpb.Heartbeat]()}
-}
-
-type DoFillGap struct {
-	Slot *types.Slot
-}
-
-func DoFillGapFromPb(pb *directorpb.DoFillGap) *DoFillGap {
-	if pb == nil {
-		return nil
-	}
-	return &DoFillGap{
-		Slot: types.SlotFromPb(pb.Slot),
-	}
-}
-
-func (m *DoFillGap) Pb() *directorpb.DoFillGap {
-	if m == nil {
-		return nil
-	}
-	pbMessage := &directorpb.DoFillGap{}
-	{
-		if m.Slot != nil {
-			pbMessage.Slot = (m.Slot).Pb()
-		}
-	}
-
-	return pbMessage
-}
-
-func (*DoFillGap) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*directorpb.DoFillGap]()}
 }

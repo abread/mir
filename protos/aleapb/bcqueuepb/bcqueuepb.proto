@@ -4,7 +4,7 @@ package aleapb.bcqueuepb;
 
 option go_package = "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb";
 
-import "aleapb/common/common.proto";
+import "aleapb/bcpb/bcpb.proto";
 import "trantorpb/trantorpb.proto";
 
 import "mir/codegen_extensions.proto";
@@ -42,7 +42,7 @@ message InputValue {
 message Deliver {
   option (mir.event) = true;
 
-  common.Slot slot = 1;
+  bcpb.Slot slot = 1;
 }
 
 message FreeSlot {
@@ -62,13 +62,13 @@ message PastVcbFinal {
 message BcStarted {
   option (mir.event) = true;
 
-  common.Slot slot = 1;
+  bcpb.Slot slot = 1;
 }
 
 message BcQuorumDone {
   option (mir.event) = true;
 
-  common.Slot slot = 1;
+  bcpb.Slot slot = 1;
 
   // Time between VCB deliver and receiving 2F+1 VCB Done messages (from different nodes).
   int64 deliver_delta = 2 [(mir.type) = "time.Duration"];
@@ -77,7 +77,7 @@ message BcQuorumDone {
 message BcAllDone {
   option (mir.event) = true;
 
-  common.Slot slot = 1;
+  bcpb.Slot slot = 1;
 
   // Time between receiving 2F+1 VCB Done messages (from different nodes) and the remaining F.
   int64 quorum_done_delta = 2 [(mir.type) = "time.Duration"];

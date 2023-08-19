@@ -6,11 +6,12 @@ import (
 	wrapperspb "google.golang.org/protobuf/types/known/wrapperspb"
 
 	mirreflect "github.com/filecoin-project/mir/codegen/mirreflect"
-	types25 "github.com/filecoin-project/mir/codegen/model/types"
+	types26 "github.com/filecoin-project/mir/codegen/model/types"
 	types19 "github.com/filecoin-project/mir/pkg/pb/abbapb/types"
-	types20 "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents/types"
+	types22 "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents/types"
+	types20 "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/types"
 	types21 "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/types"
-	types22 "github.com/filecoin-project/mir/pkg/pb/aleapb/directorpb/types"
+	types23 "github.com/filecoin-project/mir/pkg/pb/aleapb/directorpb/types"
 	types13 "github.com/filecoin-project/mir/pkg/pb/apppb/types"
 	types5 "github.com/filecoin-project/mir/pkg/pb/availabilitypb/batchdbpb/types"
 	types4 "github.com/filecoin-project/mir/pkg/pb/availabilitypb/types"
@@ -26,14 +27,14 @@ import (
 	types3 "github.com/filecoin-project/mir/pkg/pb/mempoolpb/types"
 	types16 "github.com/filecoin-project/mir/pkg/pb/ordererpb/pprepvalidatorpb/types"
 	types11 "github.com/filecoin-project/mir/pkg/pb/ordererpb/types"
-	types23 "github.com/filecoin-project/mir/pkg/pb/pingpongpb/types"
+	types24 "github.com/filecoin-project/mir/pkg/pb/pingpongpb/types"
 	types17 "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/types"
-	types24 "github.com/filecoin-project/mir/pkg/pb/testerpb/types"
+	types25 "github.com/filecoin-project/mir/pkg/pb/testerpb/types"
 	types7 "github.com/filecoin-project/mir/pkg/pb/threshcryptopb/types"
 	types14 "github.com/filecoin-project/mir/pkg/pb/transportpb/types"
 	types18 "github.com/filecoin-project/mir/pkg/pb/vcbpb/types"
-	types26 "github.com/filecoin-project/mir/pkg/timer/types"
-	types27 "github.com/filecoin-project/mir/pkg/trantor/types"
+	types27 "github.com/filecoin-project/mir/pkg/timer/types"
+	types28 "github.com/filecoin-project/mir/pkg/trantor/types"
 	types "github.com/filecoin-project/mir/pkg/types"
 	reflectutil "github.com/filecoin-project/mir/pkg/util/reflectutil"
 )
@@ -103,20 +104,22 @@ func Event_TypeFromPb(pb eventpb.Event_Type) Event_Type {
 		return &Event_Vcb{Vcb: types18.EventFromPb(pb.Vcb)}
 	case *eventpb.Event_Abba:
 		return &Event_Abba{Abba: types19.EventFromPb(pb.Abba)}
-	case *eventpb.Event_AleaAgreement:
-		return &Event_AleaAgreement{AleaAgreement: types20.EventFromPb(pb.AleaAgreement)}
+	case *eventpb.Event_AleaBc:
+		return &Event_AleaBc{AleaBc: types20.EventFromPb(pb.AleaBc)}
 	case *eventpb.Event_AleaBcqueue:
 		return &Event_AleaBcqueue{AleaBcqueue: types21.EventFromPb(pb.AleaBcqueue)}
+	case *eventpb.Event_AleaAgreement:
+		return &Event_AleaAgreement{AleaAgreement: types22.EventFromPb(pb.AleaAgreement)}
 	case *eventpb.Event_AleaDirector:
-		return &Event_AleaDirector{AleaDirector: types22.EventFromPb(pb.AleaDirector)}
+		return &Event_AleaDirector{AleaDirector: types23.EventFromPb(pb.AleaDirector)}
 	case *eventpb.Event_PingPong:
-		return &Event_PingPong{PingPong: types23.EventFromPb(pb.PingPong)}
+		return &Event_PingPong{PingPong: types24.EventFromPb(pb.PingPong)}
 	case *eventpb.Event_TestingString:
 		return &Event_TestingString{TestingString: pb.TestingString}
 	case *eventpb.Event_TestingUint:
 		return &Event_TestingUint{TestingUint: pb.TestingUint}
 	case *eventpb.Event_Tester:
-		return &Event_Tester{Tester: types24.TesterFromPb(pb.Tester)}
+		return &Event_Tester{Tester: types25.TesterFromPb(pb.Tester)}
 	}
 	return nil
 }
@@ -625,28 +628,28 @@ func (*Event_Abba) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*eventpb.Event_Abba]()}
 }
 
-type Event_AleaAgreement struct {
-	AleaAgreement *types20.Event
+type Event_AleaBc struct {
+	AleaBc *types20.Event
 }
 
-func (*Event_AleaAgreement) isEvent_Type() {}
+func (*Event_AleaBc) isEvent_Type() {}
 
-func (w *Event_AleaAgreement) Unwrap() *types20.Event {
-	return w.AleaAgreement
+func (w *Event_AleaBc) Unwrap() *types20.Event {
+	return w.AleaBc
 }
 
-func (w *Event_AleaAgreement) Pb() eventpb.Event_Type {
+func (w *Event_AleaBc) Pb() eventpb.Event_Type {
 	if w == nil {
 		return nil
 	}
-	if w.AleaAgreement == nil {
-		return &eventpb.Event_AleaAgreement{}
+	if w.AleaBc == nil {
+		return &eventpb.Event_AleaBc{}
 	}
-	return &eventpb.Event_AleaAgreement{AleaAgreement: (w.AleaAgreement).Pb()}
+	return &eventpb.Event_AleaBc{AleaBc: (w.AleaBc).Pb()}
 }
 
-func (*Event_AleaAgreement) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*eventpb.Event_AleaAgreement]()}
+func (*Event_AleaBc) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*eventpb.Event_AleaBc]()}
 }
 
 type Event_AleaBcqueue struct {
@@ -673,13 +676,37 @@ func (*Event_AleaBcqueue) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*eventpb.Event_AleaBcqueue]()}
 }
 
+type Event_AleaAgreement struct {
+	AleaAgreement *types22.Event
+}
+
+func (*Event_AleaAgreement) isEvent_Type() {}
+
+func (w *Event_AleaAgreement) Unwrap() *types22.Event {
+	return w.AleaAgreement
+}
+
+func (w *Event_AleaAgreement) Pb() eventpb.Event_Type {
+	if w == nil {
+		return nil
+	}
+	if w.AleaAgreement == nil {
+		return &eventpb.Event_AleaAgreement{}
+	}
+	return &eventpb.Event_AleaAgreement{AleaAgreement: (w.AleaAgreement).Pb()}
+}
+
+func (*Event_AleaAgreement) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*eventpb.Event_AleaAgreement]()}
+}
+
 type Event_AleaDirector struct {
-	AleaDirector *types22.Event
+	AleaDirector *types23.Event
 }
 
 func (*Event_AleaDirector) isEvent_Type() {}
 
-func (w *Event_AleaDirector) Unwrap() *types22.Event {
+func (w *Event_AleaDirector) Unwrap() *types23.Event {
 	return w.AleaDirector
 }
 
@@ -698,12 +725,12 @@ func (*Event_AleaDirector) MirReflect() mirreflect.Type {
 }
 
 type Event_PingPong struct {
-	PingPong *types23.Event
+	PingPong *types24.Event
 }
 
 func (*Event_PingPong) isEvent_Type() {}
 
-func (w *Event_PingPong) Unwrap() *types23.Event {
+func (w *Event_PingPong) Unwrap() *types24.Event {
 	return w.PingPong
 }
 
@@ -770,12 +797,12 @@ func (*Event_TestingUint) MirReflect() mirreflect.Type {
 }
 
 type Event_Tester struct {
-	Tester *types24.Tester
+	Tester *types25.Tester
 }
 
 func (*Event_Tester) isEvent_Type() {}
 
-func (w *Event_Tester) Unwrap() *types24.Tester {
+func (w *Event_Tester) Unwrap() *types25.Tester {
 	return w.Tester
 }
 
@@ -800,7 +827,7 @@ func EventFromPb(pb *eventpb.Event) *Event {
 	return &Event{
 		DestModule: (types.ModuleID)(pb.DestModule),
 		Type:       Event_TypeFromPb(pb.Type),
-		Next: types25.ConvertSlice(pb.Next, func(t *eventpb.Event) *Event {
+		Next: types26.ConvertSlice(pb.Next, func(t *eventpb.Event) *Event {
 			return EventFromPb(t)
 		}),
 		LocalTs: pb.LocalTs,
@@ -817,7 +844,7 @@ func (m *Event) Pb() *eventpb.Event {
 		if m.Type != nil {
 			pbMessage.Type = (m.Type).Pb()
 		}
-		pbMessage.Next = types25.ConvertSlice(m.Next, func(t *Event) *eventpb.Event {
+		pbMessage.Next = types26.ConvertSlice(m.Next, func(t *Event) *eventpb.Event {
 			return (t).Pb()
 		})
 		pbMessage.LocalTs = m.LocalTs
@@ -985,7 +1012,7 @@ func (*TimerEvent) MirReflect() mirreflect.Type {
 
 type TimerDelay struct {
 	EventsToDelay []*Event
-	Delay         types26.Duration
+	Delay         types27.Duration
 }
 
 func TimerDelayFromPb(pb *eventpb.TimerDelay) *TimerDelay {
@@ -993,10 +1020,10 @@ func TimerDelayFromPb(pb *eventpb.TimerDelay) *TimerDelay {
 		return nil
 	}
 	return &TimerDelay{
-		EventsToDelay: types25.ConvertSlice(pb.EventsToDelay, func(t *eventpb.Event) *Event {
+		EventsToDelay: types26.ConvertSlice(pb.EventsToDelay, func(t *eventpb.Event) *Event {
 			return EventFromPb(t)
 		}),
-		Delay: (types26.Duration)(pb.Delay),
+		Delay: (types27.Duration)(pb.Delay),
 	}
 }
 
@@ -1006,7 +1033,7 @@ func (m *TimerDelay) Pb() *eventpb.TimerDelay {
 	}
 	pbMessage := &eventpb.TimerDelay{}
 	{
-		pbMessage.EventsToDelay = types25.ConvertSlice(m.EventsToDelay, func(t *Event) *eventpb.Event {
+		pbMessage.EventsToDelay = types26.ConvertSlice(m.EventsToDelay, func(t *Event) *eventpb.Event {
 			return (t).Pb()
 		})
 		pbMessage.Delay = (uint64)(m.Delay)
@@ -1021,8 +1048,8 @@ func (*TimerDelay) MirReflect() mirreflect.Type {
 
 type TimerRepeat struct {
 	EventsToRepeat []*Event
-	Delay          types26.Duration
-	RetentionIndex types27.RetentionIndex
+	Delay          types27.Duration
+	RetentionIndex types28.RetentionIndex
 }
 
 func TimerRepeatFromPb(pb *eventpb.TimerRepeat) *TimerRepeat {
@@ -1030,11 +1057,11 @@ func TimerRepeatFromPb(pb *eventpb.TimerRepeat) *TimerRepeat {
 		return nil
 	}
 	return &TimerRepeat{
-		EventsToRepeat: types25.ConvertSlice(pb.EventsToRepeat, func(t *eventpb.Event) *Event {
+		EventsToRepeat: types26.ConvertSlice(pb.EventsToRepeat, func(t *eventpb.Event) *Event {
 			return EventFromPb(t)
 		}),
-		Delay:          (types26.Duration)(pb.Delay),
-		RetentionIndex: (types27.RetentionIndex)(pb.RetentionIndex),
+		Delay:          (types27.Duration)(pb.Delay),
+		RetentionIndex: (types28.RetentionIndex)(pb.RetentionIndex),
 	}
 }
 
@@ -1044,7 +1071,7 @@ func (m *TimerRepeat) Pb() *eventpb.TimerRepeat {
 	}
 	pbMessage := &eventpb.TimerRepeat{}
 	{
-		pbMessage.EventsToRepeat = types25.ConvertSlice(m.EventsToRepeat, func(t *Event) *eventpb.Event {
+		pbMessage.EventsToRepeat = types26.ConvertSlice(m.EventsToRepeat, func(t *Event) *eventpb.Event {
 			return (t).Pb()
 		})
 		pbMessage.Delay = (uint64)(m.Delay)
@@ -1059,7 +1086,7 @@ func (*TimerRepeat) MirReflect() mirreflect.Type {
 }
 
 type TimerGarbageCollect struct {
-	RetentionIndex types27.RetentionIndex
+	RetentionIndex types28.RetentionIndex
 }
 
 func TimerGarbageCollectFromPb(pb *eventpb.TimerGarbageCollect) *TimerGarbageCollect {
@@ -1067,7 +1094,7 @@ func TimerGarbageCollectFromPb(pb *eventpb.TimerGarbageCollect) *TimerGarbageCol
 		return nil
 	}
 	return &TimerGarbageCollect{
-		RetentionIndex: (types27.RetentionIndex)(pb.RetentionIndex),
+		RetentionIndex: (types28.RetentionIndex)(pb.RetentionIndex),
 	}
 }
 

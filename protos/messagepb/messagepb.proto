@@ -18,7 +18,7 @@ import "checkpointpb/checkpointpb.proto";
 import "ordererpb/ordererpb.proto";
 import "vcbpb/vcbpb.proto";
 import "abbapb/abbapb.proto";
-import "aleapb/aleapb.proto";
+import "aleapb/bcpb/bcpb.proto";
 import "aleapb/agreementpb/messages.proto";
 import "reliablenetpb/messages/messages.proto";
 
@@ -41,7 +41,7 @@ message Message {
     ordererpb.Message            orderer            = 7;
     vcbpb.Message                vcb                = 8;
     abbapb.Message               abba               = 9;
-    aleapb.Message               alea               = 10;
+    aleapb.bcpb.Message          alea_broadcast     = 10;
     aleapb.agreementpb.Message   alea_agreement     = 11;
     reliablenetpb.Message        reliable_net       = 12;
   }
