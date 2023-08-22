@@ -225,7 +225,7 @@ func (m *mockLibp2pCommunication) testThatSenderIs(events events.EventList, node
 	require.True(m.t, valid)
 	msg, valid := tEvent.Transport.Type.(*transportpbtypes.Event_MessageReceived)
 	require.True(m.t, valid)
-	require.Equal(m.t, msg.MessageReceived.From, nodeID.Pb())
+	require.Equal(m.t, msg.MessageReceived.From, nodeID)
 }
 
 // testEventuallyHasConnection tests that there is a connection between the nodes initiated by initiator.

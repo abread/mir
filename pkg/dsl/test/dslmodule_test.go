@@ -197,7 +197,7 @@ func TestDslModule_ApplyEvents(t *testing.T) {
 
 			if tc.err != nil {
 				assert.Equal(t, tc.err.Error(), err.Error())
-				assert.Nil(t, eventsOutList)
+				assert.Equal(t, 0, eventsOutList.Len())
 				return
 			}
 			assert.Nil(t, err)

@@ -84,7 +84,7 @@ func TestFactoryModule(t *testing.T) {
 			)))
 			assert.NoError(t, err)
 			assert.Equal(t, 1, evOut.Len())
-			assert.Equal(t, echoFactoryID.Pb(), evOut.Slice()[0].DestModule)
+			assert.Equal(t, echoFactoryID, evOut.Slice()[0].DestModule)
 			assert.Equal(t,
 				string(echoFactoryID.Then("inst0"))+" Init",
 				evOut.Slice()[0].Type.(*eventpbtypes.Event_TestingString).TestingString.GetValue(),
@@ -114,7 +114,7 @@ func TestFactoryModule(t *testing.T) {
 				)))
 				assert.NoError(t, err)
 				assert.Equal(t, 1, evOut.Len())
-				assert.Equal(t, echoFactoryID.Pb(), evOut.Slice()[0].DestModule)
+				assert.Equal(t, echoFactoryID, evOut.Slice()[0].DestModule)
 				assert.Equal(t,
 					string(echoFactoryID.Then(tp.ModuleID(fmt.Sprintf("inst%d", i))))+" Init",
 					evOut.Slice()[0].Type.(*eventpbtypes.Event_TestingString).TestingString.GetValue(),
@@ -142,7 +142,7 @@ func TestFactoryModule(t *testing.T) {
 			})
 
 			for i := 0; i <= 5; i++ {
-				assert.Equal(t, echoFactoryID.Pb(), sortedOutput[0].DestModule)
+				assert.Equal(t, echoFactoryID, sortedOutput[0].DestModule)
 				assert.Equal(t,
 					fmt.Sprintf("Inst %d: Hi!", i),
 					sortedOutput[i].Type.(*eventpbtypes.Event_TestingString).TestingString.GetValue(),
@@ -156,7 +156,7 @@ func TestFactoryModule(t *testing.T) {
 			if assert.Error(t, err) {
 				assert.Equal(t, err.Error(), fmt.Sprintf("unsupported event type for factory module: %T", wrongEvent.Type))
 			}
-			assert.Nil(t, evOut)
+			assert.Equal(t, 0, evOut.Len())
 		},
 
 		"05 Wrong submodule ID": func(t *testing.T) {
@@ -209,7 +209,7 @@ func TestFactoryModule(t *testing.T) {
 			}
 
 			for i := 3; i <= 5; i++ {
-				assert.Equal(t, echoFactoryID.Pb(), sortedOutput[i-3].DestModule)
+				assert.Equal(t, echoFactoryID, sortedOutput[i-3].DestModule)
 				assert.Equal(t,
 					fmt.Sprintf("Inst %d: Hi!", i),
 					sortedOutput[i-3].Type.(*eventpbtypes.Event_TestingString).TestingString.GetValue(),

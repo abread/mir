@@ -24,8 +24,8 @@ func (m *MockPassiveModule) EXPECT() *mock_internal.MockModuleImplMockRecorder {
 
 // ApplyEvents applies a list of input events to the module, making it advance its state
 // and returns a (potentially empty) list of output events that the application of the input events results in.
-func (m *MockPassiveModule) ApplyEvents(events events.EventList) (events.EventList, error) {
-	return modules.ApplyEventsSequentially(events, m.impl.Event)
+func (m *MockPassiveModule) ApplyEvents(evs events.EventList) (events.EventList, error) {
+	return modules.ApplyEventsSequentially(evs, m.impl.Event)
 }
 
 // ImplementsModule only serves the purpose of indicating that this is a Module and must not be called.
