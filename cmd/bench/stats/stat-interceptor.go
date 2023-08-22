@@ -5,6 +5,8 @@
 package stats
 
 import (
+	"time"
+
 	"github.com/filecoin-project/mir/pkg/events"
 	ageventstypes "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents/types"
 	bcqueuepbtypes "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/types"
@@ -22,6 +24,8 @@ type StatInterceptor struct {
 	// and the rest of the events will be ignored by the StatInterceptor.
 	txConsumerModule t.ModuleID
 }
+
+var timeRef = time.Now()
 
 func NewStatInterceptor(s *Stats, txConsumer t.ModuleID) *StatInterceptor {
 	return &StatInterceptor{s, txConsumer}
@@ -43,8 +47,9 @@ func (i *StatInterceptor) Intercept(events events.EventList) error {
 		case *eventpbtypes.Event_Mempool:
 			switch e := e.Mempool.Type.(type) {
 			case *mempoolpbtypes.Event_NewTransactions:
+				ts := time.Since(timeRef)
 				for _, tx := range e.NewTransactions.Transactions {
-					i.Stats.NewTX(tx, evt.LocalTs)
+					i.Stats.NewTX(tx, int64(ts))
 				}
 			case *mempoolpbtypes.Event_NewBatch:
 				i.Stats.MempoolNewBatch()
@@ -58,8 +63,9 @@ func (i *StatInterceptor) Intercept(events events.EventList) error {
 
 			switch e := e.BatchFetcher.Type.(type) {
 			case *batchfetcherpbtypes.Event_NewOrderedBatch:
+				ts := time.Since(timeRef)
 				for _, tx := range e.NewOrderedBatch.Txs {
-					i.Stats.Delivered(tx, evt.LocalTs)
+					i.Stats.Delivered(tx, int64(ts))
 				}
 			}
 		case *eventpbtypes.Event_AleaAgreement:

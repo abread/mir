@@ -32,7 +32,6 @@ import (
 	vcbpbtypes "github.com/filecoin-project/mir/pkg/pb/vcbpb/types"
 	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 	t "github.com/filecoin-project/mir/pkg/types"
-	"github.com/filecoin-project/mir/pkg/util/localclock"
 )
 
 type AleaTracer struct {
@@ -97,6 +96,8 @@ type txID struct {
 
 const N = 128
 
+var timeRef = time.Now()
+
 func NewAleaTracer(ctx context.Context, ownQueueIdx aleatypes.QueueIdx, nodeCount int, out io.Writer) *AleaTracer {
 	tracerCtx, cancel := context.WithCancel(ctx)
 
@@ -143,7 +144,7 @@ func NewAleaTracer(ctx context.Context, ownQueueIdx aleatypes.QueueIdx, nodeCoun
 		tracer.unagreedSlots[i] = make(map[aleatypes.QueueSlot]struct{}, 32)
 	}
 
-	ref := localclock.RefTime().UnixNano()
+	ref := timeRef.UnixNano()
 	_, err := out.Write([]byte(fmt.Sprintf("class,id,start,end\nmark,,%d,%d\n", ref, ref)))
 	if err != nil {
 		panic(err)
@@ -187,7 +188,7 @@ func (at *AleaTracer) Intercept(evs events.EventList) error {
 }
 
 func (at *AleaTracer) interceptOne(event *eventpbtypes.Event) error { // nolint: gocognit,gocyclo
-	ts := time.Duration(event.LocalTs)
+	ts := time.Since(timeRef)
 
 	// consider all non-messagereceived events as module initialization
 	if ev, ok := event.Type.(*eventpbtypes.Event_Transport); ok {

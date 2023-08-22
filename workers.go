@@ -11,7 +11,6 @@ import (
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/modules"
 	t "github.com/filecoin-project/mir/pkg/types"
-	"github.com/filecoin-project/mir/pkg/util/localclock"
 )
 
 // workChans represents input channels for the modules within the Node.
@@ -101,9 +100,6 @@ func (n *Node) processModuleEvents(
 		}
 
 		// Add newly generated Events to the output.
-		for _, ev := range newEvents.Slice() {
-			localclock.AttachTS(ev)
-		}
 		eventsOut.PushBackList(newEvents)
 
 	case modules.ActiveModule:
