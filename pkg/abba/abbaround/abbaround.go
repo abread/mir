@@ -59,7 +59,7 @@ type state struct {
 	relCoinRecoverStartTime time.Duration
 }
 
-// nolint: gocognit
+// nolint: gocognit,gocyclo
 func New(mc ModuleConfig, params ModuleParams, nodeID t.NodeID, logger logging.Logger) modules.PassiveModule {
 	m := dsl.NewModule(mc.Self)
 

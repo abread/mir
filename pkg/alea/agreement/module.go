@@ -199,9 +199,8 @@ func (s *state) loadRound(rounds *modring.Module, roundNum uint64) *round {
 	return s.rounds[roundNum]
 }
 
-func (s *state) clearRoundData(roundNum uint64) error {
+func (s *state) clearRoundData(roundNum uint64) {
 	delete(s.rounds, roundNum)
-	return nil
 }
 
 func newAgController(mc ModuleConfig, logger logging.Logger, state *state, agRounds *modring.Module) modules.PassiveModule {

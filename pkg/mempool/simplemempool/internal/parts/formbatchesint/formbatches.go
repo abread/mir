@@ -31,7 +31,6 @@ import (
 	mppbevents "github.com/filecoin-project/mir/pkg/pb/mempoolpb/events"
 	mppbtypes "github.com/filecoin-project/mir/pkg/pb/mempoolpb/types"
 	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
-	"github.com/filecoin-project/mir/pkg/serializing"
 	timertypes "github.com/filecoin-project/mir/pkg/timer/types"
 	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 	"github.com/filecoin-project/mir/pkg/util/indexedlist"
@@ -91,7 +90,7 @@ type State struct {
 }
 
 // IncludeBatchCreation registers event handlers for processing NewRequests and RequestBatch events.
-func IncludeBatchCreation( // nolint:gocognit
+func IncludeBatchCreation( // nolint:gocyclo,gocognit
 	m dsl.Module,
 	mc common.ModuleConfig,
 	params *common.ModuleParams,
@@ -359,7 +358,3 @@ type requestTxIDsContext struct {
 }
 
 type markDeliveredContext struct{}
-
-func txBucketIdx(nBuckets int, txID tt.TxID) int {
-	return int(serializing.Uint64FromBytes([]byte(txID[len(txID)-8:])) % uint64(nBuckets))
-}
