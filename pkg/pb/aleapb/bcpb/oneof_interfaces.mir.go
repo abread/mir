@@ -9,6 +9,26 @@ type Event_TypeWrapper[T any] interface {
 	Unwrap() *T
 }
 
+func (w *Event_RequestCert) Unwrap() *RequestCert {
+	return w.RequestCert
+}
+
+func (w *Event_DeliverCert) Unwrap() *DeliverCert {
+	return w.DeliverCert
+}
+
+func (w *Event_BcStarted) Unwrap() *BcStarted {
+	return w.BcStarted
+}
+
+func (w *Event_FreeSlot) Unwrap() *FreeSlot {
+	return w.FreeSlot
+}
+
+func (w *Event_EstimateUpdate) Unwrap() *EstimateUpdate {
+	return w.EstimateUpdate
+}
+
 func (w *Event_FillGap) Unwrap() *DoFillGap {
 	return w.FillGap
 }

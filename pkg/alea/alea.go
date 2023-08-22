@@ -7,7 +7,6 @@ import (
 
 	"github.com/filecoin-project/mir/pkg/alea/agreement"
 	"github.com/filecoin-project/mir/pkg/alea/broadcast"
-	"github.com/filecoin-project/mir/pkg/alea/broadcast/bcqueue"
 	"github.com/filecoin-project/mir/pkg/alea/director"
 	"github.com/filecoin-project/mir/pkg/checkpoint"
 	"github.com/filecoin-project/mir/pkg/logging"
@@ -20,7 +19,7 @@ import (
 // Config sets the module ids. All replicas are expected to use identical module configurations.
 type Config struct {
 	AleaDirector  t.ModuleID
-	BcQueuePrefix string
+	AleaBroadcast t.ModuleID
 	AleaAgreement t.ModuleID
 	Consumer      t.ModuleID
 	BatchDB       t.ModuleID
@@ -130,7 +129,7 @@ func New(ownID t.NodeID, config Config, params Params, startingChkp *checkpoint.
 		director.ModuleConfig{
 			Self:          config.AleaDirector,
 			Consumer:      config.Consumer,
-			BcQueuePrefix: config.BcQueuePrefix,
+			AleaBroadcast: config.AleaBroadcast,
 			AleaAgreement: config.AleaAgreement,
 			BatchDB:       config.BatchDB,
 			Mempool:       config.Mempool,
@@ -156,9 +155,9 @@ func New(ownID t.NodeID, config Config, params Params, startingChkp *checkpoint.
 		logging.Decorate(logger, "AleaDirector: "),
 	)
 
-	aleaBcModules, errAleaBc := broadcast.CreateQueues(
-		broadcast.ConfigTemplate{
-			SelfPrefix:   config.BcQueuePrefix,
+	aleaBc, errAleaBc := broadcast.New(
+		broadcast.ModuleConfig{
+			Self:         config.AleaBroadcast,
 			Consumer:     config.AleaDirector,
 			BatchDB:      config.BatchDB,
 			Mempool:      config.Mempool,
@@ -166,13 +165,16 @@ func New(ownID t.NodeID, config Config, params Params, startingChkp *checkpoint.
 			ReliableNet:  config.ReliableNet,
 			Hasher:       config.Hasher,
 			ThreshCrypto: config.ThreshCrypto,
+			Timer:        config.Timer,
 		},
-		broadcast.ParamsTemplate{
+		broadcast.ModuleParams{
 			InstanceUID: append(params.InstanceUID, 'b'),
 			AllNodes:    allNodes,
 		},
-		bcqueue.ModuleTunables{
-			MaxConcurrentVcb: params.MaxConcurrentVcbPerQueue,
+		broadcast.ModuleTunables{
+			MaxConcurrentVcbPerQueue: params.MaxConcurrentVcbPerQueue,
+			EstimateWindowSize:       params.EstimateWindowSize,
+			MaxExtSlowdownFactor:     params.MaxExtSlowdownFactor,
 		},
 		ownID,
 		logging.Decorate(logger, "AleaBroadcast: "),
@@ -205,9 +207,10 @@ func New(ownID t.NodeID, config Config, params Params, startingChkp *checkpoint.
 		return nil, es.Errorf("error creating alea agreement: %w", errAleaAg)
 	}
 
-	moduleSet := aleaBcModules
+	moduleSet := make(modules.Modules, 3)
 	moduleSet[config.AleaDirector] = aleaDir
 	moduleSet[config.AleaAgreement] = aleaAg
+	moduleSet[config.AleaBroadcast] = aleaBc
 
 	// Return the initialized protocol module.
 	return moduleSet, nil

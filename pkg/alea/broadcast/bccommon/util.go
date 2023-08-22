@@ -1,8 +1,6 @@
-package bcutil
+package bccommon
 
 import (
-	"fmt"
-
 	"github.com/filecoin-project/mir/pkg/alea/aleatypes"
 	"github.com/filecoin-project/mir/pkg/serializing"
 	t "github.com/filecoin-project/mir/pkg/types"
@@ -17,6 +15,6 @@ func VCBInstanceUID(aleaBcInstanceUID []byte, queueIdx aleatypes.QueueIdx, queue
 	return uid
 }
 
-func BcQueueModuleID(prefix string, idx aleatypes.QueueIdx) t.ModuleID {
-	return t.ModuleID(fmt.Sprintf("%s-%d", prefix, idx))
+func BcQueueModuleID(aleaBc t.ModuleID, idx aleatypes.QueueIdx) t.ModuleID {
+	return aleaBc.Then(t.NewModuleIDFromInt(idx))
 }

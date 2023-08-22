@@ -1,60 +1,75 @@
 package broadcast
 
 import (
+	"strconv"
+
 	es "github.com/go-errors/errors"
 
 	"github.com/filecoin-project/mir/pkg/alea/aleatypes"
+	"github.com/filecoin-project/mir/pkg/alea/broadcast/availability"
+	"github.com/filecoin-project/mir/pkg/alea/broadcast/bccommon"
 	"github.com/filecoin-project/mir/pkg/alea/broadcast/bcqueue"
-	"github.com/filecoin-project/mir/pkg/alea/broadcast/bcutil"
+	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/modules"
+	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
+	transportpbtypes "github.com/filecoin-project/mir/pkg/pb/transportpb/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
-// ConfigTemplate sets the module ids. All replicas are expected to use identical module configurations.
-type ConfigTemplate struct {
-	SelfPrefix   string // prefix for queue module IDs
-	Consumer     t.ModuleID
-	BatchDB      t.ModuleID
-	Mempool      t.ModuleID
-	Net          t.ModuleID
-	ReliableNet  t.ModuleID
-	Hasher       t.ModuleID
-	ThreshCrypto t.ModuleID
+type ModuleConfig = bccommon.ModuleConfig
+type ModuleParams = bccommon.ModuleParams
+type ModuleTunables = bccommon.ModuleTunables
+
+type bcMod struct {
+	selfID t.ModuleID
+
+	queues       []modules.PassiveModule
+	availability modules.PassiveModule
 }
 
-// ParamsTemplate sets the values for the parameters of an instance of the protocol.
-// All replicas are expected to use identical module parameters.
-type ParamsTemplate struct {
-	InstanceUID []byte     // must be the alea instance uid followed by 'b'
-	AllNodes    []t.NodeID // the list of participating nodes, which must be the same as the set of nodes in the threshcrypto module
+func New(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.Module, error) {
+	queues, err := createQueues(mc, params, tunables, nodeID, logger)
+	if err != nil {
+		return nil, err
+	}
+
+	return &bcMod{
+		selfID:       mc.Self,
+		availability: availability.New(mc, params, tunables, nodeID, logger),
+		queues:       queues,
+	}, nil
 }
 
-func CreateQueues(mcTemplate ConfigTemplate, paramsTemplate ParamsTemplate, tunables bcqueue.ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.Modules, error) {
-	queues := make(map[t.ModuleID]modules.Module, len(paramsTemplate.AllNodes))
+func createQueues(bcMc ModuleConfig, bcParams ModuleParams, bcTunables ModuleTunables, nodeID t.NodeID, logger logging.Logger) ([]modules.PassiveModule, error) {
+	queues := make([]modules.PassiveModule, 0, len(bcParams.AllNodes))
 
-	for idx := range paramsTemplate.AllNodes {
+	tunables := bcqueue.ModuleTunables{
+		MaxConcurrentVcb: bcTunables.MaxConcurrentVcbPerQueue,
+	}
+
+	for idx := range bcParams.AllNodes {
 		if int(aleatypes.QueueIdx(idx)) != idx {
 			return nil, es.Errorf("queue idx %v is not representable", idx)
 		}
 
 		mc := bcqueue.ModuleConfig{
-			Self:         bcutil.BcQueueModuleID(mcTemplate.SelfPrefix, aleatypes.QueueIdx(idx)),
-			Consumer:     mcTemplate.Consumer,
-			BatchDB:      mcTemplate.BatchDB,
-			Mempool:      mcTemplate.Mempool,
-			Net:          mcTemplate.Net,
-			ReliableNet:  mcTemplate.ReliableNet,
-			Hasher:       mcTemplate.Hasher,
-			ThreshCrypto: mcTemplate.ThreshCrypto,
+			Self:         bccommon.BcQueueModuleID(bcMc.Self, aleatypes.QueueIdx(idx)),
+			Consumer:     bcMc.Self,
+			BatchDB:      bcMc.BatchDB,
+			Mempool:      bcMc.Mempool,
+			Net:          bcMc.Net,
+			ReliableNet:  bcMc.ReliableNet,
+			Hasher:       bcMc.Hasher,
+			ThreshCrypto: bcMc.ThreshCrypto,
 		}
 
 		params := bcqueue.ModuleParams{
-			BcInstanceUID: paramsTemplate.InstanceUID, // TODO: review
-			AllNodes:      paramsTemplate.AllNodes,
+			BcInstanceUID: bcParams.InstanceUID, // TODO: review
+			AllNodes:      bcParams.AllNodes,
 
 			QueueIdx:   aleatypes.QueueIdx(idx),
-			QueueOwner: paramsTemplate.AllNodes[idx],
+			QueueOwner: bcParams.AllNodes[idx],
 		}
 
 		mod, err := bcqueue.New(mc, params, tunables, nodeID, logging.Decorate(logger, "BcQueue: ", "queueIdx", params.QueueIdx, "queueOwner", params.QueueOwner))
@@ -62,8 +77,81 @@ func CreateQueues(mcTemplate ConfigTemplate, paramsTemplate ParamsTemplate, tuna
 			return nil, err
 		}
 
-		queues[mc.Self] = mod
+		queues = append(queues, mod)
 	}
 
 	return queues, nil
+}
+
+func (bc *bcMod) ImplementsModule() {}
+func (bc *bcMod) ApplyEvents(evsIn events.EventList) (events.EventList, error) {
+	evsInByMod, err := bc.splitEvsIn(evsIn)
+	if err != nil {
+		return events.EmptyList(), err
+	}
+
+	evsOutChan := make(chan events.EventList)
+	errOutChan := make(chan error)
+	for mod, evsIn := range evsInByMod {
+		go func(mod modules.PassiveModule, evsIn events.EventList) {
+			evsOut, err := modules.ApplyAllSafely(mod, evsIn)
+			if err == nil {
+				evsOutChan <- evsOut
+			} else {
+				errOutChan <- err
+			}
+		}(mod, *evsIn)
+	}
+
+	evsOut := events.EmptyList()
+	var firstError error
+	for i := 0; i < len(evsInByMod); i++ {
+		select {
+		case subEvsOut := <-evsOutChan:
+			evsOut.PushBackList(subEvsOut)
+		case err := <-errOutChan:
+			if firstError == nil {
+				firstError = err
+			}
+		}
+	}
+
+	return evsOut, firstError
+}
+
+func (bc *bcMod) splitEvsIn(evsIn events.EventList) (map[modules.PassiveModule]*events.EventList, error) {
+	res := make(map[modules.PassiveModule]*events.EventList)
+
+	for _, ev := range evsIn.Slice() {
+		// TODO: make a proper factory module/modring for multiple availability modules and remove this hack
+		if ev.DestModule == bc.selfID.Top() {
+			ev.DestModule = bc.selfID
+		}
+
+		var mod modules.PassiveModule
+		if ev.DestModule == bc.selfID {
+			mod = bc.availability
+		} else if n, err := strconv.ParseUint(string(ev.DestModule.StripParent(bc.selfID).Top()), 10, 64); err == nil && n < uint64(len(bc.queues)) {
+			mod = bc.queues[int(n)]
+		}
+
+		if mod == nil {
+			if transportEv, ok := ev.Type.(*eventpbtypes.Event_Transport); ok {
+				if _, ok := transportEv.Transport.Type.(*transportpbtypes.Event_MessageReceived); ok {
+					// ignore event, other node is byz
+					// TODO: signal byz node
+					continue
+				}
+			}
+
+			return nil, es.Errorf("failed to find destination module %s for bc event", ev.DestModule)
+		}
+
+		if _, ok := res[mod]; !ok {
+			res[mod] = &events.EventList{}
+		}
+		res[mod].PushBack(ev)
+	}
+
+	return res, nil
 }

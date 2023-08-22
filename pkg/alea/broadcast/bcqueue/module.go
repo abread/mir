@@ -9,7 +9,7 @@ import (
 	"golang.org/x/exp/slices"
 
 	"github.com/filecoin-project/mir/pkg/alea/aleatypes"
-	"github.com/filecoin-project/mir/pkg/alea/broadcast/bcutil"
+	"github.com/filecoin-project/mir/pkg/alea/broadcast/bccommon"
 	aleaCommon "github.com/filecoin-project/mir/pkg/alea/util"
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/events"
@@ -223,7 +223,7 @@ func newVcbGenerator(queueMc ModuleConfig, queueParams ModuleParams, nodeID t.No
 		queueSlot := aleatypes.QueueSlot(idx)
 
 		params := baseParams
-		params.InstanceUID = bcutil.VCBInstanceUID(queueParams.BcInstanceUID, queueParams.QueueIdx, queueSlot)
+		params.InstanceUID = bccommon.VCBInstanceUID(queueParams.BcInstanceUID, queueParams.QueueIdx, queueSlot)
 
 		mod := vcb.NewModule(mc, &params, nodeID, logging.Decorate(logger, "Vcb: ", "slot", idx))
 

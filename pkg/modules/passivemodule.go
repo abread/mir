@@ -45,8 +45,8 @@ func (m *routedModule) ApplyEvents(evs events.EventList) (events.EventList, erro
 		}
 	}
 
-	rootEvsOut, rootErr := applyAllSafely(m.root, rootEvsIn)
-	subRouterEvsOut, subRouterErr := applyAllSafely(m.subRouter, subRouterEvsIn)
+	rootEvsOut, rootErr := ApplyAllSafely(m.root, rootEvsIn)
+	subRouterEvsOut, subRouterErr := ApplyAllSafely(m.subRouter, subRouterEvsIn)
 
 	if subRouterErr != nil {
 		return events.EmptyList(), subRouterErr
@@ -74,7 +74,7 @@ func (m *multiApplyModule) ApplyEvents(evs events.EventList) (events.EventList, 
 	allEvsOut := events.EmptyList()
 
 	for _, sub := range m.subs {
-		evsOut, err := applyAllSafely(sub, evs)
+		evsOut, err := ApplyAllSafely(sub, evs)
 		if err != nil {
 			return events.EmptyList(), err
 		}
@@ -85,7 +85,7 @@ func (m *multiApplyModule) ApplyEvents(evs events.EventList) (events.EventList, 
 	return allEvsOut, nil
 }
 
-func applyAllSafely(m PassiveModule, evs events.EventList) (result events.EventList, err error) {
+func ApplyAllSafely(m PassiveModule, evs events.EventList) (result events.EventList, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			if rErr, ok := r.(error); ok {

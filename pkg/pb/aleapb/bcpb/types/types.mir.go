@@ -3,6 +3,8 @@
 package bcpbtypes
 
 import (
+	"time"
+
 	mirreflect "github.com/filecoin-project/mir/codegen/mirreflect"
 	types1 "github.com/filecoin-project/mir/codegen/model/types"
 	aleatypes "github.com/filecoin-project/mir/pkg/alea/aleatypes"
@@ -33,10 +35,140 @@ func Event_TypeFromPb(pb bcpb.Event_Type) Event_Type {
 		return nil
 	}
 	switch pb := pb.(type) {
+	case *bcpb.Event_RequestCert:
+		return &Event_RequestCert{RequestCert: RequestCertFromPb(pb.RequestCert)}
+	case *bcpb.Event_DeliverCert:
+		return &Event_DeliverCert{DeliverCert: DeliverCertFromPb(pb.DeliverCert)}
+	case *bcpb.Event_BcStarted:
+		return &Event_BcStarted{BcStarted: BcStartedFromPb(pb.BcStarted)}
+	case *bcpb.Event_FreeSlot:
+		return &Event_FreeSlot{FreeSlot: FreeSlotFromPb(pb.FreeSlot)}
+	case *bcpb.Event_EstimateUpdate:
+		return &Event_EstimateUpdate{EstimateUpdate: EstimateUpdateFromPb(pb.EstimateUpdate)}
 	case *bcpb.Event_FillGap:
 		return &Event_FillGap{FillGap: DoFillGapFromPb(pb.FillGap)}
 	}
 	return nil
+}
+
+type Event_RequestCert struct {
+	RequestCert *RequestCert
+}
+
+func (*Event_RequestCert) isEvent_Type() {}
+
+func (w *Event_RequestCert) Unwrap() *RequestCert {
+	return w.RequestCert
+}
+
+func (w *Event_RequestCert) Pb() bcpb.Event_Type {
+	if w == nil {
+		return nil
+	}
+	if w.RequestCert == nil {
+		return &bcpb.Event_RequestCert{}
+	}
+	return &bcpb.Event_RequestCert{RequestCert: (w.RequestCert).Pb()}
+}
+
+func (*Event_RequestCert) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*bcpb.Event_RequestCert]()}
+}
+
+type Event_DeliverCert struct {
+	DeliverCert *DeliverCert
+}
+
+func (*Event_DeliverCert) isEvent_Type() {}
+
+func (w *Event_DeliverCert) Unwrap() *DeliverCert {
+	return w.DeliverCert
+}
+
+func (w *Event_DeliverCert) Pb() bcpb.Event_Type {
+	if w == nil {
+		return nil
+	}
+	if w.DeliverCert == nil {
+		return &bcpb.Event_DeliverCert{}
+	}
+	return &bcpb.Event_DeliverCert{DeliverCert: (w.DeliverCert).Pb()}
+}
+
+func (*Event_DeliverCert) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*bcpb.Event_DeliverCert]()}
+}
+
+type Event_BcStarted struct {
+	BcStarted *BcStarted
+}
+
+func (*Event_BcStarted) isEvent_Type() {}
+
+func (w *Event_BcStarted) Unwrap() *BcStarted {
+	return w.BcStarted
+}
+
+func (w *Event_BcStarted) Pb() bcpb.Event_Type {
+	if w == nil {
+		return nil
+	}
+	if w.BcStarted == nil {
+		return &bcpb.Event_BcStarted{}
+	}
+	return &bcpb.Event_BcStarted{BcStarted: (w.BcStarted).Pb()}
+}
+
+func (*Event_BcStarted) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*bcpb.Event_BcStarted]()}
+}
+
+type Event_FreeSlot struct {
+	FreeSlot *FreeSlot
+}
+
+func (*Event_FreeSlot) isEvent_Type() {}
+
+func (w *Event_FreeSlot) Unwrap() *FreeSlot {
+	return w.FreeSlot
+}
+
+func (w *Event_FreeSlot) Pb() bcpb.Event_Type {
+	if w == nil {
+		return nil
+	}
+	if w.FreeSlot == nil {
+		return &bcpb.Event_FreeSlot{}
+	}
+	return &bcpb.Event_FreeSlot{FreeSlot: (w.FreeSlot).Pb()}
+}
+
+func (*Event_FreeSlot) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*bcpb.Event_FreeSlot]()}
+}
+
+type Event_EstimateUpdate struct {
+	EstimateUpdate *EstimateUpdate
+}
+
+func (*Event_EstimateUpdate) isEvent_Type() {}
+
+func (w *Event_EstimateUpdate) Unwrap() *EstimateUpdate {
+	return w.EstimateUpdate
+}
+
+func (w *Event_EstimateUpdate) Pb() bcpb.Event_Type {
+	if w == nil {
+		return nil
+	}
+	if w.EstimateUpdate == nil {
+		return &bcpb.Event_EstimateUpdate{}
+	}
+	return &bcpb.Event_EstimateUpdate{EstimateUpdate: (w.EstimateUpdate).Pb()}
+}
+
+func (*Event_EstimateUpdate) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*bcpb.Event_EstimateUpdate]()}
 }
 
 type Event_FillGap struct {
@@ -88,6 +220,158 @@ func (m *Event) Pb() *bcpb.Event {
 
 func (*Event) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*bcpb.Event]()}
+}
+
+type RequestCert struct{}
+
+func RequestCertFromPb(pb *bcpb.RequestCert) *RequestCert {
+	if pb == nil {
+		return nil
+	}
+	return &RequestCert{}
+}
+
+func (m *RequestCert) Pb() *bcpb.RequestCert {
+	if m == nil {
+		return nil
+	}
+	pbMessage := &bcpb.RequestCert{}
+	{
+	}
+
+	return pbMessage
+}
+
+func (*RequestCert) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*bcpb.RequestCert]()}
+}
+
+type DeliverCert struct {
+	Cert *Cert
+}
+
+func DeliverCertFromPb(pb *bcpb.DeliverCert) *DeliverCert {
+	if pb == nil {
+		return nil
+	}
+	return &DeliverCert{
+		Cert: CertFromPb(pb.Cert),
+	}
+}
+
+func (m *DeliverCert) Pb() *bcpb.DeliverCert {
+	if m == nil {
+		return nil
+	}
+	pbMessage := &bcpb.DeliverCert{}
+	{
+		if m.Cert != nil {
+			pbMessage.Cert = (m.Cert).Pb()
+		}
+	}
+
+	return pbMessage
+}
+
+func (*DeliverCert) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*bcpb.DeliverCert]()}
+}
+
+type BcStarted struct {
+	Slot *Slot
+}
+
+func BcStartedFromPb(pb *bcpb.BcStarted) *BcStarted {
+	if pb == nil {
+		return nil
+	}
+	return &BcStarted{
+		Slot: SlotFromPb(pb.Slot),
+	}
+}
+
+func (m *BcStarted) Pb() *bcpb.BcStarted {
+	if m == nil {
+		return nil
+	}
+	pbMessage := &bcpb.BcStarted{}
+	{
+		if m.Slot != nil {
+			pbMessage.Slot = (m.Slot).Pb()
+		}
+	}
+
+	return pbMessage
+}
+
+func (*BcStarted) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*bcpb.BcStarted]()}
+}
+
+type FreeSlot struct {
+	Slot *Slot
+}
+
+func FreeSlotFromPb(pb *bcpb.FreeSlot) *FreeSlot {
+	if pb == nil {
+		return nil
+	}
+	return &FreeSlot{
+		Slot: SlotFromPb(pb.Slot),
+	}
+}
+
+func (m *FreeSlot) Pb() *bcpb.FreeSlot {
+	if m == nil {
+		return nil
+	}
+	pbMessage := &bcpb.FreeSlot{}
+	{
+		if m.Slot != nil {
+			pbMessage.Slot = (m.Slot).Pb()
+		}
+	}
+
+	return pbMessage
+}
+
+func (*FreeSlot) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*bcpb.FreeSlot]()}
+}
+
+type EstimateUpdate struct {
+	MaxOwnBcDuration      time.Duration
+	MaxOwnBcLocalDuration time.Duration
+	MaxExtBcDuration      time.Duration
+}
+
+func EstimateUpdateFromPb(pb *bcpb.EstimateUpdate) *EstimateUpdate {
+	if pb == nil {
+		return nil
+	}
+	return &EstimateUpdate{
+		MaxOwnBcDuration:      (time.Duration)(pb.MaxOwnBcDuration),
+		MaxOwnBcLocalDuration: (time.Duration)(pb.MaxOwnBcLocalDuration),
+		MaxExtBcDuration:      (time.Duration)(pb.MaxExtBcDuration),
+	}
+}
+
+func (m *EstimateUpdate) Pb() *bcpb.EstimateUpdate {
+	if m == nil {
+		return nil
+	}
+	pbMessage := &bcpb.EstimateUpdate{}
+	{
+		pbMessage.MaxOwnBcDuration = (int64)(m.MaxOwnBcDuration)
+		pbMessage.MaxOwnBcLocalDuration = (int64)(m.MaxOwnBcLocalDuration)
+		pbMessage.MaxExtBcDuration = (int64)(m.MaxExtBcDuration)
+	}
+
+	return pbMessage
+}
+
+func (*EstimateUpdate) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*bcpb.EstimateUpdate]()}
 }
 
 type DoFillGap struct {

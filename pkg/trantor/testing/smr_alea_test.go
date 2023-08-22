@@ -139,7 +139,7 @@ func testIntegrationWithAlea(t *testing.T) {
 
 					// drop all broadcast messages involving node 0
 					// node 0 will not receive broadcasts, but should be able to deliver
-					if isVcb && to == node0 && from != to && !msg.DestModule.IsSubOf("abc-0") {
+					if isVcb && to == node0 && from != to && !msg.DestModule.IsSubOf("abc/0/0") {
 						return false
 					}
 					return true

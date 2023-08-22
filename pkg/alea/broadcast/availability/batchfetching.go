@@ -6,19 +6,17 @@ import (
 
 	es "github.com/go-errors/errors"
 
-	"github.com/filecoin-project/mir/pkg/alea/broadcast/bcutil"
-	director "github.com/filecoin-project/mir/pkg/alea/director/internal/common"
-	"github.com/filecoin-project/mir/pkg/alea/director/internal/parts/estimators"
+	"github.com/filecoin-project/mir/pkg/alea/broadcast/bccommon"
 	"github.com/filecoin-project/mir/pkg/alea/util"
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/logging"
 	bcpbdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/dsl"
 	bcpbevents "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/events"
-	"github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/msgs"
-	"github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/types"
+	bcpbmsgs "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/msgs"
+	bcpbtypes "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/types"
 	bcqueuepbdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/dsl"
 	batchdbdsl "github.com/filecoin-project/mir/pkg/pb/availabilitypb/batchdbpb/dsl"
-	adsl "github.com/filecoin-project/mir/pkg/pb/availabilitypb/dsl"
+	availabilitypbdsl "github.com/filecoin-project/mir/pkg/pb/availabilitypb/dsl"
 	availabilitypbtypes "github.com/filecoin-project/mir/pkg/pb/availabilitypb/types"
 	eventpbevents "github.com/filecoin-project/mir/pkg/pb/eventpb/events"
 	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
@@ -51,13 +49,13 @@ type RequestsState struct {
 	Replies     map[t.NodeID]struct{}
 }
 
-// IncludeBatchFetching registers event handlers for processing availabilitypb.RequestTransactions events.
-func IncludeBatchFetching(
+// includeBatchFetching registers event handlers for processing availabilitypb.RequestTransactions events.
+func includeBatchFetching(
 	m dsl.Module,
-	mc director.ModuleConfig,
-	params director.ModuleParams,
+	mc bccommon.ModuleConfig,
+	params bccommon.ModuleParams,
 	logger logging.Logger,
-	est *estimators.Estimators,
+	est *bcEstimators,
 ) {
 	_ = logger // silence warnings
 
@@ -66,7 +64,7 @@ func IncludeBatchFetching(
 	}
 
 	// When receive a request for transactions, first check the local storage.
-	adsl.UponRequestTransactions(m, func(anyCert *availabilitypbtypes.Cert, origin *availabilitypbtypes.RequestTransactionsOrigin) error {
+	availabilitypbdsl.UponRequestTransactions(m, func(anyCert *availabilitypbtypes.Cert, origin *availabilitypbtypes.RequestTransactionsOrigin) error {
 		certWrapper, present := anyCert.Type.(*availabilitypbtypes.Cert_Alea)
 		if !present {
 			return es.Errorf("unexpected certificate type. Expected: %T, got %T", certWrapper, anyCert.Type)
@@ -115,7 +113,7 @@ func IncludeBatchFetching(
 
 		if found {
 			for _, origin := range reqState.ReqOrigins {
-				adsl.ProvideTransactions(m, origin.Module, txs, origin)
+				availabilitypbdsl.ProvideTransactions(m, origin.Module, txs, origin)
 			}
 			mempooldsl.MarkDelivered(m, mc.Mempool, txs)
 
@@ -138,7 +136,7 @@ func IncludeBatchFetching(
 		delay := time.Duration(0)
 
 		if bcRuntime, ok := est.BcRuntime(*slot); ok {
-			delay = est.ExtBcMaxDurationEst() - bcRuntime
+			delay = est.MaxExtBcDuration() - bcRuntime
 			if delay < 0 {
 				delay = 0
 			}
@@ -262,7 +260,7 @@ func IncludeBatchFetching(
 		// send response to requests
 		// logger.Log(logging.LevelDebug, "satisfying delayed requests with FILLER", "queueIdx", context.slot.QueueIdx, "queueSlot", context.slot.QueueSlot)
 		for _, origin := range requestState.ReqOrigins {
-			adsl.ProvideTransactions(m, origin.Module, context.txs, origin)
+			availabilitypbdsl.ProvideTransactions(m, origin.Module, context.txs, origin)
 		}
 		mempooldsl.MarkDelivered(m, mc.Mempool, context.txs)
 		delete(state.RequestsState, *context.slot)
@@ -271,7 +269,7 @@ func IncludeBatchFetching(
 	})
 
 	batchdbdsl.UponBatchStored(m, func(context *handleFillerContext) error {
-		bcqueuepbdsl.FreeSlot(m, bcutil.BcQueueModuleID(mc.AleaBc, context.slot.QueueIdx), context.slot.QueueSlot)
+		bcqueuepbdsl.FreeSlot(m, bccommon.BcQueueModuleID(mc.Self, context.slot.QueueIdx), context.slot.QueueSlot)
 		return nil
 	})
 }
@@ -279,7 +277,7 @@ func IncludeBatchFetching(
 func certSigData(instanceUID []byte, slot *bcpbtypes.Slot, txIDsHash []byte) [][]byte {
 	aleaUID := instanceUID[:len(instanceUID)-1]
 	aleaBcInstanceUID := append(aleaUID, 'b')
-	return vcb.SigData(bcutil.VCBInstanceUID(aleaBcInstanceUID, slot.QueueIdx, slot.QueueSlot), txIDsHash)
+	return vcb.SigData(bccommon.VCBInstanceUID(aleaBcInstanceUID, slot.QueueIdx, slot.QueueSlot), txIDsHash)
 }
 
 const (

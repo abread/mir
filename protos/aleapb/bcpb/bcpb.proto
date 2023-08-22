@@ -19,8 +19,55 @@ message Event {
   oneof type {
     option (mir.event_type) = true;
 
-    DoFillGap fill_gap  = 1;
+    RequestCert      request_cert    = 1;
+    DeliverCert      deliver_cert    = 2;
+    BcStarted        bc_started      = 3;
+    FreeSlot         free_slot       = 4;
+    EstimateUpdate estimate_update = 5;
+    DoFillGap        fill_gap        = 6;
   }
+}
+
+message RequestCert {
+  option (mir.event) = true;
+
+  // This is a separate event from availabilitypb's to avoid the unused origin parameter
+  // Alea's certificates are generated on demand for local transactions, and by external node's broadcasts
+}
+
+message DeliverCert {
+  option (mir.event) = true;
+
+  // This is a separate event from availabilitypb's to avoid the unused origin parameter
+  // Alea's certificates are generated on demand for local transactions, and by external node's broadcasts
+  Cert cert = 1;
+}
+
+message BcStarted {
+  option (mir.event) = true;
+
+  Slot slot = 1;
+}
+
+message FreeSlot {
+  option (mir.event) = true;
+
+  Slot slot = 1;
+}
+
+message EstimateUpdate {
+  option (mir.event) = true;
+
+  // estimated worst-case duration for broadcasts of local transactions, accounting for time for remote
+  // nodes to receive the final message and verify it.
+  int64 maxOwnBcDuration = 1 [(mir.type) = "time.Duration"];
+
+  // estimated worst-case duration for broadcasts of local transactions, excluding time for remote
+  // nodes to receive the final message and verify it.
+  int64 maxOwnBcLocalDuration = 3 [(mir.type) = "time.Duration"];
+
+  // estimated worst-case duration for incoming transactions from remote nodes
+  int64 maxExtBcDuration = 2 [(mir.type) = "time.Duration"];
 }
 
 message DoFillGap {

@@ -8,6 +8,11 @@ import (
 
 func (*Event) ReflectTypeOptions() []reflect.Type {
 	return []reflect.Type{
+		reflect.TypeOf((*Event_RequestCert)(nil)),
+		reflect.TypeOf((*Event_DeliverCert)(nil)),
+		reflect.TypeOf((*Event_BcStarted)(nil)),
+		reflect.TypeOf((*Event_FreeSlot)(nil)),
+		reflect.TypeOf((*Event_EstimateUpdate)(nil)),
 		reflect.TypeOf((*Event_FillGap)(nil)),
 	}
 }

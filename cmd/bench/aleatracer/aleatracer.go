@@ -398,7 +398,7 @@ func (at *AleaTracer) interceptOne(event *eventpbtypes.Event) error { // nolint:
 	case *eventpbtypes.Event_Hasher:
 		switch ev.Hasher.Type.(type) {
 		case *hasherpbtypes.Event_ResultOne:
-			if strings.HasPrefix(string(event.DestModule), "abc-") {
+			if strings.HasPrefix(string(event.DestModule), "abc/0/") {
 				slot := parseSlotFromModuleID(event.DestModule)
 				at.endBcComputeSigDataSpan(ts, slot)
 			}
@@ -452,7 +452,7 @@ func (at *AleaTracer) interceptOne(event *eventpbtypes.Event) error { // nolint:
 			if !ok {
 				return nil
 			}
-			if strings.HasPrefix(string(e.Recover.Origin.Module), "abc-") {
+			if strings.HasPrefix(string(e.Recover.Origin.Module), "abc/0/") {
 				slot := parseSlotFromModuleID(e.Recover.Origin.Module)
 				if slot.QueueIdx == at.ownQueueIdx {
 					at.endBcAwaitEchoSpan(ts, slot)
@@ -505,8 +505,8 @@ func (at *AleaTracer) registerModStart(ts time.Duration, event *eventpbtypes.Eve
 
 			at.startAbbaRoundModSpan(ts, abbaRoundID{agRound, abbaRound})
 		}
-	} else if strings.HasPrefix(string(id), "abc-") {
-		id = t.ModuleID(strings.TrimPrefix(string(id), "abc-"))
+	} else if strings.HasPrefix(string(id), "abc/0/") {
+		id = t.ModuleID(strings.TrimPrefix(string(id), "abc/0/"))
 
 		queueIdx, err := strconv.ParseUint(string(id.Top()), 10, 64)
 		if err != nil {
@@ -1031,11 +1031,11 @@ func (at *AleaTracer) writeSpan(s *span) {
 }
 
 func parseSlotFromModuleID(moduleID t.ModuleID) bcpbtypes.Slot {
-	if !strings.HasPrefix(string(moduleID), "abc-") {
+	if !strings.HasPrefix(string(moduleID), "abc/0/") {
 		panic(es.Errorf("id is not from a bcqueue: %s", moduleID))
 	}
 
-	modID := t.ModuleID(strings.TrimPrefix(string(moduleID), "abc-"))
+	modID := t.ModuleID(strings.TrimPrefix(string(moduleID), "abc/0/"))
 	queueIdxStr := string(modID.Top())
 	queueSlotStr := string(modID.Sub().Top())
 
@@ -1056,11 +1056,11 @@ func parseSlotFromModuleID(moduleID t.ModuleID) bcpbtypes.Slot {
 }
 
 func parseQueueIdxFromModuleID(moduleID t.ModuleID) aleatypes.QueueIdx {
-	if !strings.HasPrefix(string(moduleID), "abc-") {
+	if !strings.HasPrefix(string(moduleID), "abc/0/") {
 		panic(es.Errorf("id is not from a bcqueue: %s", moduleID))
 	}
 
-	modID := t.ModuleID(strings.TrimPrefix(string(moduleID), "abc-"))
+	modID := t.ModuleID(strings.TrimPrefix(string(moduleID), "abc/0/"))
 	queueIdxStr := string(modID.Top())
 
 	queueIdx, err := strconv.ParseUint(queueIdxStr, 10, 32)

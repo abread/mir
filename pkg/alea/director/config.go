@@ -1,4 +1,4 @@
-package common
+package director
 
 import (
 	"time"
@@ -10,7 +10,7 @@ import (
 type ModuleConfig struct {
 	Self          t.ModuleID // id of this module
 	Consumer      t.ModuleID
-	BcQueuePrefix string
+	AleaBroadcast t.ModuleID
 	AleaAgreement t.ModuleID
 	BatchDB       t.ModuleID
 	Mempool       t.ModuleID

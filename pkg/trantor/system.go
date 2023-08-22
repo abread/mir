@@ -306,7 +306,7 @@ func NewAlea(
 	// also to configure other modules of the system.
 	moduleConfig := alea.Config{
 		AleaDirector:  "adir",
-		BcQueuePrefix: "abc",
+		AleaBroadcast: "abc/0", // TODO: proper epoch handling
 		AleaAgreement: "aag",
 		Consumer:      "bf",
 		BatchDB:       "batchdb",
@@ -328,6 +328,9 @@ func NewAlea(
 	if err != nil {
 		return nil, es.Errorf("error creating Alea protocol modules: %w", err)
 	}
+	aleaProtocolModules["abc"] = aleaProtocolModules["abc/0"]
+	delete(aleaProtocolModules, "abc/0")
+	moduleConfig.AleaBroadcast = "abc"
 
 	aleaProtocolModules[moduleConfig.Null] = modules.NullPassive{}
 
@@ -375,7 +378,7 @@ func NewAlea(
 	aleaProtocolModules[moduleConfig.Consumer] = batchfetcher.NewModule(
 		batchfetcher.ModuleConfig{
 			Self:         moduleConfig.Consumer,
-			Availability: moduleConfig.AleaDirector,
+			Availability: moduleConfig.AleaBroadcast,
 			Checkpoint:   "",
 			Destination:  appID,
 		},
