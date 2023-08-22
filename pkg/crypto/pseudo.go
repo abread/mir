@@ -63,6 +63,16 @@ func InsecureCryptoForTestingOnly(nodes []t.NodeID, ownID t.NodeID, keyPairs *Ke
 	return c, nil
 }
 
+type fixedReader byte
+
+func (r fixedReader) Read(b []byte) (int, error) {
+	for i := range b {
+		b[i] = byte(r)
+	}
+
+	return len(b), nil
+}
+
 // GenerateKeys generates numKeys keys, using the given randomness source.
 // returns private keys and public keys in two separate arrays, where privKeys[i] and pubKeys[i] represent one key pair.
 func GenerateKeys(numKeys int, seed int64) (kp KeyPairs, err error) {
@@ -76,7 +86,10 @@ func GenerateKeys(numKeys int, seed int64) (kp KeyPairs, err error) {
 
 	// Generate key pairs.
 	for i := 0; i < numKeys; i++ {
-		if kp.PrivateKeys[i], kp.PublicKeys[i], err = GenerateKeyPair(randomness); err != nil {
+		// Golang's ECDSA implementation only generates deterministic keys for fixed-output RNGs
+		keyRng := fixedReader(randomness.Int())
+
+		if kp.PrivateKeys[i], kp.PublicKeys[i], err = GenerateKeyPair(&keyRng); err != nil {
 			return KeyPairs{}, err
 		}
 	}
