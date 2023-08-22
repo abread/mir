@@ -29,14 +29,20 @@ type dummyMulti struct {
 
 func (m *dummyMulti) ImplementsModule() {}
 func (m *dummyMulti) ApplyEvents(evs events.EventList) (events.EventList, error) {
-	for _, ev := range evs.Slice() {
-		// generate abc/0 Init event from abc Init event
+	// transform init event for abc into init event for abc/0
+	evs = evs.Transform(func(ev *eventpbtypes.Event) *eventpbtypes.Event {
 		if ev.DestModule == m.selfID {
 			if _, ok := ev.Type.(*eventpbtypes.Event_Init); ok {
+				// make a shallow copy of the event
+				newEv := *ev
+				ev = &newEv
+
 				ev.DestModule = m.selfID.Then(t.NewModuleIDFromInt(0))
 			}
 		}
-	}
+
+		return ev
+	})
 
 	return m.mod.ApplyEvents(evs)
 }

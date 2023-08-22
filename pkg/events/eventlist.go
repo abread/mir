@@ -91,6 +91,17 @@ func (el *EventList) RemoveFront(n int) int {
 	return n
 }
 
+func (el EventList) Transform(evTransformer func(ev *eventpbtypes.Event) *eventpbtypes.Event) EventList {
+	newList := EmptyListWithCapacity(el.Len())
+
+	for _, ev := range el.evs {
+		newEv := evTransformer(ev)
+		newList.PushBack(newEv)
+	}
+
+	return newList
+}
+
 // Slice returns a slice representation of the current state of the list.
 // The returned slice only contains pointers to the events in this list, no deep copying is performed.
 // Any modifications performed on the events will affect the contents of both the EventList and the returned slice.
@@ -98,24 +109,28 @@ func (el EventList) Slice() []*eventpbtypes.Event {
 	return el.evs
 }
 
-// StripFollowUps collects all follow-up Events of the Events in a new EventList, removing them from
-// the events in the original list.
-// It returns a new EventList containing the collected follow-up events.
-func (el *EventList) StripFollowUps() EventList {
+// StripFollowUps collects all follow-up Events of the Events in a new EventList.
+// It returns a copy of the original EventList with follow-ups removed, and a new EventList containing the collected follow-up events.
+func (el EventList) StripFollowUps() (EventList, EventList) {
 	// Create list of follow-up Events.
 	followUps := EventList{}
 
-	// Populate list by follow-up events
-	for _, event := range el.evs {
-		followUpEvs := event.Next
-		followUps.PushBackSlice(followUpEvs)
+	// Populate list by follow-up events, removing them from the original
+	newEl := el.Transform(func(ev *eventpbtypes.Event) *eventpbtypes.Event {
+		if len(ev.Next) > 0 {
+			followUps.PushBackSlice(ev.Next)
 
-		// Remove follow-up events from current event.
-		event.Next = nil
-	}
+			// replace event with shallow copy missing follow-ups
+			newEv := *ev
+			ev = &newEv
+			ev.Next = nil
+		}
+
+		return ev
+	})
 
 	// Return populated list of follow-up events.
-	return followUps
+	return newEl, followUps
 }
 
 // Iterator returns a pointer to an EventListIterator object used to iterate over the events in this list,

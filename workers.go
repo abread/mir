@@ -68,7 +68,7 @@ func (n *Node) processModuleEvents(
 
 	// Remove follow-up Events from the input EventList,
 	// in order to re-insert them in the processing loop after the input events have been processed.
-	followUps := eventsIn.StripFollowUps()
+	eventsIn, followUps := eventsIn.StripFollowUps()
 	eventsOut := followUps // Follow-up events go directly to the output after the plainEvents are processed.
 
 	sw.Start()

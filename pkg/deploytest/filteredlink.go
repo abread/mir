@@ -52,6 +52,10 @@ func (fl *FilteredLink) ApplyEvents(
 	iter := eventList.Iterator()
 	for event := iter.Next(); event != nil; event = iter.Next() {
 		if ev, ok := getSendMessageEv(event); ok {
+			// don't mutate the original event to avoid races
+			newEv := *ev
+			ev = &newEv
+
 			ev.Destinations = sliceutil.Filter(ev.Destinations, func(_ int, dest t.NodeID) bool {
 				return fl.filter(ev.Msg, fl.ownID, dest)
 			})
