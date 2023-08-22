@@ -127,9 +127,10 @@ func New(ownID t.NodeID, config Config, params Params, startingChkp *checkpoint.
 
 	aleaDir := director.NewModule(
 		director.ModuleConfig{
-			Self:          config.AleaDirector,
-			Consumer:      config.Consumer,
-			AleaBroadcast: config.AleaBroadcast,
+			Self:     config.AleaDirector,
+			Consumer: config.Consumer,
+			// TODO: implement proper epoch change/checkpointing
+			AleaBroadcast: config.AleaBroadcast.Then(t.NewModuleIDFromInt(0)),
 			AleaAgreement: config.AleaAgreement,
 			BatchDB:       config.BatchDB,
 			Mempool:       config.Mempool,
@@ -155,7 +156,7 @@ func New(ownID t.NodeID, config Config, params Params, startingChkp *checkpoint.
 		logging.Decorate(logger, "AleaDirector: "),
 	)
 
-	aleaBc, errAleaBc := broadcast.New(
+	aleaBc, errAleaBc := broadcast.NewMulti(
 		broadcast.ModuleConfig{
 			Self:         config.AleaBroadcast,
 			Consumer:     config.AleaDirector,

@@ -14,6 +14,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/modules"
 	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 	transportpbtypes "github.com/filecoin-project/mir/pkg/pb/transportpb/types"
+	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -21,14 +22,46 @@ type ModuleConfig = bccommon.ModuleConfig
 type ModuleParams = bccommon.ModuleParams
 type ModuleTunables = bccommon.ModuleTunables
 
-type bcMod struct {
+type dummyMulti struct {
 	selfID t.ModuleID
+	mod    modules.PassiveModule
+}
+
+func (m *dummyMulti) ImplementsModule() {}
+func (m *dummyMulti) ApplyEvents(evs events.EventList) (events.EventList, error) {
+	for _, ev := range evs.Slice() {
+		// generate abc/0 Init event from abc Init event
+		if ev.DestModule == m.selfID {
+			if _, ok := ev.Type.(*eventpbtypes.Event_Init); ok {
+				ev.DestModule = m.selfID.Then(t.NewModuleIDFromInt(0))
+			}
+		}
+	}
+
+	return m.mod.ApplyEvents(evs)
+}
+
+func NewMulti(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.Module, error) {
+	origSelf := mc.Self
+
+	mc.Self = mc.Self.Then(t.NewModuleIDFromInt(0))
+	mod, err := NewInstance(mc, params, tunables, tt.EpochNr(0), nodeID, logging.Decorate(logger, "BcInst: ", "epochNr", 0))
+	if err != nil {
+		return nil, err
+	}
+
+	return &dummyMulti{origSelf, mod}, nil
+}
+
+type bcMod struct {
+	selfID  t.ModuleID
+	epochNr tt.EpochNr
 
 	queues       []modules.PassiveModule
 	availability modules.PassiveModule
 }
 
-func New(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.Module, error) {
+func NewInstance(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, epochNr tt.EpochNr, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
 	queues, err := createQueues(mc, params, tunables, nodeID, logger)
 	if err != nil {
 		return nil, err
@@ -36,6 +69,7 @@ func New(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, nodeID t
 
 	return &bcMod{
 		selfID:       mc.Self,
+		epochNr:      epochNr,
 		availability: availability.New(mc, params, tunables, nodeID, logger),
 		queues:       queues,
 	}, nil
@@ -123,15 +157,17 @@ func (bc *bcMod) splitEvsIn(evsIn events.EventList) (map[modules.PassiveModule]*
 	res := make(map[modules.PassiveModule]*events.EventList)
 
 	for _, ev := range evsIn.Slice() {
-		// TODO: make a proper factory module/modring for multiple availability modules and remove this hack
-		if ev.DestModule == bc.selfID.Top() {
-			ev.DestModule = bc.selfID
+		var destID t.ModuleID
+		if ev.DestModule == bc.selfID {
+			destID = ""
+		} else {
+			destID = ev.DestModule.StripParent(bc.selfID)
 		}
 
 		var mod modules.PassiveModule
-		if ev.DestModule == bc.selfID {
+		if destID == "" {
 			mod = bc.availability
-		} else if n, err := strconv.ParseUint(string(ev.DestModule.StripParent(bc.selfID).Top()), 10, 64); err == nil && n < uint64(len(bc.queues)) {
+		} else if n, err := strconv.ParseUint(string(destID.Top()), 10, 64); err == nil && n < uint64(len(bc.queues)) {
 			mod = bc.queues[int(n)]
 		}
 
