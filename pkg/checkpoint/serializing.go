@@ -91,11 +91,11 @@ func serializeClientProgressForHash(clientProgress *trantorpbtypes.ClientProgres
 		clientProgress.Progress,
 		func(clientID tt.ClientID, deliveredTXs *trantorpbtypes.DeliveredTXs) (cont bool) {
 			// Append client ID and low watermark.
-			data = append(data, []byte(clientID.Pb()), serializing.Uint64ToBytes(uint64(deliveredTXs.LowWm)))
+			data = append(data, []byte(clientID.Pb()), deliveredTXs.LowWm.Bytes())
 
 			// Append all request numbers delivered after the watermark.
 			for _, txNo := range deliveredTXs.Delivered {
-				data = append(data, serializing.Uint64ToBytes(uint64(txNo)))
+				data = append(data, txNo.Bytes())
 			}
 			return true
 		},
