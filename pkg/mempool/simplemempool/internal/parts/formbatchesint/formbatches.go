@@ -100,7 +100,7 @@ func IncludeBatchCreation( // nolint:gocyclo,gocognit
 	state := &State{
 		State:                             commonState,
 		Epoch:                             0,
-		ClientProgress:                    clientprogress.NewClientProgress(logger),
+		ClientProgress:                    clientprogress.NewClientProgress(),
 		TotalPayloadSize:                  0,
 		UnproposedPayloadSize:             0,
 		NumUnproposed:                     0,

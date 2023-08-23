@@ -58,7 +58,9 @@ func NewModule(mc ModuleConfig, epochNr tt.EpochNr, clientProgress *clientprogre
 		for _, tx := range newOrderedBatch.Txs {
 
 			// Only keep transaction if it has not yet been delivered.
-			if clientProgress.Add(tx.ClientId, tx.TxNo) {
+			if clientProgress.IsBelowWatermarkWindow(tx.ClientId, tx.TxNo) {
+				logger.Log(logging.LevelDebug, "Transaction number below client's watermark window", "lowWm", clientProgress.ClientTrackers[tx.ClientId].LowWm(), "txNo", tx.TxNo)
+			} else if clientProgress.Add(tx.ClientId, tx.TxNo) {
 				newTxs = append(newTxs, tx)
 			}
 		}
@@ -161,7 +163,7 @@ func NewModule(mc ModuleConfig, epochNr tt.EpochNr, clientProgress *clientprogre
 		epochNr = chkp.Epoch()
 
 		// Load client progress.
-		clientProgress = chkp.ClientProgress(logger)
+		clientProgress = chkp.ClientProgress()
 
 		// Reset output event queue.
 		// This is necessary to prune any pending output to the application

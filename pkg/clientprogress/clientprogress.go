@@ -1,7 +1,6 @@
 package clientprogress
 
 import (
-	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/pb/trantorpb"
 	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	tt "github.com/filecoin-project/mir/pkg/trantor/types"
@@ -10,13 +9,11 @@ import (
 // ClientProgress tracks watermarks for all the clients.
 type ClientProgress struct {
 	ClientTrackers map[tt.ClientID]*DeliveredTXs
-	logger         logging.Logger
 }
 
-func NewClientProgress(logger logging.Logger) *ClientProgress {
+func NewClientProgress() *ClientProgress {
 	return &ClientProgress{
 		ClientTrackers: make(map[tt.ClientID]*DeliveredTXs),
-		logger:         logger,
 	}
 }
 
@@ -29,9 +26,16 @@ func (cp *ClientProgress) Contains(clID tt.ClientID, txNo tt.TxNo) bool {
 
 func (cp *ClientProgress) Add(clID tt.ClientID, txNo tt.TxNo) bool {
 	if _, ok := cp.ClientTrackers[clID]; !ok {
-		cp.ClientTrackers[clID] = EmptyDeliveredTXs(logging.Decorate(cp.logger, "", "clID", clID))
+		cp.ClientTrackers[clID] = EmptyDeliveredTXs()
 	}
 	return cp.ClientTrackers[clID].Add(txNo)
+}
+
+func (cp *ClientProgress) IsBelowWatermarkWindow(clID tt.ClientID, txNo tt.TxNo) bool {
+	if ct, ok := cp.ClientTrackers[clID]; ok {
+		return ct.IsBelowWatermarkWindow(txNo)
+	}
+	return false
 }
 
 func (cp *ClientProgress) GarbageCollectGetWatermarks() map[tt.ClientID]tt.TxNo {
@@ -59,10 +63,7 @@ func (cp *ClientProgress) DslStruct() *trantorpbtypes.ClientProgress {
 func (cp *ClientProgress) LoadDslStruct(ds *trantorpbtypes.ClientProgress) {
 	cp.ClientTrackers = make(map[tt.ClientID]*DeliveredTXs)
 	for clientID, deliveredReqs := range ds.Progress {
-		cp.ClientTrackers[clientID] = DeliveredTXsFromDslStruct(
-			deliveredReqs,
-			logging.Decorate(cp.logger, "", "clID", clientID),
-		)
+		cp.ClientTrackers[clientID] = DeliveredTXsFromDslStruct(deliveredReqs)
 	}
 }
 
@@ -77,15 +78,12 @@ func (cp *ClientProgress) Pb() *trantorpb.ClientProgress {
 func (cp *ClientProgress) LoadPb(pb *trantorpb.ClientProgress) {
 	cp.ClientTrackers = make(map[tt.ClientID]*DeliveredTXs)
 	for clientID, deliveredTXs := range pb.Progress {
-		cp.ClientTrackers[tt.ClientID(clientID)] = DeliveredTXsFromPb(
-			deliveredTXs,
-			logging.Decorate(cp.logger, "", "clID", clientID),
-		)
+		cp.ClientTrackers[tt.ClientID(clientID)] = DeliveredTXsFromPb(deliveredTXs)
 	}
 }
 
-func FromPb(pb *trantorpb.ClientProgress, logger logging.Logger) *ClientProgress {
-	cp := NewClientProgress(logger)
+func FromPb(pb *trantorpb.ClientProgress) *ClientProgress {
+	cp := NewClientProgress()
 	cp.LoadPb(pb)
 	return cp
 }

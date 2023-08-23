@@ -224,7 +224,7 @@ func NewISS(
 	trantorModules[moduleConfig.BatchFetcher] = batchfetcher.NewModule(
 		moduleConfig.ConfigureBatchFetcher(),
 		startingCheckpoint.Epoch(),
-		startingCheckpoint.ClientProgress(logger),
+		startingCheckpoint.ClientProgress(),
 		logger,
 	)
 
@@ -380,7 +380,7 @@ func NewAlea(
 			Destination:  appID,
 		},
 		tt.EpochNr(0),
-		clientprogress.NewClientProgress(logger),
+		clientprogress.NewClientProgress(),
 		logging.Decorate(logger, "BatchFetcher: "),
 	)
 

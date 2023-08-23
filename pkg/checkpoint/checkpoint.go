@@ -9,7 +9,6 @@ import (
 
 	"github.com/filecoin-project/mir/pkg/clientprogress"
 	"github.com/filecoin-project/mir/pkg/crypto"
-	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/pb/checkpointpb"
 	checkpointpbtypes "github.com/filecoin-project/mir/pkg/pb/checkpointpb/types"
 	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
@@ -133,8 +132,8 @@ func (sc *StableCheckpoint) StateSnapshot() *trantorpbtypes.StateSnapshot {
 	return sc.Snapshot
 }
 
-func (sc *StableCheckpoint) ClientProgress(logger logging.Logger) *clientprogress.ClientProgress {
-	return clientprogress.FromPb(sc.Snapshot.EpochData.ClientProgress.Pb(), logger)
+func (sc *StableCheckpoint) ClientProgress() *clientprogress.ClientProgress {
+	return clientprogress.FromPb(sc.Snapshot.EpochData.ClientProgress.Pb())
 }
 
 func (sc *StableCheckpoint) Certificate() Certificate {
