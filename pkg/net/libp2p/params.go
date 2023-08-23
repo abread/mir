@@ -13,11 +13,17 @@ const (
 
 type Params struct {
 	ProtocolID           protocol.ID
-	ConnectionTTL        time.Duration
-	ConnectionBufferSize int
-	StreamWriteTimeout   time.Duration
-	ReconnectionPeriod   time.Duration
-	MaxMessageSize       int
+	ConnectionTTL        time.Duration `json:",string"`
+	ConnectionBufferSize int           `json:",string"`
+	StreamWriteTimeout   time.Duration `json:",string"`
+	ReconnectionPeriod   time.Duration `json:",string"`
+	MaxMessageSize       int           `json:",string"`
+
+	// For some strange reason, a call to Write() on a libp2p stream tends to pretend to time out (without the timeout
+	// actually elapsing) if we provide a bigger amount of data (hundreds of kB) at once. Splitting it into smaller
+	// chunks and calling Write() successively with these chunks seems to resolve the issue.
+	// Experienced on a multi-continental deployment on AWS EC2, with libp2p v0.26.2 and yamux v4.0.0.
+	MaxDataPerWrite int `json:",string"`
 }
 
 func DefaultParams() Params {
@@ -28,5 +34,6 @@ func DefaultParams() Params {
 		StreamWriteTimeout:   100 * time.Millisecond,
 		ReconnectionPeriod:   time.Second,
 		MaxMessageSize:       2 * 1024 * 1024, // 2 MiB
+		MaxDataPerWrite:      100 * 1024,      // 100 kiB
 	}
 }

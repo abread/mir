@@ -213,11 +213,7 @@ func (conn *remoteConnection) tryConnecting(ctx context.Context) error {
 		}
 	}
 
-	streamWriter := conn.encMode.NewEncoder(&disconnectAwareOutputStream{
-		stopC:        conn.stop,
-		writeTimeout: conn.params.StreamWriteTimeout,
-		stream:       stream,
-	})
+	streamWriter := conn.encMode.NewEncoder(&disconnectAwareOutputStream{conn, stream})
 
 	// If connecting succeeded, save the new stream
 	// and notify any goroutines waiting for the connection establishment (Wait method).
@@ -309,9 +305,8 @@ func (conn *remoteConnection) closeStream() {
 // It blocks until all data is written, the connection closes, or an error occurs.
 // In the first case, Write returns nil. Otherwise, it returns the corresponding error.
 type disconnectAwareOutputStream struct {
-	stopC        chan struct{}
-	writeTimeout time.Duration
-	stream       network.Stream
+	*remoteConnection
+	stream network.Stream
 }
 
 func (s *disconnectAwareOutputStream) Write(data []byte) (int, error) {
@@ -325,15 +320,22 @@ func (s *disconnectAwareOutputStream) Write(data []byte) (int, error) {
 
 		// Set a timeout for the data to be written, so the conn.stream.Write call does not block forever.
 		// This is required so that we can periodically check the conn.stop channel.
-		if err := s.stream.SetWriteDeadline(time.Now().Add(s.writeTimeout)); err != nil {
+		if err := s.stream.SetWriteDeadline(time.Now().Add(s.params.StreamWriteTimeout)); err != nil {
 			return n, es.Errorf("could not set stream write deadline")
 		}
 
-		// Try writing data to the underlying network stream.
-		bytesWritten, err := s.stream.Write(data)
+		// Try writing a chunk of data to the underlying network stream.
+		var bytesWritten int
+		var err error
+		if len(data) > s.params.MaxDataPerWrite {
+			bytesWritten, err = s.stream.Write(data[:s.params.MaxDataPerWrite])
+		} else {
+			bytesWritten, err = s.stream.Write(data)
+		}
+		data = data[bytesWritten:]
 		n += bytesWritten
 
-		if err == nil {
+		if err == nil && len(data) == 0 {
 			// If all data was successfully written, return.
 			return n, nil
 
@@ -342,13 +344,12 @@ func (s *disconnectAwareOutputStream) Write(data []byte) (int, error) {
 			// If the connection is still open, retry sending the rest of the data in the next iteration.
 
 			select {
-			case <-s.stopC:
+			case <-s.stop:
 				return n, es.Errorf("connection closing")
 			default:
-				data = data[bytesWritten:]
 			}
 
-		} else {
+		} else if err != nil {
 			// If any other error occurred, just return it.
 			return n, es.Errorf("failed sending data: %w", err)
 		}
