@@ -12,23 +12,19 @@ import (
 	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 )
 
-type MirModule struct {
+func New(crypto Crypto) *modules.SimpleEventApplier {
+	return &modules.SimpleEventApplier{&cryptoEvProc{crypto}}
+}
+
+type cryptoEvProc struct {
 	crypto Crypto
 }
 
-func New(crypto Crypto) *MirModule {
-	return &MirModule{crypto: crypto}
-}
-
-func (c *MirModule) ApplyEvents(eventsIn events.EventList) (events.EventList, error) {
-	return modules.ApplyEventsConcurrently(eventsIn, c.ApplyEvent)
-}
-
-func (c *MirModule) ApplyEvent(event *eventpbtypes.Event) (events.EventList, error) {
+func (c *cryptoEvProc) ApplyEvent(event *eventpbtypes.Event) events.EventList {
 	switch e := event.Type.(type) {
 	case *eventpbtypes.Event_Init:
 		// no actions on init
-		return events.EmptyList(), nil
+		return events.EmptyList()
 	case *eventpbtypes.Event_Crypto:
 		switch e := e.Crypto.Type.(type) {
 		case *cryptopbtypes.Event_SignRequest:
@@ -36,14 +32,14 @@ func (c *MirModule) ApplyEvent(event *eventpbtypes.Event) (events.EventList, err
 
 			signature, err := c.crypto.Sign(e.SignRequest.Data.Data)
 			if err != nil {
-				return events.EmptyList(), err
+				panic(err)
 			}
 			return events.ListOf(
 				cryptopbevents.SignResult(
 					e.SignRequest.Origin.Module,
 					signature,
 					e.SignRequest.Origin,
-				)), nil
+				))
 
 		case *cryptopbtypes.Event_VerifySigs:
 			// Verify a batch of node signatures
@@ -68,7 +64,7 @@ func (c *MirModule) ApplyEvent(event *eventpbtypes.Event) (events.EventList, err
 				verifyEvent.NodeIds,
 				errors,
 				allOK,
-			)), nil
+			))
 
 		case *cryptopbtypes.Event_VerifySig:
 			err := c.crypto.Verify(
@@ -82,16 +78,13 @@ func (c *MirModule) ApplyEvent(event *eventpbtypes.Event) (events.EventList, err
 				e.VerifySig.Origin,
 				e.VerifySig.NodeId,
 				err,
-			)), nil
+			))
 
 		default:
-			return events.EmptyList(), es.Errorf("unexpected type of crypto event: %T", e)
+			panic(es.Errorf("unexpected type of crypto event: %T", e))
 		}
 	default:
 		// Complain about all other incoming event types.
-		return events.EmptyList(), es.Errorf("unexpected type of MirModule event: %T", event.Type)
+		panic(es.Errorf("unexpected type of MirModule event: %T", event.Type))
 	}
 }
-
-// The ImplementsModule method only serves the purpose of indicating that this is a Module and must not be called.
-func (c *MirModule) ImplementsModule() {}
