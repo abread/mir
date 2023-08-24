@@ -137,9 +137,7 @@ type poolModule struct {
 	inputChan  chan *eventpbtypes.Event
 	outputChan chan events.EventList
 
-	wg sync.WaitGroup
-
-	// ensures events are serialized
+	// ensures events are scheduled for processing in order of arrival
 	// ApplyEvents will spawn a goroutine with some seqno. This goroutine will wait for nextInputSeqNo
 	// to be its seqno, then push all its input to inputChan, and aftewards increment nextInputSeqNo
 	// and signal other routines to try to make progress.
@@ -161,9 +159,7 @@ func NewGoRoutinePoolModule(ctx context.Context, processor EventProcessor, worke
 	doneChan := ctx.Done()
 
 	for i := 0; i < workers; i++ {
-		mod.wg.Add(1)
 		go func() {
-			defer mod.wg.Done()
 		Loop:
 			for {
 				select {
@@ -181,11 +177,6 @@ func NewGoRoutinePoolModule(ctx context.Context, processor EventProcessor, worke
 		}()
 	}
 
-	go func() {
-		mod.wg.Wait()
-		close(mod.outputChan) // the simulation needs the output channel to be closed to complete (?)
-	}()
-
 	return mod
 }
 
@@ -196,20 +187,16 @@ func (m *poolModule) EventsOut() <-chan events.EventList {
 func (m *poolModule) ApplyEvents(ctx context.Context, events events.EventList) error {
 	seqno := atomic.AddUint64(&m.lastFutureInputSeqNo, 1)
 
-	m.wg.Add(1)
-	isNotDone := true
 	select {
-	case _, isNotDone = <-ctx.Done():
+	case _, channelOpen := <-ctx.Done():
+		if !channelOpen {
+			// we're done
+			return nil
+		}
 	default:
-	}
-	if !isNotDone {
-		m.wg.Done()
-		return nil
 	}
 
 	go func() {
-		defer m.wg.Done()
-
 		m.nextInputReady.L.Lock()
 		defer m.nextInputReady.L.Unlock()
 
