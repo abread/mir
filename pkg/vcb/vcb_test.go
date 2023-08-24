@@ -59,8 +59,8 @@ func TestVcb(t *testing.T) {
 	config := TestConfig{
 		NodeIDsWeight: deploytest.NewNodeIDsDefaultWeights(3*F + 1),
 		F:             F,
-		Transport:     "libp2p", // TODO: fix sim for goroutine pool active modules (threshcrypto breaks it)
-		Duration:      5 * time.Second,
+		Transport:     "sim",
+		Duration:      10 * time.Second,
 	}
 
 	if v := os.Getenv("RANDOM_SEED"); v != "" {

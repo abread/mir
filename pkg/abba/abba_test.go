@@ -56,7 +56,7 @@ func runHappyTest(t *testing.T, F int, decision bool, customInputs map[types.Nod
 	config := TestConfig{
 		NodeIDsWeight:     deploytest.NewNodeIDsDefaultWeights(3*F + 1),
 		F:                 F,
-		Transport:         "libp2p", // TODO: fix sim for goroutine pool active modules (threshcrypto breaks it)
+		Transport:         "sim",
 		DefaultInputValue: decision,
 		InputValues:       customInputs,
 		Duration:          duration,
@@ -67,15 +67,15 @@ func runHappyTest(t *testing.T, F int, decision bool, customInputs map[types.Nod
 }
 
 func TestAbbaHappyUnanimousTrueOneNode(t *testing.T) {
-	runHappyTest(t, 0, true, nil, 2*time.Second)
+	runHappyTest(t, 0, true, nil, 5*time.Second)
 }
 
 func TestAbbaHappyUnanimousTrue(t *testing.T) {
-	runHappyTest(t, 2, true, nil, 2*time.Second)
+	runHappyTest(t, 2, true, nil, 5*time.Second)
 }
 
 func TestAbbaHappyUnanimousFalse(t *testing.T) {
-	runHappyTest(t, 2, false, nil, 2*time.Second)
+	runHappyTest(t, 2, false, nil, 5*time.Second)
 }
 
 func TestAbbaHappyMajorityTrue(t *testing.T) {
@@ -87,7 +87,7 @@ func TestAbbaHappyMajorityTrue(t *testing.T) {
 		customInputs[types.NewNodeIDFromInt(i)] = !decision
 	}
 
-	runHappyTest(t, 2, decision, customInputs, 12*time.Second)
+	runHappyTest(t, 2, decision, customInputs, 20*time.Second)
 }
 
 func TestAbbaHappyMajorityFalse(t *testing.T) {
@@ -99,7 +99,7 @@ func TestAbbaHappyMajorityFalse(t *testing.T) {
 		customInputs[types.NewNodeIDFromInt(i)] = !decision
 	}
 
-	runHappyTest(t, 2, decision, customInputs, 12*time.Second)
+	runHappyTest(t, 2, decision, customInputs, 20*time.Second)
 }
 
 func runTest(t *testing.T, conf *TestConfig) (result bool, heapObjects int64, heapAlloc int64) {
