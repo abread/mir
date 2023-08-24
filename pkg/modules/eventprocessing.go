@@ -110,7 +110,26 @@ func ApplyEventsConcurrently(
 }
 
 type EventProcessor interface {
-	ApplyEvent(ctx context.Context, ev *eventpbtypes.Event) events.EventList
+	// TODO: add if needed
+	// CheckEvent(ev *eventpbtypes.Event) error
+
+	ApplyEvent(ev *eventpbtypes.Event) events.EventList
+}
+
+type SimpleEventApplier struct {
+	EventProcessor
+}
+
+func (sea *SimpleEventApplier) ImplementsModule() {}
+func (sea *SimpleEventApplier) ApplyEvents(evs events.EventList) (events.EventList, error) {
+	return ApplyEventsSequentially(evs, func(e *eventpbtypes.Event) (events.EventList, error) {
+		// if err := sea.CheckEvent(e); err != nil { return err }
+		return sea.ApplyEvent(e), nil
+	})
+}
+
+func (sea *SimpleEventApplier) IntoGoroutinePool(ctx context.Context, workers int) ActiveModule {
+	return NewGoRoutinePoolModule(ctx, sea.EventProcessor, workers)
 }
 
 type poolModule struct {
@@ -152,7 +171,7 @@ func NewGoRoutinePoolModule(ctx context.Context, processor EventProcessor, worke
 					break Loop
 				case ev := <-mod.inputChan:
 					select {
-					case mod.outputChan <- processor.ApplyEvent(ctx, ev):
+					case mod.outputChan <- processor.ApplyEvent(ev):
 						continue
 					case <-doneChan:
 						break Loop

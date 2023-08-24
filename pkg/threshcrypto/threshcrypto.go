@@ -3,9 +3,6 @@
 package threshcrypto
 
 import (
-	"context"
-	"runtime"
-
 	es "github.com/go-errors/errors"
 
 	"github.com/filecoin-project/mir/pkg/events"
@@ -15,31 +12,21 @@ import (
 	threshcryptopbtypes "github.com/filecoin-project/mir/pkg/pb/threshcryptopb/types"
 )
 
-type ModuleParams struct {
-	NumWorkers int
-}
-
-func DefaultModuleParams() *ModuleParams {
-	return &ModuleParams{
-		NumWorkers: runtime.NumCPU(),
-	}
-}
-
-func New(ctx context.Context, params *ModuleParams, threshCrypto ThreshCrypto) modules.ActiveModule {
-	return modules.NewGoRoutinePoolModule(ctx, &threshEventProcessor{threshCrypto}, params.NumWorkers)
+func New(threshCrypto ThreshCrypto) *modules.SimpleEventApplier {
+	return &modules.SimpleEventApplier{&threshEventProcessor{threshCrypto}}
 }
 
 type threshEventProcessor struct {
-	threshCrypto ThreshCrypto
+	ThreshCrypto
 }
 
-func (c *threshEventProcessor) ApplyEvent(ctx context.Context, event *eventpbtypes.Event) events.EventList {
+func (c *threshEventProcessor) ApplyEvent(event *eventpbtypes.Event) events.EventList {
 	switch e := event.Type.(type) {
 	case *eventpbtypes.Event_Init:
 		// no actions on init
 		return events.EmptyList()
 	case *eventpbtypes.Event_ThreshCrypto:
-		return c.applyTCEvent(ctx, e.ThreshCrypto)
+		return c.applyTCEvent(e.ThreshCrypto)
 	default:
 		// Complain about all other incoming event types.
 		panic(es.Errorf("unexpected type of event in threshcrypto MirModule: %T", event.Type))
@@ -47,12 +34,12 @@ func (c *threshEventProcessor) ApplyEvent(ctx context.Context, event *eventpbtyp
 }
 
 // apply a thresholdcryptopbtypes.Event
-func (c *threshEventProcessor) applyTCEvent(_ context.Context, event *threshcryptopbtypes.Event) events.EventList {
+func (c *threshEventProcessor) applyTCEvent(event *threshcryptopbtypes.Event) events.EventList {
 	switch e := event.Type.(type) {
 	case *threshcryptopbtypes.Event_SignShare:
 		// Compute signature share
 
-		sigShare, err := c.threshCrypto.SignShare(e.SignShare.Data)
+		sigShare, err := c.SignShare(e.SignShare.Data)
 		if err != nil {
 			panic(es.Errorf("could not sign share: %w", err))
 		}
@@ -65,7 +52,7 @@ func (c *threshEventProcessor) applyTCEvent(_ context.Context, event *threshcryp
 	case *threshcryptopbtypes.Event_VerifyShare:
 		// Verify signature share
 
-		err := c.threshCrypto.VerifyShare(e.VerifyShare.Data, e.VerifyShare.SignatureShare, e.VerifyShare.NodeId)
+		err := c.VerifyShare(e.VerifyShare.Data, e.VerifyShare.SignatureShare, e.VerifyShare.NodeId)
 
 		ok := err == nil
 		var errStr string
@@ -81,7 +68,7 @@ func (c *threshEventProcessor) applyTCEvent(_ context.Context, event *threshcryp
 	case *threshcryptopbtypes.Event_VerifyFull:
 		// Verify full signature
 
-		err := c.threshCrypto.VerifyFull(e.VerifyFull.Data, e.VerifyFull.FullSignature)
+		err := c.VerifyFull(e.VerifyFull.Data, e.VerifyFull.FullSignature)
 
 		ok := err == nil
 		var errStr string
@@ -97,7 +84,7 @@ func (c *threshEventProcessor) applyTCEvent(_ context.Context, event *threshcryp
 	case *threshcryptopbtypes.Event_Recover:
 		// Recover full signature from shares
 
-		fullSig, err := c.threshCrypto.Recover(e.Recover.Data, e.Recover.SignatureShares)
+		fullSig, err := c.Recover(e.Recover.Data, e.Recover.SignatureShares)
 
 		ok := err == nil
 		var errStr string

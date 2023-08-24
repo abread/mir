@@ -86,7 +86,7 @@ func runTest(t *testing.T, conf *TestConfig) (heapObjects int64, heapAlloc int64
 	defer cancel()
 
 	// Create new test deployment.
-	deployment, err := newDeployment(ctx, conf)
+	deployment, err := newDeployment(conf)
 	require.NoError(t, err)
 
 	defer deployment.TestConfig.TransportLayer.Close()
@@ -146,7 +146,7 @@ func runTest(t *testing.T, conf *TestConfig) (heapObjects int64, heapAlloc int64
 	return heapObjects, heapAlloc
 }
 
-func newDeployment(ctx context.Context, conf *TestConfig) (*deploytest.Deployment, error) {
+func newDeployment(conf *TestConfig) (*deploytest.Deployment, error) {
 	nodeIDs := maputil.GetSortedKeys(conf.NodeIDsWeight)
 	logger := deploytest.NewLogger(conf.Logger)
 
@@ -223,7 +223,7 @@ func newDeployment(ctx context.Context, conf *TestConfig) (*deploytest.Deploymen
 			return nil, es.Errorf("error creating reliablenet module: %w", err)
 		}
 
-		tc, err := threshCryptoSystem.Module(ctx, nodeID)
+		tc, err := threshCryptoSystem.Module(nodeID)
 		if err != nil {
 			return nil, es.Errorf("failed to build threshcrypto: %w", err)
 		}
@@ -233,7 +233,7 @@ func newDeployment(ctx context.Context, conf *TestConfig) (*deploytest.Deploymen
 			vcbConfig.Self:         vcb,
 			vcbConfig.ThreshCrypto: tc,
 			vcbConfig.Mempool:      mempool,
-			vcbConfig.Hasher:       mirCrypto.NewHasher(ctx, mirCrypto.DefaultHasherModuleParams(), crypto.SHA256),
+			vcbConfig.Hasher:       mirCrypto.NewHasher(crypto.SHA256),
 			vcbConfig.ReliableNet:  rnet,
 			vcbConfig.Net:          transport,
 			"timer":                timer.New(),

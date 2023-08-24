@@ -11,6 +11,7 @@ import (
 	"fmt"
 	gonet "net"
 	"os"
+	"runtime"
 	"strconv"
 	"time"
 
@@ -70,7 +71,7 @@ func init() {
 	nodeCmd.Flags().StringVarP(&cryptoImplType, "cryptoImplType", "c", "pseudo", "type of cryptography to use (acceptable values: pseudo or dummy)")
 }
 
-func issSMRFactory(ctx context.Context, app *App, ownID t.NodeID, transport net.Transport, initialMembership *trantorpbtypes.Membership, smrParams trantor.Params, logger logging.Logger) (*trantor.System, error) {
+func issSMRFactory(app *App, ownID t.NodeID, transport net.Transport, initialMembership *trantorpbtypes.Membership, smrParams trantor.Params, logger logging.Logger) (*trantor.System, error) {
 	localCS, err := deploytest.NewLocalCryptoSystem(cryptoImplType, membership.GetIDs(initialMembership), logger)
 	if err != nil {
 		return nil, es.Errorf("could not create a local crypto system: %w", err)
@@ -86,7 +87,6 @@ func issSMRFactory(ctx context.Context, app *App, ownID t.NodeID, transport net.
 	}
 
 	return trantor.NewISS(
-		ctx,
 		ownID,
 		transport,
 		genesisCheckpoint,
@@ -97,7 +97,7 @@ func issSMRFactory(ctx context.Context, app *App, ownID t.NodeID, transport net.
 	)
 }
 
-func aleaSMRFactory(ctx context.Context, app *App, ownID t.NodeID, transport net.Transport, initialMembership *trantorpbtypes.Membership, smrParams trantor.Params, logger logging.Logger) (*trantor.System, error) {
+func aleaSMRFactory(app *App, ownID t.NodeID, transport net.Transport, initialMembership *trantorpbtypes.Membership, smrParams trantor.Params, logger logging.Logger) (*trantor.System, error) {
 	F := (len(initialMembership.Nodes) - 1) / 3
 	localCS := deploytest.NewLocalThreshCryptoSystem(cryptoImplType, membership.GetIDs(initialMembership), 2*F+1)
 	localCrypto, err := localCS.ThreshCrypto(ownID)
@@ -106,7 +106,6 @@ func aleaSMRFactory(ctx context.Context, app *App, ownID t.NodeID, transport net
 	}
 
 	return trantor.NewAlea(
-		ctx,
 		ownID,
 		transport,
 		nil,
@@ -117,7 +116,7 @@ func aleaSMRFactory(ctx context.Context, app *App, ownID t.NodeID, transport net
 	)
 }
 
-type smrFactory func(ctx context.Context, app *App, ownID t.NodeID, transport net.Transport, initialMembership *trantorpbtypes.Membership, smrParams trantor.Params, logger logging.Logger) (*trantor.System, error)
+type smrFactory func(app *App, ownID t.NodeID, transport net.Transport, initialMembership *trantorpbtypes.Membership, smrParams trantor.Params, logger logging.Logger) (*trantor.System, error)
 
 var smrFactories = map[string]smrFactory{
 	"iss":  issSMRFactory,
@@ -177,7 +176,7 @@ func runNode(ctx context.Context) error {
 
 	app := &App{Logger: logger, Membership: initialMembership}
 
-	benchApp, err := smrFactories[protocol](ctx, app, ownID, transport, initialMembership, smrParams, logger)
+	benchSystem, err := smrFactories[protocol](app, ownID, transport, initialMembership, smrParams, logger)
 	if err != nil {
 		return es.Errorf("could not create bench app: %w", err)
 	}
@@ -267,7 +266,8 @@ func runNode(ctx context.Context) error {
 	)
 
 	nodeConfig := mir.DefaultNodeConfig().WithLogger(logger)
-	node, err := mir.NewNode(t.NodeID(id), nodeConfig, benchApp.Modules(), interceptor)
+	nodeModules := benchSystem.Modules().ParallelizeSimpleModules(ctx, runtime.NumCPU())
+	node, err := mir.NewNode(t.NodeID(id), nodeConfig, nodeModules, interceptor)
 	if err != nil {
 		return es.Errorf("could not create node: %w", err)
 	}
@@ -289,10 +289,10 @@ func runNode(ctx context.Context) error {
 	txReceiver.Start(txReceiverListener)
 	defer txReceiver.Stop()
 
-	if err := benchApp.Start(); err != nil {
+	if err := benchSystem.Start(); err != nil {
 		return es.Errorf("could not start bench app: %w", err)
 	}
-	defer benchApp.Stop()
+	defer benchSystem.Stop()
 
 	defer node.Stop()
 	nodeErr := node.Run(ctx)

@@ -55,7 +55,6 @@ func main() {
 }
 
 func run() error {
-	ctx := context.TODO()
 	args := parseArgs(os.Args)
 
 	// Initialize logger that will be used throughout the code to print log messages.
@@ -144,7 +143,7 @@ func run() error {
 		"net":          transport,
 		"mempool":      mempool,
 		"batchdb":      batchdb,
-		"hasher":       mirCrypto.NewHasher(ctx, mirCrypto.DefaultHasherModuleParams(), crypto.SHA256),
+		"hasher":       mirCrypto.NewHasher(crypto.SHA256),
 		"crypto":       mirCrypto.New(&mirCrypto.DummyCrypto{DummySig: []byte{0}}),
 		"availability": availability,
 		"control":      control,

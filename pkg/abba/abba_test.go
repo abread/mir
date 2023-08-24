@@ -122,7 +122,7 @@ func runTest(t *testing.T, conf *TestConfig) (result bool, heapObjects int64, he
 	defer cancel()
 
 	// Create new test deployment.
-	deployment, err := newDeployment(ctx, conf)
+	deployment, err := newDeployment(conf)
 	require.NoError(t, err)
 
 	defer deployment.TestConfig.TransportLayer.Close()
@@ -200,7 +200,7 @@ var rnetConfig = reliablenet.ModuleConfig{
 	Timer: "timer",
 }
 
-func newDeployment(ctx context.Context, conf *TestConfig) (*deploytest.Deployment, error) {
+func newDeployment(conf *TestConfig) (*deploytest.Deployment, error) {
 	nodeIDs := maputil.GetSortedKeys(conf.NodeIDsWeight)
 	logger := deploytest.NewLogger(conf.Logger)
 
@@ -260,7 +260,7 @@ func newDeployment(ctx context.Context, conf *TestConfig) (*deploytest.Deploymen
 			return nil, es.Errorf("error creating reliablenet module: %w", err)
 		}
 
-		tc, err := threshCryptoSystem.Module(ctx, nodeID)
+		tc, err := threshCryptoSystem.Module(nodeID)
 		if err != nil {
 			return nil, es.Errorf("failed to create threshcrypto module: %w", err)
 		}
@@ -269,7 +269,7 @@ func newDeployment(ctx context.Context, conf *TestConfig) (*deploytest.Deploymen
 			abbaConfig.Consumer:     newCountingApp(abbaConfig, inputValue),
 			abbaConfig.Self:         abba,
 			abbaConfig.ThreshCrypto: tc,
-			abbaConfig.Hasher:       mirCrypto.NewHasher(ctx, mirCrypto.DefaultHasherModuleParams(), crypto.SHA256),
+			abbaConfig.Hasher:       mirCrypto.NewHasher(crypto.SHA256),
 			abbaConfig.ReliableNet:  rnet,
 			rnetConfig.Net:          transport,
 			rnetConfig.Timer:        timer.New(),

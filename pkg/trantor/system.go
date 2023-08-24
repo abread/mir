@@ -1,7 +1,6 @@
 package trantor
 
 import (
-	"context"
 	"crypto"
 
 	es "github.com/go-errors/errors"
@@ -91,8 +90,6 @@ func (sys *System) Stop() {
 // The returned system's Stop method should be called when the system is no longer needed.
 // The returned system's Modules method can be used to obtain the Mir modules to be passed to mir.NewNode.
 func NewISS(
-	ctx context.Context,
-
 	// The ID of this node.
 	ownID t.NodeID,
 
@@ -236,7 +233,7 @@ func NewISS(
 	trantorModules[moduleConfig.Net] = transport
 
 	// Utility modules.
-	trantorModules[moduleConfig.Hasher] = mircrypto.NewHasher(ctx, mircrypto.DefaultHasherModuleParams(), hashImpl)
+	trantorModules[moduleConfig.Hasher] = mircrypto.NewHasher(hashImpl)
 	trantorModules[moduleConfig.Crypto] = mircrypto.New(cryptoImpl)
 	trantorModules[moduleConfig.Timer] = timer.New()
 	trantorModules[moduleConfig.Null] = modules.NullPassive{}
@@ -254,8 +251,6 @@ func NewISS(
 // The returned system's Stop method should be called when the system is no longer needed.
 // The returned system's Modules method can be used to obtain the Mir modules to be passed to mir.NewNode.
 func NewAlea(
-	ctx context.Context,
-
 	// The ID of this node.
 	ownID t.NodeID,
 
@@ -346,7 +341,7 @@ func NewAlea(
 		return nil, es.Errorf("error creating reliablenet: %w", err)
 	}
 
-	aleaProtocolModules[moduleConfig.ThreshCrypto] = threshcrypto.New(ctx, params.ThreshCrypto, threshCrypto)
+	aleaProtocolModules[moduleConfig.ThreshCrypto] = threshcrypto.New(threshCrypto)
 	aleaProtocolModules[moduleConfig.Timer] = timer.New()
 
 	// Use a simple mempool for incoming requests.
@@ -367,7 +362,7 @@ func NewAlea(
 		},
 	)
 
-	aleaProtocolModules[moduleConfig.Hasher] = mircrypto.NewHasher(ctx, mircrypto.DefaultHasherModuleParams(), hashImpl)
+	aleaProtocolModules[moduleConfig.Hasher] = mircrypto.NewHasher(hashImpl)
 
 	// Instantiate the batch fetcher module that transforms availability certificates ordered by Alea
 	// into batches of transactions that can be applied to the replicated application.

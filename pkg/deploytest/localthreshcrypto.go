@@ -1,8 +1,6 @@
 package deploytest
 
 import (
-	"context"
-
 	es "github.com/go-errors/errors"
 
 	mirCrypto "github.com/filecoin-project/mir/pkg/crypto"
@@ -13,7 +11,7 @@ import (
 
 type LocalThreshCryptoSystem interface {
 	ThreshCrypto(id t.NodeID) (threshcrypto.ThreshCrypto, error)
-	Module(ctx context.Context, id t.NodeID) (modules.Module, error)
+	Module(id t.NodeID) (*modules.SimpleEventApplier, error)
 }
 
 type localPseudoThreshCryptoSystem struct {
@@ -43,11 +41,11 @@ func (cs *localPseudoThreshCryptoSystem) ThreshCrypto(id t.NodeID) (threshcrypto
 	}
 }
 
-func (cs *localPseudoThreshCryptoSystem) Module(ctx context.Context, id t.NodeID) (modules.Module, error) {
+func (cs *localPseudoThreshCryptoSystem) Module(id t.NodeID) (*modules.SimpleEventApplier, error) {
 	c, err := cs.ThreshCrypto(id)
 	if err != nil {
 		return nil, err
 	}
 
-	return threshcrypto.New(ctx, threshcrypto.DefaultModuleParams(), c), nil
+	return threshcrypto.New(c), nil
 }

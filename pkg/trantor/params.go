@@ -10,7 +10,6 @@ import (
 	"github.com/filecoin-project/mir/pkg/net/libp2p"
 	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	"github.com/filecoin-project/mir/pkg/reliablenet"
-	"github.com/filecoin-project/mir/pkg/threshcrypto"
 	"github.com/filecoin-project/mir/pkg/util/maputil"
 )
 
@@ -20,7 +19,6 @@ type Params struct {
 	Net          libp2p.Params
 	Alea         alea.Params // TODO: extract protocol parameters away or figure out a better way to handle this
 	ReliableNet  *reliablenet.ModuleParams
-	ThreshCrypto *threshcrypto.ModuleParams
 	Availability multisigcollector.ModuleParams
 }
 
@@ -32,7 +30,6 @@ func DefaultParams(initialMembership *trantorpbtypes.Membership) Params {
 		Net:          libp2p.DefaultParams(),
 		Alea:         alea.DefaultParams(initialMembership),
 		ReliableNet:  reliablenet.DefaultModuleParams(allNodes),
-		ThreshCrypto: threshcrypto.DefaultModuleParams(),
 		Availability: multisigcollector.DefaultParamsTemplate(),
 	}
 }

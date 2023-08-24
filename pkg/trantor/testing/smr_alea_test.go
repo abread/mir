@@ -238,7 +238,7 @@ func runIntegrationWithAleaConfig(tb testing.TB, conf *TestConfig) (heapObjects 
 	defer cancel()
 
 	// Create new test deployment.
-	deployment, err := newDeploymentAlea(ctx, conf)
+	deployment, err := newDeploymentAlea(conf)
 	require.NoError(tb, err)
 
 	defer deployment.TestConfig.TransportLayer.Close()
@@ -316,7 +316,7 @@ func fileLogger(conf *TestConfig, name string) (logging.Logger, error) {
 	return logging.NewStreamLogger(logging.LevelDebug, logFile), nil
 }
 
-func newDeploymentAlea(ctx context.Context, conf *TestConfig) (*deploytest.Deployment, error) {
+func newDeploymentAlea(conf *TestConfig) (*deploytest.Deployment, error) {
 	nodeIDs := maputil.GetSortedKeys(conf.NodeIDsWeight)
 	testCommonLogger := deploytest.NewLogger(conf.Logger)
 
@@ -398,7 +398,6 @@ func newDeploymentAlea(ctx context.Context, conf *TestConfig) (*deploytest.Deplo
 		}
 
 		system, err := trantor.NewAlea(
-			ctx,
 			nodeID,
 			transport,
 			nil,

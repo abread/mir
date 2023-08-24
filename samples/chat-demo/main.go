@@ -200,7 +200,6 @@ func run() error {
 
 	// Create a Mir SMR system.
 	trantorSystem, err := trantor.NewISS(
-		ctx,
 		args.OwnID,
 		transport,
 		genesis,

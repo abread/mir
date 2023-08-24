@@ -1,9 +1,7 @@
 package crypto
 
 import (
-	"context"
 	"hash"
-	"runtime"
 
 	es "github.com/go-errors/errors"
 
@@ -18,25 +16,15 @@ type HashImpl interface {
 	New() hash.Hash
 }
 
-type HasherModuleParams struct {
-	NumWorkers int
-}
-
-func DefaultHasherModuleParams() *HasherModuleParams {
-	return &HasherModuleParams{
-		NumWorkers: runtime.NumCPU(),
-	}
-}
-
-func NewHasher(ctx context.Context, params *HasherModuleParams, hashImpl HashImpl) modules.ActiveModule {
-	return modules.NewGoRoutinePoolModule(ctx, &hasherEventProc{hashImpl}, params.NumWorkers)
+func NewHasher(hashImpl HashImpl) *modules.SimpleEventApplier {
+	return &modules.SimpleEventApplier{&hasherEventProc{hashImpl}}
 }
 
 type hasherEventProc struct {
-	hashImpl HashImpl
+	HashImpl
 }
 
-func (hasher *hasherEventProc) ApplyEvent(_ context.Context, event *eventpbtypes.Event) events.EventList {
+func (hasher *hasherEventProc) ApplyEvent(event *eventpbtypes.Event) events.EventList {
 	switch e := event.Type.(type) {
 	case *eventpbtypes.Event_Init:
 		// no actions on init
@@ -75,7 +63,7 @@ func (hasher *hasherEventProc) computeDigests(allData []*hasherpbtypes.HashData)
 
 		// One data item consists of potentially multiple byte slices.
 		// Add each of them to the hash function.
-		h := hasher.hashImpl.New()
+		h := hasher.New()
 		for _, d := range data.Data {
 			h.Write(d)
 		}
