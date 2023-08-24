@@ -142,7 +142,7 @@ func testIntegrationWithISS(tt *testing.T) {
 				NumNetTXs:     10,
 				Duration:      15 * time.Second,
 			}},
-		/*7: {"Do nothing with 1 node in simulation",
+		7: {"Do nothing with 1 node in simulation",
 			&TestConfig{
 				NodeIDsWeight: deploytest.NewNodeIDsDefaultWeights(1),
 				Transport:     "sim",
@@ -228,7 +228,7 @@ func testIntegrationWithISS(tt *testing.T) {
 						require.Equal(tb, conf.NumNetTXs+conf.NumFakeTXs, int(app.TransactionsProcessed))
 					}
 				},
-			}},*/
+			}},
 	}
 
 	for i, test := range tests {
