@@ -13,7 +13,6 @@ package iss
 
 import (
 	"encoding/binary"
-	"fmt"
 
 	es "github.com/go-errors/errors"
 	"google.golang.org/protobuf/proto"
@@ -363,7 +362,7 @@ func New(
 			}
 
 			// Instantiate a CheckpointPPV module from the PreprepareValidator factory
-			PPVId := iss.moduleConfig.PPrepValidatorChkp.Then(t.ModuleID(fmt.Sprintf("%v", epoch)))
+			PPVId := iss.moduleConfig.PPrepValidatorChkp.Then(t.NewModuleIDFromInt(epoch))
 			factorypbdsl.NewModule(iss.m,
 				iss.moduleConfig.PPrepValidatorChkp,
 				PPVId,
@@ -375,7 +374,7 @@ func New(
 			// Instantiate a new PBFT orderer.
 			factorypbdsl.NewModule(iss.m,
 				iss.moduleConfig.Ordering,
-				iss.moduleConfig.Ordering.Then(t.ModuleID(fmt.Sprintf("%v", epoch))).Then("chkp"),
+				iss.moduleConfig.Ordering.Then(t.NewModuleIDFromInt(epoch)).Then("chkp"),
 				tt.RetentionIndex(epoch),
 				orderers.InstanceParams(
 					seg,
@@ -656,12 +655,12 @@ func (iss *ISS) initOrderers() error {
 		// Instantiate a new PBFT orderer.
 		factorypbdsl.NewModule(iss.m, iss.moduleConfig.Ordering,
 			iss.moduleConfig.Ordering.
-				Then(t.ModuleID(fmt.Sprintf("%v", iss.epoch.Nr()))).
-				Then(t.ModuleID(fmt.Sprintf("%v", i))),
+				Then(t.NewModuleIDFromInt(iss.epoch.Nr())).
+				Then(t.NewModuleIDFromInt(i)),
 			tt.RetentionIndex(iss.epoch.Nr()),
 			orderers.InstanceParams(
 				seg,
-				iss.moduleConfig.Availability.Then(t.ModuleID(fmt.Sprintf("%v", iss.epoch.Nr()))),
+				iss.moduleConfig.Availability.Then(t.NewModuleIDFromInt(iss.epoch.Nr())),
 				iss.epoch.Nr(),
 				iss.moduleConfig.PPrepValidator,
 			))
@@ -828,7 +827,7 @@ func (iss *ISS) verifyCert(sn tt.SeqNr, data []uint8, aborted bool, leader t.Nod
 		return iss.deliverCert(sn, []byte{}, true, leader) // deliver empty certificate
 	}
 
-	apbdsl.VerifyCert(iss.m, iss.moduleConfig.Availability.Then(t.ModuleID(fmt.Sprintf("%v", iss.epoch.Nr()))),
+	apbdsl.VerifyCert(iss.m, iss.moduleConfig.Availability.Then(t.NewModuleIDFromInt(iss.epoch.Nr())),
 		apbtypes.CertFromPb(cert), &verifyCertContext{
 			sn:      sn,
 			data:    data,

@@ -1,8 +1,6 @@
 package orderers
 
 import (
-	"fmt"
-
 	"github.com/filecoin-project/mir/pkg/factorymodule"
 	issconfig "github.com/filecoin-project/mir/pkg/iss/config"
 	"github.com/filecoin-project/mir/pkg/logging"
@@ -51,7 +49,7 @@ func Factory(
 
 				// Select validity checker
 
-				if ppvID == t.ModuleID("pprepvalidatorchkp").Then(t.ModuleID(fmt.Sprintf("%v", epoch))) { // this must change but that's the scope of a different PR
+				if ppvID == t.ModuleID("pprepvalidatorchkp").Then(t.NewModuleIDFromInt(epoch)) { // this must change but that's the scope of a different PR
 					// TODO: This is a dirty hack! Put (at least the relevant parts of) the configuration in params.
 					// Make the agreement on a checkpoint start immediately.
 					ordererConfig.MaxProposeDelay = 0
