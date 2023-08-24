@@ -43,9 +43,14 @@ type State struct {
 	// If a batch requests from a higher epoch is received, it needs to be buffered until its epoch is reached.
 	Epoch tt.EpochNr
 
-	// Progress made by all clients so far.
+	// Progress made by availability component so far.
+	// This data structure is used to track what transactions have been proposed but not delivered.
+	// It is reset in epoch changes to DeliveredClientProgress.
+	ProposalProgress *clientprogress.ClientProgress
+
+	// Progress made by consensus component so far.
 	// This data structure is used to avoid storing transactions that have already been delivered.
-	ClientProgress *clientprogress.ClientProgress
+	DeliveryProgress *clientprogress.ClientProgress
 
 	// Combined total payload size of all the transactions in the mempool.
 	TotalPayloadSize int
@@ -100,7 +105,8 @@ func IncludeBatchCreation( // nolint:gocyclo,gocognit
 	state := &State{
 		State:                             commonState,
 		Epoch:                             0,
-		ClientProgress:                    clientprogress.NewClientProgress(),
+		ProposalProgress:                  clientprogress.NewClientProgress(),
+		DeliveryProgress:                  clientprogress.NewClientProgress(),
 		TotalPayloadSize:                  0,
 		UnproposedPayloadSize:             0,
 		NumUnproposed:                     0,
@@ -121,8 +127,10 @@ func IncludeBatchCreation( // nolint:gocyclo,gocognit
 		txIDs, txs, _ := state.Iterator.NextWhile(func(txID tt.TxID, tx *trantorpbtypes.Transaction) bool {
 			if txCount < params.MaxTransactionsInBatch && batchSize+len(tx.Data) <= params.MaxPayloadInBatch {
 				txCount++
-				state.NumUnproposed--
 				batchSize += len(tx.Data)
+
+				state.ProposalProgress.Add(tx.ClientId, tx.TxNo)
+				state.NumUnproposed--
 				state.UnproposedPayloadSize -= len(tx.Data)
 				return true
 			}
@@ -137,7 +145,7 @@ func IncludeBatchCreation( // nolint:gocyclo,gocognit
 
 	mppbdsl.UponMarkDelivered(m, func(txs []*trantorpbtypes.Transaction) error {
 		for _, tx := range txs {
-			state.ClientProgress.Add(tx.ClientId, tx.TxNo)
+			state.DeliveryProgress.Add(tx.ClientId, tx.TxNo)
 		}
 
 		mppbdsl.RequestTransactionIDs[markDeliveredContext](m, mc.Self, txs, nil)
@@ -147,13 +155,18 @@ func IncludeBatchCreation( // nolint:gocyclo,gocognit
 		_, removedTxs := state.Transactions.Remove(txIDs)
 
 		for _, tx := range removedTxs {
-			state.TotalPayloadSize -= len(tx.Data)
-			state.UnproposedPayloadSize -= len(tx.Data)
-			state.NumUnproposed--
+			// Only remove previously unproposed transactions
+			// Delivering means they were proposed by some (possibly remote) node.
+			if state.ProposalProgress.Add(tx.ClientId, tx.TxNo) {
+				state.TotalPayloadSize -= len(tx.Data)
+				state.UnproposedPayloadSize -= len(tx.Data)
+				state.NumUnproposed--
+			}
 		}
 
 		// don't let client progress accumulate too many watermarks
-		state.ClientProgress.GarbageCollect()
+		state.ProposalProgress.GarbageCollect()
+		state.DeliveryProgress.GarbageCollect()
 
 		return nil
 	})
@@ -235,9 +248,9 @@ func IncludeBatchCreation( // nolint:gocyclo,gocognit
 			//   A potential solution would be to keep an index of pending transactions similar to
 			//   ClientProgress - for each client, list of pending transactions sorted by TxNo - that
 			//   would make pruning significantly more efficient.
-			state.ClientProgress.LoadPb(clientProgress.Pb())
+			state.DeliveryProgress.LoadPb(clientProgress.Pb())
 			_, removedTXs := state.Transactions.RemoveSelected(func(txID tt.TxID, tx *trantorpbtypes.Transaction) bool {
-				return state.ClientProgress.Contains(tx.ClientId, tx.TxNo)
+				return state.DeliveryProgress.Contains(tx.ClientId, tx.TxNo)
 			})
 			for _, tx := range removedTXs {
 				state.TotalPayloadSize -= len(tx.Data)
@@ -246,6 +259,7 @@ func IncludeBatchCreation( // nolint:gocyclo,gocognit
 			// Reset trackers of unproposed transactions.
 			state.NumUnproposed = state.Transactions.Len()
 			state.UnproposedPayloadSize = state.TotalPayloadSize
+			state.ProposalProgress = state.DeliveryProgress.Clone()
 
 			// Garbage-collect outdated buffered early batch requests, if any,
 			// and process the buffered up-to-date ones.
@@ -274,7 +288,7 @@ func IncludeBatchCreation( // nolint:gocyclo,gocognit
 				continue
 			}
 
-			if !state.ClientProgress.Contains(tx.ClientId, tx.TxNo) {
+			if !state.DeliveryProgress.Contains(tx.ClientId, tx.TxNo) {
 				filteredTxs = append(filteredTxs, tx)
 			}
 		}
@@ -290,7 +304,7 @@ func IncludeBatchCreation( // nolint:gocyclo,gocognit
 		for _, tx := range addedTxs {
 
 			// Discard transactions that have already been delivered in a previous epoch.
-			if state.ClientProgress.Contains(tx.ClientId, tx.TxNo) {
+			if state.DeliveryProgress.Contains(tx.ClientId, tx.TxNo) {
 				continue
 			}
 

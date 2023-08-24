@@ -52,6 +52,18 @@ func (cp *ClientProgress) GarbageCollect() {
 	}
 }
 
+func (cp *ClientProgress) Clone() *ClientProgress {
+	cloned := &ClientProgress{
+		ClientTrackers: make(map[tt.ClientID]*DeliveredTXs, len(cp.ClientTrackers)),
+	}
+
+	for clientID, clientTracker := range cp.ClientTrackers {
+		cloned.ClientTrackers[clientID] = clientTracker.Clone()
+	}
+
+	return cloned
+}
+
 func (cp *ClientProgress) DslStruct() *trantorpbtypes.ClientProgress {
 	ds := make(map[tt.ClientID]*trantorpbtypes.DeliveredTXs)
 	for clientID, clientTracker := range cp.ClientTrackers {

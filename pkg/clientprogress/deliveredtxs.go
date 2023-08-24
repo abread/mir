@@ -96,6 +96,20 @@ func (dt *DeliveredTXs) GarbageCollect() tt.TxNo {
 	return dt.lowWm
 }
 
+// Clone returns a copy of the DeliveredTXs object.
+func (dt *DeliveredTXs) Clone() *DeliveredTXs {
+	cloned := &DeliveredTXs{
+		lowWm:     dt.lowWm,
+		delivered: make(map[tt.TxNo]struct{}, len(dt.delivered)),
+	}
+
+	for txNo := range dt.delivered {
+		cloned.delivered[txNo] = struct{}{}
+	}
+
+	return cloned
+}
+
 func (dt *DeliveredTXs) Pb() *trantorpb.DeliveredTXs {
 	delivered := make([]uint64, len(dt.delivered))
 	for i, txNo := range maputil.GetSortedKeys(dt.delivered) {
