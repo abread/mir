@@ -120,15 +120,15 @@ type SimpleEventApplier struct {
 	EventProcessor
 }
 
-func (sea *SimpleEventApplier) ImplementsModule() {}
-func (sea *SimpleEventApplier) ApplyEvents(evs events.EventList) (events.EventList, error) {
+func (sea SimpleEventApplier) ImplementsModule() {}
+func (sea SimpleEventApplier) ApplyEvents(evs events.EventList) (events.EventList, error) {
 	return ApplyEventsSequentially(evs, func(e *eventpbtypes.Event) (events.EventList, error) {
 		// if err := sea.CheckEvent(e); err != nil { return err }
 		return sea.ApplyEvent(e), nil
 	})
 }
 
-func (sea *SimpleEventApplier) IntoGoroutinePool(ctx context.Context, workers int) ActiveModule {
+func (sea SimpleEventApplier) IntoGoroutinePool(ctx context.Context, workers int) ActiveModule {
 	return NewGoRoutinePoolModule(ctx, sea.EventProcessor, workers)
 }
 

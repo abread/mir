@@ -12,12 +12,12 @@ import (
 	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 )
 
-func New(crypto Crypto) *modules.SimpleEventApplier {
-	return &modules.SimpleEventApplier{&cryptoEvProc{crypto}}
+func New(crypto Crypto) modules.PassiveModule {
+	return modules.SimpleEventApplier{EventProcessor: &cryptoEvProc{crypto}}
 }
 
 type cryptoEvProc struct {
-	crypto Crypto
+	Crypto
 }
 
 func (c *cryptoEvProc) ApplyEvent(event *eventpbtypes.Event) events.EventList {
@@ -30,7 +30,7 @@ func (c *cryptoEvProc) ApplyEvent(event *eventpbtypes.Event) events.EventList {
 		case *cryptopbtypes.Event_SignRequest:
 			// Compute a signature over the provided data and produce a SignResult event.
 
-			signature, err := c.crypto.Sign(e.SignRequest.Data.Data)
+			signature, err := c.Sign(e.SignRequest.Data.Data)
 			if err != nil {
 				panic(err)
 			}
@@ -51,7 +51,7 @@ func (c *cryptoEvProc) ApplyEvent(event *eventpbtypes.Event) events.EventList {
 
 			// Verify each signature.
 			for i, data := range verifyEvent.Data {
-				errors[i] = c.crypto.Verify(data.Data, verifyEvent.Signatures[i], verifyEvent.NodeIds[i])
+				errors[i] = c.Verify(data.Data, verifyEvent.Signatures[i], verifyEvent.NodeIds[i])
 				if errors[i] != nil {
 					allOK = false
 				}
@@ -67,7 +67,7 @@ func (c *cryptoEvProc) ApplyEvent(event *eventpbtypes.Event) events.EventList {
 			))
 
 		case *cryptopbtypes.Event_VerifySig:
-			err := c.crypto.Verify(
+			err := c.Verify(
 				e.VerifySig.Data.Data,
 				e.VerifySig.Signature,
 				e.VerifySig.NodeId,

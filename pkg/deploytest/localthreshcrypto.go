@@ -11,7 +11,7 @@ import (
 
 type LocalThreshCryptoSystem interface {
 	ThreshCrypto(id t.NodeID) (threshcrypto.ThreshCrypto, error)
-	Module(id t.NodeID) (*modules.SimpleEventApplier, error)
+	Module(id t.NodeID) (modules.PassiveModule, error)
 }
 
 type localPseudoThreshCryptoSystem struct {
@@ -41,7 +41,7 @@ func (cs *localPseudoThreshCryptoSystem) ThreshCrypto(id t.NodeID) (threshcrypto
 	}
 }
 
-func (cs *localPseudoThreshCryptoSystem) Module(id t.NodeID) (*modules.SimpleEventApplier, error) {
+func (cs *localPseudoThreshCryptoSystem) Module(id t.NodeID) (modules.PassiveModule, error) {
 	c, err := cs.ThreshCrypto(id)
 	if err != nil {
 		return nil, err

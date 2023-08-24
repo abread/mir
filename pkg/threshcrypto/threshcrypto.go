@@ -12,8 +12,8 @@ import (
 	threshcryptopbtypes "github.com/filecoin-project/mir/pkg/pb/threshcryptopb/types"
 )
 
-func New(threshCrypto ThreshCrypto) *modules.SimpleEventApplier {
-	return &modules.SimpleEventApplier{&threshEventProcessor{threshCrypto}}
+func New(threshCrypto ThreshCrypto) modules.PassiveModule {
+	return modules.SimpleEventApplier{EventProcessor: &threshEventProcessor{threshCrypto}}
 }
 
 type threshEventProcessor struct {

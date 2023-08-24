@@ -16,8 +16,8 @@ type HashImpl interface {
 	New() hash.Hash
 }
 
-func NewHasher(hashImpl HashImpl) *modules.SimpleEventApplier {
-	return &modules.SimpleEventApplier{&hasherEventProc{hashImpl}}
+func NewHasher(hashImpl HashImpl) modules.PassiveModule {
+	return modules.SimpleEventApplier{EventProcessor: &hasherEventProc{hashImpl}}
 }
 
 type hasherEventProc struct {

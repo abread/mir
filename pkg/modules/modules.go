@@ -11,7 +11,6 @@ package modules
 
 import (
 	"context"
-	"fmt"
 
 	t "github.com/filecoin-project/mir/pkg/types"
 )
@@ -31,8 +30,7 @@ type Modules map[t.ModuleID]Module
 // Returns the module set.
 func (mods Modules) ParallelizeSimpleModules(ctx context.Context, nWorkers int) Modules {
 	for name, mod := range mods {
-		if seaMod, ok := mod.(*SimpleEventApplier); ok {
-			fmt.Printf("\nparallelizing %s\n", seaMod)
+		if seaMod, ok := mod.(SimpleEventApplier); ok {
 			mods[name] = seaMod.IntoGoroutinePool(ctx, nWorkers)
 		}
 	}

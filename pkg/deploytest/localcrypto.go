@@ -11,7 +11,7 @@ import (
 
 type LocalCryptoSystem interface {
 	Crypto(id t.NodeID) (mirCrypto.Crypto, error)
-	Module(id t.NodeID) (*modules.SimpleEventApplier, error)
+	Module(id t.NodeID) (modules.PassiveModule, error)
 }
 
 type localPseudoCryptoSystem struct {
@@ -45,7 +45,7 @@ func (cs *localPseudoCryptoSystem) Crypto(id t.NodeID) (mirCrypto.Crypto, error)
 	}
 }
 
-func (cs *localPseudoCryptoSystem) Module(id t.NodeID) (*modules.SimpleEventApplier, error) {
+func (cs *localPseudoCryptoSystem) Module(id t.NodeID) (modules.PassiveModule, error) {
 	c, err := cs.Crypto(id)
 	if err != nil {
 		return nil, err
