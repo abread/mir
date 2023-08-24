@@ -184,16 +184,16 @@ func (d *Deployment) Run(ctx context.Context) (nodeErrors []error, heapObjects i
 
 	// Start the Mir nodes.
 	nodeWg.Add(len(d.TestReplicas))
-	rrAddrs := make(map[t.NodeID]string, len(d.TestReplicas))
+	trAddrs := make(map[t.NodeID]string, len(d.TestReplicas))
 	for i, testReplica := range d.TestReplicas {
 		i, testReplica := i, testReplica
 
-		rrListener, err := net.Listen("tcp", "127.0.0.1:0")
+		trListener, err := net.Listen("tcp", "127.0.0.1:0")
 		if err != nil {
 			nodeErrors[i] = err
-			return
+			return nodeErrors, 0, 0
 		}
-		rrAddrs[testReplica.ID] = fmt.Sprintf("127.0.0.1:%v", rrListener.Addr().(*net.TCPAddr).Port)
+		trAddrs[testReplica.ID] = fmt.Sprintf("127.0.0.1:%v", trListener.Addr().(*net.TCPAddr).Port)
 
 		// Start the replica in a separate goroutine.
 		start := make(chan struct{})
@@ -202,7 +202,7 @@ func (d *Deployment) Run(ctx context.Context) (nodeErrors []error, heapObjects i
 
 			<-start
 			testReplica.Config.Logger.Log(logging.LevelDebug, "running")
-			nodeErrors[i] = testReplica.Run(ctx2, rrListener)
+			nodeErrors[i] = testReplica.Run(ctx2, trListener)
 			if err := nodeErrors[i]; err != nil {
 				testReplica.Config.Logger.Log(logging.LevelError, "exit with error", "err", errstack.ToString(err))
 			} else {
@@ -229,7 +229,7 @@ func (d *Deployment) Run(ctx context.Context) (nodeErrors []error, heapObjects i
 		go func(c *dummyclient.DummyClient) {
 			defer clientWg.Done()
 
-			c.Connect(ctx2, rrAddrs)
+			c.Connect(ctx2, trAddrs)
 			submitDummyTransactions(ctx2, c, d.TestConfig.NumNetTXs)
 			c.Disconnect()
 		}(client)
