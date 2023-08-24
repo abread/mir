@@ -28,7 +28,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/modules"
 	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 	messagepbtypes "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
-	"github.com/filecoin-project/mir/pkg/reliablenet"
+	"github.com/filecoin-project/mir/pkg/reliablenet" // nolint: typecheck
 	"github.com/filecoin-project/mir/pkg/testsim"
 	"github.com/filecoin-project/mir/pkg/trantor"
 	"github.com/filecoin-project/mir/pkg/trantor/appmodule"
