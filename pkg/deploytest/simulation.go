@@ -88,7 +88,7 @@ func (n *SimNode) SendEvents(proc *testsim.Process, eventList events.EventList) 
 		if !ok {
 			panic(fmt.Sprintf("destination module does not exist: %v", m.Top()))
 		}
-		proc.Send(ch, eventsMap[m.Top()])
+		proc.Send(ch, *eventsMap[m.Top()])
 		proc.Yield() // wait until the receiver blocks
 	}
 }
