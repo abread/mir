@@ -13,41 +13,42 @@ import (
 )
 
 func New(threshCrypto ThreshCrypto) modules.PassiveModule {
-	return modules.SimpleEventApplier{EventProcessor: &threshEventProcessor{threshCrypto}}
+	evProc := threshEventProcessor{threshCrypto}
+	return modules.ConcurrentEventApplierModule{ConcurrencySafeEventApplier: evProc.applyEvent}
 }
 
 type threshEventProcessor struct {
 	ThreshCrypto
 }
 
-func (c *threshEventProcessor) ApplyEvent(event *eventpbtypes.Event) events.EventList {
+func (c threshEventProcessor) applyEvent(event *eventpbtypes.Event) (events.EventList, error) {
 	switch e := event.Type.(type) {
 	case *eventpbtypes.Event_Init:
 		// no actions on init
-		return events.EmptyList()
+		return events.EmptyList(), nil
 	case *eventpbtypes.Event_ThreshCrypto:
 		return c.applyTCEvent(e.ThreshCrypto)
 	default:
 		// Complain about all other incoming event types.
-		panic(es.Errorf("unexpected type of event in threshcrypto MirModule: %T", event.Type))
+		return events.EmptyList(), es.Errorf("unexpected type of event in threshcrypto MirModule: %T", event.Type)
 	}
 }
 
 // apply a thresholdcryptopbtypes.Event
-func (c *threshEventProcessor) applyTCEvent(event *threshcryptopbtypes.Event) events.EventList {
+func (c threshEventProcessor) applyTCEvent(event *threshcryptopbtypes.Event) (events.EventList, error) {
 	switch e := event.Type.(type) {
 	case *threshcryptopbtypes.Event_SignShare:
 		// Compute signature share
 
 		sigShare, err := c.SignShare(e.SignShare.Data)
 		if err != nil {
-			panic(es.Errorf("could not sign share: %w", err))
+			return events.EmptyList(), es.Errorf("could not sign share: %w", err)
 		}
 
 		origin := e.SignShare.Origin
 		return events.ListOf(
 			tcEvents.SignShareResult(origin.Module, sigShare, origin),
-		)
+		), nil
 
 	case *threshcryptopbtypes.Event_VerifyShare:
 		// Verify signature share
@@ -63,7 +64,7 @@ func (c *threshEventProcessor) applyTCEvent(event *threshcryptopbtypes.Event) ev
 		origin := e.VerifyShare.Origin
 		return events.ListOf(
 			tcEvents.VerifyShareResult(origin.Module, ok, errStr, origin),
-		)
+		), nil
 
 	case *threshcryptopbtypes.Event_VerifyFull:
 		// Verify full signature
@@ -79,7 +80,7 @@ func (c *threshEventProcessor) applyTCEvent(event *threshcryptopbtypes.Event) ev
 		origin := e.VerifyFull.Origin
 		return events.ListOf(
 			tcEvents.VerifyFullResult(origin.Module, ok, errStr, origin),
-		)
+		), nil
 
 	case *threshcryptopbtypes.Event_Recover:
 		// Recover full signature from shares
@@ -95,9 +96,9 @@ func (c *threshEventProcessor) applyTCEvent(event *threshcryptopbtypes.Event) ev
 		origin := e.Recover.Origin
 		return events.ListOf(
 			tcEvents.RecoverResult(origin.Module, fullSig, ok, errStr, origin),
-		)
+		), nil
 	default:
 		// Complain about all other incoming event types.
-		panic(es.Errorf("unexpected type of threshcrypto event in threshcrypto MirModule: %T", event.Type))
+		return events.EmptyList(), es.Errorf("unexpected type of threshcrypto event in threshcrypto MirModule: %T", event.Type)
 	}
 }

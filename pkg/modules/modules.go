@@ -25,13 +25,13 @@ type Module interface {
 // The Modules structs groups the modules a Node consists of.
 type Modules map[t.ModuleID]Module
 
-// ParallelizeSimpleModules modifies the module set, turning SimpleEventApplier modules into
-// GoRoutinePool modules, using the given context and worker count.
-// Returns the module set.
-func (mods Modules) ParallelizeSimpleModules(ctx context.Context, nWorkers int) Modules {
+// ConvertConcurrentEventAppliersToGoroutinePools modifies the module set, turning ConcurrentEventApplier modules into
+// GoroutinePool modules, using the given context and worker count.
+// Returns the (modified) module set.
+func (mods Modules) ConvertConcurrentEventAppliersToGoroutinePools(ctx context.Context, nWorkers int) Modules {
 	for name, mod := range mods {
-		if seaMod, ok := mod.(SimpleEventApplier); ok {
-			mods[name] = seaMod.IntoGoroutinePool(ctx, nWorkers)
+		if oldMod, ok := mod.(ConcurrentEventApplierModule); ok {
+			mods[name] = oldMod.IntoGoroutinePool(ctx, nWorkers)
 		}
 	}
 

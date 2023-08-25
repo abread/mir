@@ -266,7 +266,7 @@ func runNode(ctx context.Context) error {
 	)
 
 	nodeConfig := mir.DefaultNodeConfig().WithLogger(logger)
-	nodeModules := benchSystem.Modules().ParallelizeSimpleModules(ctx, runtime.NumCPU())
+	nodeModules := benchSystem.Modules().ConvertConcurrentEventAppliersToGoroutinePools(ctx, runtime.NumCPU())
 	node, err := mir.NewNode(t.NodeID(id), nodeConfig, nodeModules, interceptor)
 	if err != nil {
 		return es.Errorf("could not create node: %w", err)

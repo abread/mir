@@ -46,7 +46,7 @@ func ApplyEventsSequentially(
 // along with an empty EventList.
 func ApplyEventsConcurrently(
 	eventsIn events.EventList,
-	applyEvent func(*eventpbtypes.Event) (events.EventList, error),
+	applyEvent ConcurrencySafeEventApplier,
 ) (events.EventList, error) {
 
 	// Initialize channels into which the results of each invocation of applyEvent will be written.
@@ -109,31 +109,30 @@ func ApplyEventsConcurrently(
 	return eventsOut, nil
 }
 
-type EventProcessor interface {
-	// TODO: add if needed
-	// CheckEvent(ev *eventpbtypes.Event) error
+// IndependentEventApplier is an event processor for events that can be processed concurrently and in
+// any order.
+type ConcurrencySafeEventApplier func(ev *eventpbtypes.Event) (events.EventList, error)
 
-	ApplyEvent(ev *eventpbtypes.Event) events.EventList
+// ConcurrentEventApplierModule is a Mir PassiveModule that can process events concurrently, by means
+// of ApplyEventsConcurrently.
+// It can be transformed into the more efficient (but bad for simulations) GoroutinePoolModule
+// using IntoGoroutinePoolModule.
+// Nodes can systematically convert ConcurrentEventApplierModules into GoroutinePoolModules using
+// modules.
+type ConcurrentEventApplierModule struct {
+	ConcurrencySafeEventApplier
 }
 
-type SimpleEventApplier struct {
-	EventProcessor
+func (m ConcurrentEventApplierModule) ImplementsModule() {}
+func (m ConcurrentEventApplierModule) ApplyEvents(evs events.EventList) (events.EventList, error) {
+	return ApplyEventsConcurrently(evs, m.ConcurrencySafeEventApplier)
 }
 
-func (sea SimpleEventApplier) ImplementsModule() {}
-func (sea SimpleEventApplier) ApplyEvents(evs events.EventList) (events.EventList, error) {
-	return ApplyEventsSequentially(evs, func(e *eventpbtypes.Event) (events.EventList, error) {
-		// if err := sea.CheckEvent(e); err != nil { return err }
-		return sea.ApplyEvent(e), nil
-	})
-}
-
-func (sea SimpleEventApplier) IntoGoroutinePool(ctx context.Context, workers int) ActiveModule {
-	return NewGoRoutinePoolModule(ctx, sea.EventProcessor, workers)
+func (m ConcurrentEventApplierModule) IntoGoroutinePool(ctx context.Context, workers int) ActiveModule {
+	return NewGoroutinePoolModule(ctx, m.ConcurrencySafeEventApplier, workers)
 }
 
 type poolModule struct {
-	processor  EventProcessor
 	inputChan  chan *eventpbtypes.Event
 	outputChan chan events.EventList
 
@@ -147,9 +146,8 @@ type poolModule struct {
 	lastFutureInputSeqNo uint64 // must be manipulated with atomics
 }
 
-func NewGoRoutinePoolModule(ctx context.Context, processor EventProcessor, workers int) ActiveModule {
+func NewGoroutinePoolModule(ctx context.Context, applyEvent ConcurrencySafeEventApplier, workers int) ActiveModule {
 	mod := &poolModule{
-		processor:  processor,
 		inputChan:  make(chan *eventpbtypes.Event, workers),
 		outputChan: make(chan events.EventList, workers*2),
 
@@ -166,8 +164,14 @@ func NewGoRoutinePoolModule(ctx context.Context, processor EventProcessor, worke
 				case <-doneChan:
 					break Loop
 				case ev := <-mod.inputChan:
+					outEvs, err := applyEvent(ev)
+					if err != nil {
+						// there's no other mechanism for reporting errors in ActiveModules.
+						panic(es.Errorf("error applying event in goroutine pool: %w", err))
+					}
+
 					select {
-					case mod.outputChan <- processor.ApplyEvent(ev):
+					case mod.outputChan <- outEvs:
 						continue
 					case <-doneChan:
 						break Loop

@@ -13,18 +13,19 @@ import (
 )
 
 func New(crypto Crypto) modules.PassiveModule {
-	return modules.SimpleEventApplier{EventProcessor: &cryptoEvProc{crypto}}
+	evProc := cryptoEvProc{crypto}
+	return modules.ConcurrentEventApplierModule{ConcurrencySafeEventApplier: evProc.applyEvent}
 }
 
 type cryptoEvProc struct {
 	Crypto
 }
 
-func (c *cryptoEvProc) ApplyEvent(event *eventpbtypes.Event) events.EventList {
+func (c cryptoEvProc) applyEvent(event *eventpbtypes.Event) (events.EventList, error) {
 	switch e := event.Type.(type) {
 	case *eventpbtypes.Event_Init:
 		// no actions on init
-		return events.EmptyList()
+		return events.EmptyList(), nil
 	case *eventpbtypes.Event_Crypto:
 		switch e := e.Crypto.Type.(type) {
 		case *cryptopbtypes.Event_SignRequest:
@@ -32,14 +33,14 @@ func (c *cryptoEvProc) ApplyEvent(event *eventpbtypes.Event) events.EventList {
 
 			signature, err := c.Sign(e.SignRequest.Data.Data)
 			if err != nil {
-				panic(err)
+				return events.EmptyList(), err
 			}
 			return events.ListOf(
 				cryptopbevents.SignResult(
 					e.SignRequest.Origin.Module,
 					signature,
 					e.SignRequest.Origin,
-				))
+				)), nil
 
 		case *cryptopbtypes.Event_VerifySigs:
 			// Verify a batch of node signatures
@@ -64,7 +65,7 @@ func (c *cryptoEvProc) ApplyEvent(event *eventpbtypes.Event) events.EventList {
 				verifyEvent.NodeIds,
 				errors,
 				allOK,
-			))
+			)), nil
 
 		case *cryptopbtypes.Event_VerifySig:
 			err := c.Verify(
@@ -78,13 +79,13 @@ func (c *cryptoEvProc) ApplyEvent(event *eventpbtypes.Event) events.EventList {
 				e.VerifySig.Origin,
 				e.VerifySig.NodeId,
 				err,
-			))
+			)), nil
 
 		default:
-			panic(es.Errorf("unexpected type of crypto event: %T", e))
+			return events.EmptyList(), es.Errorf("unexpected type of crypto event: %T", e)
 		}
 	default:
 		// Complain about all other incoming event types.
-		panic(es.Errorf("unexpected type of MirModule event: %T", event.Type))
+		return events.EmptyList(), es.Errorf("unexpected type of MirModule event: %T", event.Type)
 	}
 }

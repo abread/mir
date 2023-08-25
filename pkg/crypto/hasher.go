@@ -17,18 +17,19 @@ type HashImpl interface {
 }
 
 func NewHasher(hashImpl HashImpl) modules.PassiveModule {
-	return modules.SimpleEventApplier{EventProcessor: &hasherEventProc{hashImpl}}
+	evProc := hasherEventProc{hashImpl}
+	return modules.ConcurrentEventApplierModule{ConcurrencySafeEventApplier: evProc.applyEvent}
 }
 
 type hasherEventProc struct {
 	HashImpl
 }
 
-func (hasher *hasherEventProc) ApplyEvent(event *eventpbtypes.Event) events.EventList {
+func (hasher hasherEventProc) applyEvent(event *eventpbtypes.Event) (events.EventList, error) {
 	switch e := event.Type.(type) {
 	case *eventpbtypes.Event_Init:
 		// no actions on init
-		return events.EmptyList()
+		return events.EmptyList(), nil
 	case *eventpbtypes.Event_Hasher:
 		switch e := e.Hasher.Type.(type) {
 		case *hasherpbtypes.Event_Request:
@@ -37,24 +38,24 @@ func (hasher *hasherEventProc) ApplyEvent(event *eventpbtypes.Event) events.Even
 				e.Request.Origin.Module,
 				hasher.computeDigests(e.Request.Data),
 				e.Request.Origin,
-			))
+			)), nil
 		case *hasherpbtypes.Event_RequestOne:
 			// Return a single computed digests.
 			return events.ListOf(hasherpbevents.ResultOne(
 				e.RequestOne.Origin.Module,
 				hasher.computeDigests([]*hasherpbtypes.HashData{e.RequestOne.Data})[0],
 				e.RequestOne.Origin,
-			))
+			)), nil
 		default:
-			panic(es.Errorf("unexpected hasher event type: %T", e))
+			return events.EmptyList(), es.Errorf("unexpected hasher event type: %T", e)
 		}
 	default:
 		// Complain about all other incoming event types.
-		panic(es.Errorf("unexpected type of Hash event: %T", event.Type))
+		return events.EmptyList(), es.Errorf("unexpected type of Hash event: %T", event.Type)
 	}
 }
 
-func (hasher *hasherEventProc) computeDigests(allData []*hasherpbtypes.HashData) [][]byte {
+func (hasher hasherEventProc) computeDigests(allData []*hasherpbtypes.HashData) [][]byte {
 	// Create a slice for the resulting digests containing one element for each data item to be hashed.
 	digests := make([][]byte, len(allData))
 
