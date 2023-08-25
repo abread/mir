@@ -20,6 +20,8 @@ import (
 	transportpbtypes "github.com/filecoin-project/mir/pkg/pb/transportpb/types"
 	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	t "github.com/filecoin-project/mir/pkg/types"
+
+	cbor "github.com/fxamacker/cbor/v2"
 )
 
 type TransportMessage struct {
@@ -32,6 +34,9 @@ type Transport struct {
 	host   host.Host
 	logger logging.Logger
 
+	decMode cbor.DecMode
+	encMode cbor.EncMode
+
 	connections     map[t.NodeID]connection
 	nodeIDs         map[peer.ID]t.NodeID
 	connectionsLock sync.RWMutex
@@ -41,11 +46,27 @@ type Transport struct {
 }
 
 func NewTransport(params Params, ownID t.NodeID, h host.Host, logger logging.Logger) *Transport {
+	decOptions := cbor.DecOptions{
+		MaxArrayElements: params.MaxMessageSize,
+		IndefLength:      cbor.IndefLengthForbidden,
+	}
+	decMode, err := decOptions.DecMode()
+	if err != nil {
+		panic(err)
+	}
+
+	encMode, err := cbor.CoreDetEncOptions().EncMode()
+	if err != nil {
+		panic(err)
+	}
+
 	return &Transport{
 		params:           params,
 		ownID:            ownID,
 		host:             h,
 		logger:           logger,
+		decMode:          decMode,
+		encMode:          encMode,
 		connections:      make(map[t.NodeID]connection),
 		nodeIDs:          make(map[peer.ID]t.NodeID),
 		incomingMessages: make(chan events.EventList),
@@ -65,8 +86,13 @@ func (tr *Transport) ApplyEvents(_ context.Context, eventList events.EventList) 
 		case *eventpbtypes.Event_Transport:
 			switch e := e.Transport.Type.(type) {
 			case *transportpbtypes.Event_SendMessage:
+				serializedMsg, err := tr.serializeMessage(e.SendMessage.Msg)
+				if err != nil {
+					return es.Errorf("failed to serialize message: %w", err)
+				}
+
 				for _, destID := range e.SendMessage.Destinations {
-					if err := tr.Send(destID, e.SendMessage.Msg); err != nil {
+					if err := tr.sendSerialized(destID, serializedMsg); err != nil {
 						tr.logger.Log(logging.LevelWarn, "Failed to send a message", "dest", destID, "err", err)
 					}
 				}
@@ -131,6 +157,7 @@ func (tr *Transport) Connect(membership *trantorpbtypes.Membership) {
 			} else {
 				conn, err = newRemoteConnection(
 					tr.params,
+					tr.encMode,
 					tr.ownID,
 					addr,
 					tr.host,
@@ -153,11 +180,36 @@ func (tr *Transport) Connect(membership *trantorpbtypes.Membership) {
 }
 
 func (tr *Transport) Send(dest t.NodeID, msg *messagepbtypes.Message) error {
+	serialized, err := tr.serializeMessage(msg)
+	if err != nil {
+		return err
+	}
+
+	return tr.sendSerialized(dest, serialized)
+}
+
+func (tr *Transport) serializeMessage(msg *messagepbtypes.Message) ([]byte, error) {
+	msgPb := msg.Pb()
+
+	if proto.Size(msgPb) > tr.params.MaxMessageSize {
+		return nil, es.Errorf("message too big: %v", msg)
+	}
+
+	serialized, err := proto.Marshal(msgPb)
+	if err != nil {
+		return nil, es.Errorf("could not serialize message: %w", err)
+	}
+
+	return serialized, nil
+}
+
+func (tr *Transport) sendSerialized(dest t.NodeID, serializedMsg []byte) error {
 	conn, err := tr.getConnection(dest)
 	if err != nil {
 		return err
 	}
-	return conn.Send(msg)
+
+	return conn.Send(serializedMsg)
 }
 
 func (tr *Transport) WaitFor(n int) error {
@@ -261,7 +313,7 @@ func (tr *Transport) handleIncomingConnection(s network.Stream) {
 
 	// Check if connection has been received from a known node (as per ID declared by the remote node).
 	tr.connectionsLock.RLock()
-	nodeID, ok := tr.nodeIDs[peerID]
+	peerNodeID, ok := tr.nodeIDs[peerID]
 	// TODO: Also keep a synchronized map of incoming streams.
 	//       On shutdown, close them all and wait until the corresponding handlers return.
 	tr.connectionsLock.RUnlock()
@@ -271,14 +323,16 @@ func (tr *Transport) handleIncomingConnection(s network.Stream) {
 		return
 	}
 
+	decoder := tr.decMode.NewDecoder(s)
+
 	// Start reading and processig incoming messages.
 	// This call blocks until an error occurs (e.g. the connection breaks) or the Transport is explicitly shut down.
-	tr.readAndProcessMessages(s, nodeID, peerID)
+	tr.readAndProcessMessages(decoder, peerNodeID, peerID)
 }
 
 // readAndProcessMessages Reads incoming data from the stream s, parses it to Mir messages,
 // and writes them to the incomingMessages channel
-func (tr *Transport) readAndProcessMessages(s network.Stream, nodeID t.NodeID, peerID peer.ID) {
+func (tr *Transport) readAndProcessMessages(s *cbor.Decoder, peerNodeID t.NodeID, peerID peer.ID) {
 	for {
 		// Read message from the network.
 		msg, err := readAndDecode(s)
@@ -293,21 +347,21 @@ func (tr *Transport) readAndProcessMessages(s network.Stream, nodeID t.NodeID, p
 		//       instead of sending each individual message as a list of length one.
 		case tr.incomingMessages <- events.ListOf(transportpbevents.MessageReceived(
 			t.ModuleID(msg.DestModule),
-			nodeID,
+			peerNodeID,
 			messagepbtypes.MessageFromPb(msg),
 		)):
 			// Nothing to do in this case message has written to the receiving channel.
 		case <-tr.stop:
 			tr.logger.Log(logging.LevelError, "Shutdown. Stopping incoming connection.",
-				"nodeID", nodeID, "remotePeer", peerID)
+				"nodeID", peerNodeID, "remotePeer", peerID)
 			return
 		}
 	}
 }
 
-func readAndDecode(s network.Stream) (*messagepb.Message, error) {
+func readAndDecode(s *cbor.Decoder) (*messagepb.Message, error) {
 	var tm TransportMessage
-	err := tm.UnmarshalCBOR(s)
+	err := s.Decode(&tm)
 	if err != nil {
 		return nil, err
 	}

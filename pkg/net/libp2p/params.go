@@ -17,6 +17,7 @@ type Params struct {
 	ConnectionBufferSize int
 	StreamWriteTimeout   time.Duration
 	ReconnectionPeriod   time.Duration
+	MaxMessageSize       int
 }
 
 func DefaultParams() Params {
@@ -26,5 +27,6 @@ func DefaultParams() Params {
 		ConnectionBufferSize: 128,
 		StreamWriteTimeout:   100 * time.Millisecond,
 		ReconnectionPeriod:   time.Second,
+		MaxMessageSize:       2 * 1024 * 1024, // 2 MiB
 	}
 }
