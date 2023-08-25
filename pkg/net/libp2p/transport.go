@@ -86,8 +86,13 @@ func (tr *Transport) ApplyEvents(_ context.Context, eventList *events.EventList)
 		case *eventpb.Event_Transport:
 			switch e := transportpbtypes.EventFromPb(e.Transport).Type.(type) {
 			case *transportpbtypes.Event_SendMessage:
+				serializedMsg, err := tr.serializeMessage(e.SendMessage.Msg.Pb())
+				if err != nil {
+					return es.Errorf("failed to serialize message: %w", err)
+				}
+
 				for _, destID := range e.SendMessage.Destinations {
-					if err := tr.Send(destID, e.SendMessage.Msg.Pb()); err != nil {
+					if err := tr.sendSerialized(destID, serializedMsg); err != nil {
 						tr.logger.Log(logging.LevelWarn, "Failed to send a message", "dest", destID, "err", err)
 					}
 				}
@@ -175,11 +180,34 @@ func (tr *Transport) Connect(membership *trantorpbtypes.Membership) {
 }
 
 func (tr *Transport) Send(dest t.NodeID, msg *messagepb.Message) error {
+	serialized, err := tr.serializeMessage(msg)
+	if err != nil {
+		return err
+	}
+
+	return tr.sendSerialized(dest, serialized)
+}
+
+func (tr *Transport) serializeMessage(msg *messagepb.Message) ([]byte, error) {
+	if proto.Size(msg) > tr.params.MaxMessageSize {
+		return nil, es.Errorf("message too big: %v", msg)
+	}
+
+	serialized, err := proto.Marshal(msg)
+	if err != nil {
+		return nil, es.Errorf("could not serialize message: %w", err)
+	}
+
+	return serialized, nil
+}
+
+func (tr *Transport) sendSerialized(dest t.NodeID, serializedMsg []byte) error {
 	conn, err := tr.getConnection(dest)
 	if err != nil {
 		return err
 	}
-	return conn.Send(msg)
+
+	return conn.Send(serializedMsg)
 }
 
 func (tr *Transport) WaitFor(n int) error {

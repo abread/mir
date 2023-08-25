@@ -2,8 +2,6 @@ package libp2p
 
 import (
 	"github.com/libp2p/go-libp2p/core/peer"
-
-	"github.com/filecoin-project/mir/pkg/pb/messagepb"
 )
 
 // connection represents a connection to a (local or remote) peer.
@@ -15,7 +13,7 @@ type connection interface {
 	// Send makes a non-blocking attempt to send a message to this connection.
 	// Send might use internal buffering. Thus, even if it returns nil,
 	// the message might not have yet been physically sent.
-	Send(message *messagepb.Message) error
+	Send(message []byte) error
 
 	// Close closes the connection. No data will be sent to the underlying stream after Close returns.
 	Close()

@@ -12,10 +12,8 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-yamux/v4"
-	"google.golang.org/protobuf/proto"
 
 	"github.com/filecoin-project/mir/pkg/logging"
-	"github.com/filecoin-project/mir/pkg/pb/messagepb"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -28,7 +26,7 @@ type remoteConnection struct {
 	encMode       cbor.EncMode
 	streamWriter  *cbor.Encoder
 	stream        network.Stream
-	msgBuffer     chan *messagepb.Message
+	msgBuffer     chan []byte
 	stop          chan struct{}
 	done          chan struct{}
 	connectedCond *sync.Cond
@@ -55,7 +53,7 @@ func newRemoteConnection(
 		encMode:       encMode,
 		streamWriter:  nil,
 		stream:        nil,
-		msgBuffer:     make(chan *messagepb.Message, params.ConnectionBufferSize),
+		msgBuffer:     make(chan []byte, params.ConnectionBufferSize),
 		stop:          make(chan struct{}),
 		done:          make(chan struct{}),
 		connectedCond: sync.NewCond(&sync.Mutex{}),
@@ -72,7 +70,7 @@ func (conn *remoteConnection) PeerID() peer.ID {
 // Send makes a non-blocking attempt to send a message to this connection.
 // Send might use internal buffering. Thus, even if it returns nil,
 // the message might not have yet been sent to the network.
-func (conn *remoteConnection) Send(msg *messagepb.Message) error {
+func (conn *remoteConnection) Send(msg []byte) error {
 
 	select {
 	case conn.msgBuffer <- msg:
@@ -263,19 +261,12 @@ func (conn *remoteConnection) process() {
 			}
 		}
 
-		// Get the next message and encode it if there is no pending unsent message.
+		// Get the next message if there is no pending unsent message.
 		if msgData == nil {
 			select {
 			case <-conn.stop:
 				return
-			case msg := <-conn.msgBuffer:
-				// Encode message to a byte slice.
-				var err error
-				msgData, err = proto.Marshal(msg)
-				if err != nil {
-					conn.logger.Log(logging.LevelError, "Could not encode message. Disconnecting.", "err", err)
-					return
-				}
+			case msgData = <-conn.msgBuffer:
 			}
 		}
 

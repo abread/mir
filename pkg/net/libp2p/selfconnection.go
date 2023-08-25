@@ -3,6 +3,7 @@ package libp2p
 import (
 	es "github.com/go-errors/errors"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/pb/messagepb"
@@ -16,7 +17,7 @@ import (
 type selfConnection struct {
 	ownID       t.NodeID
 	peerID      peer.ID
-	msgBuffer   chan *messagepb.Message
+	msgBuffer   chan []byte
 	deliverChan chan<- *events.EventList
 	stop        chan struct{}
 	done        chan struct{}
@@ -35,7 +36,7 @@ func newSelfConnection(params Params, ownID t.NodeID, ownAddr t.NodeAddress, del
 	conn := &selfConnection{
 		ownID:       ownID,
 		peerID:      addrInfo.ID,
-		msgBuffer:   make(chan *messagepb.Message, params.ConnectionBufferSize),
+		msgBuffer:   make(chan []byte, params.ConnectionBufferSize),
 		deliverChan: deliverChan,
 		stop:        make(chan struct{}),
 		done:        make(chan struct{}),
@@ -53,7 +54,7 @@ func (conn *selfConnection) PeerID() peer.ID {
 
 // Send feeds the given message directly to the sink of delivered messages.
 // Send is non-blocking and if the buffer for delivered messages is full, the message is dropped.
-func (conn *selfConnection) Send(msg *messagepb.Message) error {
+func (conn *selfConnection) Send(msg []byte) error {
 
 	select {
 	case conn.msgBuffer <- msg:
@@ -104,14 +105,20 @@ func (conn *selfConnection) process() {
 		select {
 		case <-conn.stop:
 			return
-		case msg := <-conn.msgBuffer:
+		case encodedMsg := <-conn.msgBuffer:
+			var msg messagepb.Message
+			err := proto.Unmarshal(encodedMsg, &msg)
+			if err != nil {
+				panic(es.Errorf("failed to unmarshal message from self: %w", err))
+			}
+
 			select {
 			case <-conn.stop:
 				return
 			case conn.deliverChan <- events.ListOf(transportpbevents.MessageReceived(
 				t.ModuleID(msg.DestModule),
 				conn.ownID,
-				messagepbtypes.MessageFromPb(msg)).Pb(),
+				messagepbtypes.MessageFromPb(&msg)).Pb(),
 			):
 				// Nothing to do in this case, message has been delivered.
 			}
