@@ -28,16 +28,13 @@ require (
 	github.com/drand/kyber-bls12381 v0.2.3
 	github.com/fxamacker/cbor/v2 v2.4.0
 	github.com/go-errors/errors v1.4.2
-	github.com/ipfs/go-cid v0.4.1
-	github.com/libp2p/go-yamux/v3 v3.1.2
+	github.com/libp2p/go-yamux/v4 v4.0.0
 	github.com/mattn/go-sqlite3 v1.14.16
 	github.com/multiformats/go-multiaddr v0.9.0
 	github.com/reactivex/rxgo/v2 v2.5.0
 	github.com/spf13/cobra v1.5.0
-	github.com/whyrusleeping/cbor-gen v0.0.0-20220514204315-f29c37e9c44c
 	go.uber.org/goleak v1.1.12
 	golang.org/x/time v0.0.0-20220722155302-e5dcc9cfc0b9
-	golang.org/x/xerrors v0.0.0-20220411194840-2f41105eb62f
 )
 
 require (
@@ -64,6 +61,7 @@ require (
 	github.com/gorilla/websocket v1.5.0 // indirect
 	github.com/huin/goupnp v1.2.0 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
+	github.com/ipfs/go-cid v0.4.1 // indirect
 	github.com/ipfs/go-log/v2 v2.5.1 // indirect
 	github.com/jackpal/go-nat-pmp v1.0.2 // indirect
 	github.com/jbenet/go-temp-err-catcher v0.1.0 // indirect
@@ -80,7 +78,6 @@ require (
 	github.com/libp2p/go-nat v0.1.0 // indirect
 	github.com/libp2p/go-netroute v0.2.1 // indirect
 	github.com/libp2p/go-reuseport v0.3.0 // indirect
-	github.com/libp2p/go-yamux/v4 v4.0.0 // indirect
 	github.com/marten-seemann/tcp v0.0.0-20210406111302-dfbc87cc63fd // indirect
 	github.com/mattn/go-colorable v0.1.2 // indirect
 	github.com/mattn/go-isatty v0.0.19 // indirect

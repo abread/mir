@@ -1,12 +1,12 @@
 package libp2p
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"sync"
 	"time"
 
+	"github.com/fxamacker/cbor/v2"
 	es "github.com/go-errors/errors"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
@@ -25,6 +25,8 @@ type remoteConnection struct {
 	addrInfo      *peer.AddrInfo
 	logger        logging.Logger
 	host          host.Host
+	encMode       cbor.EncMode
+	streamWriter  *cbor.Encoder
 	stream        network.Stream
 	msgBuffer     chan *messagepb.Message
 	stop          chan struct{}
@@ -34,6 +36,7 @@ type remoteConnection struct {
 
 func newRemoteConnection(
 	params Params,
+	encMode cbor.EncMode,
 	ownID t.NodeID,
 	addr t.NodeAddress,
 	h host.Host,
@@ -49,6 +52,8 @@ func newRemoteConnection(
 		addrInfo:      addrInfo,
 		logger:        logger,
 		host:          h,
+		encMode:       encMode,
+		streamWriter:  nil,
 		stream:        nil,
 		msgBuffer:     make(chan *messagepb.Message, params.ConnectionBufferSize),
 		stop:          make(chan struct{}),
@@ -206,9 +211,16 @@ func (conn *remoteConnection) tryConnecting(ctx context.Context) error {
 		}
 	}
 
+	streamWriter := conn.encMode.NewEncoder(&disconnectAwareOutputStream{
+		stopC:        conn.stop,
+		writeTimeout: conn.params.StreamWriteTimeout,
+		stream:       stream,
+	})
+
 	// If connecting succeeded, save the new stream
 	// and notify any goroutines waiting for the connection establishment (Wait method).
 	conn.connectedCond.L.Lock()
+	conn.streamWriter = streamWriter
 	conn.stream = stream
 	conn.connectedCond.Broadcast()
 	conn.connectedCond.L.Unlock()
@@ -242,7 +254,7 @@ func (conn *remoteConnection) process() {
 		}
 
 		// Create a network connection if there is none.
-		if conn.stream == nil {
+		if conn.streamWriter == nil {
 			if err := conn.connect(); err != nil {
 				// Unless the connection is closing, connect() will keep retrying to connect indefinitely.
 				// Thus, if it returns an error, it means that there is no point in continuing the processing.
@@ -259,7 +271,7 @@ func (conn *remoteConnection) process() {
 			case msg := <-conn.msgBuffer:
 				// Encode message to a byte slice.
 				var err error
-				msgData, err = encodeMessage(msg, conn.ownID)
+				msgData, err = proto.Marshal(msg)
 				if err != nil {
 					conn.logger.Log(logging.LevelError, "Could not encode message. Disconnecting.", "err", err)
 					return
@@ -268,7 +280,7 @@ func (conn *remoteConnection) process() {
 		}
 
 		// Write the encoded data to the network stream.
-		if err := conn.writeDataToStream(msgData); err != nil {
+		if err := conn.streamWriter.Encode(TransportMessage{msgData}); err != nil {
 			// If writing fails, close the stream, such that a new one will be re-established in the next iteration.
 			conn.logger.Log(logging.LevelWarn, "Failed sending data.", "err", err)
 			conn.closeStream()
@@ -280,10 +292,33 @@ func (conn *remoteConnection) process() {
 	}
 }
 
-// writeDataToStream writes data to the underlying network stream.
+// closeStream closes the underlying network stream if it is open.
+func (conn *remoteConnection) closeStream() {
+	conn.connectedCond.L.Lock()
+	stream := conn.stream
+	// conn.stream == nil is used as a condition in the Wait method and thus needs to be guarded by the lock.
+	conn.streamWriter = nil
+	conn.stream = nil
+	conn.connectedCond.L.Unlock()
+
+	if stream != nil {
+		if err := stream.Close(); err != nil {
+			conn.logger.Log(logging.LevelWarn, "Failed closing stream.", "err", err)
+		}
+	}
+}
+
+// disconnectAwareOutputStream writes data to the underlying network stream.
 // It blocks until all data is written, the connection closes, or an error occurs.
-// In the first case, writeDataToStream returns nil. Otherwise, it returns the corresponding error.
-func (conn *remoteConnection) writeDataToStream(data []byte) error {
+// In the first case, Write returns nil. Otherwise, it returns the corresponding error.
+type disconnectAwareOutputStream struct {
+	stopC        chan struct{}
+	writeTimeout time.Duration
+	stream       network.Stream
+}
+
+func (s *disconnectAwareOutputStream) Write(data []byte) (int, error) {
+	n := 0
 
 	// Retry sending data until:
 	// - all data is sent, or
@@ -293,63 +328,32 @@ func (conn *remoteConnection) writeDataToStream(data []byte) error {
 
 		// Set a timeout for the data to be written, so the conn.stream.Write call does not block forever.
 		// This is required so that we can periodically check the conn.stop channel.
-		if err := conn.stream.SetWriteDeadline(time.Now().Add(conn.params.StreamWriteTimeout)); err != nil {
-			return es.Errorf("could not set stream write deadline")
+		if err := s.stream.SetWriteDeadline(time.Now().Add(s.writeTimeout)); err != nil {
+			return n, es.Errorf("could not set stream write deadline")
 		}
 
 		// Try writing data to the underlying network stream.
-		bytesWritten, err := conn.stream.Write(data)
+		bytesWritten, err := s.stream.Write(data)
+		n += bytesWritten
 
 		if err == nil {
 			// If all data was successfully written, return.
-
-			return nil
+			return n, nil
 
 		} else if errors.Is(err, yamux.ErrTimeout) {
 			// If a timeout occurred, check if the connection has not been closed in the meantime.
 			// If the connection is still open, retry sending the rest of the data in the next iteration.
 
 			select {
-			case <-conn.stop:
-				return es.Errorf("connection closing")
+			case <-s.stopC:
+				return n, es.Errorf("connection closing")
 			default:
 				data = data[bytesWritten:]
 			}
 
 		} else {
 			// If any other error occurred, just return it.
-
-			return es.Errorf("failed sending data: %w", err)
-
+			return n, es.Errorf("failed sending data: %w", err)
 		}
 	}
-}
-
-// closeStream closes the underlying network stream if it is open.
-func (conn *remoteConnection) closeStream() {
-
-	if conn.stream != nil {
-		if err := conn.stream.Close(); err != nil {
-			conn.logger.Log(logging.LevelWarn, "Failed closing stream.", "err", err)
-		}
-
-		// conn.stream == nil is used as a condition in the Wait method and thus needs to be guarded by the lock.
-		conn.connectedCond.L.Lock()
-		conn.stream = nil
-		conn.connectedCond.L.Unlock()
-	}
-}
-
-func encodeMessage(msg *messagepb.Message, nodeID t.NodeID) ([]byte, error) {
-	p, err := proto.Marshal(msg)
-	if err != nil {
-		return nil, es.Errorf("failed to marshal message: %w", err)
-	}
-
-	tm := TransportMessage{nodeID.Pb(), p}
-	buf := new(bytes.Buffer)
-	if err = tm.MarshalCBOR(buf); err != nil {
-		return nil, es.Errorf("failed to CBOR marshal message: %w", err)
-	}
-	return buf.Bytes(), nil
 }

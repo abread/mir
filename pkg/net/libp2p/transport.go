@@ -20,10 +20,11 @@ import (
 	transportpbtypes "github.com/filecoin-project/mir/pkg/pb/transportpb/types"
 	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	t "github.com/filecoin-project/mir/pkg/types"
+
+	cbor "github.com/fxamacker/cbor/v2"
 )
 
 type TransportMessage struct {
-	Sender  string
 	Payload []byte
 }
 
@@ -32,6 +33,9 @@ type Transport struct {
 	ownID  t.NodeID
 	host   host.Host
 	logger logging.Logger
+
+	decMode cbor.DecMode
+	encMode cbor.EncMode
 
 	connections     map[t.NodeID]connection
 	nodeIDs         map[peer.ID]t.NodeID
@@ -42,11 +46,27 @@ type Transport struct {
 }
 
 func NewTransport(params Params, ownID t.NodeID, h host.Host, logger logging.Logger) *Transport {
+	decOptions := cbor.DecOptions{
+		MaxArrayElements: params.MaxMessageSize,
+		IndefLength:      cbor.IndefLengthForbidden,
+	}
+	decMode, err := decOptions.DecMode()
+	if err != nil {
+		panic(err)
+	}
+
+	encMode, err := cbor.CoreDetEncOptions().EncMode()
+	if err != nil {
+		panic(err)
+	}
+
 	return &Transport{
 		params:           params,
 		ownID:            ownID,
 		host:             h,
 		logger:           logger,
+		decMode:          decMode,
+		encMode:          encMode,
 		connections:      make(map[t.NodeID]connection),
 		nodeIDs:          make(map[peer.ID]t.NodeID),
 		incomingMessages: make(chan *events.EventList),
@@ -132,6 +152,7 @@ func (tr *Transport) Connect(membership *trantorpbtypes.Membership) {
 			} else {
 				conn, err = newRemoteConnection(
 					tr.params,
+					tr.encMode,
 					tr.ownID,
 					addr,
 					tr.host,
@@ -262,7 +283,7 @@ func (tr *Transport) handleIncomingConnection(s network.Stream) {
 
 	// Check if connection has been received from a known node (as per ID declared by the remote node).
 	tr.connectionsLock.RLock()
-	nodeID, ok := tr.nodeIDs[peerID]
+	peerNodeID, ok := tr.nodeIDs[peerID]
 	// TODO: Also keep a synchronized map of incoming streams.
 	//       On shutdown, close them all and wait until the corresponding handlers return.
 	tr.connectionsLock.RUnlock()
@@ -272,27 +293,22 @@ func (tr *Transport) handleIncomingConnection(s network.Stream) {
 		return
 	}
 
+	decoder := tr.decMode.NewDecoder(s)
+
 	// Start reading and processig incoming messages.
 	// This call blocks until an error occurs (e.g. the connection breaks) or the Transport is explicitly shut down.
-	tr.readAndProcessMessages(s, nodeID, peerID)
+	tr.readAndProcessMessages(decoder, peerNodeID, peerID)
 }
 
 // readAndProcessMessages Reads incoming data from the stream s, parses it to Mir messages,
 // and writes them to the incomingMessages channel
-func (tr *Transport) readAndProcessMessages(s network.Stream, nodeID t.NodeID, peerID peer.ID) {
+func (tr *Transport) readAndProcessMessages(s *cbor.Decoder, peerNodeID t.NodeID, peerID peer.ID) {
 	for {
 		// Read message from the network.
-		msg, sender, err := readAndDecode(s)
+		msg, err := readAndDecode(s)
 		if err != nil {
 			tr.logger.Log(logging.LevelDebug, "Failed reading message. Stopping incoming connection",
 				"remotePeer", peerID, "err", err)
-			return
-		}
-
-		// Sanity check. TODO: Remove the `sender` completely and infer it from the PeerID.
-		if sender != nodeID {
-			tr.logger.Log(logging.LevelWarn, "Remote node identity mismatch. Stopping incoming connection.",
-				"expectedNodeID", nodeID, "declaredNodeID", sender, "remotePeerID", peerID)
 			return
 		}
 
@@ -301,28 +317,28 @@ func (tr *Transport) readAndProcessMessages(s network.Stream, nodeID t.NodeID, p
 		//       instead of sending each individual message as a list of length one.
 		case tr.incomingMessages <- events.ListOf(transportpbevents.MessageReceived(
 			t.ModuleID(msg.DestModule),
-			sender,
+			peerNodeID,
 			messagepbtypes.MessageFromPb(msg),
 		).Pb()):
 			// Nothing to do in this case message has written to the receiving channel.
 		case <-tr.stop:
 			tr.logger.Log(logging.LevelError, "Shutdown. Stopping incoming connection.",
-				"nodeID", sender, "remotePeer", peerID)
+				"nodeID", peerNodeID, "remotePeer", peerID)
 			return
 		}
 	}
 }
 
-func readAndDecode(s network.Stream) (*messagepb.Message, t.NodeID, error) {
+func readAndDecode(s *cbor.Decoder) (*messagepb.Message, error) {
 	var tm TransportMessage
-	err := tm.UnmarshalCBOR(s)
+	err := s.Decode(&tm)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
 	var msg messagepb.Message
 	if err := proto.Unmarshal(tm.Payload, &msg); err != nil {
-		return nil, "", err
+		return nil, err
 	}
-	return &msg, t.NodeID(tm.Sender), nil
+	return &msg, nil
 }
