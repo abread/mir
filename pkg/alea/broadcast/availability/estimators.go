@@ -8,7 +8,6 @@ import (
 	"github.com/go-errors/errors"
 
 	"github.com/filecoin-project/mir/pkg/alea/aleatypes"
-	"github.com/filecoin-project/mir/pkg/alea/broadcast/bccommon"
 	"github.com/filecoin-project/mir/pkg/alea/util"
 	"github.com/filecoin-project/mir/pkg/dsl"
 	bcpbdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/dsl"
@@ -19,7 +18,7 @@ import (
 
 type bcEstimators struct {
 	bcStartTimes map[bcpbtypes.Slot]time.Time
-	tunables     bccommon.ModuleTunables
+	tunables     ModuleTunables
 	ownQueueHead uint64
 
 	ownBcDuration         *util.Estimator
@@ -58,7 +57,7 @@ func (est *bcEstimators) MaxExtBcDuration() time.Duration {
 	return est.extBcDuration.MaxEstimate()
 }
 
-func newBcEstimators(m dsl.Module, mc bccommon.ModuleConfig, params bccommon.ModuleParams, tunables bccommon.ModuleTunables, nodeID t.NodeID) *bcEstimators {
+func newBcEstimators(m dsl.Module, mc ModuleConfig, params ModuleParams, tunables ModuleTunables, nodeID t.NodeID) *bcEstimators {
 	estimators := &bcEstimators{
 		bcStartTimes: make(map[bcpbtypes.Slot]time.Time, len(params.AllNodes)),
 		ownQueueHead: 0,

@@ -12,7 +12,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/vcb"
 )
 
-func includeCertVerification(m dsl.Module, mc bccommon.ModuleConfig, params bccommon.ModuleParams) {
+func includeCertVerification(m dsl.Module, mc ModuleConfig, params ModuleParams) {
 	availabilitypbdsl.UponVerifyCert(m, func(cert *availabilitypbtypes.Cert, origin *availabilitypbtypes.VerifyCertOrigin) error {
 		aleaCertWrapped, ok := cert.Type.(*availabilitypbtypes.Cert_Alea)
 		if !ok {

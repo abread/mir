@@ -20,9 +20,9 @@ type ModuleConfig struct {
 // ModuleParams sets the values for the parameters of an instance of the protocol.
 // All replicas are expected to use identical module parameters.
 type ModuleParams struct {
-	BcInstanceUID  []byte
-	AllNodes       []t.NodeID // the list of participating nodes, which must be the same as the set of nodes in the threshcrypto module
-	RetentionIndex tt.RetentionIndex
+	BcInstanceUID []byte
+	AllNodes      []t.NodeID // the list of participating nodes, which must be the same as the set of nodes in the threshcrypto module
+	EpochNr       tt.RetentionIndex
 
 	QueueIdx   aleatypes.QueueIdx
 	QueueOwner t.NodeID

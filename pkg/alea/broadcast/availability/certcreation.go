@@ -24,8 +24,8 @@ type certCreationState struct {
 
 func includeCertCreation(
 	m dsl.Module,
-	mc bccommon.ModuleConfig,
-	params bccommon.ModuleParams,
+	mc ModuleConfig,
+	params ModuleParams,
 	nodeID t.NodeID,
 	certDB map[bcpbtypes.Slot]*bcpbtypes.Cert,
 ) {

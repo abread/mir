@@ -34,7 +34,7 @@ func (mgr *vcbPayloadManager) init(m dsl.Module, mc ModuleConfig, params *Module
 		mgr.batchID = batchID
 		mgr.sigData = SigData(params.InstanceUID, batchID)
 
-		batchdbpbdsl.StoreBatch(m, mc.BatchDB, batchID, mgr.txs, params.RetentitionIndex, context)
+		batchdbpbdsl.StoreBatch(m, mc.BatchDB, batchID, mgr.txs, params.EpochNr, context)
 		return nil
 	})
 

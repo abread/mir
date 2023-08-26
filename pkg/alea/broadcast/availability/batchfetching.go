@@ -48,8 +48,8 @@ type RequestsState struct {
 // includeBatchFetching registers event handlers for processing availabilitypb.RequestTransactions events.
 func includeBatchFetching(
 	m dsl.Module,
-	mc bccommon.ModuleConfig,
-	params bccommon.ModuleParams,
+	mc ModuleConfig,
+	params ModuleParams,
 	logger logging.Logger,
 	certDB map[bcpbtypes.Slot]*bcpbtypes.Cert,
 	est *bcEstimators,
@@ -263,7 +263,7 @@ func includeBatchFetching(
 
 		// store batch/cert asynchronously
 		// TODO: proper epochs (retention index)
-		batchdbdsl.StoreBatch(m, mc.BatchDB, context.cert.BatchId, context.txs, tt.RetentionIndex(0), context)
+		batchdbdsl.StoreBatch(m, mc.BatchDB, context.cert.BatchId, context.txs, params.EpochNr, context)
 
 		// send response to requests
 		// logger.Log(logging.LevelDebug, "satisfying delayed requests with FILLER", "queueIdx", context.slot.QueueIdx, "queueSlot", context.slot.QueueSlot)
@@ -287,7 +287,7 @@ func includeBatchFetching(
 	})
 }
 
-func certSigData(params *bccommon.ModuleParams, cert *bcpbtypes.Cert) [][]byte {
+func certSigData(params *ModuleParams, cert *bcpbtypes.Cert) [][]byte {
 	aleaUID := params.InstanceUID[:len(params.InstanceUID)-1]
 	aleaBcInstanceUID := append(aleaUID, 'b')
 	return vcb.SigData(bccommon.VCBInstanceUID(aleaBcInstanceUID, cert.Slot.QueueIdx, cert.Slot.QueueSlot), cert.BatchId)

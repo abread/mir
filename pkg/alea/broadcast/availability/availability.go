@@ -11,7 +11,11 @@ import (
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
-func New(mc bccommon.ModuleConfig, params bccommon.ModuleParams, tunables bccommon.ModuleTunables, nodeID t.NodeID, logger logging.Logger) modules.PassiveModule {
+type ModuleConfig = bccommon.ModuleConfig
+type ModuleTunables = bccommon.ModuleTunables
+type ModuleParams = bccommon.ModuleParams
+
+func New(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, nodeID t.NodeID, logger logging.Logger) modules.PassiveModule {
 	m := dsl.NewModule(mc.Self)
 
 	certDB := make(map[bcpbtypes.Slot]*bcpbtypes.Cert)

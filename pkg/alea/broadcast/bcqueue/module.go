@@ -208,13 +208,14 @@ func newVcbGenerator(queueMc ModuleConfig, queueParams ModuleParams, nodeID t.No
 		ReliableNet:  queueMc.ReliableNet,
 		ThreshCrypto: queueMc.ThreshCrypto,
 		Mempool:      queueMc.Mempool,
+		BatchDB:      queueMc.BatchDB,
 	}
 
 	baseParams := vcb.ModuleParams{
-		InstanceUID:      nil,
-		RetentitionIndex: queueParams.RetentionIndex,
-		AllNodes:         queueParams.AllNodes,
-		Leader:           queueParams.QueueOwner,
+		InstanceUID: nil,
+		EpochNr:     queueParams.EpochNr,
+		AllNodes:    queueParams.AllNodes,
+		Leader:      queueParams.QueueOwner,
 	}
 
 	return func(id t.ModuleID, idx uint64) (modules.PassiveModule, events.EventList, error) {

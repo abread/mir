@@ -19,7 +19,7 @@ import (
 )
 
 type ModuleConfig = bccommon.ModuleConfig
-type ModuleParams = bccommon.ModuleParams
+type ModuleParams = bccommon.GlobalParams
 type ModuleTunables = bccommon.ModuleTunables
 
 type dummyMulti struct {
@@ -51,7 +51,11 @@ func NewMulti(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, nod
 	origSelf := mc.Self
 
 	mc.Self = mc.Self.Then(t.NewModuleIDFromInt(0))
-	mod, err := NewInstance(mc, params, tunables, tt.EpochNr(0), nodeID, logging.Decorate(logger, "BcInst: ", "epochNr", 0))
+	subParams := bccommon.ModuleParams{
+		GlobalParams: params,
+		EpochNr:      tt.RetentionIndex(0),
+	}
+	mod, err := NewInstance(mc, subParams, tunables, tt.EpochNr(0), nodeID, logging.Decorate(logger, "BcInst: ", "epochNr", 0))
 	if err != nil {
 		return nil, err
 	}
@@ -67,7 +71,7 @@ type bcMod struct {
 	availability modules.PassiveModule
 }
 
-func NewInstance(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, epochNr tt.EpochNr, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
+func NewInstance(mc ModuleConfig, params bccommon.ModuleParams, tunables ModuleTunables, epochNr tt.EpochNr, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
 	queues, err := createQueues(mc, params, tunables, nodeID, logger)
 	if err != nil {
 		return nil, err
@@ -81,7 +85,7 @@ func NewInstance(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, 
 	}, nil
 }
 
-func createQueues(bcMc ModuleConfig, bcParams ModuleParams, bcTunables ModuleTunables, nodeID t.NodeID, logger logging.Logger) ([]modules.PassiveModule, error) {
+func createQueues(bcMc ModuleConfig, bcParams bccommon.ModuleParams, bcTunables ModuleTunables, nodeID t.NodeID, logger logging.Logger) ([]modules.PassiveModule, error) {
 	queues := make([]modules.PassiveModule, 0, len(bcParams.AllNodes))
 
 	tunables := bcqueue.ModuleTunables{
@@ -106,6 +110,7 @@ func createQueues(bcMc ModuleConfig, bcParams ModuleParams, bcTunables ModuleTun
 		params := bcqueue.ModuleParams{
 			BcInstanceUID: bcParams.InstanceUID, // TODO: review
 			AllNodes:      bcParams.AllNodes,
+			EpochNr:       bcParams.EpochNr,
 
 			QueueIdx:   aleatypes.QueueIdx(idx),
 			QueueOwner: bcParams.AllNodes[idx],

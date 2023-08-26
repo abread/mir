@@ -207,10 +207,10 @@ func newDeployment(conf *TestConfig) (*deploytest.Deployment, error) {
 		)
 
 		vcb := NewModule(vcbConfig, ModuleParams{
-			InstanceUID:      []byte{0},
-			RetentitionIndex: tt.RetentionIndex(0),
-			AllNodes:         nodeIDs,
-			Leader:           leader,
+			InstanceUID: []byte{0},
+			EpochNr:     tt.RetentionIndex(0),
+			AllNodes:    nodeIDs,
+			Leader:      leader,
 		}, nodeID, logging.Decorate(nodeLogger, "Vcb: "))
 
 		// Use a small retransmission delay to increase likelihood of duplicate messages

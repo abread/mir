@@ -35,10 +35,10 @@ type ModuleConfig struct {
 // ModuleParams sets the values for the parameters of an instance of the protocol.
 // All replicas are expected to use identical module parameters, apart from the Origin.
 type ModuleParams struct {
-	InstanceUID      []byte // unique identifier for this instance of VCB
-	RetentitionIndex tt.RetentionIndex
-	AllNodes         []t.NodeID // the list of participating nodes, which must be the same as the set of nodes in the threshcrypto module
-	Leader           t.NodeID   // the id of the leader of the instance
+	InstanceUID []byte // unique identifier for this instance of VCB
+	EpochNr     tt.RetentionIndex
+	AllNodes    []t.NodeID // the list of participating nodes, which must be the same as the set of nodes in the threshcrypto module
+	Leader      t.NodeID   // the id of the leader of the instance
 }
 
 // GetN returns the total number of nodes.
