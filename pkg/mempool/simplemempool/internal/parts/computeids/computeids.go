@@ -52,7 +52,8 @@ func IncludeComputationOfTransactionAndBatchIDs(
 			m,
 			context.origin.Module,
 			sliceutil.Transform(hashes, func(_ int, hash []uint8) tt.TxID {
-				return tt.TxID(hash)
+				txID := base64.StdEncoding.EncodeToString(hash)
+				return txID
 			}),
 			context.origin,
 		)
