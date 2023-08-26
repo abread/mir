@@ -1,6 +1,8 @@
 package computeids
 
 import (
+	"encoding/base64"
+
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/mempool/simplemempool/common"
@@ -70,7 +72,9 @@ func IncludeComputationOfTransactionAndBatchIDs(
 	})
 
 	hasherpbdsl.UponResultOne(m, func(hash []byte, context *computeHashForBatchIDContext) error {
-		mppbdsl.BatchIDResponse(m, context.origin.Module, tt.TxID(hash), context.origin)
+		batchID := base64.StdEncoding.EncodeToString(hash)
+
+		mppbdsl.BatchIDResponse(m, context.origin.Module, batchID, context.origin)
 		return nil
 	})
 }
