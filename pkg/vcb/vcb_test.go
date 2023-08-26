@@ -322,7 +322,7 @@ func newCountingApp(isLeader bool) *countingApp {
 		return nil
 	})
 
-	batchdbpbdsl.UponLookupBatchResponse(m, func(found bool, txs []*trantorpbtypes.Transaction, _ []uint8, _ *struct{}) error {
+	batchdbpbdsl.UponLookupBatchResponse(m, func(found bool, txs []*trantorpbtypes.Transaction, _ *struct{}) error {
 		if !found {
 			return es.Errorf("vcb didn't store batch")
 		}

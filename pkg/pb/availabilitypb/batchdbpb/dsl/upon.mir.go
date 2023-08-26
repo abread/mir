@@ -30,7 +30,7 @@ func UponLookupBatch(m dsl.Module, handler func(batchId types2.BatchID, origin *
 	})
 }
 
-func UponLookupBatchResponse[C any](m dsl.Module, handler func(found bool, txs []*types3.Transaction, metadata []uint8, context *C) error) {
+func UponLookupBatchResponse[C any](m dsl.Module, handler func(found bool, txs []*types3.Transaction, context *C) error) {
 	UponEvent[*types.Event_LookupResponse](m, func(ev *types.LookupBatchResponse) error {
 		originWrapper, ok := ev.Origin.Type.(*types.LookupBatchOrigin_Dsl)
 		if !ok {
@@ -43,13 +43,13 @@ func UponLookupBatchResponse[C any](m dsl.Module, handler func(found bool, txs [
 			return nil
 		}
 
-		return handler(ev.Found, ev.Txs, ev.Metadata, context)
+		return handler(ev.Found, ev.Txs, context)
 	})
 }
 
-func UponStoreBatch(m dsl.Module, handler func(batchId types2.BatchID, txs []*types3.Transaction, retentionIndex types4.RetentionIndex, metadata []uint8, origin *types.StoreBatchOrigin) error) {
+func UponStoreBatch(m dsl.Module, handler func(batchId types2.BatchID, txs []*types3.Transaction, retentionIndex types4.RetentionIndex, origin *types.StoreBatchOrigin) error) {
 	UponEvent[*types.Event_Store](m, func(ev *types.StoreBatch) error {
-		return handler(ev.BatchId, ev.Txs, ev.RetentionIndex, ev.Metadata, ev.Origin)
+		return handler(ev.BatchId, ev.Txs, ev.RetentionIndex, ev.Origin)
 	})
 }
 

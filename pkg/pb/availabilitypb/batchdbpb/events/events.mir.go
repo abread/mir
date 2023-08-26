@@ -27,17 +27,16 @@ func LookupBatch(destModule types.ModuleID, batchId types1.BatchID, origin *type
 	}
 }
 
-func LookupBatchResponse(destModule types.ModuleID, found bool, txs []*types4.Transaction, metadata []uint8, origin *types2.LookupBatchOrigin) *types3.Event {
+func LookupBatchResponse(destModule types.ModuleID, found bool, txs []*types4.Transaction, origin *types2.LookupBatchOrigin) *types3.Event {
 	return &types3.Event{
 		DestModule: destModule,
 		Type: &types3.Event_BatchDb{
 			BatchDb: &types2.Event{
 				Type: &types2.Event_LookupResponse{
 					LookupResponse: &types2.LookupBatchResponse{
-						Found:    found,
-						Txs:      txs,
-						Metadata: metadata,
-						Origin:   origin,
+						Found:  found,
+						Txs:    txs,
+						Origin: origin,
 					},
 				},
 			},
@@ -45,7 +44,7 @@ func LookupBatchResponse(destModule types.ModuleID, found bool, txs []*types4.Tr
 	}
 }
 
-func StoreBatch(destModule types.ModuleID, batchId types1.BatchID, txs []*types4.Transaction, retentionIndex types5.RetentionIndex, metadata []uint8, origin *types2.StoreBatchOrigin) *types3.Event {
+func StoreBatch(destModule types.ModuleID, batchId types1.BatchID, txs []*types4.Transaction, retentionIndex types5.RetentionIndex, origin *types2.StoreBatchOrigin) *types3.Event {
 	return &types3.Event{
 		DestModule: destModule,
 		Type: &types3.Event_BatchDb{
@@ -55,7 +54,6 @@ func StoreBatch(destModule types.ModuleID, batchId types1.BatchID, txs []*types4
 						BatchId:        batchId,
 						Txs:            txs,
 						RetentionIndex: retentionIndex,
-						Metadata:       metadata,
 						Origin:         origin,
 					},
 				},

@@ -232,10 +232,9 @@ func (*LookupBatch) MirReflect() mirreflect.Type {
 }
 
 type LookupBatchResponse struct {
-	Found    bool
-	Txs      []*types1.Transaction
-	Metadata []uint8
-	Origin   *LookupBatchOrigin
+	Found  bool
+	Txs    []*types1.Transaction
+	Origin *LookupBatchOrigin
 }
 
 func LookupBatchResponseFromPb(pb *batchdbpb.LookupBatchResponse) *LookupBatchResponse {
@@ -247,8 +246,7 @@ func LookupBatchResponseFromPb(pb *batchdbpb.LookupBatchResponse) *LookupBatchRe
 		Txs: types2.ConvertSlice(pb.Txs, func(t *trantorpb.Transaction) *types1.Transaction {
 			return types1.TransactionFromPb(t)
 		}),
-		Metadata: pb.Metadata,
-		Origin:   LookupBatchOriginFromPb(pb.Origin),
+		Origin: LookupBatchOriginFromPb(pb.Origin),
 	}
 }
 
@@ -262,7 +260,6 @@ func (m *LookupBatchResponse) Pb() *batchdbpb.LookupBatchResponse {
 		pbMessage.Txs = types2.ConvertSlice(m.Txs, func(t *types1.Transaction) *trantorpb.Transaction {
 			return (t).Pb()
 		})
-		pbMessage.Metadata = m.Metadata
 		if m.Origin != nil {
 			pbMessage.Origin = (m.Origin).Pb()
 		}
@@ -279,7 +276,6 @@ type StoreBatch struct {
 	BatchId        types.BatchID
 	Txs            []*types1.Transaction
 	RetentionIndex types3.RetentionIndex
-	Metadata       []uint8
 	Origin         *StoreBatchOrigin
 }
 
@@ -293,7 +289,6 @@ func StoreBatchFromPb(pb *batchdbpb.StoreBatch) *StoreBatch {
 			return types1.TransactionFromPb(t)
 		}),
 		RetentionIndex: (types3.RetentionIndex)(pb.RetentionIndex),
-		Metadata:       pb.Metadata,
 		Origin:         StoreBatchOriginFromPb(pb.Origin),
 	}
 }
@@ -309,7 +304,6 @@ func (m *StoreBatch) Pb() *batchdbpb.StoreBatch {
 			return (t).Pb()
 		})
 		pbMessage.RetentionIndex = (uint64)(m.RetentionIndex)
-		pbMessage.Metadata = m.Metadata
 		if m.Origin != nil {
 			pbMessage.Origin = (m.Origin).Pb()
 		}

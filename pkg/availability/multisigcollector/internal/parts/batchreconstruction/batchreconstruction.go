@@ -82,7 +82,7 @@ func IncludeBatchReconstruction(
 	})
 
 	// If the batch is present in the local storage, return it. Otherwise, ask the nodes that signed the certificate.
-	batchdbpbdsl.UponLookupBatchResponse(m, func(found bool, txs []*trantorpbtypes.Transaction, _metadata []byte, context *lookupBatchLocallyContext) error {
+	batchdbpbdsl.UponLookupBatchResponse(m, func(found bool, txs []*trantorpbtypes.Transaction, context *lookupBatchLocallyContext) error {
 
 		if _, ok := state.RequestState[context.reqID]; !ok {
 			return nil
@@ -114,7 +114,7 @@ func IncludeBatchReconstruction(
 	})
 
 	// If the batch is found in the local storage, send it to the requesting node.
-	batchdbpbdsl.UponLookupBatchResponse(m, func(found bool, txs []*trantorpbtypes.Transaction, _metadata []byte, context *lookupBatchOnRemoteRequestContext) error {
+	batchdbpbdsl.UponLookupBatchResponse(m, func(found bool, txs []*trantorpbtypes.Transaction, context *lookupBatchOnRemoteRequestContext) error {
 		if !found {
 			// Ignore invalid request.
 			return nil
@@ -173,7 +173,6 @@ func IncludeBatchReconstruction(
 			batchID,
 			context.txs,
 			tt.RetentionIndex(params.EpochNr),
-			nil,
 			&storeBatchContext{},
 		)
 		saveAndFinish(m, context.reqID, context.txs, context.batchID, requestState.ReqOrigin, &state)

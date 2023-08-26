@@ -102,7 +102,7 @@ func includeBatchFetching(
 	})
 
 	// If the batch is present in the local storage, return it. Otherwise, ask other nodes.
-	batchdbdsl.UponLookupBatchResponse(m, func(found bool, txs []*trantorpbtypes.Transaction, metadata []byte, slot *bcpbtypes.Slot) error {
+	batchdbdsl.UponLookupBatchResponse(m, func(found bool, txs []*trantorpbtypes.Transaction, slot *bcpbtypes.Slot) error {
 		reqState, ok := state.RequestsState[*slot]
 		if !ok {
 			return nil // stale request
@@ -183,7 +183,7 @@ func includeBatchFetching(
 	})
 
 	// If the batch is found in the local storage, send it to the requesting node.
-	batchdbdsl.UponLookupBatchResponse(m, func(found bool, txs []*trantorpbtypes.Transaction, _ []byte, context *lookupBatchOnRemoteRequestContext) error {
+	batchdbdsl.UponLookupBatchResponse(m, func(found bool, txs []*trantorpbtypes.Transaction, context *lookupBatchOnRemoteRequestContext) error {
 		if !found {
 			return es.Errorf("inconsistency between dbs: cert was in certdb, but no batch present")
 		}
@@ -263,7 +263,7 @@ func includeBatchFetching(
 
 		// store batch/cert asynchronously
 		// TODO: proper epochs (retention index)
-		batchdbdsl.StoreBatch(m, mc.BatchDB, context.cert.BatchId, context.txs, tt.RetentionIndex(0), nil, context)
+		batchdbdsl.StoreBatch(m, mc.BatchDB, context.cert.BatchId, context.txs, tt.RetentionIndex(0), context)
 
 		// send response to requests
 		// logger.Log(logging.LevelDebug, "satisfying delayed requests with FILLER", "queueIdx", context.slot.QueueIdx, "queueSlot", context.slot.QueueSlot)

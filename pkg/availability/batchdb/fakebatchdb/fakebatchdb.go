@@ -37,9 +37,6 @@ type batch struct {
 	// Transactions in the batch.
 	txs []*trantorpbtypes.Transaction
 
-	// Batch metadata
-	metadata []byte
-
 	// The maximal retention index with which the batch was stored.
 	// Note that the same batch can be stored in the batchDB (under the same batch ID)
 	// multiple times if, e.g., multiple nodes propose the same transactions in different epoch in Trantor.
@@ -64,7 +61,6 @@ func NewModule(mc ModuleConfig) modules.Module {
 		batchID msctypes.BatchID,
 		txs []*trantorpbtypes.Transaction,
 		retIdx tt.RetentionIndex,
-		metadata []byte,
 		origin *batchdbpbtypes.StoreBatchOrigin,
 	) error {
 
@@ -75,7 +71,7 @@ func NewModule(mc ModuleConfig) modules.Module {
 			if !ok || b.maxRetIdx < retIdx {
 				// If we do not, or if the stored batch's retention index is lower,
 				// store the received batch with the up-to-date retention index
-				state.batchStore[batchID] = &batch{txs, metadata, retIdx}
+				state.batchStore[batchID] = &batch{txs, retIdx}
 			}
 
 			if _, ok := state.batchesByRetIdx[retIdx]; !ok {
@@ -99,11 +95,11 @@ func NewModule(mc ModuleConfig) modules.Module {
 
 		storedBatch, found := state.batchStore[batchID]
 		if !found {
-			batchdbpbdsl.LookupBatchResponse(m, origin.Module, false, nil, nil, origin)
+			batchdbpbdsl.LookupBatchResponse(m, origin.Module, false, nil, origin)
 			return nil
 		}
 
-		batchdbpbdsl.LookupBatchResponse(m, origin.Module, true, storedBatch.txs, storedBatch.metadata, origin)
+		batchdbpbdsl.LookupBatchResponse(m, origin.Module, true, storedBatch.txs, origin)
 		return nil
 	})
 
