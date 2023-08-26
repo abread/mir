@@ -7,7 +7,6 @@ import (
 	es "github.com/go-errors/errors"
 
 	"github.com/filecoin-project/mir/pkg/alea/broadcast/bccommon"
-	"github.com/filecoin-project/mir/pkg/alea/util"
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/logging"
 	bcpbdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/dsl"
@@ -79,7 +78,9 @@ func includeBatchFetching(
 			state.RequestsState[*slot] = reqState
 
 			// try resolving locally first
-			batchdbdsl.LookupBatch(m, mc.BatchDB, util.FormatAleaBatchID(slot), slot)
+			if cert, ok := certDB[*slot]; ok {
+				batchdbdsl.LookupBatch(m, mc.BatchDB, cert.BatchId, slot)
+			}
 		}
 
 		// add ourselves to the list of requestors in order to receive a reply
@@ -175,7 +176,7 @@ func includeBatchFetching(
 
 		if cert, ok := certDB[*slot]; ok {
 			// we have it! go get the batch
-			batchdbdsl.LookupBatch(m, mc.BatchDB, util.FormatAleaBatchID(slot), &lookupBatchOnRemoteRequestContext{from, cert})
+			batchdbdsl.LookupBatch(m, mc.BatchDB, cert.BatchId, &lookupBatchOnRemoteRequestContext{from, cert})
 		}
 		// TODO: send indication of no-reply
 

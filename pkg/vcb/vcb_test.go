@@ -121,7 +121,6 @@ func runTest(t *testing.T, conf *TestConfig) (heapObjects int64, heapAlloc int64
 	for _, replica := range deployment.TestReplicas {
 		// Check if all requests were delivered exactly once in all replicas.
 		app := replica.Modules["app"].(*countingApp)
-		fmt.Printf("%v", *app)
 		assert.Equal(t, 1, app.deliveredCount)
 		assert.Equal(t, types.ModuleID("vcb"), app.firstSrcModule)
 		assert.Equal(t, app0.firstBatchID, app.firstBatchID)

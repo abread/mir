@@ -20,12 +20,6 @@ type vcbPayloadManager struct {
 func (mgr *vcbPayloadManager) init(m dsl.Module, mc ModuleConfig, params *ModuleParams) {
 	mempoolpbdsl.UponTransactionIDsResponse(m, func(txIDs []tt.TxID, context *vcbPayloadMgrInputTxs) error {
 		mgr.txIDs = txIDs
-
-		idsBytes := make([][]byte, len(txIDs))
-		for i, x := range txIDs {
-			idsBytes[i] = []byte(x)
-		}
-
 		mempoolpbdsl.RequestBatchID(m, mc.Mempool, txIDs, context)
 		return nil
 	})

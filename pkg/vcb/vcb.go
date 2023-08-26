@@ -143,10 +143,8 @@ func NewModule(mc ModuleConfig, params ModuleParams, nodeID t.NodeID, logger log
 		switch state.phase {
 		case VcbPhaseAwaitingNilDelivery:
 			logger.Log(logging.LevelWarn, "delivering failure")
-			// nothing to deliver, we'll just skip to the part where we do nothing
+			// nothing to deliver, we'll just hang indefinitely
 			// TODO: mark byz node
-			state.phase = VcbPhaseDelivered
-			return nil
 		case VcbPhaseAwaitingOkDelivery:
 			// logger.Log(logging.LevelDebug, "delivering batch", "txs", state.payload.Txs(), "sig", state.sig)
 			vcbdsl.Deliver(m, mc.Consumer,
