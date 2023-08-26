@@ -22,7 +22,7 @@ func includeCertVerification(m dsl.Module, mc bccommon.ModuleConfig, params bcco
 
 		sigData := vcb.SigData(
 			bccommon.VCBInstanceUID(params.InstanceUID, aleaCert.Slot.QueueIdx, aleaCert.Slot.QueueSlot),
-			aleaCert.BatchDigest,
+			aleaCert.BatchId,
 		)
 		threshcryptopbdsl.VerifyFull(m, mc.ThreshCrypto, sigData, aleaCert.Signature, origin)
 		return nil

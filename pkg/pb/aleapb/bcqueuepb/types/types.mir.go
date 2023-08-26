@@ -286,7 +286,7 @@ func (*InputValue) MirReflect() mirreflect.Type {
 }
 
 type Deliver struct {
-	Slot *types2.Slot
+	Cert *types2.Cert
 }
 
 func DeliverFromPb(pb *bcqueuepb.Deliver) *Deliver {
@@ -294,7 +294,7 @@ func DeliverFromPb(pb *bcqueuepb.Deliver) *Deliver {
 		return nil
 	}
 	return &Deliver{
-		Slot: types2.SlotFromPb(pb.Slot),
+		Cert: types2.CertFromPb(pb.Cert),
 	}
 }
 
@@ -304,8 +304,8 @@ func (m *Deliver) Pb() *bcqueuepb.Deliver {
 	}
 	pbMessage := &bcqueuepb.Deliver{}
 	{
-		if m.Slot != nil {
-			pbMessage.Slot = (m.Slot).Pb()
+		if m.Cert != nil {
+			pbMessage.Cert = (m.Cert).Pb()
 		}
 	}
 

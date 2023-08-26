@@ -85,17 +85,17 @@ func newBcEstimators(m dsl.Module, mc bccommon.ModuleConfig, params bccommon.Mod
 		return nil
 	})
 
-	bcqueuepbdsl.UponDeliver(m, func(slot *bcpbtypes.Slot) error {
-		if start, ok := estimators.bcStartTimes[*slot]; ok {
+	bcqueuepbdsl.UponDeliver(m, func(cert *bcpbtypes.Cert) error {
+		if start, ok := estimators.bcStartTimes[*cert.Slot]; ok {
 			duration := time.Since(start)
 
-			if slot.QueueIdx == ownQueueIdx {
+			if cert.Slot.QueueIdx == ownQueueIdx {
 				estimators.ownBcDuration.AddSample(duration)
 			} else {
-				estimators.extBcDuration.AddSample(int(slot.QueueIdx), duration)
+				estimators.extBcDuration.AddSample(int(cert.Slot.QueueIdx), duration)
 			}
 
-			delete(estimators.bcStartTimes, *slot)
+			delete(estimators.bcStartTimes, *cert.Slot)
 
 			estimators.estimatesModified = true
 		}

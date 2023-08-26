@@ -14,10 +14,12 @@ import (
 func New(mc bccommon.ModuleConfig, params bccommon.ModuleParams, tunables bccommon.ModuleTunables, nodeID t.NodeID, logger logging.Logger) modules.PassiveModule {
 	m := dsl.NewModule(mc.Self)
 
+	certDB := make(map[bcpbtypes.Slot]*bcpbtypes.Cert)
+
 	est := newBcEstimators(m, mc, params, tunables, nodeID)
 	includeCertVerification(m, mc, params)
-	includeCertCreation(m, mc, params, nodeID)
-	includeBatchFetching(m, mc, params, logger, est)
+	includeCertCreation(m, mc, params, nodeID, certDB)
+	includeBatchFetching(m, mc, params, logger, certDB, est)
 
 	bcpbdsl.UponFreeSlot(m, func(slot *bcpbtypes.Slot) error {
 		// propagate event to queue

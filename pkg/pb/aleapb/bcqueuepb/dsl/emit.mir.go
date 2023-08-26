@@ -20,8 +20,8 @@ func InputValue(m dsl.Module, destModule types.ModuleID, queueSlot aleatypes.Que
 	dsl.EmitEvent(m, events.InputValue(destModule, queueSlot, txs))
 }
 
-func Deliver(m dsl.Module, destModule types.ModuleID, slot *types2.Slot) {
-	dsl.EmitEvent(m, events.Deliver(destModule, slot))
+func Deliver(m dsl.Module, destModule types.ModuleID, cert *types2.Cert) {
+	dsl.EmitEvent(m, events.Deliver(destModule, cert))
 }
 
 func FreeSlot(m dsl.Module, destModule types.ModuleID, queueSlot aleatypes.QueueSlot) {

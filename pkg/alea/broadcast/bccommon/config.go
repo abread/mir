@@ -10,7 +10,6 @@ type ModuleConfig struct {
 	Mempool      t.ModuleID
 	Net          t.ModuleID
 	ReliableNet  t.ModuleID
-	Hasher       t.ModuleID
 	ThreshCrypto t.ModuleID
 	Timer        t.ModuleID
 }

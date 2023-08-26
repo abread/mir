@@ -540,9 +540,8 @@ func (*FillGapMessage) MirReflect() mirreflect.Type {
 }
 
 type FillerMessage struct {
-	Slot      *Slot
-	Txs       []*types.Transaction
-	Signature tctypes.FullSig
+	Cert *Cert
+	Txs  []*types.Transaction
 }
 
 func FillerMessageFromPb(pb *bcpb.FillerMessage) *FillerMessage {
@@ -550,11 +549,10 @@ func FillerMessageFromPb(pb *bcpb.FillerMessage) *FillerMessage {
 		return nil
 	}
 	return &FillerMessage{
-		Slot: SlotFromPb(pb.Slot),
+		Cert: CertFromPb(pb.Cert),
 		Txs: types1.ConvertSlice(pb.Txs, func(t *trantorpb.Transaction) *types.Transaction {
 			return types.TransactionFromPb(t)
 		}),
-		Signature: (tctypes.FullSig)(pb.Signature),
 	}
 }
 
@@ -564,13 +562,12 @@ func (m *FillerMessage) Pb() *bcpb.FillerMessage {
 	}
 	pbMessage := &bcpb.FillerMessage{}
 	{
-		if m.Slot != nil {
-			pbMessage.Slot = (m.Slot).Pb()
+		if m.Cert != nil {
+			pbMessage.Cert = (m.Cert).Pb()
 		}
 		pbMessage.Txs = types1.ConvertSlice(m.Txs, func(t *types.Transaction) *trantorpb.Transaction {
 			return (t).Pb()
 		})
-		pbMessage.Signature = ([]uint8)(m.Signature)
 	}
 
 	return pbMessage
@@ -613,9 +610,9 @@ func (*Slot) MirReflect() mirreflect.Type {
 }
 
 type Cert struct {
-	Slot        *Slot
-	BatchDigest []uint8
-	Signature   tctypes.FullSig
+	Slot      *Slot
+	BatchId   string
+	Signature tctypes.FullSig
 }
 
 func CertFromPb(pb *bcpb.Cert) *Cert {
@@ -623,9 +620,9 @@ func CertFromPb(pb *bcpb.Cert) *Cert {
 		return nil
 	}
 	return &Cert{
-		Slot:        SlotFromPb(pb.Slot),
-		BatchDigest: pb.BatchDigest,
-		Signature:   (tctypes.FullSig)(pb.Signature),
+		Slot:      SlotFromPb(pb.Slot),
+		BatchId:   pb.BatchId,
+		Signature: (tctypes.FullSig)(pb.Signature),
 	}
 }
 
@@ -638,7 +635,7 @@ func (m *Cert) Pb() *bcpb.Cert {
 		if m.Slot != nil {
 			pbMessage.Slot = (m.Slot).Pb()
 		}
-		pbMessage.BatchDigest = m.BatchDigest
+		pbMessage.BatchId = m.BatchId
 		pbMessage.Signature = ([]uint8)(m.Signature)
 	}
 

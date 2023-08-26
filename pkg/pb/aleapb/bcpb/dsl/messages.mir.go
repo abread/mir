@@ -8,7 +8,6 @@ import (
 	dsl1 "github.com/filecoin-project/mir/pkg/pb/messagepb/dsl"
 	types2 "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
 	types3 "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
-	tctypes "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 	types1 "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -31,8 +30,8 @@ func UponFillGapMessageReceived(m dsl.Module, handler func(from types1.NodeID, s
 	})
 }
 
-func UponFillerMessageReceived(m dsl.Module, handler func(from types1.NodeID, slot *types.Slot, txs []*types3.Transaction, signature tctypes.FullSig) error) {
+func UponFillerMessageReceived(m dsl.Module, handler func(from types1.NodeID, cert *types.Cert, txs []*types3.Transaction) error) {
 	UponMessageReceived[*types.Message_FillerMessage](m, func(from types1.NodeID, msg *types.FillerMessage) error {
-		return handler(from, msg.Slot, msg.Txs, msg.Signature)
+		return handler(from, msg.Cert, msg.Txs)
 	})
 }

@@ -33,9 +33,9 @@ func UponInputValue(m dsl.Module, handler func(queueSlot aleatypes.QueueSlot, tx
 	})
 }
 
-func UponDeliver(m dsl.Module, handler func(slot *types3.Slot) error) {
+func UponDeliver(m dsl.Module, handler func(cert *types3.Cert) error) {
 	UponEvent[*types.Event_Deliver](m, func(ev *types.Deliver) error {
-		return handler(ev.Slot)
+		return handler(ev.Cert)
 	})
 }
 

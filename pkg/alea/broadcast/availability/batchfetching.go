@@ -20,19 +20,15 @@ import (
 	availabilitypbtypes "github.com/filecoin-project/mir/pkg/pb/availabilitypb/types"
 	eventpbevents "github.com/filecoin-project/mir/pkg/pb/eventpb/events"
 	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
-	hasherpbdsl "github.com/filecoin-project/mir/pkg/pb/hasherpb/dsl"
-	hasherpbtypes "github.com/filecoin-project/mir/pkg/pb/hasherpb/types"
 	mempooldsl "github.com/filecoin-project/mir/pkg/pb/mempoolpb/dsl"
 	rnetdsl "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/dsl"
 	threshDsl "github.com/filecoin-project/mir/pkg/pb/threshcryptopb/dsl"
 	transportpbdsl "github.com/filecoin-project/mir/pkg/pb/transportpb/dsl"
 	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	"github.com/filecoin-project/mir/pkg/reliablenet/rntypes"
-	"github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 	"github.com/filecoin-project/mir/pkg/timer/types"
 	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 	t "github.com/filecoin-project/mir/pkg/types"
-	"github.com/filecoin-project/mir/pkg/util/sliceutil"
 	"github.com/filecoin-project/mir/pkg/vcb"
 )
 
@@ -55,6 +51,7 @@ func includeBatchFetching(
 	mc bccommon.ModuleConfig,
 	params bccommon.ModuleParams,
 	logger logging.Logger,
+	certDB map[bcpbtypes.Slot]*bcpbtypes.Cert,
 	est *bcEstimators,
 ) {
 	_ = logger // silence warnings
@@ -92,13 +89,13 @@ func includeBatchFetching(
 	})
 
 	// if broadcast delivers for a batch being requested, we can *now* resolve it locally
-	bcqueuepbdsl.UponDeliver(m, func(slot *bcpbtypes.Slot) error {
-		if _, present := state.RequestsState[*slot]; present {
+	bcqueuepbdsl.UponDeliver(m, func(cert *bcpbtypes.Cert) error {
+		if _, present := state.RequestsState[*cert.Slot]; present {
 			// TODO: avoid concurrent lookups of the same batch?
 			// if bc delivers right after the transaction starts, two lookups will be performed.
 
 			// retry locally, you will now succeed!
-			batchdbdsl.LookupBatch(m, mc.BatchDB, util.FormatAleaBatchID(slot), slot)
+			batchdbdsl.LookupBatch(m, mc.BatchDB, cert.BatchId, cert.Slot)
 		}
 
 		return nil
@@ -176,30 +173,36 @@ func includeBatchFetching(
 	bcpbdsl.UponFillGapMessageReceived(m, func(from t.NodeID, slot *bcpbtypes.Slot) error {
 		// do not ACK message - acknowledging means sending a FILLER reply
 
-		// logger.Log(logging.LevelDebug, "satisfying FILL-GAP request", "queueIdx", slot.QueueIdx, "queueSlot", slot.QueueSlot, "from", from)
-		batchdbdsl.LookupBatch(m, mc.BatchDB, util.FormatAleaBatchID(slot), &lookupBatchOnRemoteRequestContext{from, slot})
+		if cert, ok := certDB[*slot]; ok {
+			// we have it! go get the batch
+			batchdbdsl.LookupBatch(m, mc.BatchDB, util.FormatAleaBatchID(slot), &lookupBatchOnRemoteRequestContext{from, cert})
+		}
+		// TODO: send indication of no-reply
+
 		return nil
 	})
 
 	// If the batch is found in the local storage, send it to the requesting node.
-	batchdbdsl.UponLookupBatchResponse(m, func(found bool, txs []*trantorpbtypes.Transaction, signature []byte, context *lookupBatchOnRemoteRequestContext) error {
+	batchdbdsl.UponLookupBatchResponse(m, func(found bool, txs []*trantorpbtypes.Transaction, _ []byte, context *lookupBatchOnRemoteRequestContext) error {
 		if !found {
-			// Ignore invalid request.
-			return nil
+			return es.Errorf("inconsistency between dbs: cert was in certdb, but no batch present")
 		}
 
+		// logger.Log(logging.LevelDebug, "satisfying FILL-GAP request", "queueIdx", slot.QueueIdx, "queueSlot", slot.QueueSlot, "from", from)
 		transportpbdsl.SendMessage(m, mc.Net,
-			bcpbmsgs.FillerMessage(mc.Self, context.slot, txs, signature),
+			bcpbmsgs.FillerMessage(mc.Self, context.cert, txs),
 			[]t.NodeID{context.requester},
 		)
 		return nil
 	})
 
-	// When receive a requested batch, compute the ids of the received transactions.
-	bcpbdsl.UponFillerMessageReceived(m, func(from t.NodeID, slot *bcpbtypes.Slot, txs []*trantorpbtypes.Transaction, signature tctypes.FullSig) error {
-		rnetdsl.MarkRecvd(m, mc.ReliableNet, mc.Self, FillGapMsgID(slot), []t.NodeID{from})
+	// After receiving a Filler message, we must validate the provided information (batchID, signature)
+	bcpbdsl.UponFillerMessageReceived(m, func(from t.NodeID, cert *bcpbtypes.Cert, txs []*trantorpbtypes.Transaction) error {
+		rnetdsl.MarkRecvd(m, mc.ReliableNet, mc.Self, FillGapMsgID(cert.Slot), []t.NodeID{from})
 
-		reqState, present := state.RequestsState[*slot]
+		// TODO: do this smartly and try one node at a time instead of broadcasting FILL-GAP
+
+		reqState, present := state.RequestsState[*cert.Slot]
 		if !present || reqState.Replies == nil {
 			return nil // no request needs this message to be satisfied
 		}
@@ -211,51 +214,56 @@ func includeBatchFetching(
 
 		// logger.Log(logging.LevelDebug, "got FILLER for missing slot!", "queueIdx", slot.QueueIdx, "queueSlot", slot.QueueSlot, "from", from)
 
+		// compute tx ids in order to compute batch ID
 		mempooldsl.RequestTransactionIDs(m, mc.Mempool, txs, &handleFillerContext{
-			slot:      slot,
-			txs:       txs,
-			signature: signature,
+			cert: cert,
+			txs:  txs,
 		})
 		return nil
 	})
-
-	// Compute signature data
 	mempooldsl.UponTransactionIDsResponse(m, func(txIDs []tt.TxID, context *handleFillerContext) error {
-		context.txIDs = txIDs
-		hasherpbdsl.RequestOne(m, mc.Hasher, &hasherpbtypes.HashData{
-			Data: sliceutil.Transform(txIDs, func(i int, txID tt.TxID) []byte {
-				return []byte(txID)
-			}),
-		}, context)
+		// compute batch ID
+		mempooldsl.RequestBatchID(m, mc.Mempool, txIDs, context)
 		return nil
 	})
-	hasherpbdsl.UponResultOne(m, func(txIDsHash []byte, context *handleFillerContext) error {
-		sigData := certSigData(params.InstanceUID, context.slot, txIDsHash)
-		threshDsl.VerifyFull(m, mc.ThreshCrypto, sigData, context.signature, context)
-
-		return nil
-	})
-
-	// Check if signature is correct
-	threshDsl.UponVerifyFullResult(m, func(ok bool, err string, context *handleFillerContext) error {
-		if !ok {
-			// TODO: do this the smart way to avoid needless traffic and send requests to other nodes here
-			// also go ahead and ensure that no request goes unanswered
+	mempooldsl.UponBatchIDResponse(m, func(batchId string, context *handleFillerContext) error {
+		// check batchID
+		if context.cert.BatchId != batchId {
+			// TODO: report node as byz
+			// TODO: do this smartly and try another node here instead of broadcasting FILL-GAP
 			return nil
 		}
 
-		requestState, ok := state.RequestsState[*context.slot]
+		if _, ok := state.RequestsState[*context.cert.Slot]; !ok {
+			// The request has already been completed.
+			// Don't bother with verifying the signature
+			return nil
+		}
+
+		// check signature
+		sigData := certSigData(&params, context.cert)
+		threshDsl.VerifyFull(m, mc.ThreshCrypto, sigData, context.cert.Signature, context)
+		return nil
+	})
+	threshDsl.UponVerifyFullResult(m, func(ok bool, err string, context *handleFillerContext) error {
+		if !ok {
+			// TODO: report node as byz
+			// TODO: do this smartly and try another node here instead of broadcasting FILL-GAP
+			return nil
+		}
+
+		requestState, ok := state.RequestsState[*context.cert.Slot]
 		if !ok {
 			// The request has already been completed.
 			return nil
 		}
 
 		// stop asking other nodes to send us stuff
-		rnetdsl.MarkRecvd(m, mc.ReliableNet, mc.Self, FillGapMsgID(context.slot), params.AllNodes)
+		rnetdsl.MarkRecvd(m, mc.ReliableNet, mc.Self, FillGapMsgID(context.cert.Slot), params.AllNodes)
 
-		// store batch asynchronously
+		// store batch/cert asynchronously
 		// TODO: proper epochs (retention index)
-		batchdbdsl.StoreBatch(m, mc.BatchDB, util.FormatAleaBatchID(context.slot), context.txs, tt.RetentionIndex(0), context.signature /*metadata*/, context)
+		batchdbdsl.StoreBatch(m, mc.BatchDB, context.cert.BatchId, context.txs, tt.RetentionIndex(0), nil, context)
 
 		// send response to requests
 		// logger.Log(logging.LevelDebug, "satisfying delayed requests with FILLER", "queueIdx", context.slot.QueueIdx, "queueSlot", context.slot.QueueSlot)
@@ -263,21 +271,26 @@ func includeBatchFetching(
 			availabilitypbdsl.ProvideTransactions(m, origin.Module, context.txs, origin)
 		}
 		mempooldsl.MarkDelivered(m, mc.Mempool, context.txs)
-		delete(state.RequestsState, *context.slot)
+		delete(state.RequestsState, *context.cert.Slot)
 
 		return nil
 	})
 
 	batchdbdsl.UponBatchStored(m, func(context *handleFillerContext) error {
-		bcqueuepbdsl.FreeSlot(m, bccommon.BcQueueModuleID(mc.Self, context.slot.QueueIdx), context.slot.QueueSlot)
+		// batch is stored, we can now store the corresponding cert
+		certDB[*context.cert.Slot] = context.cert
+
+		// this means the corresponding broadcast was completed, albeit through a non-convetional path
+		// we can free the vcb instance for this slot
+		bcqueuepbdsl.FreeSlot(m, bccommon.BcQueueModuleID(mc.Self, context.cert.Slot.QueueIdx), context.cert.Slot.QueueSlot)
 		return nil
 	})
 }
 
-func certSigData(instanceUID []byte, slot *bcpbtypes.Slot, txIDsHash []byte) [][]byte {
-	aleaUID := instanceUID[:len(instanceUID)-1]
+func certSigData(params *bccommon.ModuleParams, cert *bcpbtypes.Cert) [][]byte {
+	aleaUID := params.InstanceUID[:len(params.InstanceUID)-1]
 	aleaBcInstanceUID := append(aleaUID, 'b')
-	return vcb.SigData(bccommon.VCBInstanceUID(aleaBcInstanceUID, slot.QueueIdx, slot.QueueSlot), txIDsHash)
+	return vcb.SigData(bccommon.VCBInstanceUID(aleaBcInstanceUID, cert.Slot.QueueIdx, cert.Slot.QueueSlot), cert.BatchId)
 }
 
 const (
@@ -292,13 +305,10 @@ func FillGapMsgID(slot *bcpbtypes.Slot) rntypes.MsgID {
 
 type lookupBatchOnRemoteRequestContext struct {
 	requester t.NodeID
-	slot      *bcpbtypes.Slot
+	cert      *bcpbtypes.Cert
 }
 
 type handleFillerContext struct {
-	slot      *bcpbtypes.Slot
-	txs       []*trantorpbtypes.Transaction
-	signature []byte
-
-	txIDs []tt.TxID
+	cert *bcpbtypes.Cert
+	txs  []*trantorpbtypes.Transaction
 }

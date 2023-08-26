@@ -22,7 +22,13 @@ type certCreationState struct {
 	nextQueueSlot aleatypes.QueueSlot
 }
 
-func includeCertCreation(m dsl.Module, mc bccommon.ModuleConfig, params bccommon.ModuleParams, nodeID t.NodeID) {
+func includeCertCreation(
+	m dsl.Module,
+	mc bccommon.ModuleConfig,
+	params bccommon.ModuleParams,
+	nodeID t.NodeID,
+	certDB map[bcpbtypes.Slot]*bcpbtypes.Cert,
+) {
 	ownQueueIdx := aleatypes.QueueIdx(slices.Index(params.AllNodes, nodeID))
 	ownQueueModuleID := bccommon.BcQueueModuleID(mc.Self, ownQueueIdx)
 	state := &certCreationState{}
@@ -44,23 +50,18 @@ func includeCertCreation(m dsl.Module, mc bccommon.ModuleConfig, params bccommon
 		return nil
 	})
 
-	bcqueuepbdsl.UponDeliver(m, func(slot *bcpbtypes.Slot) error {
-		cert := &bcpbtypes.Cert{
-			Slot: slot,
-
-			// TODO: propagate from VCB
-			BatchDigest: []uint8{},
-			Signature:   []byte{},
-		}
-
-		if slot.QueueIdx == ownQueueIdx {
+	bcqueuepbdsl.UponDeliver(m, func(cert *bcpbtypes.Cert) error {
+		if cert.Slot.QueueIdx == ownQueueIdx {
 			// free slot in own queue immediately
 			// this is required to avoid a concurrency issue between FreeSlot and RequestCert (FreeSlot
 			// sent at the same time of RequestCert, but InputValue may technically reach queue before FreeSlot)
 			// modring is lazy in deleting modules so timers will progress until the slot is reused
 
-			bcqueuepbdsl.FreeSlot(m, ownQueueModuleID, slot.QueueSlot)
+			bcqueuepbdsl.FreeSlot(m, ownQueueModuleID, cert.Slot.QueueSlot)
 		}
+
+		// register that we received this batch
+		certDB[*cert.Slot] = cert
 
 		bcpbdsl.DeliverCert(m, mc.Consumer, cert)
 		return nil

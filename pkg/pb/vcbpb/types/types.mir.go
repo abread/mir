@@ -9,8 +9,7 @@ import (
 	types "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	vcbpb "github.com/filecoin-project/mir/pkg/pb/vcbpb"
 	tctypes "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
-	types2 "github.com/filecoin-project/mir/pkg/trantor/types"
-	types3 "github.com/filecoin-project/mir/pkg/types"
+	types2 "github.com/filecoin-project/mir/pkg/types"
 	reflectutil "github.com/filecoin-project/mir/pkg/util/reflectutil"
 )
 
@@ -203,10 +202,9 @@ func (*InputValue) MirReflect() mirreflect.Type {
 }
 
 type Deliver struct {
-	Txs       []*types.Transaction
-	TxIds     []types2.TxID
+	BatchId   string
 	Signature tctypes.FullSig
-	SrcModule types3.ModuleID
+	SrcModule types2.ModuleID
 }
 
 func DeliverFromPb(pb *vcbpb.Deliver) *Deliver {
@@ -214,14 +212,9 @@ func DeliverFromPb(pb *vcbpb.Deliver) *Deliver {
 		return nil
 	}
 	return &Deliver{
-		Txs: types1.ConvertSlice(pb.Txs, func(t *trantorpb.Transaction) *types.Transaction {
-			return types.TransactionFromPb(t)
-		}),
-		TxIds: types1.ConvertSlice(pb.TxIds, func(t []uint8) types2.TxID {
-			return (types2.TxID)(t)
-		}),
+		BatchId:   pb.BatchId,
 		Signature: (tctypes.FullSig)(pb.Signature),
-		SrcModule: (types3.ModuleID)(pb.SrcModule),
+		SrcModule: (types2.ModuleID)(pb.SrcModule),
 	}
 }
 
@@ -231,12 +224,7 @@ func (m *Deliver) Pb() *vcbpb.Deliver {
 	}
 	pbMessage := &vcbpb.Deliver{}
 	{
-		pbMessage.Txs = types1.ConvertSlice(m.Txs, func(t *types.Transaction) *trantorpb.Transaction {
-			return (t).Pb()
-		})
-		pbMessage.TxIds = types1.ConvertSlice(m.TxIds, func(t types2.TxID) []uint8 {
-			return ([]uint8)(t)
-		})
+		pbMessage.BatchId = m.BatchId
 		pbMessage.Signature = ([]uint8)(m.Signature)
 		pbMessage.SrcModule = (string)(m.SrcModule)
 	}
@@ -249,7 +237,7 @@ func (*Deliver) MirReflect() mirreflect.Type {
 }
 
 type QuorumDone struct {
-	SrcModule types3.ModuleID
+	SrcModule types2.ModuleID
 }
 
 func QuorumDoneFromPb(pb *vcbpb.QuorumDone) *QuorumDone {
@@ -257,7 +245,7 @@ func QuorumDoneFromPb(pb *vcbpb.QuorumDone) *QuorumDone {
 		return nil
 	}
 	return &QuorumDone{
-		SrcModule: (types3.ModuleID)(pb.SrcModule),
+		SrcModule: (types2.ModuleID)(pb.SrcModule),
 	}
 }
 
@@ -278,7 +266,7 @@ func (*QuorumDone) MirReflect() mirreflect.Type {
 }
 
 type AllDone struct {
-	SrcModule types3.ModuleID
+	SrcModule types2.ModuleID
 }
 
 func AllDoneFromPb(pb *vcbpb.AllDone) *AllDone {
@@ -286,7 +274,7 @@ func AllDoneFromPb(pb *vcbpb.AllDone) *AllDone {
 		return nil
 	}
 	return &AllDone{
-		SrcModule: (types3.ModuleID)(pb.SrcModule),
+		SrcModule: (types2.ModuleID)(pb.SrcModule),
 	}
 }
 

@@ -17,6 +17,7 @@ import (
 	"github.com/otiai10/copy"
 
 	"github.com/filecoin-project/mir"
+	"github.com/filecoin-project/mir/pkg/availability/batchdb/fakebatchdb"
 	mirCrypto "github.com/filecoin-project/mir/pkg/crypto"
 	"github.com/filecoin-project/mir/pkg/deploytest"
 	"github.com/filecoin-project/mir/pkg/dsl"
@@ -24,6 +25,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/mempool/simplemempool"
 	"github.com/filecoin-project/mir/pkg/modules"
+	batchdbpbdsl "github.com/filecoin-project/mir/pkg/pb/availabilitypb/batchdbpb/dsl"
 	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 	mpdsl "github.com/filecoin-project/mir/pkg/pb/mempoolpb/dsl"
 	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
@@ -60,7 +62,7 @@ func TestVcb(t *testing.T) {
 		NodeIDsWeight: deploytest.NewNodeIDsDefaultWeights(3*F + 1),
 		F:             F,
 		Transport:     "sim",
-		Duration:      10 * time.Second,
+		Duration:      15 * time.Second,
 	}
 
 	if v := os.Getenv("RANDOM_SEED"); v != "" {
@@ -119,11 +121,12 @@ func runTest(t *testing.T, conf *TestConfig) (heapObjects int64, heapAlloc int64
 	for _, replica := range deployment.TestReplicas {
 		// Check if all requests were delivered exactly once in all replicas.
 		app := replica.Modules["app"].(*countingApp)
+		fmt.Printf("%v", *app)
 		assert.Equal(t, 1, app.deliveredCount)
 		assert.Equal(t, types.ModuleID("vcb"), app.firstSrcModule)
-		// TODO: check request data
-		assert.ElementsMatch(t, app0.firstTxIDs, app.firstTxIDs)
+		assert.Equal(t, app0.firstBatchID, app.firstBatchID)
 		assert.ElementsMatch(t, app0.firstSignature, app.firstSignature)
+		// TODO: check request data
 
 		// Check that all messages were properly ACKed
 		rnet := replica.Modules["reliablenet"].(*reliablenet.Module)
@@ -182,16 +185,20 @@ func newDeployment(conf *TestConfig) (*deploytest.Deployment, error) {
 			Consumer:     "app",
 			Net:          "net",
 			ReliableNet:  "reliablenet",
-			Hasher:       "hasher",
 			ThreshCrypto: "threshcrypto",
 			Mempool:      "mempool",
+			BatchDB:      "batchdb",
 		}
+
+		batchDB := fakebatchdb.NewModule(fakebatchdb.ModuleConfig{
+			Self: vcbConfig.BatchDB,
+		})
 
 		// Use a simple mempool for incoming requests.
 		mempool := simplemempool.NewModule(
 			simplemempool.ModuleConfig{
 				Self:   vcbConfig.Mempool,
-				Hasher: vcbConfig.Hasher,
+				Hasher: "hasher",
 			},
 			&simplemempool.ModuleParams{
 				MaxTransactionsInBatch: 10,
@@ -199,10 +206,11 @@ func newDeployment(conf *TestConfig) (*deploytest.Deployment, error) {
 			logging.Decorate(nodeLogger, "Mempool: "),
 		)
 
-		vcb := NewModule(vcbConfig, &ModuleParams{
-			InstanceUID: []byte{0},
-			AllNodes:    nodeIDs,
-			Leader:      leader,
+		vcb := NewModule(vcbConfig, ModuleParams{
+			InstanceUID:      []byte{0},
+			RetentitionIndex: tt.RetentionIndex(0),
+			AllNodes:         nodeIDs,
+			Leader:           leader,
 		}, nodeID, logging.Decorate(nodeLogger, "Vcb: "))
 
 		// Use a small retransmission delay to increase likelihood of duplicate messages
@@ -233,9 +241,10 @@ func newDeployment(conf *TestConfig) (*deploytest.Deployment, error) {
 			vcbConfig.Self:         vcb,
 			vcbConfig.ThreshCrypto: tc,
 			vcbConfig.Mempool:      mempool,
-			vcbConfig.Hasher:       mirCrypto.NewHasher(crypto.SHA256),
+			"hasher":               mirCrypto.NewHasher(crypto.SHA256),
 			vcbConfig.ReliableNet:  rnet,
 			vcbConfig.Net:          transport,
+			vcbConfig.BatchDB:      batchDB,
 			"timer":                timer.New(),
 		}
 
@@ -261,9 +270,9 @@ type countingApp struct {
 
 	deliveredCount int
 	firstSrcModule types.ModuleID
-	firstData      []*trantorpbtypes.Transaction
-	firstTxIDs     []tt.TxID
+	firstBatchID   string
 	firstSignature tctypes.FullSig
+	firstData      []*trantorpbtypes.Transaction
 }
 
 func newCountingApp(isLeader bool) *countingApp {
@@ -300,16 +309,25 @@ func newCountingApp(isLeader bool) *countingApp {
 		})
 	}
 
-	vcbpbdsl.UponDeliver(m, func(data []*trantorpbtypes.Transaction, txIDs []tt.TxID, signature tctypes.FullSig, srcModule types.ModuleID) error {
+	vcbpbdsl.UponDeliver(m, func(batchID string, signature tctypes.FullSig, srcModule types.ModuleID) error {
 		if app.deliveredCount == 0 {
 			app.firstSrcModule = srcModule
-			app.firstData = data
-			app.firstTxIDs = txIDs
 			app.firstSignature = signature
+			app.firstBatchID = batchID
 		}
 
 		app.deliveredCount++
 
+		batchdbpbdsl.LookupBatch(m, "app", batchID, &struct{}{})
+		return nil
+	})
+
+	batchdbpbdsl.UponLookupBatchResponse(m, func(found bool, txs []*trantorpbtypes.Transaction, _ []uint8, _ *struct{}) error {
+		if !found {
+			return es.Errorf("vcb didn't store batch")
+		}
+
+		app.firstData = txs
 		return nil
 	})
 

@@ -226,7 +226,7 @@ func (at *AleaTracer) interceptOne(event *eventpbtypes.Event) error { // nolint:
 			at.endBcSpan(ts, slot)
 			at.endBcModSpan(ts, slot)
 		case *bcqueuepbtypes.Event_Deliver:
-			slot := e.Deliver.Slot
+			slot := e.Deliver.Cert.Slot
 
 			if slot.QueueIdx == at.ownQueueIdx && slot.QueueSlot == at.nextBatchToCut {
 				at.startBatchCutStallSpan(ts, at.nextBatchToCut)

@@ -100,9 +100,8 @@ message FillGapMessage {
 message FillerMessage {
   option (net.message) = true;
 
-  Slot                           slot      = 1;
-  repeated trantorpb.Transaction txs       = 2;
-  bytes                          signature = 3 [(mir.type) = "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes.FullSig"];
+  Cert                           cert = 1;
+  repeated trantorpb.Transaction txs  = 2;
 }
 
 // ============================================================
@@ -112,7 +111,7 @@ message FillerMessage {
 message Slot {
   option (mir.struct) = true;
 
-  uint32 queue_idx = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/alea/aleatypes.QueueIdx"];
+  uint32 queue_idx  = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/alea/aleatypes.QueueIdx"];
   uint64 queue_slot = 2 [(mir.type) = "github.com/filecoin-project/mir/pkg/alea/aleatypes.QueueSlot"];
 }
 
@@ -120,10 +119,7 @@ message Slot {
 message Cert {
   option (mir.struct) = true;
 
-  Slot slot = 1;
-
-  // hash of hashes of txids in batch
-  bytes batch_digest = 2;
-
-  bytes signature = 3 [(mir.type) = "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes.FullSig"];
+  Slot   slot      = 1;
+  string batch_id  = 2;
+  bytes  signature = 3 [(mir.type) = "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes.FullSig"];
 }

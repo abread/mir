@@ -6,7 +6,6 @@ import (
 	types1 "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/types"
 	types2 "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
 	types3 "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
-	tctypes "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 	types "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -25,16 +24,15 @@ func FillGapMessage(destModule types.ModuleID, slot *types1.Slot) *types2.Messag
 	}
 }
 
-func FillerMessage(destModule types.ModuleID, slot *types1.Slot, txs []*types3.Transaction, signature tctypes.FullSig) *types2.Message {
+func FillerMessage(destModule types.ModuleID, cert *types1.Cert, txs []*types3.Transaction) *types2.Message {
 	return &types2.Message{
 		DestModule: destModule,
 		Type: &types2.Message_AleaBroadcast{
 			AleaBroadcast: &types1.Message{
 				Type: &types1.Message_FillerMessage{
 					FillerMessage: &types1.FillerMessage{
-						Slot:      slot,
-						Txs:       txs,
-						Signature: signature,
+						Cert: cert,
+						Txs:  txs,
 					},
 				},
 			},

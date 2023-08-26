@@ -12,7 +12,6 @@ import (
 	ageventsdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents/dsl"
 	bcpbdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/dsl"
 	bcpbtypes "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/types"
-	bcqueuepbdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/dsl"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -83,15 +82,15 @@ func newEstimators(m dsl.Module, params ModuleParams, tunables ModuleTunables, n
 	// =============================================================================================
 	// Bc Runtime Tracking
 	// =============================================================================================
-	bcqueuepbdsl.UponBcStarted(m, func(slot *bcpbtypes.Slot) error {
+	bcpbdsl.UponBcStarted(m, func(slot *bcpbtypes.Slot) error {
 		if _, ok := est.bcStartTimes[*slot]; !ok {
 			est.bcStartTimes[*slot] = time.Now()
 		}
 
 		return nil
 	})
-	bcqueuepbdsl.UponDeliver(m, func(slotRef *bcpbtypes.Slot) error {
-		slot := *slotRef
+	bcpbdsl.UponDeliverCert(m, func(cert *bcpbtypes.Cert) error {
+		slot := *cert.Slot
 		delete(est.bcStartTimes, slot)
 		return nil
 	})

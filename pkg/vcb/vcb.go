@@ -17,6 +17,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/reliablenet/rntypes"
 	"github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 	"github.com/filecoin-project/mir/pkg/threshcrypto/tsagg"
+	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -26,17 +27,18 @@ type ModuleConfig struct {
 	Consumer     t.ModuleID
 	Net          t.ModuleID
 	ReliableNet  t.ModuleID
-	Hasher       t.ModuleID
 	ThreshCrypto t.ModuleID
 	Mempool      t.ModuleID
+	BatchDB      t.ModuleID
 }
 
 // ModuleParams sets the values for the parameters of an instance of the protocol.
 // All replicas are expected to use identical module parameters, apart from the Origin.
 type ModuleParams struct {
-	InstanceUID []byte     // unique identifier for this instance of VCB
-	AllNodes    []t.NodeID // the list of participating nodes, which must be the same as the set of nodes in the threshcrypto module
-	Leader      t.NodeID   // the id of the leader of the instance
+	InstanceUID      []byte // unique identifier for this instance of VCB
+	RetentitionIndex tt.RetentionIndex
+	AllNodes         []t.NodeID // the list of participating nodes, which must be the same as the set of nodes in the threshcrypto module
+	Leader           t.NodeID   // the id of the leader of the instance
 }
 
 // GetN returns the total number of nodes.
@@ -70,16 +72,16 @@ const (
 	VcbPhaseDelivered
 )
 
-func NewModule(mc ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger logging.Logger) modules.PassiveModule {
+func NewModule(mc ModuleConfig, params ModuleParams, nodeID t.NodeID, logger logging.Logger) modules.PassiveModule {
 	m := dsl.NewModule(mc.Self)
 
 	state := &state{
 		phase: VcbPhaseAwaitingSend,
 	}
-	state.payload.init(m, mc, params)
+	state.payload.init(m, mc, &params)
 
 	if nodeID == params.Leader {
-		setupVcbLeader(m, mc, params, logger, state)
+		setupVcbLeader(m, mc, &params, logger, state)
 	} else {
 		vcbdsl.UponInputValue(m, func(txs []*trantorpbtypes.Transaction) error {
 			return es.Errorf("vcb input provided for non-leader")
@@ -131,15 +133,24 @@ func NewModule(mc ModuleConfig, params *ModuleParams, nodeID t.NodeID, logger lo
 		return nil
 	})
 	dsl.UponStateUpdates(m, func() error {
+		if !state.payload.IsStored() {
+			// can't deliver if it's not stored yet
+			// Note: this check is required in the unlikely event that remote nodes can store&signshare faster
+			// than the local node can store.
+			return nil
+		}
+
 		switch state.phase {
 		case VcbPhaseAwaitingNilDelivery:
 			logger.Log(logging.LevelWarn, "delivering failure")
-			vcbdsl.Deliver(m, mc.Consumer, nil, nil, nil, mc.Self)
+			// nothing to deliver, we'll just skip to the part where we do nothing
+			// TODO: mark byz node
+			state.phase = VcbPhaseDelivered
+			return nil
 		case VcbPhaseAwaitingOkDelivery:
 			// logger.Log(logging.LevelDebug, "delivering batch", "txs", state.payload.Txs(), "sig", state.sig)
 			vcbdsl.Deliver(m, mc.Consumer,
-				state.payload.Txs(),
-				state.payload.TxIDs(),
+				state.payload.BatchID(),
 				state.sig,
 				mc.Self,
 			)

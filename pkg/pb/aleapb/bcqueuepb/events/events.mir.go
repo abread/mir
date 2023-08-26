@@ -30,14 +30,14 @@ func InputValue(destModule types.ModuleID, queueSlot aleatypes.QueueSlot, txs []
 	}
 }
 
-func Deliver(destModule types.ModuleID, slot *types4.Slot) *types2.Event {
+func Deliver(destModule types.ModuleID, cert *types4.Cert) *types2.Event {
 	return &types2.Event{
 		DestModule: destModule,
 		Type: &types2.Event_AleaBcqueue{
 			AleaBcqueue: &types3.Event{
 				Type: &types3.Event_Deliver{
 					Deliver: &types3.Deliver{
-						Slot: slot,
+						Cert: cert,
 					},
 				},
 			},

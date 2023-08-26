@@ -2,23 +2,23 @@ package vcb
 
 import (
 	"github.com/filecoin-project/mir/pkg/dsl"
-	hasherpbdsl "github.com/filecoin-project/mir/pkg/pb/hasherpb/dsl"
-	hasherpbtypes "github.com/filecoin-project/mir/pkg/pb/hasherpb/types"
-	mpdsl "github.com/filecoin-project/mir/pkg/pb/mempoolpb/dsl"
+	batchdbpbdsl "github.com/filecoin-project/mir/pkg/pb/availabilitypb/batchdbpb/dsl"
+	mempoolpbdsl "github.com/filecoin-project/mir/pkg/pb/mempoolpb/dsl"
 	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	tt "github.com/filecoin-project/mir/pkg/trantor/types"
-	"github.com/filecoin-project/mir/pkg/util/sliceutil"
 )
 
 type vcbPayloadManager struct {
-	txs       []*trantorpbtypes.Transaction
-	txIDs     []tt.TxID
-	txIDsHash []byte
-	sigData   [][]byte
+	txs     []*trantorpbtypes.Transaction
+	txIDs   []tt.TxID
+	batchID string
+	sigData [][]byte
+
+	batchStored bool
 }
 
 func (mgr *vcbPayloadManager) init(m dsl.Module, mc ModuleConfig, params *ModuleParams) {
-	mpdsl.UponTransactionIDsResponse(m, func(txIDs []tt.TxID, context *vcbPayloadMgrInputTxs) error {
+	mempoolpbdsl.UponTransactionIDsResponse(m, func(txIDs []tt.TxID, context *vcbPayloadMgrInputTxs) error {
 		mgr.txIDs = txIDs
 
 		idsBytes := make([][]byte, len(txIDs))
@@ -26,17 +26,20 @@ func (mgr *vcbPayloadManager) init(m dsl.Module, mc ModuleConfig, params *Module
 			idsBytes[i] = []byte(x)
 		}
 
-		hasherpbdsl.RequestOne(m, mc.Hasher,
-			&hasherpbtypes.HashData{Data: sliceutil.Transform(txIDs, func(_ int, txID tt.TxID) []byte {
-				return []byte(txID)
-			})},
-			context,
-		)
+		mempoolpbdsl.RequestBatchID(m, mc.Mempool, txIDs, context)
 		return nil
 	})
-	hasherpbdsl.UponResultOne(m, func(txIDsHash []byte, context *vcbPayloadMgrInputTxs) error {
-		mgr.txIDsHash = txIDsHash
-		mgr.sigData = SigData(params.InstanceUID, txIDsHash)
+
+	mempoolpbdsl.UponBatchIDResponse(m, func(batchID string, context *vcbPayloadMgrInputTxs) error {
+		mgr.batchID = batchID
+		mgr.sigData = SigData(params.InstanceUID, batchID)
+
+		batchdbpbdsl.StoreBatch(m, mc.BatchDB, batchID, mgr.txs, params.RetentitionIndex, nil, context)
+		return nil
+	})
+
+	batchdbpbdsl.UponBatchStored(m, func(_ *vcbPayloadMgrInputTxs) error {
+		mgr.batchStored = true
 		return nil
 	})
 }
@@ -49,7 +52,7 @@ func (mgr *vcbPayloadManager) Input(m dsl.Module, mc *ModuleConfig, txs []*trant
 	}
 
 	mgr.txs = txs
-	mpdsl.RequestTransactionIDs(m, mc.Mempool, txs, &vcbPayloadMgrInputTxs{})
+	mempoolpbdsl.RequestTransactionIDs(m, mc.Mempool, txs, &vcbPayloadMgrInputTxs{})
 }
 
 func (mgr *vcbPayloadManager) Txs() []*trantorpbtypes.Transaction {
@@ -60,10 +63,23 @@ func (mgr *vcbPayloadManager) TxIDs() []tt.TxID {
 	return mgr.txIDs
 }
 
-func (mgr *vcbPayloadManager) SigData() [][]byte {
-	return mgr.sigData
+func (mgr *vcbPayloadManager) BatchID() string {
+	return mgr.batchID
 }
 
-func SigData(instanceUID []byte, txIDsHash []byte) [][]byte {
-	return [][]byte{instanceUID, txIDsHash}
+func (mgr *vcbPayloadManager) SigData() [][]byte {
+	// Only allow signatures after persisting batch
+	if mgr.batchStored {
+		return mgr.sigData
+	}
+
+	return nil
+}
+
+func (mgr *vcbPayloadManager) IsStored() bool {
+	return mgr.batchStored
+}
+
+func SigData(instanceUID []byte, batchID string) [][]byte {
+	return [][]byte{instanceUID, []byte(batchID)}
 }

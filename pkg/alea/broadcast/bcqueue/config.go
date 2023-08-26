@@ -2,6 +2,7 @@ package bcqueue
 
 import (
 	"github.com/filecoin-project/mir/pkg/alea/aleatypes"
+	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -13,15 +14,15 @@ type ModuleConfig struct {
 	Mempool      t.ModuleID
 	Net          t.ModuleID
 	ReliableNet  t.ModuleID
-	Hasher       t.ModuleID
 	ThreshCrypto t.ModuleID
 }
 
 // ModuleParams sets the values for the parameters of an instance of the protocol.
 // All replicas are expected to use identical module parameters.
 type ModuleParams struct {
-	BcInstanceUID []byte
-	AllNodes      []t.NodeID // the list of participating nodes, which must be the same as the set of nodes in the threshcrypto module
+	BcInstanceUID  []byte
+	AllNodes       []t.NodeID // the list of participating nodes, which must be the same as the set of nodes in the threshcrypto module
+	RetentionIndex tt.RetentionIndex
 
 	QueueIdx   aleatypes.QueueIdx
 	QueueOwner t.NodeID

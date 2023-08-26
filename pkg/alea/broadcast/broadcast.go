@@ -100,7 +100,6 @@ func createQueues(bcMc ModuleConfig, bcParams ModuleParams, bcTunables ModuleTun
 			Mempool:      bcMc.Mempool,
 			Net:          bcMc.Net,
 			ReliableNet:  bcMc.ReliableNet,
-			Hasher:       bcMc.Hasher,
 			ThreshCrypto: bcMc.ThreshCrypto,
 		}
 

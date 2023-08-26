@@ -10,16 +10,14 @@ import (
 
 	"github.com/filecoin-project/mir/pkg/alea/aleatypes"
 	"github.com/filecoin-project/mir/pkg/alea/broadcast/bccommon"
-	aleaCommon "github.com/filecoin-project/mir/pkg/alea/util"
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/modring"
 	"github.com/filecoin-project/mir/pkg/modules"
 	bcpbtypes "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/types"
-	bcqueuedsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/dsl"
+	bcqueuepbdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/dsl"
 	bcqueuepbevents "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/events"
-	batchdbdsl "github.com/filecoin-project/mir/pkg/pb/availabilitypb/batchdbpb/dsl"
 	messagepbtypes "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
 	modringpbtypes "github.com/filecoin-project/mir/pkg/pb/modringpb/types"
 	reliablenetpbdsl "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/dsl"
@@ -30,7 +28,6 @@ import (
 	vcbpbmsgs "github.com/filecoin-project/mir/pkg/pb/vcbpb/msgs"
 	vcbpbtypes "github.com/filecoin-project/mir/pkg/pb/vcbpb/types"
 	"github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
-	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 	"github.com/filecoin-project/mir/pkg/vcb"
 )
@@ -53,7 +50,7 @@ func New(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, nodeID t
 func newQueueController(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, nodeID t.NodeID, logger logging.Logger, slots *modring.Module) modules.PassiveModule {
 	m := dsl.NewModule(mc.Self)
 
-	bcqueuedsl.UponInputValue(m, func(queueSlot aleatypes.QueueSlot, txs []*trantorpbtypes.Transaction) error {
+	bcqueuepbdsl.UponInputValue(m, func(queueSlot aleatypes.QueueSlot, txs []*trantorpbtypes.Transaction) error {
 		if len(txs) == 0 {
 			return es.Errorf("cannot broadcast an empty batch")
 		}
@@ -67,7 +64,7 @@ func newQueueController(mc ModuleConfig, params ModuleParams, tunables ModuleTun
 	})
 
 	// upon vcb deliver, store batch and deliver to broadcast component
-	vcbpbdsl.UponDeliver(m, func(txs []*trantorpbtypes.Transaction, txIds []tt.TxID, signature tctypes.FullSig, srcModule t.ModuleID) error {
+	vcbpbdsl.UponDeliver(m, func(batchID string, signature tctypes.FullSig, srcModule t.ModuleID) error {
 		queueSlotStr := srcModule.StripParent(mc.Self).Top()
 		queueSlot, err := strconv.ParseUint(string(queueSlotStr), 10, 64)
 		if err != nil {
@@ -79,16 +76,26 @@ func newQueueController(mc ModuleConfig, params ModuleParams, tunables ModuleTun
 			QueueSlot: aleatypes.QueueSlot(queueSlot),
 		}
 
-		// TODO: proper epochs (retention index)
-		batchdbdsl.StoreBatch(m, mc.BatchDB, aleaCommon.FormatAleaBatchID(slot), txs, tt.RetentionIndex(0), signature, slot)
+		logger.Log(logging.LevelDebug, "delivering broadcast", "queueSlot", slot.QueueSlot)
+		bcqueuepbdsl.Deliver(m, mc.Consumer, &bcpbtypes.Cert{
+			Slot:      slot,
+			BatchId:   batchID,
+			Signature: signature,
+		})
 		return nil
 	})
 
 	if params.QueueOwner == nodeID {
 		slotDeliverTimes := make(map[aleatypes.QueueSlot]time.Time, tunables.MaxConcurrentVcb)
 
-		batchdbdsl.UponBatchStored(m, func(slot *bcpbtypes.Slot) error {
-			slotDeliverTimes[slot.QueueSlot] = time.Now()
+		vcbpbdsl.UponDeliver(m, func(_ string, _ tctypes.FullSig, srcModule t.ModuleID) error {
+			queueSlotStr := srcModule.StripParent(mc.Self).Top()
+			queueSlot, err := strconv.ParseUint(string(queueSlotStr), 10, 64)
+			if err != nil {
+				return es.Errorf("deliver event for invalid round: %w", err)
+			}
+
+			slotDeliverTimes[aleatypes.QueueSlot(queueSlot)] = time.Now()
 			return nil
 		})
 
@@ -106,7 +113,7 @@ func newQueueController(mc ModuleConfig, params ModuleParams, tunables ModuleTun
 
 			if startTime, ok := slotDeliverTimes[slot.QueueSlot]; ok {
 				deliverDelta := time.Since(startTime)
-				bcqueuedsl.BcQuorumDone(m, mc.Consumer, slot, deliverDelta)
+				bcqueuepbdsl.BcQuorumDone(m, mc.Consumer, slot, deliverDelta)
 
 				// add delta to avoid including it in the fully done delta calc
 				slotDeliverTimes[slot.QueueSlot] = startTime.Add(deliverDelta)
@@ -129,25 +136,19 @@ func newQueueController(mc ModuleConfig, params ModuleParams, tunables ModuleTun
 
 			if startTime, ok := slotDeliverTimes[slot.QueueSlot]; ok {
 				deliverDelta := time.Since(startTime)
-				bcqueuedsl.BcAllDone(m, mc.Consumer, slot, deliverDelta)
+				bcqueuepbdsl.BcAllDone(m, mc.Consumer, slot, deliverDelta)
 			}
 
 			return nil
 		})
 
-		bcqueuedsl.UponFreeSlot(m, func(queueSlot aleatypes.QueueSlot) error {
+		bcqueuepbdsl.UponFreeSlot(m, func(queueSlot aleatypes.QueueSlot) error {
 			delete(slotDeliverTimes, queueSlot)
 			return nil
 		})
 	}
 
-	batchdbdsl.UponBatchStored(m, func(slot *bcpbtypes.Slot) error {
-		logger.Log(logging.LevelDebug, "delivering broadcast", "queueSlot", slot.QueueSlot)
-		bcqueuedsl.Deliver(m, mc.Consumer, slot)
-		return nil
-	})
-
-	bcqueuedsl.UponFreeSlot(m, func(queueSlot aleatypes.QueueSlot) error {
+	bcqueuepbdsl.UponFreeSlot(m, func(queueSlot aleatypes.QueueSlot) error {
 		// advance queue to not get stuck in old slots
 		// we could go to the latest slot, but if we center it around the latest slot, we can still
 		// recover slow broadcasts *and* accept new ones.
@@ -205,15 +206,15 @@ func newVcbGenerator(queueMc ModuleConfig, queueParams ModuleParams, nodeID t.No
 		Consumer:     queueMc.Self,
 		Net:          queueMc.Net,
 		ReliableNet:  queueMc.ReliableNet,
-		Hasher:       queueMc.Hasher,
 		ThreshCrypto: queueMc.ThreshCrypto,
 		Mempool:      queueMc.Mempool,
 	}
 
 	baseParams := vcb.ModuleParams{
-		InstanceUID: nil,
-		AllNodes:    queueParams.AllNodes,
-		Leader:      queueParams.QueueOwner,
+		InstanceUID:      nil,
+		RetentitionIndex: queueParams.RetentionIndex,
+		AllNodes:         queueParams.AllNodes,
+		Leader:           queueParams.QueueOwner,
 	}
 
 	return func(id t.ModuleID, idx uint64) (modules.PassiveModule, events.EventList, error) {
@@ -225,7 +226,7 @@ func newVcbGenerator(queueMc ModuleConfig, queueParams ModuleParams, nodeID t.No
 		params := baseParams
 		params.InstanceUID = bccommon.VCBInstanceUID(queueParams.BcInstanceUID, queueParams.QueueIdx, queueSlot)
 
-		mod := vcb.NewModule(mc, &params, nodeID, logging.Decorate(logger, "Vcb: ", "slot", idx))
+		mod := vcb.NewModule(mc, params, nodeID, logging.Decorate(logger, "Vcb: ", "slot", idx))
 
 		return mod, events.ListOf(
 			bcqueuepbevents.BcStarted(queueMc.Consumer, &bcpbtypes.Slot{

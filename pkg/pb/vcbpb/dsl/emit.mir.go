@@ -7,7 +7,6 @@ import (
 	types1 "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	events "github.com/filecoin-project/mir/pkg/pb/vcbpb/events"
 	tctypes "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
-	types2 "github.com/filecoin-project/mir/pkg/trantor/types"
 	types "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -17,8 +16,8 @@ func InputValue(m dsl.Module, destModule types.ModuleID, txs []*types1.Transacti
 	dsl.EmitEvent(m, events.InputValue(destModule, txs))
 }
 
-func Deliver(m dsl.Module, destModule types.ModuleID, txs []*types1.Transaction, txIds []types2.TxID, signature tctypes.FullSig, srcModule types.ModuleID) {
-	dsl.EmitEvent(m, events.Deliver(destModule, txs, txIds, signature, srcModule))
+func Deliver(m dsl.Module, destModule types.ModuleID, batchId string, signature tctypes.FullSig, srcModule types.ModuleID) {
+	dsl.EmitEvent(m, events.Deliver(destModule, batchId, signature, srcModule))
 }
 
 func QuorumDone(m dsl.Module, destModule types.ModuleID, srcModule types.ModuleID) {

@@ -42,7 +42,7 @@ message InputValue {
 message Deliver {
   option (mir.event) = true;
 
-  bcpb.Slot slot = 1;
+  bcpb.Cert cert = 1;
 }
 
 message FreeSlot {

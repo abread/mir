@@ -37,11 +37,9 @@ message InputValue {
 message Deliver {
   option (mir.event) = true;
 
-  repeated trantorpb.Transaction txs       = 1;
-  repeated bytes                 tx_ids    = 2 [(mir.type) = "github.com/filecoin-project/mir/pkg/trantor/types.TxID"];
-  bytes                          signature = 3 [(mir.type) = "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes.FullSig"];
-
-  string src_module = 4 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.ModuleID"];
+  string batch_id   = 1;
+  bytes  signature  = 2 [(mir.type) = "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes.FullSig"];
+  string src_module = 3 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.ModuleID"];
 }
 
 message QuorumDone {
