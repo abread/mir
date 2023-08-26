@@ -10,14 +10,15 @@ import (
 	types "github.com/filecoin-project/mir/pkg/types"
 )
 
-func InputValue(destModule types.ModuleID, txs []*types1.Transaction) *types2.Event {
+func InputValue(destModule types.ModuleID, txIds []string, txs []*types1.Transaction) *types2.Event {
 	return &types2.Event{
 		DestModule: destModule,
 		Type: &types2.Event_Vcb{
 			Vcb: &types3.Event{
 				Type: &types3.Event_InputValue{
 					InputValue: &types3.InputValue{
-						Txs: txs,
+						TxIds: txIds,
+						Txs:   txs,
 					},
 				},
 			},

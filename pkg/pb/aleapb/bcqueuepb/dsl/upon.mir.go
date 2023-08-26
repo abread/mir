@@ -7,11 +7,12 @@ import (
 
 	aleatypes "github.com/filecoin-project/mir/pkg/alea/aleatypes"
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
-	types3 "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/types"
+	types4 "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/types"
 	types "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/types"
 	types1 "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
-	types2 "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
+	types3 "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	tctypes "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
+	types2 "github.com/filecoin-project/mir/pkg/trantor/types"
 )
 
 // Module-specific dsl functions for processing events.
@@ -27,13 +28,13 @@ func UponEvent[W types.Event_TypeWrapper[Ev], Ev any](m dsl.Module, handler func
 	})
 }
 
-func UponInputValue(m dsl.Module, handler func(queueSlot aleatypes.QueueSlot, txs []*types2.Transaction) error) {
+func UponInputValue(m dsl.Module, handler func(queueSlot aleatypes.QueueSlot, txIds []types2.TxID, txs []*types3.Transaction) error) {
 	UponEvent[*types.Event_InputValue](m, func(ev *types.InputValue) error {
-		return handler(ev.QueueSlot, ev.Txs)
+		return handler(ev.QueueSlot, ev.TxIds, ev.Txs)
 	})
 }
 
-func UponDeliver(m dsl.Module, handler func(cert *types3.Cert) error) {
+func UponDeliver(m dsl.Module, handler func(cert *types4.Cert) error) {
 	UponEvent[*types.Event_Deliver](m, func(ev *types.Deliver) error {
 		return handler(ev.Cert)
 	})
@@ -45,25 +46,25 @@ func UponFreeSlot(m dsl.Module, handler func(queueSlot aleatypes.QueueSlot) erro
 	})
 }
 
-func UponPastVcbFinal(m dsl.Module, handler func(queueSlot aleatypes.QueueSlot, txs []*types2.Transaction, signature tctypes.FullSig) error) {
+func UponPastVcbFinal(m dsl.Module, handler func(queueSlot aleatypes.QueueSlot, txs []*types3.Transaction, signature tctypes.FullSig) error) {
 	UponEvent[*types.Event_PastVcbFinal](m, func(ev *types.PastVcbFinal) error {
 		return handler(ev.QueueSlot, ev.Txs, ev.Signature)
 	})
 }
 
-func UponBcStarted(m dsl.Module, handler func(slot *types3.Slot) error) {
+func UponBcStarted(m dsl.Module, handler func(slot *types4.Slot) error) {
 	UponEvent[*types.Event_BcStarted](m, func(ev *types.BcStarted) error {
 		return handler(ev.Slot)
 	})
 }
 
-func UponBcQuorumDone(m dsl.Module, handler func(slot *types3.Slot, deliverDelta time.Duration) error) {
+func UponBcQuorumDone(m dsl.Module, handler func(slot *types4.Slot, deliverDelta time.Duration) error) {
 	UponEvent[*types.Event_BcQuorumDone](m, func(ev *types.BcQuorumDone) error {
 		return handler(ev.Slot, ev.DeliverDelta)
 	})
 }
 
-func UponBcAllDone(m dsl.Module, handler func(slot *types3.Slot, quorumDoneDelta time.Duration) error) {
+func UponBcAllDone(m dsl.Module, handler func(slot *types4.Slot, quorumDoneDelta time.Duration) error) {
 	UponEvent[*types.Event_BcAllDone](m, func(ev *types.BcAllDone) error {
 		return handler(ev.Slot, ev.QuorumDoneDelta)
 	})

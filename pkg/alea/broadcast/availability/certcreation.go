@@ -43,9 +43,8 @@ func includeCertCreation(
 		mempoolpbdsl.RequestBatch[struct{}](m, mc.Mempool, tt.EpochNr(0), nil)
 		return nil
 	})
-	mempoolpbdsl.UponNewBatch(m, func(txIds []string, txs []*trantorpbtypes.Transaction, _context *struct{}) error {
-		// TODO: propagate txIDs to avoid duplicate computation
-		bcqueuepbdsl.InputValue(m, ownQueueModuleID, state.nextQueueSlot, txs)
+	mempoolpbdsl.UponNewBatch(m, func(txIDs []tt.TxID, txs []*trantorpbtypes.Transaction, _context *struct{}) error {
+		bcqueuepbdsl.InputValue(m, ownQueueModuleID, state.nextQueueSlot, txIDs, txs)
 		state.nextQueueSlot++
 		return nil
 	})

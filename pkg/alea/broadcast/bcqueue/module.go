@@ -28,6 +28,7 @@ import (
 	vcbpbmsgs "github.com/filecoin-project/mir/pkg/pb/vcbpb/msgs"
 	vcbpbtypes "github.com/filecoin-project/mir/pkg/pb/vcbpb/types"
 	"github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
+	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 	"github.com/filecoin-project/mir/pkg/vcb"
 )
@@ -50,7 +51,7 @@ func New(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, nodeID t
 func newQueueController(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, nodeID t.NodeID, logger logging.Logger, slots *modring.Module) modules.PassiveModule {
 	m := dsl.NewModule(mc.Self)
 
-	bcqueuepbdsl.UponInputValue(m, func(queueSlot aleatypes.QueueSlot, txs []*trantorpbtypes.Transaction) error {
+	bcqueuepbdsl.UponInputValue(m, func(queueSlot aleatypes.QueueSlot, txIDs []tt.TxID, txs []*trantorpbtypes.Transaction) error {
 		if len(txs) == 0 {
 			return es.Errorf("cannot broadcast an empty batch")
 		}
@@ -58,6 +59,7 @@ func newQueueController(mc ModuleConfig, params ModuleParams, tunables ModuleTun
 		// logger.Log(logging.LevelDebug, "starting broadcast", "queueSlot", queueSlot, "txs", txs)
 		dsl.EmitEvent(m, vcbpbevents.InputValue(
 			mc.Self.Then(t.NewModuleIDFromInt(queueSlot)),
+			txIDs,
 			txs,
 		))
 		return nil

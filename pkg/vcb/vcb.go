@@ -83,7 +83,7 @@ func NewModule(mc ModuleConfig, params ModuleParams, nodeID t.NodeID, logger log
 	if nodeID == params.Leader {
 		setupVcbLeader(m, mc, &params, logger, state)
 	} else {
-		vcbdsl.UponInputValue(m, func(txs []*trantorpbtypes.Transaction) error {
+		vcbdsl.UponInputValue(m, func(_ []tt.TxID, _ []*trantorpbtypes.Transaction) error {
 			return es.Errorf("vcb input provided for non-leader")
 		})
 	}
@@ -170,7 +170,7 @@ func NewModule(mc ModuleConfig, params ModuleParams, nodeID t.NodeID, logger log
 		}
 
 		// logger.Log(logging.LevelDebug, "recvd SEND", "txs", txs)
-		state.payload.Input(m, &mc, txs)
+		state.payload.Input(m, &mc, nil, txs)
 		state.phase = VcbPhaseAwaitingSigData
 		return nil
 	})
@@ -287,9 +287,9 @@ func setupVcbLeader(m dsl.Module, mc ModuleConfig, params *ModuleParams, logger 
 		return nil
 	})
 
-	vcbdsl.UponInputValue(m, func(txs []*trantorpbtypes.Transaction) error {
+	vcbdsl.UponInputValue(m, func(txIDs []tt.TxID, txs []*trantorpbtypes.Transaction) error {
 		// logger.Log(logging.LevelDebug, "inputting value", "txs", txs)
-		state.payload.Input(m, &mc, txs)
+		state.payload.Input(m, &mc, txIDs, txs)
 		return nil
 	})
 	dsl.UponStateUpdates(m, func() error {

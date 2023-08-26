@@ -10,7 +10,6 @@ import (
 
 type vcbPayloadManager struct {
 	txs     []*trantorpbtypes.Transaction
-	txIDs   []tt.TxID
 	batchID string
 	sigData [][]byte
 
@@ -19,7 +18,6 @@ type vcbPayloadManager struct {
 
 func (mgr *vcbPayloadManager) init(m dsl.Module, mc ModuleConfig, params *ModuleParams) {
 	mempoolpbdsl.UponTransactionIDsResponse(m, func(txIDs []tt.TxID, context *vcbPayloadMgrInputTxs) error {
-		mgr.txIDs = txIDs
 		mempoolpbdsl.RequestBatchID(m, mc.Mempool, txIDs, context)
 		return nil
 	})
@@ -40,21 +38,24 @@ func (mgr *vcbPayloadManager) init(m dsl.Module, mc ModuleConfig, params *Module
 
 type vcbPayloadMgrInputTxs struct{}
 
-func (mgr *vcbPayloadManager) Input(m dsl.Module, mc *ModuleConfig, txs []*trantorpbtypes.Transaction) {
+func (mgr *vcbPayloadManager) Input(m dsl.Module, mc *ModuleConfig, txIDs []tt.TxID, txs []*trantorpbtypes.Transaction) {
 	if mgr.txs != nil {
 		return
 	}
 
 	mgr.txs = txs
-	mempoolpbdsl.RequestTransactionIDs(m, mc.Mempool, txs, &vcbPayloadMgrInputTxs{})
+
+	if txIDs == nil {
+		// outside source of txs, must compute ids
+		mempoolpbdsl.RequestTransactionIDs(m, mc.Mempool, txs, &vcbPayloadMgrInputTxs{})
+	} else {
+		// batch came from local node, can use existing ids
+		mempoolpbdsl.RequestBatchID(m, mc.Mempool, txIDs, &vcbPayloadMgrInputTxs{})
+	}
 }
 
 func (mgr *vcbPayloadManager) Txs() []*trantorpbtypes.Transaction {
 	return mgr.txs
-}
-
-func (mgr *vcbPayloadManager) TxIDs() []tt.TxID {
-	return mgr.txIDs
 }
 
 func (mgr *vcbPayloadManager) BatchID() string {

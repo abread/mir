@@ -6,22 +6,24 @@ import (
 	"time"
 
 	aleatypes "github.com/filecoin-project/mir/pkg/alea/aleatypes"
-	types4 "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/types"
-	types3 "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/types"
-	types2 "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
-	types1 "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
+	types5 "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/types"
+	types4 "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/types"
+	types3 "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
+	types2 "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	tctypes "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
+	types1 "github.com/filecoin-project/mir/pkg/trantor/types"
 	types "github.com/filecoin-project/mir/pkg/types"
 )
 
-func InputValue(destModule types.ModuleID, queueSlot aleatypes.QueueSlot, txs []*types1.Transaction) *types2.Event {
-	return &types2.Event{
+func InputValue(destModule types.ModuleID, queueSlot aleatypes.QueueSlot, txIds []types1.TxID, txs []*types2.Transaction) *types3.Event {
+	return &types3.Event{
 		DestModule: destModule,
-		Type: &types2.Event_AleaBcqueue{
-			AleaBcqueue: &types3.Event{
-				Type: &types3.Event_InputValue{
-					InputValue: &types3.InputValue{
+		Type: &types3.Event_AleaBcqueue{
+			AleaBcqueue: &types4.Event{
+				Type: &types4.Event_InputValue{
+					InputValue: &types4.InputValue{
 						QueueSlot: queueSlot,
+						TxIds:     txIds,
 						Txs:       txs,
 					},
 				},
@@ -30,13 +32,13 @@ func InputValue(destModule types.ModuleID, queueSlot aleatypes.QueueSlot, txs []
 	}
 }
 
-func Deliver(destModule types.ModuleID, cert *types4.Cert) *types2.Event {
-	return &types2.Event{
+func Deliver(destModule types.ModuleID, cert *types5.Cert) *types3.Event {
+	return &types3.Event{
 		DestModule: destModule,
-		Type: &types2.Event_AleaBcqueue{
-			AleaBcqueue: &types3.Event{
-				Type: &types3.Event_Deliver{
-					Deliver: &types3.Deliver{
+		Type: &types3.Event_AleaBcqueue{
+			AleaBcqueue: &types4.Event{
+				Type: &types4.Event_Deliver{
+					Deliver: &types4.Deliver{
 						Cert: cert,
 					},
 				},
@@ -45,13 +47,13 @@ func Deliver(destModule types.ModuleID, cert *types4.Cert) *types2.Event {
 	}
 }
 
-func FreeSlot(destModule types.ModuleID, queueSlot aleatypes.QueueSlot) *types2.Event {
-	return &types2.Event{
+func FreeSlot(destModule types.ModuleID, queueSlot aleatypes.QueueSlot) *types3.Event {
+	return &types3.Event{
 		DestModule: destModule,
-		Type: &types2.Event_AleaBcqueue{
-			AleaBcqueue: &types3.Event{
-				Type: &types3.Event_FreeSlot{
-					FreeSlot: &types3.FreeSlot{
+		Type: &types3.Event_AleaBcqueue{
+			AleaBcqueue: &types4.Event{
+				Type: &types4.Event_FreeSlot{
+					FreeSlot: &types4.FreeSlot{
 						QueueSlot: queueSlot,
 					},
 				},
@@ -60,13 +62,13 @@ func FreeSlot(destModule types.ModuleID, queueSlot aleatypes.QueueSlot) *types2.
 	}
 }
 
-func PastVcbFinal(destModule types.ModuleID, queueSlot aleatypes.QueueSlot, txs []*types1.Transaction, signature tctypes.FullSig) *types2.Event {
-	return &types2.Event{
+func PastVcbFinal(destModule types.ModuleID, queueSlot aleatypes.QueueSlot, txs []*types2.Transaction, signature tctypes.FullSig) *types3.Event {
+	return &types3.Event{
 		DestModule: destModule,
-		Type: &types2.Event_AleaBcqueue{
-			AleaBcqueue: &types3.Event{
-				Type: &types3.Event_PastVcbFinal{
-					PastVcbFinal: &types3.PastVcbFinal{
+		Type: &types3.Event_AleaBcqueue{
+			AleaBcqueue: &types4.Event{
+				Type: &types4.Event_PastVcbFinal{
+					PastVcbFinal: &types4.PastVcbFinal{
 						QueueSlot: queueSlot,
 						Txs:       txs,
 						Signature: signature,
@@ -77,13 +79,13 @@ func PastVcbFinal(destModule types.ModuleID, queueSlot aleatypes.QueueSlot, txs 
 	}
 }
 
-func BcStarted(destModule types.ModuleID, slot *types4.Slot) *types2.Event {
-	return &types2.Event{
+func BcStarted(destModule types.ModuleID, slot *types5.Slot) *types3.Event {
+	return &types3.Event{
 		DestModule: destModule,
-		Type: &types2.Event_AleaBcqueue{
-			AleaBcqueue: &types3.Event{
-				Type: &types3.Event_BcStarted{
-					BcStarted: &types3.BcStarted{
+		Type: &types3.Event_AleaBcqueue{
+			AleaBcqueue: &types4.Event{
+				Type: &types4.Event_BcStarted{
+					BcStarted: &types4.BcStarted{
 						Slot: slot,
 					},
 				},
@@ -92,13 +94,13 @@ func BcStarted(destModule types.ModuleID, slot *types4.Slot) *types2.Event {
 	}
 }
 
-func BcQuorumDone(destModule types.ModuleID, slot *types4.Slot, deliverDelta time.Duration) *types2.Event {
-	return &types2.Event{
+func BcQuorumDone(destModule types.ModuleID, slot *types5.Slot, deliverDelta time.Duration) *types3.Event {
+	return &types3.Event{
 		DestModule: destModule,
-		Type: &types2.Event_AleaBcqueue{
-			AleaBcqueue: &types3.Event{
-				Type: &types3.Event_BcQuorumDone{
-					BcQuorumDone: &types3.BcQuorumDone{
+		Type: &types3.Event_AleaBcqueue{
+			AleaBcqueue: &types4.Event{
+				Type: &types4.Event_BcQuorumDone{
+					BcQuorumDone: &types4.BcQuorumDone{
 						Slot:         slot,
 						DeliverDelta: deliverDelta,
 					},
@@ -108,13 +110,13 @@ func BcQuorumDone(destModule types.ModuleID, slot *types4.Slot, deliverDelta tim
 	}
 }
 
-func BcAllDone(destModule types.ModuleID, slot *types4.Slot, quorumDoneDelta time.Duration) *types2.Event {
-	return &types2.Event{
+func BcAllDone(destModule types.ModuleID, slot *types5.Slot, quorumDoneDelta time.Duration) *types3.Event {
+	return &types3.Event{
 		DestModule: destModule,
-		Type: &types2.Event_AleaBcqueue{
-			AleaBcqueue: &types3.Event{
-				Type: &types3.Event_BcAllDone{
-					BcAllDone: &types3.BcAllDone{
+		Type: &types3.Event_AleaBcqueue{
+			AleaBcqueue: &types4.Event{
+				Type: &types4.Event_BcAllDone{
+					BcAllDone: &types4.BcAllDone{
 						Slot:            slot,
 						QuorumDoneDelta: quorumDoneDelta,
 					},

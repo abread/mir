@@ -6,13 +6,14 @@ import (
 	"time"
 
 	mirreflect "github.com/filecoin-project/mir/codegen/mirreflect"
-	types1 "github.com/filecoin-project/mir/codegen/model/types"
+	types2 "github.com/filecoin-project/mir/codegen/model/types"
 	aleatypes "github.com/filecoin-project/mir/pkg/alea/aleatypes"
-	types2 "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/types"
+	types3 "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/types"
 	bcqueuepb "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb"
 	trantorpb "github.com/filecoin-project/mir/pkg/pb/trantorpb"
-	types "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
+	types1 "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	tctypes "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
+	types "github.com/filecoin-project/mir/pkg/trantor/types"
 	reflectutil "github.com/filecoin-project/mir/pkg/util/reflectutil"
 )
 
@@ -251,7 +252,8 @@ func (*Event) MirReflect() mirreflect.Type {
 
 type InputValue struct {
 	QueueSlot aleatypes.QueueSlot
-	Txs       []*types.Transaction
+	TxIds     []types.TxID
+	Txs       []*types1.Transaction
 }
 
 func InputValueFromPb(pb *bcqueuepb.InputValue) *InputValue {
@@ -260,8 +262,11 @@ func InputValueFromPb(pb *bcqueuepb.InputValue) *InputValue {
 	}
 	return &InputValue{
 		QueueSlot: (aleatypes.QueueSlot)(pb.QueueSlot),
-		Txs: types1.ConvertSlice(pb.Txs, func(t *trantorpb.Transaction) *types.Transaction {
-			return types.TransactionFromPb(t)
+		TxIds: types2.ConvertSlice(pb.TxIds, func(t string) types.TxID {
+			return (types.TxID)(t)
+		}),
+		Txs: types2.ConvertSlice(pb.Txs, func(t *trantorpb.Transaction) *types1.Transaction {
+			return types1.TransactionFromPb(t)
 		}),
 	}
 }
@@ -273,7 +278,10 @@ func (m *InputValue) Pb() *bcqueuepb.InputValue {
 	pbMessage := &bcqueuepb.InputValue{}
 	{
 		pbMessage.QueueSlot = (uint64)(m.QueueSlot)
-		pbMessage.Txs = types1.ConvertSlice(m.Txs, func(t *types.Transaction) *trantorpb.Transaction {
+		pbMessage.TxIds = types2.ConvertSlice(m.TxIds, func(t types.TxID) string {
+			return (string)(t)
+		})
+		pbMessage.Txs = types2.ConvertSlice(m.Txs, func(t *types1.Transaction) *trantorpb.Transaction {
 			return (t).Pb()
 		})
 	}
@@ -286,7 +294,7 @@ func (*InputValue) MirReflect() mirreflect.Type {
 }
 
 type Deliver struct {
-	Cert *types2.Cert
+	Cert *types3.Cert
 }
 
 func DeliverFromPb(pb *bcqueuepb.Deliver) *Deliver {
@@ -294,7 +302,7 @@ func DeliverFromPb(pb *bcqueuepb.Deliver) *Deliver {
 		return nil
 	}
 	return &Deliver{
-		Cert: types2.CertFromPb(pb.Cert),
+		Cert: types3.CertFromPb(pb.Cert),
 	}
 }
 
@@ -347,7 +355,7 @@ func (*FreeSlot) MirReflect() mirreflect.Type {
 
 type PastVcbFinal struct {
 	QueueSlot aleatypes.QueueSlot
-	Txs       []*types.Transaction
+	Txs       []*types1.Transaction
 	Signature tctypes.FullSig
 }
 
@@ -357,8 +365,8 @@ func PastVcbFinalFromPb(pb *bcqueuepb.PastVcbFinal) *PastVcbFinal {
 	}
 	return &PastVcbFinal{
 		QueueSlot: (aleatypes.QueueSlot)(pb.QueueSlot),
-		Txs: types1.ConvertSlice(pb.Txs, func(t *trantorpb.Transaction) *types.Transaction {
-			return types.TransactionFromPb(t)
+		Txs: types2.ConvertSlice(pb.Txs, func(t *trantorpb.Transaction) *types1.Transaction {
+			return types1.TransactionFromPb(t)
 		}),
 		Signature: (tctypes.FullSig)(pb.Signature),
 	}
@@ -371,7 +379,7 @@ func (m *PastVcbFinal) Pb() *bcqueuepb.PastVcbFinal {
 	pbMessage := &bcqueuepb.PastVcbFinal{}
 	{
 		pbMessage.QueueSlot = (uint64)(m.QueueSlot)
-		pbMessage.Txs = types1.ConvertSlice(m.Txs, func(t *types.Transaction) *trantorpb.Transaction {
+		pbMessage.Txs = types2.ConvertSlice(m.Txs, func(t *types1.Transaction) *trantorpb.Transaction {
 			return (t).Pb()
 		})
 		pbMessage.Signature = ([]uint8)(m.Signature)
@@ -385,7 +393,7 @@ func (*PastVcbFinal) MirReflect() mirreflect.Type {
 }
 
 type BcStarted struct {
-	Slot *types2.Slot
+	Slot *types3.Slot
 }
 
 func BcStartedFromPb(pb *bcqueuepb.BcStarted) *BcStarted {
@@ -393,7 +401,7 @@ func BcStartedFromPb(pb *bcqueuepb.BcStarted) *BcStarted {
 		return nil
 	}
 	return &BcStarted{
-		Slot: types2.SlotFromPb(pb.Slot),
+		Slot: types3.SlotFromPb(pb.Slot),
 	}
 }
 
@@ -416,7 +424,7 @@ func (*BcStarted) MirReflect() mirreflect.Type {
 }
 
 type BcQuorumDone struct {
-	Slot         *types2.Slot
+	Slot         *types3.Slot
 	DeliverDelta time.Duration
 }
 
@@ -425,7 +433,7 @@ func BcQuorumDoneFromPb(pb *bcqueuepb.BcQuorumDone) *BcQuorumDone {
 		return nil
 	}
 	return &BcQuorumDone{
-		Slot:         types2.SlotFromPb(pb.Slot),
+		Slot:         types3.SlotFromPb(pb.Slot),
 		DeliverDelta: (time.Duration)(pb.DeliverDelta),
 	}
 }
@@ -450,7 +458,7 @@ func (*BcQuorumDone) MirReflect() mirreflect.Type {
 }
 
 type BcAllDone struct {
-	Slot            *types2.Slot
+	Slot            *types3.Slot
 	QuorumDoneDelta time.Duration
 }
 
@@ -459,7 +467,7 @@ func BcAllDoneFromPb(pb *bcqueuepb.BcAllDone) *BcAllDone {
 		return nil
 	}
 	return &BcAllDone{
-		Slot:            types2.SlotFromPb(pb.Slot),
+		Slot:            types3.SlotFromPb(pb.Slot),
 		QuorumDoneDelta: (time.Duration)(pb.QuorumDoneDelta),
 	}
 }

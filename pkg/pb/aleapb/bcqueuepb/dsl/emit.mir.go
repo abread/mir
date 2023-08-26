@@ -7,20 +7,21 @@ import (
 
 	aleatypes "github.com/filecoin-project/mir/pkg/alea/aleatypes"
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
-	types2 "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/types"
+	types3 "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/types"
 	events "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/events"
-	types1 "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
+	types2 "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	tctypes "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
+	types1 "github.com/filecoin-project/mir/pkg/trantor/types"
 	types "github.com/filecoin-project/mir/pkg/types"
 )
 
 // Module-specific dsl functions for emitting events.
 
-func InputValue(m dsl.Module, destModule types.ModuleID, queueSlot aleatypes.QueueSlot, txs []*types1.Transaction) {
-	dsl.EmitEvent(m, events.InputValue(destModule, queueSlot, txs))
+func InputValue(m dsl.Module, destModule types.ModuleID, queueSlot aleatypes.QueueSlot, txIds []types1.TxID, txs []*types2.Transaction) {
+	dsl.EmitEvent(m, events.InputValue(destModule, queueSlot, txIds, txs))
 }
 
-func Deliver(m dsl.Module, destModule types.ModuleID, cert *types2.Cert) {
+func Deliver(m dsl.Module, destModule types.ModuleID, cert *types3.Cert) {
 	dsl.EmitEvent(m, events.Deliver(destModule, cert))
 }
 
@@ -28,18 +29,18 @@ func FreeSlot(m dsl.Module, destModule types.ModuleID, queueSlot aleatypes.Queue
 	dsl.EmitEvent(m, events.FreeSlot(destModule, queueSlot))
 }
 
-func PastVcbFinal(m dsl.Module, destModule types.ModuleID, queueSlot aleatypes.QueueSlot, txs []*types1.Transaction, signature tctypes.FullSig) {
+func PastVcbFinal(m dsl.Module, destModule types.ModuleID, queueSlot aleatypes.QueueSlot, txs []*types2.Transaction, signature tctypes.FullSig) {
 	dsl.EmitEvent(m, events.PastVcbFinal(destModule, queueSlot, txs, signature))
 }
 
-func BcStarted(m dsl.Module, destModule types.ModuleID, slot *types2.Slot) {
+func BcStarted(m dsl.Module, destModule types.ModuleID, slot *types3.Slot) {
 	dsl.EmitEvent(m, events.BcStarted(destModule, slot))
 }
 
-func BcQuorumDone(m dsl.Module, destModule types.ModuleID, slot *types2.Slot, deliverDelta time.Duration) {
+func BcQuorumDone(m dsl.Module, destModule types.ModuleID, slot *types3.Slot, deliverDelta time.Duration) {
 	dsl.EmitEvent(m, events.BcQuorumDone(destModule, slot, deliverDelta))
 }
 
-func BcAllDone(m dsl.Module, destModule types.ModuleID, slot *types2.Slot, quorumDoneDelta time.Duration) {
+func BcAllDone(m dsl.Module, destModule types.ModuleID, slot *types3.Slot, quorumDoneDelta time.Duration) {
 	dsl.EmitEvent(m, events.BcAllDone(destModule, slot, quorumDoneDelta))
 }

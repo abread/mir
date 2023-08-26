@@ -169,7 +169,8 @@ func (*Event) MirReflect() mirreflect.Type {
 }
 
 type InputValue struct {
-	Txs []*types.Transaction
+	TxIds []string
+	Txs   []*types.Transaction
 }
 
 func InputValueFromPb(pb *vcbpb.InputValue) *InputValue {
@@ -177,6 +178,7 @@ func InputValueFromPb(pb *vcbpb.InputValue) *InputValue {
 		return nil
 	}
 	return &InputValue{
+		TxIds: pb.TxIds,
 		Txs: types1.ConvertSlice(pb.Txs, func(t *trantorpb.Transaction) *types.Transaction {
 			return types.TransactionFromPb(t)
 		}),
@@ -189,6 +191,7 @@ func (m *InputValue) Pb() *vcbpb.InputValue {
 	}
 	pbMessage := &vcbpb.InputValue{}
 	{
+		pbMessage.TxIds = m.TxIds
 		pbMessage.Txs = types1.ConvertSlice(m.Txs, func(t *types.Transaction) *trantorpb.Transaction {
 			return (t).Pb()
 		})

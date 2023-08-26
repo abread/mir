@@ -30,8 +30,8 @@ message Event {
 message InputValue {
   option (mir.event) = true;
 
-  // empty txs represents a request to listen for VCB (and deliver what was broadcast to us)
-  repeated trantorpb.Transaction txs = 1;
+  repeated string tx_ids = 1;
+  repeated trantorpb.Transaction txs = 2;
 }
 
 message Deliver {

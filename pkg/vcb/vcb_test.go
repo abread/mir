@@ -303,7 +303,7 @@ func newCountingApp(isLeader bool) *countingApp {
 		})
 
 		mpdsl.UponTransactionIDsResponse(m, func(txIDs []tt.TxID, _ctx *struct{}) error {
-			vcbpbdsl.InputValue(m, "vcb", txs)
+			vcbpbdsl.InputValue(m, "vcb", txIDs, txs)
 			return nil
 		})
 	}

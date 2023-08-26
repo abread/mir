@@ -24,9 +24,9 @@ func UponEvent[W types.Event_TypeWrapper[Ev], Ev any](m dsl.Module, handler func
 	})
 }
 
-func UponInputValue(m dsl.Module, handler func(txs []*types2.Transaction) error) {
+func UponInputValue(m dsl.Module, handler func(txIds []string, txs []*types2.Transaction) error) {
 	UponEvent[*types.Event_InputValue](m, func(ev *types.InputValue) error {
-		return handler(ev.Txs)
+		return handler(ev.TxIds, ev.Txs)
 	})
 }
 

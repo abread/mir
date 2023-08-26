@@ -12,8 +12,8 @@ import (
 
 // Module-specific dsl functions for emitting events.
 
-func InputValue(m dsl.Module, destModule types.ModuleID, txs []*types1.Transaction) {
-	dsl.EmitEvent(m, events.InputValue(destModule, txs))
+func InputValue(m dsl.Module, destModule types.ModuleID, txIds []string, txs []*types1.Transaction) {
+	dsl.EmitEvent(m, events.InputValue(destModule, txIds, txs))
 }
 
 func Deliver(m dsl.Module, destModule types.ModuleID, batchId string, signature tctypes.FullSig, srcModule types.ModuleID) {
