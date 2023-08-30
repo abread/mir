@@ -85,7 +85,7 @@ func runClient(ctx context.Context) error {
 	if verbose {
 		logger = logging.ConsoleDebugLogger
 	} else {
-		logger = logging.ConsoleWarnLogger
+		logger = logging.ConsoleInfoLogger
 	}
 
 	initialMembership, err := membership.FromFileName(membershipFile)
@@ -113,6 +113,7 @@ func runClient(ctx context.Context) error {
 		// TODO: Make this properly configurable and remove the hack.
 		// break // sending to all nodes is more reproducible
 	}
+	logger.Log(logging.LevelInfo, "processed node list", "txReceiverAddrs", txReceiverAddrs)
 
 	ctxStats, stopStats := context.WithCancel(ctx)
 	defer stopStats()
@@ -125,6 +126,7 @@ func runClient(ctx context.Context) error {
 	)
 	client.Connect(ctx, txReceiverAddrs)
 	defer client.Disconnect()
+	logger.Log(logging.LevelInfo, "client connected")
 
 	clock := time.Now()
 	txs := make(map[tt.TxNo]time.Duration, int(rate*statPeriod.Seconds()))
@@ -132,6 +134,7 @@ func runClient(ctx context.Context) error {
 	nextTxNo := tt.TxNo(0)
 	if statFileName != "" {
 		go clientStats(ctxStats, txReceiverAddrs, clock, txs, txsMutex)
+		logger.Log(logging.LevelInfo, "started stats collection")
 	}
 
 	go func() {
