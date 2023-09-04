@@ -154,6 +154,12 @@ func runNode(ctx context.Context) error {
 	smrParams := trantor.DefaultParams(initialMembership)
 	smrParams.Mempool.MaxTransactionsInBatch = batchSize
 
+	// ensure network messages can accommodate the chosen batch size
+	batchAdjustedMaxMsgSize := batchSize * 512 * 105 / 100
+	if smrParams.Net.MaxMessageSize < batchAdjustedMaxMsgSize {
+		smrParams.Net.MaxMessageSize = batchAdjustedMaxMsgSize
+	}
+
 	// derived to match mean alea latency with 1tx/s load (directed at the next leader replica) - 2ms
 	//smrParams.AdjustSpeed(time.Duration(10879+1467*len(initialMembership.Nodes)) * time.Microsecond)
 
