@@ -43,32 +43,55 @@ func getSendMessageEv(ev *eventpbtypes.Event) (*transportpbtypes.SendMessage, bo
 	return nil, false
 }
 
+func (fl *FilteredLink) applyFilterToEventSlice(events []*eventpbtypes.Event) []*eventpbtypes.Event {
+	filtered := make([]*eventpbtypes.Event, 0, len(events))
+
+	for _, ev := range events {
+		ev = fl.filterEvent(ev)
+		if ev != nil {
+			filtered = append(filtered, ev)
+		}
+	}
+
+	return filtered
+}
+
+func (fl *FilteredLink) filterEvent(event *eventpbtypes.Event) *eventpbtypes.Event {
+	if ev, ok := getSendMessageEv(event); ok {
+		// don't mutate the original event to avoid races
+		newEv := *ev
+		ev = &newEv
+
+		ev.Destinations = sliceutil.Filter(ev.Destinations, func(_ int, dest t.NodeID) bool {
+			return fl.filter(ev.Msg, fl.ownID, dest)
+		})
+
+		if len(ev.Destinations) > 0 {
+			return &eventpbtypes.Event{
+				DestModule: event.DestModule,
+				Type: &eventpbtypes.Event_Transport{
+					Transport: &transportpbtypes.Event{
+						Type: &transportpbtypes.Event_SendMessage{
+							SendMessage: ev,
+						},
+					},
+				},
+				Next: fl.applyFilterToEventSlice(event.Next),
+			}
+		}
+
+		return nil
+	}
+
+	return event
+}
+
 func (fl *FilteredLink) ApplyEvents(
 	ctx context.Context,
 	eventList events.EventList,
 ) error {
-	filtered := events.EmptyListWithCapacity(eventList.Len())
-
-	iter := eventList.Iterator()
-	for event := iter.Next(); event != nil; event = iter.Next() {
-		if ev, ok := getSendMessageEv(event); ok {
-			// don't mutate the original event to avoid races
-			newEv := *ev
-			ev = &newEv
-
-			ev.Destinations = sliceutil.Filter(ev.Destinations, func(_ int, dest t.NodeID) bool {
-				return fl.filter(ev.Msg, fl.ownID, dest)
-			})
-
-			if len(ev.Destinations) > 0 {
-				filtered.PushBack(event)
-			}
-		} else {
-			filtered.PushBack(event)
-		}
-	}
-
-	return fl.link.ApplyEvents(ctx, eventList)
+	filtered := events.ListOf(fl.applyFilterToEventSlice(eventList.Slice())...)
+	return fl.link.ApplyEvents(ctx, filtered)
 }
 
 // The ImplementsModule method only serves the purpose of indicating that this is a Module and must not be called.
