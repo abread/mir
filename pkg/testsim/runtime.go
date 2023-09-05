@@ -36,6 +36,7 @@ package testsim
 
 import (
 	"container/heap"
+	"math"
 	"math/rand"
 	"sync"
 	"time"
@@ -123,6 +124,11 @@ func (r *Runtime) Stop() {
 
 // timeAfter calculates the simulated time after the duration d.
 func (r *Runtime) timeAfter(d time.Duration) int64 {
+	if d == math.MaxInt64 {
+		// infinite delays should be scheduled as such
+		return math.MaxInt64
+	}
+
 	t := r.now + int64(d)
 	if t < 0 {
 		panic("Time overflow")

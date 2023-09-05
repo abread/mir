@@ -81,7 +81,7 @@ func testIntegrationWithAlea(t *testing.T) {
 				NodeIDsWeight: deploytest.NewNodeIDsDefaultWeights(4),
 				Transport:     "libp2p",
 				NumFakeTXs:    10,
-				Duration:      5 * time.Second,
+				Duration:      7 * time.Second,
 			}},
 		6: {"Submit 10 requests with 1 node and libp2p networking",
 			&TestConfig{
@@ -98,7 +98,7 @@ func testIntegrationWithAlea(t *testing.T) {
 				NumClients:    1,
 				Transport:     "libp2p",
 				NumNetTXs:     10,
-				Duration:      7 * time.Second,
+				Duration:      9 * time.Second,
 			}},
 
 		8: {"Do nothing with 1 node in simulation",
@@ -144,9 +144,8 @@ func testIntegrationWithAlea(t *testing.T) {
 			&TestConfig{
 				Info:          "libp2p 10 requests and 4 nodes, force FILL-GAP/FILLER",
 				NodeIDsWeight: deploytest.NewNodeIDsDefaultWeights(4),
-				Transport:     "libp2p",
-				NumNetTXs:     10,
-				NumClients:    1,
+				Transport:     "sim",
+				NumFakeTXs:    10,
 				Duration:      10 * time.Second,
 				TransportFilter: func(msg *messagepbtypes.Message, from, to types.NodeID) bool {
 					node0 := types.NewNodeIDFromInt(0)

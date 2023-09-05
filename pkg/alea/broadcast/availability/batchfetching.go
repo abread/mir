@@ -59,6 +59,31 @@ func includeBatchFetching(
 		RequestsState: make(map[bcpbtypes.Slot]*RequestsState),
 	}
 
+	scheduleFillGap := func(slot *bcpbtypes.Slot, reqState *RequestsState) error {
+		if reqState.SentFillGap {
+			return es.Errorf("tried to send FILL-GAP twice")
+		}
+		reqState.SentFillGap = true
+
+		// send FILL-GAP after a timeout (if request was not satisfied)
+		// this way bc has more chances of completing before even trying to send a fill-gap message
+		delay := time.Duration(0)
+
+		if bcRuntime, ok := est.BcRuntime(*slot); ok {
+			delay = est.MaxExtBcDuration() - bcRuntime
+			if delay < 0 {
+				delay = 0
+			}
+		}
+
+		// TODO: adjust delay according to bc estimate. don't delay when bc slot was already freed
+		dsl.EmitEvent(m, eventpbevents.TimerDelay(mc.Timer, []*eventpbtypes.Event{
+			bcpbevents.DoFillGap(mc.Self, slot),
+		}, types.Duration(delay)))
+
+		return nil
+	}
+
 	// When receive a request for transactions, first check the local storage.
 	availabilitypbdsl.UponRequestTransactions(m, func(anyCert *availabilitypbtypes.Cert, origin *availabilitypbtypes.RequestTransactionsOrigin) error {
 		certWrapper, present := anyCert.Type.(*availabilitypbtypes.Cert_Alea)
@@ -80,6 +105,10 @@ func includeBatchFetching(
 			// try resolving locally first
 			if cert, ok := certDB[*slot]; ok {
 				batchdbdsl.LookupBatch(m, mc.BatchDB, cert.BatchId, slot)
+			} else {
+				if err := scheduleFillGap(slot, reqState); err != nil {
+					return err
+				}
 			}
 		}
 
@@ -109,42 +138,21 @@ func includeBatchFetching(
 			return nil // stale request
 		}
 
-		if found {
-			for _, origin := range reqState.ReqOrigins {
-				availabilitypbdsl.ProvideTransactions(m, origin.Module, txs, origin)
-			}
-			mempooldsl.MarkDelivered(m, mc.Mempool, txs)
-
-			if reqState.SentFillGap {
-				// no need for FILLER anymore
-				rnetdsl.MarkRecvd(m, mc.ReliableNet, mc.Self, FillGapMsgID(slot), params.AllNodes)
-			}
-
-			delete(state.RequestsState, *slot)
-			return nil
+		if !found {
+			return es.Errorf("inconsistent batch db state: missing txs for slot %v", slot)
 		}
+
+		for _, origin := range reqState.ReqOrigins {
+			availabilitypbdsl.ProvideTransactions(m, origin.Module, txs, origin)
+		}
+		mempooldsl.MarkDelivered(m, mc.Mempool, txs)
 
 		if reqState.SentFillGap {
-			return es.Errorf("tried to send FILL-GAP twice")
-		}
-		reqState.SentFillGap = true
-
-		// send FILL-GAP after a timeout (if request was not satisfied)
-		// this way bc has more chances of completing before even trying to send a fill-gap message
-		delay := time.Duration(0)
-
-		if bcRuntime, ok := est.BcRuntime(*slot); ok {
-			delay = est.MaxExtBcDuration() - bcRuntime
-			if delay < 0 {
-				delay = 0
-			}
+			// no need for FILLER anymore
+			rnetdsl.MarkRecvd(m, mc.ReliableNet, mc.Self, FillGapMsgID(slot), params.AllNodes)
 		}
 
-		// TODO: adjust delay according to bc estimate. don't delay when bc slot was already freed
-		dsl.EmitEvent(m, eventpbevents.TimerDelay(mc.Timer, []*eventpbtypes.Event{
-			bcpbevents.DoFillGap(mc.Self, slot),
-		}, types.Duration(delay)))
-
+		delete(state.RequestsState, *slot)
 		return nil
 	})
 
