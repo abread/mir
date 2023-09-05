@@ -26,7 +26,9 @@ import (
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/modules"
 	abbadsl "github.com/filecoin-project/mir/pkg/pb/abbapb/dsl"
+	abbapbtypes "github.com/filecoin-project/mir/pkg/pb/abbapb/types"
 	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
+	messagepbtypes "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
 	"github.com/filecoin-project/mir/pkg/reliablenet"
 	"github.com/filecoin-project/mir/pkg/testsim"
 	"github.com/filecoin-project/mir/pkg/timer"
@@ -49,7 +51,9 @@ type TestConfig struct {
 	Directory         string
 	InputValues       map[types.NodeID]bool
 	DefaultInputValue bool
-	Logger            logging.Logger
+
+	TransportFilter func(msg *messagepbtypes.Message, from types.NodeID, to types.NodeID) bool
+	Logger          logging.Logger
 }
 
 func runHappyTest(t *testing.T, F int, decision bool, customInputs map[types.NodeID]bool, duration time.Duration) {
@@ -100,6 +104,42 @@ func TestAbbaHappyMajorityFalse(t *testing.T) {
 	}
 
 	runHappyTest(t, 2, decision, customInputs, 20*time.Second)
+}
+
+func runUnanimousOptimizationTest(t *testing.T, F int, decision bool, duration time.Duration) {
+	config := TestConfig{
+		NodeIDsWeight:     deploytest.NewNodeIDsDefaultWeights(3*F + 1),
+		F:                 F,
+		Transport:         "sim",
+		DefaultInputValue: decision,
+		Duration:          duration,
+		TransportFilter: func(msg *messagepbtypes.Message, from, to types.NodeID) bool {
+			if abbaMsg, ok := msg.Type.(*messagepbtypes.Message_Abba); ok {
+				if abbaRoundMsg, ok := abbaMsg.Abba.Type.(*abbapbtypes.Message_Round); ok {
+					switch abbaRoundMsg.Round.Type.(type) {
+					case *abbapbtypes.RoundMessage_Input:
+						return true
+					default:
+						// filter out all non-INPUT ABBA messages to force the result to come only from the unanimity optimization
+						return false
+					}
+				}
+			}
+
+			return true
+		},
+	}
+
+	r, _, _ := runTest(t, &config)
+	assert.Equal(t, r, decision)
+}
+
+func TestAbbaUnanimousOptimizationTrue(t *testing.T) {
+	runUnanimousOptimizationTest(t, 2, true, 5*time.Second)
+}
+
+func TestAbbaUnanimousOptimizationFalse(t *testing.T) {
+	runUnanimousOptimizationTest(t, 2, false, 5*time.Second)
 }
 
 func runTest(t *testing.T, conf *TestConfig) (result bool, heapObjects int64, heapAlloc int64) {
@@ -229,6 +269,7 @@ func newDeployment(conf *TestConfig) (*deploytest.Deployment, error) {
 		if err != nil {
 			return nil, es.Errorf("error initializing Mir transport: %w", err)
 		}
+		transport = deploytest.NewFilteredTransport(transport, nodeID, conf.TransportFilter)
 
 		abba, err := NewModule(
 			abbaConfig,
