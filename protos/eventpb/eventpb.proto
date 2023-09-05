@@ -92,9 +92,6 @@ message Event {
   // and the next field would contain the message sending event.
   // (This is a hypothetical example, the WAL functionality is not implemented at a moment.)
   repeated Event next = 400 [(mir.omit_in_event_constructors) = true];
-
-  // event timestamp produced by the runtime for tracing purposes
-  int64 local_ts = 401 [(mir.omit_in_event_constructors) = true];
 }
 
 message Init {
