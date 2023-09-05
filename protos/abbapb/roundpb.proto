@@ -57,18 +57,24 @@ message RoundMessage {
   oneof type {
     option (net.message_type) = true;
 
-    RoundInitMessage init = 1;
-    RoundAuxMessage  aux  = 2;
-    RoundConfMessage conf = 3;
-    RoundCoinMessage coin = 4;
+    RoundInputMessage input = 1;
+    RoundInitMessage  init  = 2;
+    RoundAuxMessage   aux   = 3;
+    RoundConfMessage  conf  = 4;
+    RoundCoinMessage  coin  = 5;
   }
+}
+
+message RoundInputMessage {
+  option (net.message) = true;
+
+  bool estimate = 1;
 }
 
 message RoundInitMessage {
   option (net.message) = true;
 
   bool estimate = 1;
-  bool is_input = 2; // won't take space on wire when false, only used in first round for unanimous optimization
 }
 
 message RoundAuxMessage {

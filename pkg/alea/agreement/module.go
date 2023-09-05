@@ -395,8 +395,8 @@ func newAgRoundSniffer(mc ModuleConfig, params ModuleParams, agRounds *modring.M
 			return
 		}
 
-		abbaRoundInitMsg, ok := abbaRoundMsg.Round.Type.(*abbapbtypes.RoundMessage_Init)
-		if !ok || !abbaRoundInitMsg.Init.IsInput {
+		abbaRoundInputMsg, ok := abbaRoundMsg.Round.Type.(*abbapbtypes.RoundMessage_Input)
+		if !ok {
 			return
 		}
 
@@ -404,7 +404,7 @@ func newAgRoundSniffer(mc ModuleConfig, params ModuleParams, agRounds *modring.M
 			return
 		}
 
-		if abbaRoundInitMsg.Init.Estimate {
+		if abbaRoundInputMsg.Input.Estimate {
 			r.nodesWithPosInputCount++
 
 			if r.nodesWithPosInputCount == strongQuorumThresh {

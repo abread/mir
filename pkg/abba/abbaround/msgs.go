@@ -7,15 +7,16 @@ import (
 )
 
 const (
-	MsgTypeFinish = "f"
-	MsgTypeInit   = "i"
-	MsgTypeAux    = "a"
-	MsgTypeConf   = "c"
-	MsgTypeCoin   = "r"
+	//MsgTypeFinish = "f"
+	MsgTypeInput = "I"
+	MsgTypeInit  = "i"
+	MsgTypeAux   = "a"
+	MsgTypeConf  = "c"
+	MsgTypeCoin  = "r"
 )
 
-func FinishMsgID() rntypes.MsgID {
-	return MsgTypeFinish
+func InputMsgID() rntypes.MsgID {
+	return MsgTypeInput
 }
 
 func InitMsgID(v bool) rntypes.MsgID {

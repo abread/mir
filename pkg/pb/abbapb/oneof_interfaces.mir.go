@@ -66,6 +66,10 @@ type RoundMessage_TypeWrapper[T any] interface {
 	Unwrap() *T
 }
 
+func (w *RoundMessage_Input) Unwrap() *RoundInputMessage {
+	return w.Input
+}
+
 func (w *RoundMessage_Init) Unwrap() *RoundInitMessage {
 	return w.Init
 }

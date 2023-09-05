@@ -635,6 +635,8 @@ func RoundMessage_TypeFromPb(pb abbapb.RoundMessage_Type) RoundMessage_Type {
 		return nil
 	}
 	switch pb := pb.(type) {
+	case *abbapb.RoundMessage_Input:
+		return &RoundMessage_Input{Input: RoundInputMessageFromPb(pb.Input)}
 	case *abbapb.RoundMessage_Init:
 		return &RoundMessage_Init{Init: RoundInitMessageFromPb(pb.Init)}
 	case *abbapb.RoundMessage_Aux:
@@ -645,6 +647,30 @@ func RoundMessage_TypeFromPb(pb abbapb.RoundMessage_Type) RoundMessage_Type {
 		return &RoundMessage_Coin{Coin: RoundCoinMessageFromPb(pb.Coin)}
 	}
 	return nil
+}
+
+type RoundMessage_Input struct {
+	Input *RoundInputMessage
+}
+
+func (*RoundMessage_Input) isRoundMessage_Type() {}
+
+func (w *RoundMessage_Input) Unwrap() *RoundInputMessage {
+	return w.Input
+}
+
+func (w *RoundMessage_Input) Pb() abbapb.RoundMessage_Type {
+	if w == nil {
+		return nil
+	}
+	if w.Input == nil {
+		return &abbapb.RoundMessage_Input{}
+	}
+	return &abbapb.RoundMessage_Input{Input: (w.Input).Pb()}
+}
+
+func (*RoundMessage_Input) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.RoundMessage_Input]()}
 }
 
 type RoundMessage_Init struct {
@@ -770,9 +796,37 @@ func (*RoundMessage) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.RoundMessage]()}
 }
 
+type RoundInputMessage struct {
+	Estimate bool
+}
+
+func RoundInputMessageFromPb(pb *abbapb.RoundInputMessage) *RoundInputMessage {
+	if pb == nil {
+		return nil
+	}
+	return &RoundInputMessage{
+		Estimate: pb.Estimate,
+	}
+}
+
+func (m *RoundInputMessage) Pb() *abbapb.RoundInputMessage {
+	if m == nil {
+		return nil
+	}
+	pbMessage := &abbapb.RoundInputMessage{}
+	{
+		pbMessage.Estimate = m.Estimate
+	}
+
+	return pbMessage
+}
+
+func (*RoundInputMessage) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.RoundInputMessage]()}
+}
+
 type RoundInitMessage struct {
 	Estimate bool
-	IsInput  bool
 }
 
 func RoundInitMessageFromPb(pb *abbapb.RoundInitMessage) *RoundInitMessage {
@@ -781,7 +835,6 @@ func RoundInitMessageFromPb(pb *abbapb.RoundInitMessage) *RoundInitMessage {
 	}
 	return &RoundInitMessage{
 		Estimate: pb.Estimate,
-		IsInput:  pb.IsInput,
 	}
 }
 
@@ -792,7 +845,6 @@ func (m *RoundInitMessage) Pb() *abbapb.RoundInitMessage {
 	pbMessage := &abbapb.RoundInitMessage{}
 	{
 		pbMessage.Estimate = m.Estimate
-		pbMessage.IsInput = m.IsInput
 	}
 
 	return pbMessage

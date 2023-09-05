@@ -16,6 +16,7 @@ func (*RoundEvent) ReflectTypeOptions() []reflect.Type {
 
 func (*RoundMessage) ReflectTypeOptions() []reflect.Type {
 	return []reflect.Type{
+		reflect.TypeOf((*RoundMessage_Input)(nil)),
 		reflect.TypeOf((*RoundMessage_Init)(nil)),
 		reflect.TypeOf((*RoundMessage_Aux)(nil)),
 		reflect.TypeOf((*RoundMessage_Conf)(nil)),

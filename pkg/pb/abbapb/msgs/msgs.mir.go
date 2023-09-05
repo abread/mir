@@ -25,7 +25,26 @@ func FinishMessage(destModule types.ModuleID, value bool) *types1.Message {
 	}
 }
 
-func RoundInitMessage(destModule types.ModuleID, estimate bool, isInput bool) *types1.Message {
+func RoundInputMessage(destModule types.ModuleID, estimate bool) *types1.Message {
+	return &types1.Message{
+		DestModule: destModule,
+		Type: &types1.Message_Abba{
+			Abba: &types2.Message{
+				Type: &types2.Message_Round{
+					Round: &types2.RoundMessage{
+						Type: &types2.RoundMessage_Input{
+							Input: &types2.RoundInputMessage{
+								Estimate: estimate,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func RoundInitMessage(destModule types.ModuleID, estimate bool) *types1.Message {
 	return &types1.Message{
 		DestModule: destModule,
 		Type: &types1.Message_Abba{
@@ -35,7 +54,6 @@ func RoundInitMessage(destModule types.ModuleID, estimate bool, isInput bool) *t
 						Type: &types2.RoundMessage_Init{
 							Init: &types2.RoundInitMessage{
 								Estimate: estimate,
-								IsInput:  isInput,
 							},
 						},
 					},

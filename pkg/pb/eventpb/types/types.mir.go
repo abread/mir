@@ -43,7 +43,6 @@ type Event struct {
 	DestModule types.ModuleID
 	Type       Event_Type
 	Next       []*Event
-	LocalTs    int64
 }
 
 type Event_Type interface {
@@ -830,7 +829,6 @@ func EventFromPb(pb *eventpb.Event) *Event {
 		Next: types26.ConvertSlice(pb.Next, func(t *eventpb.Event) *Event {
 			return EventFromPb(t)
 		}),
-		LocalTs: pb.LocalTs,
 	}
 }
 
@@ -847,7 +845,6 @@ func (m *Event) Pb() *eventpb.Event {
 		pbMessage.Next = types26.ConvertSlice(m.Next, func(t *Event) *eventpb.Event {
 			return (t).Pb()
 		})
-		pbMessage.LocalTs = m.LocalTs
 	}
 
 	return pbMessage
