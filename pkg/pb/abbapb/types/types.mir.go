@@ -35,6 +35,8 @@ func Event_TypeFromPb(pb abbapb.Event_Type) Event_Type {
 	switch pb := pb.(type) {
 	case *abbapb.Event_InputValue:
 		return &Event_InputValue{InputValue: InputValueFromPb(pb.InputValue)}
+	case *abbapb.Event_Continue:
+		return &Event_Continue{Continue: ContinueExecutionFromPb(pb.Continue)}
 	case *abbapb.Event_Deliver:
 		return &Event_Deliver{Deliver: DeliverFromPb(pb.Deliver)}
 	case *abbapb.Event_Round:
@@ -67,6 +69,30 @@ func (w *Event_InputValue) Pb() abbapb.Event_Type {
 
 func (*Event_InputValue) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Event_InputValue]()}
+}
+
+type Event_Continue struct {
+	Continue *ContinueExecution
+}
+
+func (*Event_Continue) isEvent_Type() {}
+
+func (w *Event_Continue) Unwrap() *ContinueExecution {
+	return w.Continue
+}
+
+func (w *Event_Continue) Pb() abbapb.Event_Type {
+	if w == nil {
+		return nil
+	}
+	if w.Continue == nil {
+		return &abbapb.Event_Continue{}
+	}
+	return &abbapb.Event_Continue{Continue: (w.Continue).Pb()}
+}
+
+func (*Event_Continue) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.Event_Continue]()}
 }
 
 type Event_Deliver struct {
@@ -195,6 +221,30 @@ func (m *InputValue) Pb() *abbapb.InputValue {
 
 func (*InputValue) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.InputValue]()}
+}
+
+type ContinueExecution struct{}
+
+func ContinueExecutionFromPb(pb *abbapb.ContinueExecution) *ContinueExecution {
+	if pb == nil {
+		return nil
+	}
+	return &ContinueExecution{}
+}
+
+func (m *ContinueExecution) Pb() *abbapb.ContinueExecution {
+	if m == nil {
+		return nil
+	}
+	pbMessage := &abbapb.ContinueExecution{}
+	{
+	}
+
+	return pbMessage
+}
+
+func (*ContinueExecution) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.ContinueExecution]()}
 }
 
 type Deliver struct {
@@ -412,6 +462,8 @@ func RoundEvent_TypeFromPb(pb abbapb.RoundEvent_Type) RoundEvent_Type {
 	switch pb := pb.(type) {
 	case *abbapb.RoundEvent_InputValue:
 		return &RoundEvent_InputValue{InputValue: RoundInputValueFromPb(pb.InputValue)}
+	case *abbapb.RoundEvent_Continue:
+		return &RoundEvent_Continue{Continue: RoundContinueFromPb(pb.Continue)}
 	case *abbapb.RoundEvent_Deliver:
 		return &RoundEvent_Deliver{Deliver: RoundDeliverFromPb(pb.Deliver)}
 	case *abbapb.RoundEvent_Finish:
@@ -442,6 +494,30 @@ func (w *RoundEvent_InputValue) Pb() abbapb.RoundEvent_Type {
 
 func (*RoundEvent_InputValue) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.RoundEvent_InputValue]()}
+}
+
+type RoundEvent_Continue struct {
+	Continue *RoundContinue
+}
+
+func (*RoundEvent_Continue) isRoundEvent_Type() {}
+
+func (w *RoundEvent_Continue) Unwrap() *RoundContinue {
+	return w.Continue
+}
+
+func (w *RoundEvent_Continue) Pb() abbapb.RoundEvent_Type {
+	if w == nil {
+		return nil
+	}
+	if w.Continue == nil {
+		return &abbapb.RoundEvent_Continue{}
+	}
+	return &abbapb.RoundEvent_Continue{Continue: (w.Continue).Pb()}
+}
+
+func (*RoundEvent_Continue) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.RoundEvent_Continue]()}
 }
 
 type RoundEvent_Deliver struct {
@@ -546,6 +622,30 @@ func (m *RoundInputValue) Pb() *abbapb.RoundInputValue {
 
 func (*RoundInputValue) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.RoundInputValue]()}
+}
+
+type RoundContinue struct{}
+
+func RoundContinueFromPb(pb *abbapb.RoundContinue) *RoundContinue {
+	if pb == nil {
+		return nil
+	}
+	return &RoundContinue{}
+}
+
+func (m *RoundContinue) Pb() *abbapb.RoundContinue {
+	if m == nil {
+		return nil
+	}
+	pbMessage := &abbapb.RoundContinue{}
+	{
+	}
+
+	return pbMessage
+}
+
+func (*RoundContinue) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*abbapb.RoundContinue]()}
 }
 
 type RoundDeliver struct {

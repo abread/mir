@@ -25,6 +25,19 @@ func InputValue(destModule types.ModuleID, input bool) *types1.Event {
 	}
 }
 
+func ContinueExecution(destModule types.ModuleID) *types1.Event {
+	return &types1.Event{
+		DestModule: destModule,
+		Type: &types1.Event_Abba{
+			Abba: &types2.Event{
+				Type: &types2.Event_Continue{
+					Continue: &types2.ContinueExecution{},
+				},
+			},
+		},
+	}
+}
+
 func Deliver(destModule types.ModuleID, result bool, srcModule types.ModuleID) *types1.Event {
 	return &types1.Event{
 		DestModule: destModule,
@@ -52,6 +65,23 @@ func RoundInputValue(destModule types.ModuleID, input bool) *types1.Event {
 							InputValue: &types2.RoundInputValue{
 								Input: input,
 							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func RoundContinue(destModule types.ModuleID) *types1.Event {
+	return &types1.Event{
+		DestModule: destModule,
+		Type: &types1.Event_Abba{
+			Abba: &types2.Event{
+				Type: &types2.Event_Round{
+					Round: &types2.RoundEvent{
+						Type: &types2.RoundEvent_Continue{
+							Continue: &types2.RoundContinue{},
 						},
 					},
 				},

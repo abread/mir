@@ -87,6 +87,19 @@ func newController(mc ModuleConfig, params ModuleParams, logger logging.Logger, 
 		finishSent:  false,
 	}
 
+	abbadsl.UponContinueExecution(m, func() error {
+		if state.phase == phaseAwaitingInput {
+			return es.Errorf("abba ordered to make progress without input")
+		} else if state.phase == phaseDone {
+			// nothing to do
+			return nil
+		}
+
+		// tell the first round to make progress
+		abbadsl.RoundContinue(m, mc.RoundID(0))
+		return nil
+	})
+
 	abbadsl.UponRoundFinishAll(m, func(decision bool, unanimous bool) error {
 		if state.phase < phaseRunning {
 			return es.Errorf("abba round cannot deliver before input")

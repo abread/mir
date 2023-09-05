@@ -71,6 +71,12 @@ type ModuleTunables struct {
 	// Maximum number of ABBA rounds for which we process messages
 	// Must be at least 1
 	MaxAbbaRoundLookahead int
+
+	// Maximum number of agreement rounds for which we send input before
+	// allowing them to progress in the normal path
+	// Must be at least 0, must be less that MaxRoundLookahead
+	// Should me less than MaxRoundLookahead/2 - 1
+	MaxRoundAdvanceInput int
 }
 
 func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
@@ -78,6 +84,10 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 		return nil, es.Errorf("MaxRoundLookahead must be at least 1")
 	} else if tunables.MaxAbbaRoundLookahead <= 0 {
 		return nil, es.Errorf("MaxAbbaRoundLookahead must be at least 1")
+	} else if tunables.MaxRoundAdvanceInput < 0 {
+		return nil, es.Errorf("MaxRoundAdvanceInput must be at least 0")
+	} else if tunables.MaxRoundAdvanceInput > tunables.MaxRoundLookahead {
+		return nil, es.Errorf("MaxRoundAdvanceInput must be less than MaxRoundLookahead")
 	}
 
 	agRounds := modring.New(
@@ -96,14 +106,14 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 	state := &state{
 		rounds: make(map[uint64]*round, tunables.MaxRoundLookahead),
 
-		// stalled inputs count can never go beyond the number of concurrent agreement rounds
-		pendingInput: make(map[uint64]pendingInput, tunables.MaxRoundLookahead),
+		// stalled inputs count can never go beyond the number of nodes
+		pendingInput: make(map[uint64]bool, len(params.AllNodes)),
 
 		N:         N,
 		strongMaj: 2*F + 1,
 	}
 
-	controller := newAgController(mc, logger, state, agRounds)
+	controller := newAgController(mc, tunables, logger, state, agRounds)
 
 	perfSniffer := newAgRoundSniffer(mc, params, agRounds, state)
 
@@ -132,11 +142,6 @@ type round struct {
 	posTotalDuration  time.Duration
 }
 
-type pendingInput struct {
-	input   bool
-	relTime time.Duration
-}
-
 type state struct {
 	roundDecisionHistory AgRoundHistory
 
@@ -144,7 +149,7 @@ type state struct {
 
 	rounds map[uint64]*round
 
-	pendingInput map[uint64]pendingInput
+	pendingInput map[uint64]bool
 
 	N         int
 	strongMaj int
@@ -203,18 +208,21 @@ func (s *state) clearRoundData(roundNum uint64) {
 	delete(s.rounds, roundNum)
 }
 
-func newAgController(mc ModuleConfig, logger logging.Logger, state *state, agRounds *modring.Module) modules.PassiveModule {
+func newAgController(mc ModuleConfig, tunables ModuleTunables, logger logging.Logger, state *state, agRounds *modring.Module) modules.PassiveModule {
 	_ = logger // silence warnings
 
 	m := dsl.NewModule(mc.Self)
 
 	agreementpbdsl.UponInputValue(m, func(roundNum uint64, input bool) error {
-		// queue input for later
-		state.pendingInput[roundNum] = pendingInput{
-			input:   input,
-			relTime: time.Since(timeRef),
+		// ensure we are not sending duplicate inputs
+		_, pendingPresent := state.pendingInput[roundNum]
+		round, roundPresent := state.rounds[roundNum]
+		if pendingPresent || (roundPresent && round.relInputTime != 0) {
+			return es.Errorf("duplicate input for round %v", roundNum)
 		}
-		state.ensureRoundInitialized(roundNum)
+
+		// queue input for later
+		state.pendingInput[roundNum] = input
 		logger.Log(logging.LevelDebug, "queued input to agreement round", "agRound", roundNum, "value", input)
 		return nil
 	})
@@ -248,6 +256,11 @@ func newAgController(mc ModuleConfig, logger logging.Logger, state *state, agRou
 			currentRound = state.loadRound(agRounds, state.currentRound)
 		}
 
+		if currentRound != nil && !currentRound.delivered && currentRound.relInputTime != 0 {
+			// current round must make progress if unanimity wasn't reached
+			abbapbdsl.ContinueExecution(m, mc.agRoundModuleID(state.currentRound))
+		}
+
 		return nil
 	})
 
@@ -270,17 +283,22 @@ func newAgController(mc ModuleConfig, logger logging.Logger, state *state, agRou
 	// give input to new rounds
 	dsl.UponStateUpdates(m, func() error {
 		for round, input := range state.pendingInput {
-			if agRounds.IsInView(round) {
-				logger.Log(logging.LevelDebug, "inputting value to agreement round", "agRound", round, "value", input.input)
+			if agRounds.IsInView(round) && round <= state.currentRound+uint64(tunables.MaxRoundAdvanceInput) {
+				logger.Log(logging.LevelDebug, "inputting value to agreement round", "agRound", round, "value", input)
+				roundModID := mc.agRoundModuleID(round)
 				dsl.EmitEvent(m, abbapbevents.InputValue(
-					mc.agRoundModuleID(round),
-					input.input,
+					roundModID,
+					input,
 				))
 
-				state.ensureRoundInitialized(round).relInputTime = input.relTime
+				state.ensureRoundInitialized(round).relInputTime = time.Since(timeRef)
+
+				if round == state.currentRound {
+					// current round must make progress, even if not unanimous
+					abbapbdsl.ContinueExecution(m, roundModID)
+				}
 				delete(state.pendingInput, round)
 			}
-
 			// else: not enough rounds have terminated/been freed yet
 		}
 

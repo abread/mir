@@ -351,6 +351,7 @@ func newCountingApp(abbaMc ModuleConfig, inputValue bool) *countingApp {
 
 	dsl.UponInit(m, func() error {
 		abbadsl.InputValue(m, abbaMc.Self, inputValue)
+		abbadsl.ContinueExecution(m, abbaMc.Self)
 
 		return nil
 	})

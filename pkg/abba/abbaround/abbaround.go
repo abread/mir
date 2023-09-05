@@ -25,11 +25,17 @@ import (
 type roundPhase uint8
 
 const (
-	phaseAwaitingInput    roundPhase = iota // immediately before protocol step 4
-	phaseAwaitingNiceAux                    // until protocol step 7 completes (until CONF is broadcast)
-	phaseAwaitingNiceConf                   // until protocol step 8 completes (until we receive enough CONF)
-	phaseTossingCoin                        // protocol step 9, while preparing coin message
-	phaseDone                               // protocol step 10 (coin was tossed, next estimate was delivered)
+	phaseAwaitingInput roundPhase = iota // immediately before protocol step 4
+
+	// nodes in the first round will stall in this phase until
+	// they receive RoundContinue, or skip to the next phase
+	// straight away if they are not in the first round
+	phaseAwaitingContinue // same as before, but with input already provided
+
+	phaseAwaitingNiceAux  // until protocol step 7 completes (until CONF is broadcast)
+	phaseAwaitingNiceConf // until protocol step 8 completes (until we receive enough CONF)
+	phaseTossingCoin      // protocol step 9, while preparing coin message
+	phaseDone             // protocol step 10 (coin was tossed, next estimate was delivered)
 )
 
 var timeRef = time.Now()
@@ -95,13 +101,31 @@ func New(mc ModuleConfig, params ModuleParams, nodeID t.NodeID, logger logging.L
 			state.estimate,
 		), params.AllNodes)
 
-		state.phase = phaseAwaitingNiceAux
-
-		// precompute coin sig share
-		threshDsl.SignShare[struct{}](m, mc.ThreshCrypto, coinData, nil)
+		state.phase = phaseAwaitingContinue
 
 		return nil
 	})
+
+	if params.RoundNumber == 0 {
+		abbadsl.UponRoundContinue(m, func() error {
+			// no more time, we must go on with ABBA, with unanimity or not
+			state.phase = phaseAwaitingNiceAux
+
+			// precompute coin sig share
+			threshDsl.SignShare[struct{}](m, mc.ThreshCrypto, coinData, nil)
+			return nil
+		})
+	} else {
+		abbadsl.UponRoundInputValue(m, func(input bool) error {
+			// skip ahead to sending AUX straight away
+			state.phase = phaseAwaitingNiceAux
+
+			// precompute coin sig share
+			threshDsl.SignShare[struct{}](m, mc.ThreshCrypto, coinData, nil)
+			return nil
+		})
+	}
+
 	threshDsl.UponSignShareResult(m, func(sigShare tctypes.SigShare, _ctx *struct{}) error {
 		state.ownCoinShare = sigShare
 		state.coinSig.Add(sigShare, nodeID)
@@ -125,7 +149,7 @@ func New(mc ModuleConfig, params ModuleParams, nodeID t.NodeID, logger logging.L
 	})
 
 	dsl.UponStateUpdates(m, func() error {
-		if state.phase == phaseAwaitingInput || state.phase == phaseDone {
+		if state.phase <= phaseAwaitingContinue || state.phase == phaseDone {
 			return nil // did not perform the initial INIT broadcast or has already terminated
 		}
 

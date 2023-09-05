@@ -16,12 +16,20 @@ func InputValue(m dsl.Module, destModule types.ModuleID, input bool) {
 	dsl.EmitEvent(m, events.InputValue(destModule, input))
 }
 
+func ContinueExecution(m dsl.Module, destModule types.ModuleID) {
+	dsl.EmitEvent(m, events.ContinueExecution(destModule))
+}
+
 func Deliver(m dsl.Module, destModule types.ModuleID, result bool, srcModule types.ModuleID) {
 	dsl.EmitEvent(m, events.Deliver(destModule, result, srcModule))
 }
 
 func RoundInputValue(m dsl.Module, destModule types.ModuleID, input bool) {
 	dsl.EmitEvent(m, events.RoundInputValue(destModule, input))
+}
+
+func RoundContinue(m dsl.Module, destModule types.ModuleID) {
+	dsl.EmitEvent(m, events.RoundContinue(destModule))
 }
 
 func RoundDeliver(m dsl.Module, destModule types.ModuleID, nextEstimate bool, roundNumber uint64, durationNoCoin time.Duration) {

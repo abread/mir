@@ -9,6 +9,7 @@ import (
 func (*RoundEvent) ReflectTypeOptions() []reflect.Type {
 	return []reflect.Type{
 		reflect.TypeOf((*RoundEvent_InputValue)(nil)),
+		reflect.TypeOf((*RoundEvent_Continue)(nil)),
 		reflect.TypeOf((*RoundEvent_Deliver)(nil)),
 		reflect.TypeOf((*RoundEvent_Finish)(nil)),
 	}

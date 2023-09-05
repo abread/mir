@@ -13,6 +13,10 @@ func (w *Event_InputValue) Unwrap() *InputValue {
 	return w.InputValue
 }
 
+func (w *Event_Continue) Unwrap() *ContinueExecution {
+	return w.Continue
+}
+
 func (w *Event_Deliver) Unwrap() *Deliver {
 	return w.Deliver
 }
@@ -49,6 +53,10 @@ type RoundEvent_TypeWrapper[T any] interface {
 
 func (w *RoundEvent_InputValue) Unwrap() *RoundInputValue {
 	return w.InputValue
+}
+
+func (w *RoundEvent_Continue) Unwrap() *RoundContinue {
+	return w.Continue
 }
 
 func (w *RoundEvent_Deliver) Unwrap() *RoundDeliver {

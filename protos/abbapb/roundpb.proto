@@ -20,8 +20,9 @@ message RoundEvent {
     option (mir.event_type) = true;
 
     RoundInputValue input_value = 1;
-    RoundDeliver    deliver     = 2;
-    RoundFinishAll  finish      = 3;
+    RoundContinue   continue    = 2;
+    RoundDeliver    deliver     = 3;
+    RoundFinishAll  finish      = 4;
   }
 }
 
@@ -29,6 +30,11 @@ message RoundInputValue {
   option (mir.event) = true;
 
   bool input = 1;
+}
+
+message RoundContinue {
+  // first round will not go beyond processing INPUT until this event is received.
+  option (mir.event) = true;
 }
 
 message RoundDeliver {

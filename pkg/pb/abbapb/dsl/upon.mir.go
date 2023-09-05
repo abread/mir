@@ -30,6 +30,12 @@ func UponInputValue(m dsl.Module, handler func(input bool) error) {
 	})
 }
 
+func UponContinueExecution(m dsl.Module, handler func() error) {
+	UponEvent[*types.Event_Continue](m, func(ev *types.ContinueExecution) error {
+		return handler()
+	})
+}
+
 func UponDeliver(m dsl.Module, handler func(result bool, srcModule types2.ModuleID) error) {
 	UponEvent[*types.Event_Deliver](m, func(ev *types.Deliver) error {
 		return handler(ev.Result, ev.SrcModule)
@@ -50,6 +56,12 @@ func UponRoundEvent[W types.RoundEvent_TypeWrapper[Ev], Ev any](m dsl.Module, ha
 func UponRoundInputValue(m dsl.Module, handler func(input bool) error) {
 	UponRoundEvent[*types.RoundEvent_InputValue](m, func(ev *types.RoundInputValue) error {
 		return handler(ev.Input)
+	})
+}
+
+func UponRoundContinue(m dsl.Module, handler func() error) {
+	UponRoundEvent[*types.RoundEvent_Continue](m, func(ev *types.RoundContinue) error {
+		return handler()
 	})
 }
 

@@ -20,10 +20,11 @@ message Event {
   oneof type {
     option (mir.event_type) = true;
 
-    InputValue input_value = 1;
-    Deliver    deliver     = 2;
-    RoundEvent round       = 3;
-    Done       done        = 4;
+    InputValue        input_value = 1;
+    ContinueExecution continue    = 2;
+    Deliver           deliver     = 3;
+    RoundEvent        round       = 4;
+    Done              done        = 5;
   }
 }
 
@@ -31,6 +32,10 @@ message InputValue {
   option (mir.event) = true;
 
   bool input = 1;
+}
+
+message ContinueExecution {
+  option (mir.event) = true;
 }
 
 message Deliver {
