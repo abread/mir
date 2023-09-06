@@ -127,10 +127,76 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 		return nil
 	})
 
-	// upon agreement round completion, prepare next round
-	aagdsl.UponDeliver(m, func(round uint64, decision bool, duration time.Duration, _posQuorumWait time.Duration) error {
-		state.agRound++
+	// eagerly input 1 into rounds as soon as possible
+	bcpbdsl.UponDeliverCert(m, func(cert *bcpbtypes.Cert) error {
+		// If we delivered the next bc slot to be ordered, we can vote 1 for it in ag.
+		// Note: we can't vote for slots delivered further ahead: we do not know in which ag round they
+		// will be voted
+		if cert.Slot.QueueSlot != state.agQueueHeads[cert.Slot.QueueIdx] {
+			return nil
+		}
+
+		currentRoundQueueIdx := aleatypes.QueueIdx(state.agRound % uint64(len(params.AllNodes)))
+		if currentRoundQueueIdx == cert.Slot.QueueIdx {
+			// this slot is for the current ag round: we need to be carefult not to input a value twice
+			nextRound := state.agRound
+			if state.stalledAgRound {
+				logger.Log(logging.LevelDebug, "INPUT AG (BC-current)", "round", nextRound, "value", true)
+				aagdsl.InputValue(m, mc.AleaAgreement, nextRound, true)
+				state.stalledAgRound = false
+			}
+		} else {
+			// this slot is not for the current ag round: we can freely input to it
+			var nextRound uint64
+			if currentRoundQueueIdx < cert.Slot.QueueIdx {
+				// we need to go a few rounds further
+				nextRound = state.agRound + uint64(cert.Slot.QueueIdx-currentRoundQueueIdx)
+			} else {
+				nextRound = state.agRound + uint64(len(params.AllNodes)) - uint64(currentRoundQueueIdx-cert.Slot.QueueIdx)
+			}
+
+			logger.Log(logging.LevelDebug, "INPUT AG (BC-future)", "round", nextRound, "value", true)
+			aagdsl.InputValue(m, mc.AleaAgreement, nextRound, true)
+		}
+
+		return nil
+	})
+
+	// Slots may be broadcast long before agreement delivers them: this event handler provides input to ag
+	// for those slots that we left behind in the previous handler.
+	aagdsl.UponDeliver(m, func(round uint64, decision bool, _, _ time.Duration) error {
+		// if we delivered a new slot in a queue, we can input one for the next slot in the same queue
+		queueIdx := aleatypes.QueueIdx(round % uint64(len(params.AllNodes)))
+		nextQueueSlot := state.agQueueHeads[queueIdx]
+		if _, present := state.slotsReadyToDeliver[queueIdx][nextQueueSlot]; present {
+			nextRound := round + uint64(len(params.AllNodes))
+
+			logger.Log(logging.LevelDebug, "INPUT AG (AG-done)", "round", nextRound, "value", true)
+			aagdsl.InputValue(m, mc.AleaAgreement, nextRound, true)
+		}
+		return nil
+	})
+
+	// upon init, stall agreement until a slot is deliverable
+	dsl.UponInit(m, func() error {
 		state.stalledAgRound = true
+		return nil
+	})
+
+	aagdsl.UponDeliver(m, func(round uint64, _ bool, _, _ time.Duration) error {
+		// advance to next round
+		state.agRound++
+
+		// if bc has delivered the slot for this round already, then we have already input 1 to the
+		// round, and it is not stalled at all.
+		nextRoundQueueIdx := aleatypes.QueueIdx(state.agRound % uint64(len(params.AllNodes)))
+		nextRoundQueueSlot := state.agQueueHeads[nextRoundQueueIdx]
+		if _, present := state.slotsReadyToDeliver[nextRoundQueueIdx][nextRoundQueueSlot]; present {
+			state.stalledAgRound = false
+		} else {
+			state.stalledAgRound = true
+		}
+
 		return nil
 	})
 
@@ -139,53 +205,52 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 	dsl.UponStateUpdates(m, func() error {
 		if !state.stalledAgRound {
 			return nil // nothing to do
+		} else if !state.agCanDeliver(1) {
+			// just continue stalling: we don't have anything to deliver yet
+			return nil
 		}
 
-		canDeliverSomething := state.agCanDeliver(1)
+		nextSlotQueueIdx := aleatypes.QueueIdx(state.agRound % uint64(N))
+		nextSlot := bcpbtypes.Slot{
+			QueueIdx:  nextSlotQueueIdx,
+			QueueSlot: state.agQueueHeads[nextSlotQueueIdx],
+		}
 
-		nextQueueIdx := aleatypes.QueueIdx(state.agRound % uint64(N))
-		nextQueueSlot := state.agQueueHeads[nextQueueIdx]
+		// entering this code path means nextSlot was not delivered yet, and we should input 0 to the
+		// agreement round
 
-		if canDeliverSomething {
-			_, bcDone := state.slotsReadyToDeliver[nextQueueIdx][nextQueueSlot]
-			if !bcDone {
-				slot := bcpbtypes.Slot{
-					QueueIdx:  nextQueueIdx,
-					QueueSlot: nextQueueSlot,
-				}
-
-				if bcRuntime, ok := est.BcRuntime(slot); ok {
-					if nextQueueIdx == ownQueueIdx && bcRuntime < est.OwnBcMedianDurationEstNoMargin() {
-						//logger.Log(logging.LevelDebug, "stalling agreement input for own batch")
-						return nil
-					}
-
-					maxTimeToWait := est.ExtBcMaxDurationEst() - bcRuntime
-
-					// clamp wait time just in case
-					if maxTimeToWait > tunables.MaxAgreementDelay {
-						maxTimeToWait = 0
-					}
-
-					if maxTimeToWait > 0 {
-						// stall agreement to allow in-flight broadcast to complete
-
-						// schedule a timer to guarantee we reprocess the previous conditions
-						// and eventually let agreement make progress, even if this broadcast
-						// stalls indefinitely
-						// logger.Log(logging.LevelDebug, "stalling agreement input", "maxDelay", maxTimeToWait)
-						state.wakeUpAfter(maxTimeToWait)
-
-						return nil
-					}
-				}
+		// delay inputting 0 when a broadcast is in progress
+		if bcRuntime, ok := est.BcRuntime(nextSlot); ok {
+			if nextSlot.QueueIdx == ownQueueIdx && bcRuntime < est.OwnBcMedianDurationEstNoMargin() {
+				//logger.Log(logging.LevelDebug, "stalling agreement input for own batch")
+				return nil
 			}
 
-			// logger.Log(logging.LevelDebug, "progressing to next agreement round", "agreementRound", state.agRound, "input", bcDone)
+			maxTimeToWait := est.ExtBcMaxDurationEst() - bcRuntime
 
-			aagdsl.InputValue(m, mc.AleaAgreement, state.agRound, bcDone)
-			state.stalledAgRound = false
+			// clamp wait time just in case
+			if maxTimeToWait > tunables.MaxAgreementDelay {
+				maxTimeToWait = 0
+			}
+
+			if maxTimeToWait > 0 {
+				// stall agreement to allow in-flight broadcast to complete
+
+				// schedule a timer to guarantee we reprocess the previous conditions
+				// and eventually let agreement make progress, even if this broadcast
+				// stalls indefinitely
+				// logger.Log(logging.LevelDebug, "stalling agreement input", "maxDelay", maxTimeToWait)
+				state.wakeUpAfter(maxTimeToWait)
+
+				return nil
+			}
 		}
+
+		// logger.Log(logging.LevelDebug, "progressing to next agreement round", "agreementRound", state.agRound, "input", bcDone)
+
+		logger.Log(logging.LevelDebug, "INPUT AG (timeout)", "round", state.agRound, "value", false)
+		aagdsl.InputValue(m, mc.AleaAgreement, state.agRound, false)
+		state.stalledAgRound = false
 
 		return nil
 	})

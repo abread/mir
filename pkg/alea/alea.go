@@ -50,11 +50,20 @@ type Params struct {
 	// Must be at least 1
 	MaxOwnUnagreedBatchCount int
 
-	// TODO
+	// Maximum number of concurrent ABBA rounds for which we process messages
+	// Must be at least 1
 	MaxAbbaRoundLookahead int
 
-	// TODO
+	// Maximum number of concurrent agreement rounds for which we process messages
+	// Must be at least 1
 	MaxAgRoundLookahead int
+
+	// Maximum number of agreement rounds for which we send input before
+	// allowing them to progress in the normal path.
+	// Must be at least 0, must be less that MaxRoundLookahead
+	// Setting this parameter too high will lead to costly retransmissions!
+	// Should likely be less than MaxRoundLookahead/2 - 1.
+	MaxAgRoundAdvanceInput int
 
 	// Subprotocol duration estimates window size
 	EstimateWindowSize int
@@ -82,6 +91,7 @@ func DefaultParams(membership *trantorpbtypes.Membership) Params {
 		MaxOwnUnagreedBatchCount: 8,
 		MaxAbbaRoundLookahead:    4,
 		MaxAgRoundLookahead:      32,
+		MaxAgRoundAdvanceInput:   15, // AgRoundLookahead / 2 - 1
 		EstimateWindowSize:       32,
 		MaxAgreementDelay:        time.Second,
 		MaxExtSlowdownFactor:     1.25,
@@ -199,6 +209,7 @@ func New(ownID t.NodeID, config Config, params Params, startingChkp *checkpoint.
 		agreement.ModuleTunables{
 			MaxRoundLookahead:     params.MaxAgRoundLookahead,
 			MaxAbbaRoundLookahead: params.MaxAbbaRoundLookahead,
+			MaxRoundAdvanceInput:  params.MaxAgRoundAdvanceInput,
 		},
 		ownID,
 		logging.Decorate(logger, "AleaAgreement: "),

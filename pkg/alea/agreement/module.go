@@ -64,18 +64,19 @@ type ModuleParams struct {
 
 // ModuleTunables sets the values of protocol tunables that need not be the same across all nodes.
 type ModuleTunables struct {
-	// Maximum number of agreement rounds for which we process messages
+	// Maximum number of concurrent agreement rounds for which we process messages
 	// Must be at least 1
 	MaxRoundLookahead int
 
-	// Maximum number of ABBA rounds for which we process messages
+	// Maximum number of concurrent ABBA rounds for which we process messages
 	// Must be at least 1
 	MaxAbbaRoundLookahead int
 
 	// Maximum number of agreement rounds for which we send input before
-	// allowing them to progress in the normal path
+	// allowing them to progress in the normal path.
 	// Must be at least 0, must be less that MaxRoundLookahead
-	// Should me less than MaxRoundLookahead/2 - 1
+	// Setting this parameter too high will lead to costly retransmissions!
+	// Should likely be less than MaxRoundLookahead/2 - 1.
 	MaxRoundAdvanceInput int
 }
 
@@ -239,8 +240,8 @@ func newAgController(mc ModuleConfig, tunables ModuleTunables, logger logging.Lo
 	})
 
 	// deliver undelivered rounds
-	// TODO: currently clashes with round clearing in UponDone. change them to allow batching state updates
-	dsl.UponStateUpdate(m, func() error {
+	dsl.UponStateUpdates(m, func() error {
+		_ = nodeID
 		currentRound := state.loadRound(agRounds, state.currentRound)
 		if currentRound == nil || !currentRound.delivered {
 			return nil
@@ -252,12 +253,16 @@ func newAgController(mc ModuleConfig, tunables ModuleTunables, logger logging.Lo
 			agreementpbdsl.Deliver(m, mc.Consumer, state.currentRound, currentRound.decision, currentRound.posQuorumDuration, currentRound.posTotalDuration)
 			state.roundDecisionHistory.Push(currentRound.decision)
 
+			// clean up metadata
+			state.clearRoundData(state.currentRound)
+
 			state.currentRound++
 			currentRound = state.loadRound(agRounds, state.currentRound)
 		}
 
 		if currentRound != nil && !currentRound.delivered && currentRound.relInputTime != 0 {
 			// current round must make progress if unanimity wasn't reached
+			logger.Log(logging.LevelDebug, "continuing normal execution", "agRound", state.currentRound)
 			abbapbdsl.ContinueExecution(m, mc.agRoundModuleID(state.currentRound))
 		}
 
@@ -276,7 +281,6 @@ func newAgController(mc ModuleConfig, tunables ModuleTunables, logger logging.Lo
 			return es.Errorf("failed to clean up finished agreement round: %w", err)
 		}
 
-		state.clearRoundData(roundNumber)
 		return nil
 	})
 
@@ -295,6 +299,7 @@ func newAgController(mc ModuleConfig, tunables ModuleTunables, logger logging.Lo
 
 				if round == state.currentRound {
 					// current round must make progress, even if not unanimous
+					logger.Log(logging.LevelDebug, "continuing normal execution", "agRound", round)
 					abbapbdsl.ContinueExecution(m, roundModID)
 				}
 				delete(state.pendingInput, round)

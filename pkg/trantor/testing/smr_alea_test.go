@@ -139,6 +139,23 @@ func testIntegrationWithAlea(t *testing.T) {
 				NumFakeTXs:    100,
 				Duration:      15 * time.Second,
 			}},
+		14: {"Submit 100 requests with 4 nodes and libp2p networking with optimizations",
+			&TestConfig{
+				NodeIDsWeight: deploytest.NewNodeIDsDefaultWeights(1),
+				Transport:     "libp2p",
+				NumClients:    4,
+				NumNetTXs:     100,
+				Duration:      15 * time.Second,
+				ParamsModifier: func(params *trantor.Params) {
+					// disable retransmissions
+					params.ReliableNet.RetransmissionLoopInterval = math.MaxInt64
+
+					// bring all abba instances into view
+					params.Alea.MaxAbbaRoundLookahead = 10
+					params.Alea.MaxAgRoundLookahead = 10
+					params.Alea.MaxAgRoundAdvanceInput = 5
+				},
+			}},
 
 		100: {"Submit 10 requests with 4 nodes and libp2p networking, with 1 replica not receiving broadcasts",
 			&TestConfig{
@@ -165,6 +182,7 @@ func testIntegrationWithAlea(t *testing.T) {
 					// bring all abba instances into view
 					params.Alea.MaxAbbaRoundLookahead = 10
 					params.Alea.MaxAgRoundLookahead = 10
+					params.Alea.MaxAgRoundAdvanceInput = 4
 				},
 			}},
 	}
@@ -388,6 +406,7 @@ func newDeploymentAlea(conf *TestConfig) (*deploytest.Deployment, error) {
 		tConf.Alea.MaxOwnUnagreedBatchCount = 2
 		tConf.Alea.MaxAbbaRoundLookahead = 1
 		tConf.Alea.MaxAgRoundLookahead = 1
+		tConf.Alea.MaxAgRoundAdvanceInput = 0
 
 		// Use small batches so even a few transactions keep being proposed even after epoch transitions.
 		tConf.Mempool.MaxTransactionsInBatch = 10
