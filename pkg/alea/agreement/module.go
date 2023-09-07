@@ -193,22 +193,6 @@ func (s *state) ensureRoundInitialized(roundNum uint64) *round {
 	return s.rounds[roundNum]
 }
 
-func (s *state) loadRound(rounds *modring.Module, roundNum uint64) *round {
-	if !rounds.IsInView(roundNum) {
-		return nil
-	}
-
-	if _, ok := s.rounds[roundNum]; !ok {
-		return nil
-	}
-
-	return s.rounds[roundNum]
-}
-
-func (s *state) clearRoundData(roundNum uint64) {
-	delete(s.rounds, roundNum)
-}
-
 func newAgController(mc ModuleConfig, tunables ModuleTunables, logger logging.Logger, state *state, agRounds *modring.Module) modules.PassiveModule {
 	_ = logger // silence warnings
 
@@ -241,23 +225,22 @@ func newAgController(mc ModuleConfig, tunables ModuleTunables, logger logging.Lo
 
 	// deliver undelivered rounds
 	dsl.UponStateUpdates(m, func() error {
-		_ = nodeID
-		currentRound := state.loadRound(agRounds, state.currentRound)
-		if currentRound == nil || !currentRound.delivered {
+		currentRound, currentRoundRunning := state.rounds[state.currentRound]
+		if !currentRoundRunning || !currentRound.delivered {
 			return nil
 		}
 
-		for currentRound != nil && currentRound.delivered {
+		for currentRoundRunning && currentRound.delivered {
 			logger.Log(logging.LevelDebug, "delivering round", "agRound", state.currentRound, "decision", currentRound.decision)
 
 			agreementpbdsl.Deliver(m, mc.Consumer, state.currentRound, currentRound.decision, currentRound.posQuorumDuration, currentRound.posTotalDuration)
 			state.roundDecisionHistory.Push(currentRound.decision)
 
 			// clean up metadata
-			state.clearRoundData(state.currentRound)
+			delete(state.rounds, state.currentRound)
 
 			state.currentRound++
-			currentRound = state.loadRound(agRounds, state.currentRound)
+			currentRound, currentRoundRunning = state.rounds[state.currentRound]
 		}
 
 		if currentRound != nil && !currentRound.delivered && currentRound.relInputTime != 0 {
