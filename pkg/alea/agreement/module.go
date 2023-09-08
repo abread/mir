@@ -137,6 +137,7 @@ type round struct {
 	relPosQuorumTime       time.Duration // instant where 2F+1 nodes provided input=1
 	relPosTotalTime        time.Duration // instant where all nodes provided input=1
 
+	continued         bool
 	delivered         bool
 	decision          bool
 	posQuorumDuration time.Duration
@@ -274,11 +275,6 @@ func newAgController(mc ModuleConfig, tunables ModuleTunables, logger logging.Lo
 					input,
 				))
 
-				if round == state.currentRound {
-					// current round must make progress, even if not unanimous
-					logger.Log(logging.LevelDebug, "continuing normal execution", "agRound", round)
-					abbapbdsl.ContinueExecution(m, roundModID)
-				}
 				delete(state.pendingInput, round)
 			}
 			// else: not enough rounds have terminated/been freed yet
@@ -290,14 +286,23 @@ func newAgController(mc ModuleConfig, tunables ModuleTunables, logger logging.Lo
 	// force full ABA when current round has input but hasn't delivered yet
 	dsl.UponStateUpdates(m, func() error {
 		currentRound, ok := state.rounds[state.currentRound]
+		if !ok {
+			return nil // current round hasn't started at all yet
+		}
 
-		if ok && !currentRound.delivered && currentRound.relInputKnownTime != 0 {
-			// Note: if the input is known and this is the current round, then we must have emitted
-			// an ABBA InputValue Event already
+		// if the input is known, this is the current round, and it is in view, then we must have emitted
+		// an ABBA InputValue Event already
+		roundHasInput := currentRound.relInputKnownTime != 0 && agRounds.IsInView(state.currentRound)
+		if !roundHasInput {
+			return nil // current round hasn't started yet (from our end)
+		}
 
-			// current round must make progress if unanimity wasn't reached
+		// current round must make progress if unanimity wasn't reached yet
+		if !currentRound.delivered && !currentRound.continued {
 			logger.Log(logging.LevelDebug, "continuing normal execution", "agRound", state.currentRound)
 			abbapbdsl.ContinueExecution(m, mc.agRoundModuleID(state.currentRound))
+
+			currentRound.continued = true
 		}
 
 		return nil
