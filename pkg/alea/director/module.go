@@ -288,6 +288,11 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 		// consider how many batches we have pending delivery
 		waitRoundCount += int(unagreedOwnBatchCount) * N
 
+		// give one ag round of leeway
+		if waitRoundCount > 0 {
+			waitRoundCount--
+		}
+
 		timeToOwnQueueAgRound := est.AgFastPathEst() * time.Duration(waitRoundCount)
 		bcRuntimeEst := est.OwnBcMaxDurationEst()
 
