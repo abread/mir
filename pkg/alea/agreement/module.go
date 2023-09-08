@@ -133,7 +133,7 @@ func (mc *ModuleConfig) agRoundModuleID(id uint64) t.ModuleID {
 type round struct {
 	nodesWithInput         abbatypes.RecvTracker // TODO: move recvtracker to another package?
 	nodesWithPosInputCount int
-	relInputTime           time.Duration
+	relInputKnownTime      time.Duration
 	relPosQuorumTime       time.Duration // instant where 2F+1 nodes provided input=1
 	relPosTotalTime        time.Duration // instant where all nodes provided input=1
 
@@ -166,12 +166,12 @@ func (s *state) storeRoundDecision(rounds *modring.Module, roundNum uint64, deci
 	r.decision = decision
 	r.delivered = true
 
-	if r.relInputTime == 0 && r.relPosQuorumTime != 0 {
+	if r.relInputKnownTime == 0 && r.relPosQuorumTime != 0 {
 		r.posQuorumDuration = 0
-	} else if r.relInputTime != 0 && r.relPosQuorumTime == 0 {
+	} else if r.relInputKnownTime != 0 && r.relPosQuorumTime == 0 {
 		r.posQuorumDuration = time.Duration(math.MaxInt64)
 	} else {
-		r.posQuorumDuration = r.relPosQuorumTime - r.relInputTime
+		r.posQuorumDuration = r.relPosQuorumTime - r.relInputKnownTime
 	}
 
 	if r.relPosTotalTime != 0 {
@@ -201,10 +201,12 @@ func newAgController(mc ModuleConfig, tunables ModuleTunables, logger logging.Lo
 	agreementpbdsl.UponInputValue(m, func(roundNum uint64, input bool) error {
 		// ensure we are not sending duplicate inputs
 		_, pendingPresent := state.pendingInput[roundNum]
-		round, roundPresent := state.rounds[roundNum]
-		if pendingPresent || (roundPresent && round.relInputTime != 0) {
+		round := state.ensureRoundInitialized(roundNum)
+		if pendingPresent || round.relInputKnownTime != 0 {
 			return es.Errorf("duplicate input for round %v", roundNum)
 		}
+
+		round.relInputKnownTime = time.Since(timeRef)
 
 		// queue input for later
 		state.pendingInput[roundNum] = input
@@ -272,8 +274,6 @@ func newAgController(mc ModuleConfig, tunables ModuleTunables, logger logging.Lo
 					input,
 				))
 
-				state.ensureRoundInitialized(round).relInputTime = time.Since(timeRef)
-
 				if round == state.currentRound {
 					// current round must make progress, even if not unanimous
 					logger.Log(logging.LevelDebug, "continuing normal execution", "agRound", round)
@@ -291,7 +291,10 @@ func newAgController(mc ModuleConfig, tunables ModuleTunables, logger logging.Lo
 	dsl.UponStateUpdates(m, func() error {
 		currentRound, ok := state.rounds[state.currentRound]
 
-		if ok && !currentRound.delivered && currentRound.relInputTime != 0 {
+		if ok && !currentRound.delivered && currentRound.relInputKnownTime != 0 {
+			// Note: if the input is known and this is the current round, then we must have emitted
+			// an ABBA InputValue Event already
+
 			// current round must make progress if unanimity wasn't reached
 			logger.Log(logging.LevelDebug, "continuing normal execution", "agRound", state.currentRound)
 			abbapbdsl.ContinueExecution(m, mc.agRoundModuleID(state.currentRound))
