@@ -288,7 +288,7 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 		// consider how many batches we have pending delivery
 		waitRoundCount += int(unagreedOwnBatchCount) * N
 
-		timeToOwnQueueAgRound := est.AgMinDurationEst() * time.Duration(waitRoundCount)
+		timeToOwnQueueAgRound := est.AgFastPathEst() * time.Duration(waitRoundCount)
 		bcRuntimeEst := est.OwnBcMaxDurationEst()
 
 		// We have a lot of time before we reach our agreement round. Let the batch fill up!

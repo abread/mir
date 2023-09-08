@@ -41,9 +41,9 @@ func (e *estimators) ExtBcMaxDurationEst() time.Duration {
 	return e.maxExtBcDuration + e.extBcDoneMargin.MaxEstimate()
 }
 
-func (e *estimators) AgMinDurationEst() time.Duration {
+func (e *estimators) AgFastPathEst() time.Duration {
 	// the unanimity optimization lowers convergence to the time for one message broadcast (per node):
-	// the INIT message, containing the initial input
+	// the INPUT message
 	// one abba round takes roughly 3 message broadcasts (per node), +1 for the common coin
 	return e.abbaRoundNoCoinDuration.MinEstimate() / 3
 }
