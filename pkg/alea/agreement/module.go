@@ -243,12 +243,6 @@ func newAgController(mc ModuleConfig, tunables ModuleTunables, logger logging.Lo
 			currentRound, currentRoundRunning = state.rounds[state.currentRound]
 		}
 
-		if currentRound != nil && !currentRound.delivered && currentRound.relInputTime != 0 {
-			// current round must make progress if unanimity wasn't reached
-			logger.Log(logging.LevelDebug, "continuing normal execution", "agRound", state.currentRound)
-			abbapbdsl.ContinueExecution(m, mc.agRoundModuleID(state.currentRound))
-		}
-
 		return nil
 	})
 
@@ -291,6 +285,17 @@ func newAgController(mc ModuleConfig, tunables ModuleTunables, logger logging.Lo
 		}
 
 		return nil
+	})
+
+	// force full ABA when current round has input but hasn't delivered yet
+	dsl.UponStateUpdates(m, func() error {
+		currentRound, ok := state.rounds[state.currentRound]
+
+		if ok && !currentRound.delivered && currentRound.relInputTime != 0 {
+			// current round must make progress if unanimity wasn't reached
+			logger.Log(logging.LevelDebug, "continuing normal execution", "agRound", state.currentRound)
+			abbapbdsl.ContinueExecution(m, mc.agRoundModuleID(state.currentRound))
+		}
 	})
 
 	// TODO: find a way to avoid this weird double-package split. it harms both sight and soul.
