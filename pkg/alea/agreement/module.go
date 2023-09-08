@@ -299,6 +299,8 @@ func newAgController(mc ModuleConfig, tunables ModuleTunables, logger logging.Lo
 			logger.Log(logging.LevelDebug, "continuing normal execution", "agRound", state.currentRound)
 			abbapbdsl.ContinueExecution(m, mc.agRoundModuleID(state.currentRound))
 		}
+
+		return nil
 	})
 
 	// TODO: find a way to avoid this weird double-package split. it harms both sight and soul.
