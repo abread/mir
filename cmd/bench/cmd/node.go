@@ -154,6 +154,16 @@ func runNode(ctx context.Context) error {
 	smrParams := trantor.DefaultParams(initialMembership)
 	smrParams.Mempool.MaxTransactionsInBatch = batchSize
 
+	// use params from ISS paper for ISS-PBFT
+	smrParams.Iss.SegmentLength = 0 // unset
+	if 2*len(initialMembership.Nodes) < 256 {
+		// min epoch length = 256
+		smrParams.Iss.EpochLength = 256
+	} else {
+		// min segment length = 2
+		smrParams.Iss.SegmentLength = 2
+	}
+
 	// ensure network messages can accommodate the chosen batch size
 	batchAdjustedMaxMsgSize := batchSize * 512 * 105 / 100
 	if smrParams.Net.MaxMessageSize < batchAdjustedMaxMsgSize {
