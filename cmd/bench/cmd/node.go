@@ -155,12 +155,12 @@ func runNode(ctx context.Context) error {
 	smrParams.Mempool.MaxTransactionsInBatch = batchSize
 
 	// use params from ISS paper for ISS-PBFT
-	smrParams.Iss.SegmentLength = 0 // unset
-	if 2*len(initialMembership.Nodes) < 256 {
+	// Note: smrParams.Iss.EpochLength is not currently implemented
+	if len(initialMembership.Nodes) < 256/2 {
 		// min epoch length = 256
-		smrParams.Iss.EpochLength = 256
+		smrParams.Iss.SegmentLength = 256 / len(initialMembership.Nodes)
 	} else {
-		// min segment length = 2
+		// min seg length = 2
 		smrParams.Iss.SegmentLength = 2
 	}
 
@@ -169,6 +169,8 @@ func runNode(ctx context.Context) error {
 	if smrParams.Net.MaxMessageSize < batchAdjustedMaxMsgSize {
 		smrParams.Net.MaxMessageSize = batchAdjustedMaxMsgSize
 	}
+
+	smrParams.Net.ConnectionBufferSize = 384
 
 	// derived to match mean alea latency with 1tx/s load (directed at the next leader replica) - 2ms
 	//smrParams.AdjustSpeed(time.Duration(10879+1467*len(initialMembership.Nodes)) * time.Microsecond)
