@@ -19,7 +19,6 @@ import (
 	ageventstypes "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents/types"
 	bcpbtypes "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/types"
 	bcqueuepbtypes "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/types"
-	batchdbpbtypes "github.com/filecoin-project/mir/pkg/pb/availabilitypb/batchdbpb/types"
 	availabilitypbtypes "github.com/filecoin-project/mir/pkg/pb/availabilitypb/types"
 	batchfetcherpbtypes "github.com/filecoin-project/mir/pkg/pb/batchfetcherpb/types"
 	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
@@ -240,31 +239,6 @@ func (at *AleaTracer) interceptOne(event *eventpbtypes.Event) error { // nolint:
 				}
 			}
 		}
-	case *eventpbtypes.Event_BatchDb:
-		switch e := ev.BatchDb.Type.(type) {
-		case *batchdbpbtypes.Event_Store:
-			// register bc end here to capture batches obtained from FILLER messages too
-			id := e.Store.BatchId
-			id = strings.TrimPrefix(id, "alea-")
-			idParts := strings.Split(id, ":")
-
-			queueIdx, err := strconv.ParseUint(idParts[0], 10, 64)
-			if err != nil {
-				return es.Errorf("bad queue index in batch id (%s): %w", id, err)
-			}
-			if queueIdx == uint64(at.ownQueueIdx) {
-				// own bc is only over after propagation completes
-				return nil
-			}
-
-			queueSlot, err := strconv.ParseUint(idParts[1], 10, 64)
-			if err != nil {
-				return es.Errorf("bad queue slot in batch id (%s): %w", id, err)
-			}
-
-			slot := bcpbtypes.Slot{QueueIdx: aleatypes.QueueIdx(queueIdx), QueueSlot: aleatypes.QueueSlot(queueSlot)}
-			at.endBcSpan(ts, slot)
-		}
 	case *eventpbtypes.Event_AleaAgreement:
 		switch e := ev.AleaAgreement.Type.(type) {
 		case *ageventstypes.Event_InputValue:
@@ -382,6 +356,9 @@ func (at *AleaTracer) interceptOne(event *eventpbtypes.Event) error { // nolint:
 
 			at.endBfSpan(ts, slot)
 			at.startDeliveryStalledSpan(ts, slot)
+
+			// register bc end here to capture batches obtained from FILLER messages too
+			at.endBcSpan(ts, slot)
 		}
 	case *eventpbtypes.Event_BatchFetcher:
 		switch e := ev.BatchFetcher.Type.(type) {
