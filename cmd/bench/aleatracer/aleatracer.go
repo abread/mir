@@ -233,18 +233,10 @@ func (at *AleaTracer) interceptOne(event *eventpbtypes.Event) error { // nolint:
 
 			if slot.QueueSlot >= at.agQueueHeads[slot.QueueIdx] {
 				at.unagreedSlots[slot.QueueIdx][slot.QueueSlot] = struct{}{}
-
-				if slot.QueueSlot == at.agQueueHeads[slot.QueueIdx] && !at.agRunning {
-					at.startAgStallSpan(ts, at.nextAgRound)
-				}
 			}
 		}
 	case *eventpbtypes.Event_AleaAgreement:
 		switch e := ev.AleaAgreement.Type.(type) {
-		case *ageventstypes.Event_InputValue:
-			at.endAgStallSpan(ts, e.InputValue.Round)
-			at.startAgSpan(ts, e.InputValue.Round)
-			at.agRunning = true
 		case *ageventstypes.Event_Deliver:
 			at.endAgSpan(ts, e.Deliver.Round)
 			at.endAgModSpan(ts, e.Deliver.Round)
@@ -262,12 +254,15 @@ func (at *AleaTracer) interceptOne(event *eventpbtypes.Event) error { // nolint:
 			}
 
 			at.nextAgRound = e.Deliver.Round + 1
-
-			at.agRunning = false
-			if at.agCanDeliver() {
+			nextQueueIdx := aleatypes.QueueIdx(at.nextAgRound % uint64(at.nodeCount))
+			if _, ok := at.unagreedSlots[nextQueueIdx][at.agQueueHeads[nextQueueIdx]]; ok {
+				// slot is present, ag will start immediately
+				at.startAgSpan(ts, at.nextAgRound)
+			} else {
+				// slot not present, ag will potentially stall a bit
+				at.agRunning = false
 				at.startAgStallSpan(ts, at.nextAgRound)
 			}
-
 		}
 	case *eventpbtypes.Event_Vcb:
 		switch e := ev.Vcb.Type.(type) {
@@ -314,6 +309,14 @@ func (at *AleaTracer) interceptOne(event *eventpbtypes.Event) error { // nolint:
 		}
 	case *eventpbtypes.Event_Abba:
 		switch e := ev.Abba.Type.(type) {
+		case *abbapbtypes.Event_Continue:
+			agRoundID, err := at.parseAgRoundID(event.DestModule)
+			if err != nil {
+				return es.Errorf("invalid ag round id: %w", err)
+			}
+			at.endAgStallSpan(ts, agRoundID)
+			at.startAgSpan(ts, agRoundID)
+			at.agRunning = true
 		case *abbapbtypes.Event_Round:
 			switch e2 := e.Round.Type.(type) {
 			case *abbapbtypes.RoundEvent_InputValue:
@@ -450,17 +453,6 @@ func (at *AleaTracer) interceptOne(event *eventpbtypes.Event) error { // nolint:
 	return nil
 }
 
-func (at *AleaTracer) agCanDeliver() bool {
-	for queueIdx, nextSlot := range at.agQueueHeads {
-		_, present := at.unagreedSlots[aleatypes.QueueIdx(queueIdx)][nextSlot]
-		if present {
-			return true
-		}
-	}
-
-	return false
-}
-
 func (at *AleaTracer) registerModStart(ts time.Duration, event *eventpbtypes.Event) {
 	id := event.DestModule
 	if id.IsSubOf("aag") {
@@ -504,6 +496,20 @@ func (at *AleaTracer) registerModStart(ts time.Duration, event *eventpbtypes.Eve
 			QueueSlot: aleatypes.QueueSlot(queueSlot),
 		})
 	}
+}
+
+func (at *AleaTracer) parseAgRoundID(id t.ModuleID) (uint64, error) {
+	if !id.IsSubOf("aag") {
+		return 0, es.Errorf("not aag/*")
+	}
+	id = id.Sub()
+
+	agRound, err := strconv.ParseUint(string(id.Top()), 10, 64)
+	if err != nil {
+		return 0, es.Errorf("expected <ag round no.>, got %s", id.Top())
+	}
+
+	return agRound, nil
 }
 
 func (at *AleaTracer) parseAbbaRoundID(id t.ModuleID) (abbaRoundID, error) {
