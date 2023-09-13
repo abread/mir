@@ -163,6 +163,7 @@ func runNode(ctx context.Context) error {
 		// min seg length = 2
 		smrParams.Iss.SegmentLength = 2
 	}
+	smrParams.Iss.AdjustSpeed(4 * time.Second)
 
 	// ensure network messages can accommodate the chosen batch size
 	batchAdjustedMaxMsgSize := batchSize * 512 * 105 / 100
