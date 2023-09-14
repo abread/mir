@@ -298,11 +298,13 @@ func runNode(ctx context.Context) error {
 
 	txReceiver := transactionreceiver.NewTransactionReceiver(node, "mempool", logger)
 	app.DeliverHook = func(txs []*trantorpbtypes.Transaction) error {
-		txsPb := make([]*trantorpb.Transaction, len(txs))
-		for i, tx := range txs {
-			txsPb[i] = tx.Pb()
+		if len(txs) != 0 {
+			txsPb := make([]*trantorpb.Transaction, len(txs))
+			for i, tx := range txs {
+				txsPb[i] = tx.Pb()
+			}
+			txReceiver.NotifyBatchDeliver(txsPb)
 		}
-		txReceiver.NotifyBatchDeliver(txsPb)
 		return nil
 	}
 	txReceiver.Start(txReceiverListener)
