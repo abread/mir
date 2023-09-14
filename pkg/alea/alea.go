@@ -84,14 +84,18 @@ type Params struct {
 // A proper deployment is expected to craft a custom configuration,
 // for which DefaultParams can serve as a starting point.
 func DefaultParams(membership *trantorpbtypes.Membership) Params {
+	MaxUnagreedBatchCount := 3
+	MaxConcurrentVcbPerQueue := MaxUnagreedBatchCount*2 + 1
+	MaxAgRoundLookahead := 32
+
 	return Params{
 		InstanceUID:              []byte{42},
 		Membership:               membership,
-		MaxConcurrentVcbPerQueue: 32,
-		MaxOwnUnagreedBatchCount: 8,
+		MaxConcurrentVcbPerQueue: MaxConcurrentVcbPerQueue,
+		MaxOwnUnagreedBatchCount: MaxUnagreedBatchCount,
 		MaxAbbaRoundLookahead:    4,
-		MaxAgRoundLookahead:      32,
-		MaxAgRoundAdvanceInput:   15, // AgRoundLookahead / 2 - 1
+		MaxAgRoundLookahead:      MaxAgRoundLookahead,
+		MaxAgRoundAdvanceInput:   MaxAgRoundLookahead/2 - 1,
 		EstimateWindowSize:       32,
 		MaxAgreementDelay:        time.Second,
 		MaxExtSlowdownFactor:     1.25,
