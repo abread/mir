@@ -33,6 +33,11 @@ func (sc *StableCheckpoint) Pb() *checkpointpb.StableCheckpoint {
 	return (*checkpointpbtypes.StableCheckpoint)(sc).Pb()
 }
 
+// DslStruct returns a dsl-struct representation of the stable checkpoint.
+func (sc *StableCheckpoint) DslStruct() *checkpointpbtypes.StableCheckpoint {
+	return (*checkpointpbtypes.StableCheckpoint)(sc)
+}
+
 // Serialize returns the stable checkpoint serialized as a byte slice.
 // It is the inverse of Deserialize, to which the returned byte slice can be passed to restore the checkpoint.
 func (sc *StableCheckpoint) Serialize() ([]byte, error) {

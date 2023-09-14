@@ -218,7 +218,7 @@ func New(
 		apppbdsl.RestoreState(
 			iss.m,
 			iss.moduleConfig.App,
-			checkpointpbtypes.StableCheckpointFromPb(iss.lastStableCheckpoint.Pb()),
+			iss.lastStableCheckpoint.DslStruct(),
 		)
 
 		// Start the first epoch (not necessarily epoch 0, depending on the starting checkpoint).
@@ -501,7 +501,7 @@ func New(
 		// Create an event to request the application module for
 		// restoring its state from the snapshot received in the new
 		// stable checkpoint message.
-		apppbdsl.RestoreState(iss.m, iss.moduleConfig.App, checkpointpbtypes.StableCheckpointFromPb(chkp.Pb()))
+		apppbdsl.RestoreState(iss.m, iss.moduleConfig.App, chkp.DslStruct())
 
 		// Start executing the current epoch (the one the checkpoint corresponds to).
 		// This must happen after the state is restored,
@@ -712,9 +712,7 @@ func (iss *ISS) processCommitted() error {
 		var cert *apbtypes.Cert
 		if logEntry.Aborted {
 			iss.LeaderPolicy.Suspect(iss.epoch.Nr(), logEntry.Suspect)
-			cert = &apbtypes.Cert{Type: &apbtypes.Cert_Mscs{Mscs: &mscpbtypes.Certs{}}}
-			// TODO: Using a dummy MSC cert here. A nil value would be more natural, as this data is not to be used,
-			//  but currently nil values are not supported in generated types. Use nil when nil support is implemented.
+			cert = nil
 		} else {
 			var certPb availabilitypb.Cert
 			if err := proto.Unmarshal(certData, &certPb); err != nil {
