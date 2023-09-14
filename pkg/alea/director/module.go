@@ -84,10 +84,11 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 	})
 
 	// upon agreement round completion, deliver if it was decided to do so
+	// if not, deliver empty batch (nilCert is used because we cannot currently)
 	aagdsl.UponDeliver(m, func(round uint64, decision bool, _duration time.Duration, _posQuorumWait time.Duration) error {
 		if !decision {
-			// nothing to deliver
-			return nil
+			// deliver empty batch
+			isspbdsl.DeliverCert(m, mc.Consumer, tt.SeqNr(round), nil, true)
 		}
 
 		queueIdx := aleatypes.QueueIdx(round % uint64(N))
@@ -136,7 +137,7 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 			return nil
 		}
 
-		currentRoundQueueIdx := aleatypes.QueueIdx(state.agRound % uint64(len(params.AllNodes)))
+		currentRoundQueueIdx := aleatypes.QueueIdx(state.agRound % uint64(N))
 		if currentRoundQueueIdx == cert.Slot.QueueIdx {
 			// this slot is for the current ag round: we need to be carefult not to input a value twice
 			nextRound := state.agRound
@@ -152,7 +153,7 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 				// we need to go a few rounds further
 				nextRound = state.agRound + uint64(cert.Slot.QueueIdx-currentRoundQueueIdx)
 			} else {
-				nextRound = state.agRound + uint64(len(params.AllNodes)) - uint64(currentRoundQueueIdx-cert.Slot.QueueIdx)
+				nextRound = state.agRound + uint64(N) - uint64(currentRoundQueueIdx-cert.Slot.QueueIdx)
 			}
 
 			logger.Log(logging.LevelDebug, "INPUT AG (BC-future)", "round", nextRound, "value", true)
@@ -166,10 +167,10 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 	// for those slots that we left behind in the previous handler.
 	aagdsl.UponDeliver(m, func(round uint64, decision bool, _, _ time.Duration) error {
 		// if we delivered a new slot in a queue, we can input one for the next slot in the same queue
-		queueIdx := aleatypes.QueueIdx(round % uint64(len(params.AllNodes)))
+		queueIdx := aleatypes.QueueIdx(round % uint64(N))
 		nextQueueSlot := state.agQueueHeads[queueIdx]
 		if _, present := state.slotsReadyToDeliver[queueIdx][nextQueueSlot]; present {
-			nextRound := round + uint64(len(params.AllNodes))
+			nextRound := round + uint64(N)
 
 			logger.Log(logging.LevelDebug, "INPUT AG (AG-done)", "round", nextRound, "value", true)
 			aagdsl.InputValue(m, mc.AleaAgreement, nextRound, true)
@@ -189,7 +190,7 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 
 		// if bc has delivered the slot for this round already, then we have already input 1 to the
 		// round, and it is not stalled at all.
-		nextRoundQueueIdx := aleatypes.QueueIdx(state.agRound % uint64(len(params.AllNodes)))
+		nextRoundQueueIdx := aleatypes.QueueIdx(state.agRound % uint64(N))
 		nextRoundQueueSlot := state.agQueueHeads[nextRoundQueueIdx]
 		if _, present := state.slotsReadyToDeliver[nextRoundQueueIdx][nextRoundQueueSlot]; present {
 			state.stalledAgRound = false
