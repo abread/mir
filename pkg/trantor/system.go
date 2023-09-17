@@ -292,8 +292,6 @@ func NewAlea(
 		// Alea does not broadcast empty batches
 		params.Mempool.MinTransactionsInBatch = 1
 	}
-	params.Mempool.RandSeed = int64(slices.Index(params.Alea.AllNodes(), ownID))
-	params.Mempool.IncomingTxBucketCount = len(params.Alea.Membership.Nodes)
 	params.Mempool.BatchTimeout = 0
 
 	// Instantiate the Alea ordering protocol with default configuration.

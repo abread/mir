@@ -25,7 +25,6 @@ type ModuleParams = common.ModuleParams
 
 func DefaultModuleParams() *ModuleParams {
 	return &ModuleParams{
-		IncomingTxBucketCount:  1,
 		MinTransactionsInBatch: 0,
 		MaxTransactionsInBatch: 1024,
 		MaxPayloadInBatch:      1024 * 1024, // 1 MiB

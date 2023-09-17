@@ -19,15 +19,6 @@ type ModuleConfig struct {
 // ModuleParams sets the values for the parameters of an instance of the protocol.
 // All replicas are expected to use identical module parameters.
 type ModuleParams struct {
-	// Divides transactions among N buckets, based on the transaction ID.
-	// Upon batch request, it will fill the batch with transactions starting from a pseudo-randomly
-	// chosen bucket.
-	// Must be at least 1.
-	IncomingTxBucketCount int
-
-	// Used for choosing a bucket. Can be e.g. an index in the list of nodes.
-	RandSeed int64
-
 	// Minimum number of individual transactions in a single batch.
 	MinTransactionsInBatch int
 
