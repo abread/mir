@@ -55,7 +55,7 @@ cmd: $(targetdir)/bench $(targetdir)/mircat
 
 .PHONY: $(targetdir)/bench
 $(targetdir)/bench:
-	go build -pgo=./default.pprof -o $(targetdir)/bench ./cmd/bench
+	go build -o $(targetdir)/bench ./cmd/bench
 
 .PHONY: $(targetdir)/mircat
 $(targetdir)/mircat:
