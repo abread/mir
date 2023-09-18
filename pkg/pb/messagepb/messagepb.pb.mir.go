@@ -18,6 +18,8 @@ func (*Message) ReflectTypeOptions() []reflect.Type {
 		reflect.TypeOf((*Message_Abba)(nil)),
 		reflect.TypeOf((*Message_AleaBroadcast)(nil)),
 		reflect.TypeOf((*Message_AleaAgreement)(nil)),
+		reflect.TypeOf((*Message_AleaDirector)(nil)),
 		reflect.TypeOf((*Message_ReliableNet)(nil)),
+		reflect.TypeOf((*Message_Threshcheckpoint)(nil)),
 	}
 }

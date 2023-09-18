@@ -34,7 +34,6 @@ func includeCertCreation(
 	state := &certCreationState{}
 
 	availabilitypbdsl.UponRequestCert(m, func(origin *availabilitypbtypes.RequestCertOrigin) error {
-		// TODO: checkpointing and proper epoch nr handling
 		return es.Errorf("alea-bc only supports cert creation requests from alea itself")
 	})
 
@@ -45,6 +44,10 @@ func includeCertCreation(
 	})
 	mempoolpbdsl.UponNewBatch(m, func(txIDs []tt.TxID, txs []*trantorpbtypes.Transaction, _context *struct{}) error {
 		bcqueuepbdsl.InputValue(m, ownQueueModuleID, state.nextQueueSlot, txIDs, txs)
+
+		// we are a correct node, so they will eventually be delivered
+		mempoolpbdsl.MarkStableProposal(m, mc.Mempool, txs)
+
 		state.nextQueueSlot++
 		return nil
 	})
@@ -65,4 +68,5 @@ func includeCertCreation(
 		bcpbdsl.DeliverCert(m, mc.Consumer, cert)
 		return nil
 	})
+
 }

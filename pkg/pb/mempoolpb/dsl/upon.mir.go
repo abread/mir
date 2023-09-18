@@ -134,8 +134,8 @@ func UponNewEpoch(m dsl.Module, handler func(epochNr types2.EpochNr, clientProgr
 	})
 }
 
-func UponMarkDelivered(m dsl.Module, handler func(txs []*types3.Transaction) error) {
-	UponEvent[*types.Event_MarkDelivered](m, func(ev *types.MarkDelivered) error {
+func UponMarkStableProposal(m dsl.Module, handler func(txs []*types3.Transaction) error) {
+	UponEvent[*types.Event_MarkStableProposal](m, func(ev *types.MarkStableProposal) error {
 		return handler(ev.Txs)
 	})
 }

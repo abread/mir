@@ -5,6 +5,7 @@ import (
 
 	es "github.com/go-errors/errors"
 
+	"github.com/filecoin-project/mir/pkg/alea/queueselectionpolicy"
 	"github.com/filecoin-project/mir/pkg/availability/batchdb/fakebatchdb"
 	"github.com/filecoin-project/mir/pkg/availability/multisigcollector"
 	"github.com/filecoin-project/mir/pkg/mempool/simplemempool"
@@ -32,6 +33,8 @@ import (
 	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/net"
 	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
+	"github.com/filecoin-project/mir/pkg/threshcheckpoint"
+	tcv "github.com/filecoin-project/mir/pkg/threshcheckpoint/chkpvalidator"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -260,6 +263,9 @@ func NewAlea(
 	// The SMR system will continue operating from this checkpoint.
 	startingCheckpoint *checkpoint.StableCheckpoint,
 
+	// Implementation of the cryptographic primitives to be used for signing and verifying protocol messages.
+	cryptoImpl mircrypto.Crypto,
+
 	// Implementation of the threshold criptography primitives to be used for signing and verifying protocol messages.
 	threshCrypto threshcrypto.ThreshCrypto,
 
@@ -281,9 +287,15 @@ func NewAlea(
 	// Hash function to be used by all modules of the system.
 	hashImpl := crypto.SHA256
 
-	if startingCheckpoint != nil {
-		// TODO: checkpointing
-		panic("checkpointing not supported yet")
+	// TODO: incorporate this into GenesisCheckpoint function, once we have a better way to switch trantor protocols
+	if startingCheckpoint.Sn == 0 {
+		var err error
+		startingCheckpoint.Snapshot.EpochData.LeaderPolicy, err = queueselectionpolicy.NewQueuePolicy(params.Alea.QueueSelectionPolicyType, params.Alea.Membership).Bytes()
+		if err != nil {
+			return nil, err
+		}
+
+		startingCheckpoint.Snapshot.EpochData.EpochConfig.Length = uint64(params.Alea.EpochLength)
 	}
 
 	// tune mempool for alea
@@ -300,7 +312,10 @@ func NewAlea(
 		AleaDirector:  "adir",
 		AleaBroadcast: "abc",
 		AleaAgreement: "aag",
+		Checkpoint:    "chkp",
+		ChkpValidator: "chkpv",
 		Consumer:      "bf",
+		Crypto:        "crypto",
 		BatchDB:       "batchdb",
 		Hasher:        "hasher",
 		Mempool:       "mempool",
@@ -360,6 +375,36 @@ func NewAlea(
 	)
 
 	aleaProtocolModules[moduleConfig.Hasher] = mircrypto.NewHasher(hashImpl)
+	aleaProtocolModules[moduleConfig.Crypto] = mircrypto.New(cryptoImpl)
+
+	// The checkpoint protocol periodically (at the beginning of each epoch) creates a checkpoint of the system state.
+	// It is created as a factory, since each checkpoint uses its own instance of the checkpointing protocol.
+	aleaProtocolModules[moduleConfig.Checkpoint] = threshcheckpoint.Factory(
+		threshcheckpoint.ModuleConfig{
+			Self:         moduleConfig.Checkpoint,
+			App:          moduleConfig.Consumer,
+			Hasher:       moduleConfig.Hasher,
+			ThreshCrypto: moduleConfig.ThreshCrypto,
+			ReliableNet:  moduleConfig.ReliableNet,
+			Ord:          moduleConfig.AleaDirector,
+		},
+		ownID,
+		logging.Decorate(logger, "CHKP: "),
+	)
+
+	// The checkpoint validator verifies checkpoints from which state is to be restored.
+	// Note that this is different from the checkpoint preprepare validator which is attached to the agreement protocol
+	// in which the proposals happen to be checkpoints.
+	aleaProtocolModules[moduleConfig.ChkpValidator] = tcv.NewModule(
+		tcv.ModuleConfig{
+			Self: moduleConfig.ChkpValidator,
+		}, tcv.NewPermissiveCV(
+			0,
+			ownID,
+			hashImpl,
+			threshCrypto,
+			logger,
+		))
 
 	// Instantiate the batch fetcher module that transforms availability certificates ordered by Alea
 	// into batches of transactions that can be applied to the replicated application.
@@ -368,7 +413,7 @@ func NewAlea(
 		batchfetcher.ModuleConfig{
 			Self:         moduleConfig.Consumer,
 			Availability: moduleConfig.AleaBroadcast,
-			Checkpoint:   "", // TODO: checkpointing
+			Checkpoint:   moduleConfig.Checkpoint,
 			Destination:  appID,
 		},
 		tt.EpochNr(0),

@@ -58,8 +58,8 @@ func Event_TypeFromPb(pb mempoolpb.Event_Type) Event_Type {
 		return &Event_BatchTimeout{BatchTimeout: BatchTimeoutFromPb(pb.BatchTimeout)}
 	case *mempoolpb.Event_NewEpoch:
 		return &Event_NewEpoch{NewEpoch: NewEpochFromPb(pb.NewEpoch)}
-	case *mempoolpb.Event_MarkDelivered:
-		return &Event_MarkDelivered{MarkDelivered: MarkDeliveredFromPb(pb.MarkDelivered)}
+	case *mempoolpb.Event_MarkStableProposal:
+		return &Event_MarkStableProposal{MarkStableProposal: MarkStableProposalFromPb(pb.MarkStableProposal)}
 	}
 	return nil
 }
@@ -328,28 +328,28 @@ func (*Event_NewEpoch) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*mempoolpb.Event_NewEpoch]()}
 }
 
-type Event_MarkDelivered struct {
-	MarkDelivered *MarkDelivered
+type Event_MarkStableProposal struct {
+	MarkStableProposal *MarkStableProposal
 }
 
-func (*Event_MarkDelivered) isEvent_Type() {}
+func (*Event_MarkStableProposal) isEvent_Type() {}
 
-func (w *Event_MarkDelivered) Unwrap() *MarkDelivered {
-	return w.MarkDelivered
+func (w *Event_MarkStableProposal) Unwrap() *MarkStableProposal {
+	return w.MarkStableProposal
 }
 
-func (w *Event_MarkDelivered) Pb() mempoolpb.Event_Type {
+func (w *Event_MarkStableProposal) Pb() mempoolpb.Event_Type {
 	if w == nil {
 		return nil
 	}
-	if w.MarkDelivered == nil {
-		return &mempoolpb.Event_MarkDelivered{}
+	if w.MarkStableProposal == nil {
+		return &mempoolpb.Event_MarkStableProposal{}
 	}
-	return &mempoolpb.Event_MarkDelivered{MarkDelivered: (w.MarkDelivered).Pb()}
+	return &mempoolpb.Event_MarkStableProposal{MarkStableProposal: (w.MarkStableProposal).Pb()}
 }
 
-func (*Event_MarkDelivered) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*mempoolpb.Event_MarkDelivered]()}
+func (*Event_MarkStableProposal) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*mempoolpb.Event_MarkStableProposal]()}
 }
 
 func EventFromPb(pb *mempoolpb.Event) *Event {
@@ -792,26 +792,26 @@ func (*BatchTimeout) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*mempoolpb.BatchTimeout]()}
 }
 
-type MarkDelivered struct {
+type MarkStableProposal struct {
 	Txs []*types1.Transaction
 }
 
-func MarkDeliveredFromPb(pb *mempoolpb.MarkDelivered) *MarkDelivered {
+func MarkStableProposalFromPb(pb *mempoolpb.MarkStableProposal) *MarkStableProposal {
 	if pb == nil {
 		return nil
 	}
-	return &MarkDelivered{
+	return &MarkStableProposal{
 		Txs: types2.ConvertSlice(pb.Txs, func(t *trantorpb.Transaction) *types1.Transaction {
 			return types1.TransactionFromPb(t)
 		}),
 	}
 }
 
-func (m *MarkDelivered) Pb() *mempoolpb.MarkDelivered {
+func (m *MarkStableProposal) Pb() *mempoolpb.MarkStableProposal {
 	if m == nil {
 		return nil
 	}
-	pbMessage := &mempoolpb.MarkDelivered{}
+	pbMessage := &mempoolpb.MarkStableProposal{}
 	{
 		pbMessage.Txs = types2.ConvertSlice(m.Txs, func(t *types1.Transaction) *trantorpb.Transaction {
 			return (t).Pb()
@@ -821,8 +821,8 @@ func (m *MarkDelivered) Pb() *mempoolpb.MarkDelivered {
 	return pbMessage
 }
 
-func (*MarkDelivered) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*mempoolpb.MarkDelivered]()}
+func (*MarkStableProposal) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*mempoolpb.MarkStableProposal]()}
 }
 
 type RequestBatchOrigin struct {

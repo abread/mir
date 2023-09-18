@@ -9,5 +9,14 @@ import (
 func (*Event) ReflectTypeOptions() []reflect.Type {
 	return []reflect.Type{
 		reflect.TypeOf((*Event_Heartbeat)(nil)),
+		reflect.TypeOf((*Event_NewEpoch)(nil)),
+		reflect.TypeOf((*Event_EpochCheckpointed)(nil)),
+		reflect.TypeOf((*Event_HelpNode)(nil)),
+	}
+}
+
+func (*Message) ReflectTypeOptions() []reflect.Type {
+	return []reflect.Type{
+		reflect.TypeOf((*Message_StableCheckpoint)(nil)),
 	}
 }

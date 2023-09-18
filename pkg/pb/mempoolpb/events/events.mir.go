@@ -188,13 +188,13 @@ func NewEpoch(destModule types.ModuleID, epochNr types1.EpochNr, clientProgress 
 	}
 }
 
-func MarkDelivered(destModule types.ModuleID, txs []*types4.Transaction) *types3.Event {
+func MarkStableProposal(destModule types.ModuleID, txs []*types4.Transaction) *types3.Event {
 	return &types3.Event{
 		DestModule: destModule,
 		Type: &types3.Event_Mempool{
 			Mempool: &types2.Event{
-				Type: &types2.Event_MarkDelivered{
-					MarkDelivered: &types2.MarkDelivered{
+				Type: &types2.Event_MarkStableProposal{
+					MarkStableProposal: &types2.MarkStableProposal{
 						Txs: txs,
 					},
 				},

@@ -99,3 +99,18 @@ func DoFillGap(destModule types.ModuleID, slot *types2.Slot) *types1.Event {
 		},
 	}
 }
+
+func MarkStableProposal(destModule types.ModuleID, slot *types2.Slot) *types1.Event {
+	return &types1.Event{
+		DestModule: destModule,
+		Type: &types1.Event_AleaBc{
+			AleaBc: &types2.Event{
+				Type: &types2.Event_MarkStable{
+					MarkStable: &types2.MarkStableProposal{
+						Slot: slot,
+					},
+				},
+			},
+		},
+	}
+}

@@ -22,7 +22,7 @@ type ModuleConfig struct {
 type ModuleParams struct {
 	BcInstanceUID []byte
 	AllNodes      []t.NodeID // the list of participating nodes, which must be the same as the set of nodes in the threshcrypto module
-	EpochNr       tt.RetentionIndex
+	EpochNr       tt.EpochNr
 
 	QueueIdx   aleatypes.QueueIdx
 	QueueOwner t.NodeID

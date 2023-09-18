@@ -19,7 +19,7 @@ import (
 )
 
 type ModuleConfig = bccommon.ModuleConfig
-type ModuleParams = bccommon.GlobalParams
+type ModuleParams = bccommon.ModuleParams
 type ModuleTunables = bccommon.ModuleTunables
 
 type dummyMulti struct {
@@ -51,11 +51,7 @@ func NewMulti(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, nod
 	origSelf := mc.Self
 
 	mc.Self = mc.Self.Then(t.NewModuleIDFromInt(0))
-	subParams := bccommon.ModuleParams{
-		GlobalParams: params,
-		EpochNr:      tt.RetentionIndex(0),
-	}
-	mod, err := NewInstance(mc, subParams, tunables, tt.EpochNr(0), nodeID, logging.Decorate(logger, "BcInst: ", "epochNr", 0))
+	mod, err := NewInstance(mc, params, tunables, tt.EpochNr(0), nodeID, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -110,7 +106,7 @@ func createQueues(bcMc ModuleConfig, bcParams bccommon.ModuleParams, bcTunables 
 		params := bcqueue.ModuleParams{
 			BcInstanceUID: bcParams.InstanceUID, // TODO: review
 			AllNodes:      bcParams.AllNodes,
-			EpochNr:       bcParams.EpochNr,
+			EpochNr:       tt.EpochNr(0),
 
 			QueueIdx:   aleatypes.QueueIdx(idx),
 			QueueOwner: bcParams.AllNodes[idx],

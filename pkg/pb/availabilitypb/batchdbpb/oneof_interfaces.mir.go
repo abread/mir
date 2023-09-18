@@ -34,6 +34,10 @@ func (w *Event_GarbageCollect) Unwrap() *GarbageCollect {
 	return w.GarbageCollect
 }
 
+func (w *Event_UpdateRet) Unwrap() *UpdateBatchRetention {
+	return w.UpdateRet
+}
+
 type LookupBatchOrigin_Type = isLookupBatchOrigin_Type
 
 type LookupBatchOrigin_TypeWrapper[T any] interface {

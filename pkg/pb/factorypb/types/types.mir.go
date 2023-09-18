@@ -9,6 +9,7 @@ import (
 	factorypb "github.com/filecoin-project/mir/pkg/pb/factorypb"
 	types5 "github.com/filecoin-project/mir/pkg/pb/ordererpb/pprepvalidatorpb/types"
 	types4 "github.com/filecoin-project/mir/pkg/pb/ordererpb/types"
+	types6 "github.com/filecoin-project/mir/pkg/pb/threshcheckpointpb/types"
 	types1 "github.com/filecoin-project/mir/pkg/trantor/types"
 	types "github.com/filecoin-project/mir/pkg/types"
 	reflectutil "github.com/filecoin-project/mir/pkg/util/reflectutil"
@@ -213,6 +214,8 @@ func GeneratorParams_TypeFromPb(pb factorypb.GeneratorParams_Type) GeneratorPara
 		return &GeneratorParams_PbftModule{PbftModule: types4.PBFTModuleFromPb(pb.PbftModule)}
 	case *factorypb.GeneratorParams_PpvModule:
 		return &GeneratorParams_PpvModule{PpvModule: types5.PPrepValidatorChkpFromPb(pb.PpvModule)}
+	case *factorypb.GeneratorParams_ThreshCheckpoint:
+		return &GeneratorParams_ThreshCheckpoint{ThreshCheckpoint: types6.InstanceParamsFromPb(pb.ThreshCheckpoint)}
 	}
 	return nil
 }
@@ -335,6 +338,30 @@ func (w *GeneratorParams_PpvModule) Pb() factorypb.GeneratorParams_Type {
 
 func (*GeneratorParams_PpvModule) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*factorypb.GeneratorParams_PpvModule]()}
+}
+
+type GeneratorParams_ThreshCheckpoint struct {
+	ThreshCheckpoint *types6.InstanceParams
+}
+
+func (*GeneratorParams_ThreshCheckpoint) isGeneratorParams_Type() {}
+
+func (w *GeneratorParams_ThreshCheckpoint) Unwrap() *types6.InstanceParams {
+	return w.ThreshCheckpoint
+}
+
+func (w *GeneratorParams_ThreshCheckpoint) Pb() factorypb.GeneratorParams_Type {
+	if w == nil {
+		return nil
+	}
+	if w.ThreshCheckpoint == nil {
+		return &factorypb.GeneratorParams_ThreshCheckpoint{}
+	}
+	return &factorypb.GeneratorParams_ThreshCheckpoint{ThreshCheckpoint: (w.ThreshCheckpoint).Pb()}
+}
+
+func (*GeneratorParams_ThreshCheckpoint) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*factorypb.GeneratorParams_ThreshCheckpoint]()}
 }
 
 func GeneratorParamsFromPb(pb *factorypb.GeneratorParams) *GeneratorParams {

@@ -13,6 +13,7 @@ import (
 	bcpbdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/dsl"
 	bcpbtypes "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/types"
 	t "github.com/filecoin-project/mir/pkg/types"
+	"github.com/filecoin-project/mir/pkg/util/maputil"
 )
 
 type estimators struct {
@@ -61,8 +62,9 @@ func (e *estimators) MarkBcStartedNow(slot bcpbtypes.Slot) {
 }
 
 func newEstimators(m dsl.Module, params ModuleParams, tunables ModuleTunables, nodeID t.NodeID) *estimators {
-	N := len(params.AllNodes)
-	ownQueueIdx := aleatypes.QueueIdx(slices.Index(params.AllNodes, nodeID))
+	allNodes := maputil.GetSortedKeys(params.Membership.Nodes)
+	N := len(allNodes)
+	ownQueueIdx := aleatypes.QueueIdx(slices.Index(allNodes, nodeID))
 
 	est := &estimators{
 		bcStartTimes: make(map[bcpbtypes.Slot]time.Time, (N-1)*tunables.MaxConcurrentVcbPerQueue+tunables.MaxOwnUnagreedBatchCount),

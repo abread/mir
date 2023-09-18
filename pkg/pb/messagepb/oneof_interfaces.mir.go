@@ -6,6 +6,7 @@ import (
 	abbapb "github.com/filecoin-project/mir/pkg/pb/abbapb"
 	agreementpb "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb"
 	bcpb "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb"
+	directorpb "github.com/filecoin-project/mir/pkg/pb/aleapb/directorpb"
 	mscpb "github.com/filecoin-project/mir/pkg/pb/availabilitypb/mscpb"
 	bcbpb "github.com/filecoin-project/mir/pkg/pb/bcbpb"
 	checkpointpb "github.com/filecoin-project/mir/pkg/pb/checkpointpb"
@@ -13,6 +14,7 @@ import (
 	ordererpb "github.com/filecoin-project/mir/pkg/pb/ordererpb"
 	pingpongpb "github.com/filecoin-project/mir/pkg/pb/pingpongpb"
 	messages "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/messages"
+	threshcheckpointpb "github.com/filecoin-project/mir/pkg/pb/threshcheckpointpb"
 	vcbpb "github.com/filecoin-project/mir/pkg/pb/vcbpb"
 )
 
@@ -63,6 +65,14 @@ func (w *Message_AleaAgreement) Unwrap() *agreementpb.Message {
 	return w.AleaAgreement
 }
 
+func (w *Message_AleaDirector) Unwrap() *directorpb.Message {
+	return w.AleaDirector
+}
+
 func (w *Message_ReliableNet) Unwrap() *messages.Message {
 	return w.ReliableNet
+}
+
+func (w *Message_Threshcheckpoint) Unwrap() *threshcheckpointpb.Message {
+	return w.Threshcheckpoint
 }

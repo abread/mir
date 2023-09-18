@@ -27,6 +27,8 @@ import (
 	pingpongpb "github.com/filecoin-project/mir/pkg/pb/pingpongpb"
 	reliablenetpb "github.com/filecoin-project/mir/pkg/pb/reliablenetpb"
 	testerpb "github.com/filecoin-project/mir/pkg/pb/testerpb"
+	threshcheckpointpb "github.com/filecoin-project/mir/pkg/pb/threshcheckpointpb"
+	threshchkpvalidatorpb "github.com/filecoin-project/mir/pkg/pb/threshcheckpointpb/threshchkpvalidatorpb"
 	threshcryptopb "github.com/filecoin-project/mir/pkg/pb/threshcryptopb"
 	transportpb "github.com/filecoin-project/mir/pkg/pb/transportpb"
 	vcbpb "github.com/filecoin-project/mir/pkg/pb/vcbpb"
@@ -121,6 +123,14 @@ func (w *Event_Vcb) Unwrap() *vcbpb.Event {
 
 func (w *Event_Abba) Unwrap() *abbapb.Event {
 	return w.Abba
+}
+
+func (w *Event_Threshcheckpoint) Unwrap() *threshcheckpointpb.Event {
+	return w.Threshcheckpoint
+}
+
+func (w *Event_ThreshchkpValidator) Unwrap() *threshchkpvalidatorpb.Event {
+	return w.ThreshchkpValidator
 }
 
 func (w *Event_AleaBc) Unwrap() *bcpb.Event {

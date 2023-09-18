@@ -82,6 +82,21 @@ func (dt *DeliveredTXs) Add(txNo tt.TxNo) bool {
 	return false
 }
 
+func (dt *DeliveredTXs) MergeIn(other *DeliveredTXs) {
+	if other.lowWm > dt.lowWm {
+		dt.lowWm = other.lowWm
+	}
+
+	for txNo := range other.delivered {
+		if txNo < dt.lowWm {
+			continue
+		}
+		dt.delivered[txNo] = struct{}{}
+	}
+
+	dt.GarbageCollect()
+}
+
 // GarbageCollect reduces the memory footprint of the DeliveredTXs
 // by deleting a contiguous prefix of delivered transaction numbers
 // and increasing the low watermark accordingly.

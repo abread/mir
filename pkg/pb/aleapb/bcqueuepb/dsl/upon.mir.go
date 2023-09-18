@@ -52,9 +52,9 @@ func UponPastVcbFinal(m dsl.Module, handler func(queueSlot aleatypes.QueueSlot, 
 	})
 }
 
-func UponBcStarted(m dsl.Module, handler func(slot *types4.Slot) error) {
+func UponBcStarted(m dsl.Module, handler func(slot *types4.Slot, epoch types2.EpochNr) error) {
 	UponEvent[*types.Event_BcStarted](m, func(ev *types.BcStarted) error {
-		return handler(ev.Slot)
+		return handler(ev.Slot, ev.Epoch)
 	})
 }
 

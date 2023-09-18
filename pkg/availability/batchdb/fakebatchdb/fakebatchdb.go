@@ -115,5 +115,15 @@ func NewModule(mc ModuleConfig) modules.Module {
 		return nil
 	})
 
+	batchdbpbdsl.UponUpdateBatchRetention(m, func(batchId msctypes.BatchID, retentionIndex tt.RetentionIndex) error {
+		oldRet := state.batchStore[batchId].maxRetIdx
+		if retentionIndex > oldRet {
+			state.batchStore[batchId].maxRetIdx = retentionIndex
+			delete(state.batchesByRetIdx[oldRet], batchId)
+			state.batchesByRetIdx[retentionIndex][batchId] = struct{}{}
+		}
+		return nil
+	})
+
 	return m
 }

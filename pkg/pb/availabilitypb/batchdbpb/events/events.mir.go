@@ -91,3 +91,19 @@ func GarbageCollect(destModule types.ModuleID, retentionIndex types5.RetentionIn
 		},
 	}
 }
+
+func UpdateBatchRetention(destModule types.ModuleID, batchId types1.BatchID, retentionIndex types5.RetentionIndex) *types3.Event {
+	return &types3.Event{
+		DestModule: destModule,
+		Type: &types3.Event_BatchDb{
+			BatchDb: &types2.Event{
+				Type: &types2.Event_UpdateRet{
+					UpdateRet: &types2.UpdateBatchRetention{
+						BatchId:        batchId,
+						RetentionIndex: retentionIndex,
+					},
+				},
+			},
+		},
+	}
+}

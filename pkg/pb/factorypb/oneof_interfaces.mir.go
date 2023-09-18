@@ -7,6 +7,7 @@ import (
 	checkpointpb "github.com/filecoin-project/mir/pkg/pb/checkpointpb"
 	ordererpb "github.com/filecoin-project/mir/pkg/pb/ordererpb"
 	pprepvalidatorpb "github.com/filecoin-project/mir/pkg/pb/ordererpb/pprepvalidatorpb"
+	threshcheckpointpb "github.com/filecoin-project/mir/pkg/pb/threshcheckpointpb"
 )
 
 type Event_Type = isEvent_Type
@@ -49,4 +50,8 @@ func (w *GeneratorParams_PbftModule) Unwrap() *ordererpb.PBFTModule {
 
 func (w *GeneratorParams_PpvModule) Unwrap() *pprepvalidatorpb.PPrepValidatorChkp {
 	return w.PpvModule
+}
+
+func (w *GeneratorParams_ThreshCheckpoint) Unwrap() *threshcheckpointpb.InstanceParams {
+	return w.ThreshCheckpoint
 }

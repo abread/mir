@@ -5,6 +5,7 @@ package directorpbdsl
 import (
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
 	events "github.com/filecoin-project/mir/pkg/pb/aleapb/directorpb/events"
+	types1 "github.com/filecoin-project/mir/pkg/trantor/types"
 	types "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -12,4 +13,16 @@ import (
 
 func Heartbeat(m dsl.Module, destModule types.ModuleID) {
 	dsl.EmitEvent(m, events.Heartbeat(destModule))
+}
+
+func NewEpoch(m dsl.Module, destModule types.ModuleID, epoch types1.EpochNr) {
+	dsl.EmitEvent(m, events.NewEpoch(destModule, epoch))
+}
+
+func EpochCheckpointed(m dsl.Module, destModule types.ModuleID, epoch types1.EpochNr) {
+	dsl.EmitEvent(m, events.EpochCheckpointed(destModule, epoch))
+}
+
+func HelpNode(m dsl.Module, destModule types.ModuleID, nodeId types.NodeID) {
+	dsl.EmitEvent(m, events.HelpNode(destModule, nodeId))
 }

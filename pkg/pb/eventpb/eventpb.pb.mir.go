@@ -29,6 +29,8 @@ func (*Event) ReflectTypeOptions() []reflect.Type {
 		reflect.TypeOf((*Event_ReliableNet)(nil)),
 		reflect.TypeOf((*Event_Vcb)(nil)),
 		reflect.TypeOf((*Event_Abba)(nil)),
+		reflect.TypeOf((*Event_Threshcheckpoint)(nil)),
+		reflect.TypeOf((*Event_ThreshchkpValidator)(nil)),
 		reflect.TypeOf((*Event_AleaBc)(nil)),
 		reflect.TypeOf((*Event_AleaBcqueue)(nil)),
 		reflect.TypeOf((*Event_AleaAgreement)(nil)),

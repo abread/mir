@@ -20,7 +20,9 @@ import "vcbpb/vcbpb.proto";
 import "abbapb/abbapb.proto";
 import "aleapb/bcpb/bcpb.proto";
 import "aleapb/agreementpb/messages.proto";
+import "aleapb/directorpb/directorpb.proto";
 import "reliablenetpb/messages/messages.proto";
+import "threshcheckpointpb/threshcheckpointpb.proto";
 
 import "mir/codegen_extensions.proto";
 import "net/codegen_extensions.proto";
@@ -43,6 +45,8 @@ message Message {
     abbapb.Message               abba               = 9;
     aleapb.bcpb.Message          alea_broadcast     = 10;
     aleapb.agreementpb.Message   alea_agreement     = 11;
+    aleapb.directorpb.Message    alea_director      = 14;
     reliablenetpb.Message        reliable_net       = 12;
+    threshcheckpointpb.Message   threshcheckpoint   = 13;
   }
 }

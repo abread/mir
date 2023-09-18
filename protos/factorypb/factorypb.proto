@@ -6,6 +6,7 @@ option go_package = "github.com/filecoin-project/mir/pkg/pb/factorypb";
 
 import "availabilitypb/mscpb/mscpb.proto";
 import "checkpointpb/checkpointpb.proto";
+import "threshcheckpointpb/threshcheckpointpb.proto";
 import "ordererpb/ordererpb.proto";
 import "ordererpb/pprepvalidatorpb/pprepvalidatorpb.proto";
 
@@ -47,11 +48,12 @@ message GeneratorParams {
   option (mir.struct) = true;
 
   oneof type {
-    availabilitypb.mscpb.InstanceParams        multisig_collector = 1;
-    checkpointpb.InstanceParams                checkpoint         = 2;
-    EchoModuleParams                           echo_test_module   = 3;
-    ordererpb.PBFTModule                       pbft_module        = 4;
-    pprepvalidatorpb.PPrepValidatorChkp        ppv_module         = 5;
+    availabilitypb.mscpb.InstanceParams multisig_collector = 1;
+    checkpointpb.InstanceParams         checkpoint         = 2;
+    EchoModuleParams                    echo_test_module   = 3;
+    ordererpb.PBFTModule                pbft_module        = 4;
+    pprepvalidatorpb.PPrepValidatorChkp ppv_module         = 5;
+    threshcheckpointpb.InstanceParams   thresh_checkpoint  = 6;
   }
 }
 

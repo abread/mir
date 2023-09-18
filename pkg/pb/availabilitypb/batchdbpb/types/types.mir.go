@@ -46,6 +46,8 @@ func Event_TypeFromPb(pb batchdbpb.Event_Type) Event_Type {
 		return &Event_Stored{Stored: BatchStoredFromPb(pb.Stored)}
 	case *batchdbpb.Event_GarbageCollect:
 		return &Event_GarbageCollect{GarbageCollect: GarbageCollectFromPb(pb.GarbageCollect)}
+	case *batchdbpb.Event_UpdateRet:
+		return &Event_UpdateRet{UpdateRet: UpdateBatchRetentionFromPb(pb.UpdateRet)}
 	}
 	return nil
 }
@@ -168,6 +170,30 @@ func (w *Event_GarbageCollect) Pb() batchdbpb.Event_Type {
 
 func (*Event_GarbageCollect) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*batchdbpb.Event_GarbageCollect]()}
+}
+
+type Event_UpdateRet struct {
+	UpdateRet *UpdateBatchRetention
+}
+
+func (*Event_UpdateRet) isEvent_Type() {}
+
+func (w *Event_UpdateRet) Unwrap() *UpdateBatchRetention {
+	return w.UpdateRet
+}
+
+func (w *Event_UpdateRet) Pb() batchdbpb.Event_Type {
+	if w == nil {
+		return nil
+	}
+	if w.UpdateRet == nil {
+		return &batchdbpb.Event_UpdateRet{}
+	}
+	return &batchdbpb.Event_UpdateRet{UpdateRet: (w.UpdateRet).Pb()}
+}
+
+func (*Event_UpdateRet) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*batchdbpb.Event_UpdateRet]()}
 }
 
 func EventFromPb(pb *batchdbpb.Event) *Event {
@@ -374,6 +400,38 @@ func (m *GarbageCollect) Pb() *batchdbpb.GarbageCollect {
 
 func (*GarbageCollect) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*batchdbpb.GarbageCollect]()}
+}
+
+type UpdateBatchRetention struct {
+	BatchId        types.BatchID
+	RetentionIndex types3.RetentionIndex
+}
+
+func UpdateBatchRetentionFromPb(pb *batchdbpb.UpdateBatchRetention) *UpdateBatchRetention {
+	if pb == nil {
+		return nil
+	}
+	return &UpdateBatchRetention{
+		BatchId:        (types.BatchID)(pb.BatchId),
+		RetentionIndex: (types3.RetentionIndex)(pb.RetentionIndex),
+	}
+}
+
+func (m *UpdateBatchRetention) Pb() *batchdbpb.UpdateBatchRetention {
+	if m == nil {
+		return nil
+	}
+	pbMessage := &batchdbpb.UpdateBatchRetention{}
+	{
+		pbMessage.BatchId = ([]uint8)(m.BatchId)
+		pbMessage.RetentionIndex = (uint64)(m.RetentionIndex)
+	}
+
+	return pbMessage
+}
+
+func (*UpdateBatchRetention) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*batchdbpb.UpdateBatchRetention]()}
 }
 
 type LookupBatchOrigin struct {

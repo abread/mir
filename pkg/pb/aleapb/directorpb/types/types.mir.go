@@ -5,6 +5,9 @@ package directorpbtypes
 import (
 	mirreflect "github.com/filecoin-project/mir/codegen/mirreflect"
 	directorpb "github.com/filecoin-project/mir/pkg/pb/aleapb/directorpb"
+	types2 "github.com/filecoin-project/mir/pkg/pb/threshcheckpointpb/types"
+	types "github.com/filecoin-project/mir/pkg/trantor/types"
+	types1 "github.com/filecoin-project/mir/pkg/types"
 	reflectutil "github.com/filecoin-project/mir/pkg/util/reflectutil"
 )
 
@@ -30,6 +33,12 @@ func Event_TypeFromPb(pb directorpb.Event_Type) Event_Type {
 	switch pb := pb.(type) {
 	case *directorpb.Event_Heartbeat:
 		return &Event_Heartbeat{Heartbeat: HeartbeatFromPb(pb.Heartbeat)}
+	case *directorpb.Event_NewEpoch:
+		return &Event_NewEpoch{NewEpoch: NewEpochFromPb(pb.NewEpoch)}
+	case *directorpb.Event_EpochCheckpointed:
+		return &Event_EpochCheckpointed{EpochCheckpointed: EpochCheckpointedFromPb(pb.EpochCheckpointed)}
+	case *directorpb.Event_HelpNode:
+		return &Event_HelpNode{HelpNode: HelpNodeFromPb(pb.HelpNode)}
 	}
 	return nil
 }
@@ -56,6 +65,78 @@ func (w *Event_Heartbeat) Pb() directorpb.Event_Type {
 
 func (*Event_Heartbeat) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*directorpb.Event_Heartbeat]()}
+}
+
+type Event_NewEpoch struct {
+	NewEpoch *NewEpoch
+}
+
+func (*Event_NewEpoch) isEvent_Type() {}
+
+func (w *Event_NewEpoch) Unwrap() *NewEpoch {
+	return w.NewEpoch
+}
+
+func (w *Event_NewEpoch) Pb() directorpb.Event_Type {
+	if w == nil {
+		return nil
+	}
+	if w.NewEpoch == nil {
+		return &directorpb.Event_NewEpoch{}
+	}
+	return &directorpb.Event_NewEpoch{NewEpoch: (w.NewEpoch).Pb()}
+}
+
+func (*Event_NewEpoch) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*directorpb.Event_NewEpoch]()}
+}
+
+type Event_EpochCheckpointed struct {
+	EpochCheckpointed *EpochCheckpointed
+}
+
+func (*Event_EpochCheckpointed) isEvent_Type() {}
+
+func (w *Event_EpochCheckpointed) Unwrap() *EpochCheckpointed {
+	return w.EpochCheckpointed
+}
+
+func (w *Event_EpochCheckpointed) Pb() directorpb.Event_Type {
+	if w == nil {
+		return nil
+	}
+	if w.EpochCheckpointed == nil {
+		return &directorpb.Event_EpochCheckpointed{}
+	}
+	return &directorpb.Event_EpochCheckpointed{EpochCheckpointed: (w.EpochCheckpointed).Pb()}
+}
+
+func (*Event_EpochCheckpointed) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*directorpb.Event_EpochCheckpointed]()}
+}
+
+type Event_HelpNode struct {
+	HelpNode *HelpNode
+}
+
+func (*Event_HelpNode) isEvent_Type() {}
+
+func (w *Event_HelpNode) Unwrap() *HelpNode {
+	return w.HelpNode
+}
+
+func (w *Event_HelpNode) Pb() directorpb.Event_Type {
+	if w == nil {
+		return nil
+	}
+	if w.HelpNode == nil {
+		return &directorpb.Event_HelpNode{}
+	}
+	return &directorpb.Event_HelpNode{HelpNode: (w.HelpNode).Pb()}
+}
+
+func (*Event_HelpNode) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*directorpb.Event_HelpNode]()}
 }
 
 func EventFromPb(pb *directorpb.Event) *Event {
@@ -107,4 +188,199 @@ func (m *Heartbeat) Pb() *directorpb.Heartbeat {
 
 func (*Heartbeat) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*directorpb.Heartbeat]()}
+}
+
+type NewEpoch struct {
+	Epoch types.EpochNr
+}
+
+func NewEpochFromPb(pb *directorpb.NewEpoch) *NewEpoch {
+	if pb == nil {
+		return nil
+	}
+	return &NewEpoch{
+		Epoch: (types.EpochNr)(pb.Epoch),
+	}
+}
+
+func (m *NewEpoch) Pb() *directorpb.NewEpoch {
+	if m == nil {
+		return nil
+	}
+	pbMessage := &directorpb.NewEpoch{}
+	{
+		pbMessage.Epoch = (uint64)(m.Epoch)
+	}
+
+	return pbMessage
+}
+
+func (*NewEpoch) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*directorpb.NewEpoch]()}
+}
+
+type EpochCheckpointed struct {
+	Epoch types.EpochNr
+}
+
+func EpochCheckpointedFromPb(pb *directorpb.EpochCheckpointed) *EpochCheckpointed {
+	if pb == nil {
+		return nil
+	}
+	return &EpochCheckpointed{
+		Epoch: (types.EpochNr)(pb.Epoch),
+	}
+}
+
+func (m *EpochCheckpointed) Pb() *directorpb.EpochCheckpointed {
+	if m == nil {
+		return nil
+	}
+	pbMessage := &directorpb.EpochCheckpointed{}
+	{
+		pbMessage.Epoch = (uint64)(m.Epoch)
+	}
+
+	return pbMessage
+}
+
+func (*EpochCheckpointed) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*directorpb.EpochCheckpointed]()}
+}
+
+type HelpNode struct {
+	NodeId types1.NodeID
+}
+
+func HelpNodeFromPb(pb *directorpb.HelpNode) *HelpNode {
+	if pb == nil {
+		return nil
+	}
+	return &HelpNode{
+		NodeId: (types1.NodeID)(pb.NodeId),
+	}
+}
+
+func (m *HelpNode) Pb() *directorpb.HelpNode {
+	if m == nil {
+		return nil
+	}
+	pbMessage := &directorpb.HelpNode{}
+	{
+		pbMessage.NodeId = (string)(m.NodeId)
+	}
+
+	return pbMessage
+}
+
+func (*HelpNode) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*directorpb.HelpNode]()}
+}
+
+type Message struct {
+	Type Message_Type
+}
+
+type Message_Type interface {
+	mirreflect.GeneratedType
+	isMessage_Type()
+	Pb() directorpb.Message_Type
+}
+
+type Message_TypeWrapper[T any] interface {
+	Message_Type
+	Unwrap() *T
+}
+
+func Message_TypeFromPb(pb directorpb.Message_Type) Message_Type {
+	if pb == nil {
+		return nil
+	}
+	switch pb := pb.(type) {
+	case *directorpb.Message_StableCheckpoint:
+		return &Message_StableCheckpoint{StableCheckpoint: StableCheckpointFromPb(pb.StableCheckpoint)}
+	}
+	return nil
+}
+
+type Message_StableCheckpoint struct {
+	StableCheckpoint *StableCheckpoint
+}
+
+func (*Message_StableCheckpoint) isMessage_Type() {}
+
+func (w *Message_StableCheckpoint) Unwrap() *StableCheckpoint {
+	return w.StableCheckpoint
+}
+
+func (w *Message_StableCheckpoint) Pb() directorpb.Message_Type {
+	if w == nil {
+		return nil
+	}
+	if w.StableCheckpoint == nil {
+		return &directorpb.Message_StableCheckpoint{}
+	}
+	return &directorpb.Message_StableCheckpoint{StableCheckpoint: (w.StableCheckpoint).Pb()}
+}
+
+func (*Message_StableCheckpoint) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*directorpb.Message_StableCheckpoint]()}
+}
+
+func MessageFromPb(pb *directorpb.Message) *Message {
+	if pb == nil {
+		return nil
+	}
+	return &Message{
+		Type: Message_TypeFromPb(pb.Type),
+	}
+}
+
+func (m *Message) Pb() *directorpb.Message {
+	if m == nil {
+		return nil
+	}
+	pbMessage := &directorpb.Message{}
+	{
+		if m.Type != nil {
+			pbMessage.Type = (m.Type).Pb()
+		}
+	}
+
+	return pbMessage
+}
+
+func (*Message) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*directorpb.Message]()}
+}
+
+type StableCheckpoint struct {
+	Checkpoint *types2.StableCheckpoint
+}
+
+func StableCheckpointFromPb(pb *directorpb.StableCheckpoint) *StableCheckpoint {
+	if pb == nil {
+		return nil
+	}
+	return &StableCheckpoint{
+		Checkpoint: types2.StableCheckpointFromPb(pb.Checkpoint),
+	}
+}
+
+func (m *StableCheckpoint) Pb() *directorpb.StableCheckpoint {
+	if m == nil {
+		return nil
+	}
+	pbMessage := &directorpb.StableCheckpoint{}
+	{
+		if m.Checkpoint != nil {
+			pbMessage.Checkpoint = (m.Checkpoint).Pb()
+		}
+	}
+
+	return pbMessage
+}
+
+func (*StableCheckpoint) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*directorpb.StableCheckpoint]()}
 }

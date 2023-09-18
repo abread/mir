@@ -143,7 +143,9 @@ func IncludeBatchCreation( // nolint:gocyclo,gocognit
 		mppbdsl.NewBatch(m, origin.Module, txIDs, txs, origin)
 	}
 
-	mppbdsl.UponMarkDelivered(m, func(txs []*trantorpbtypes.Transaction) error {
+	mppbdsl.UponMarkStableProposal(m, func(txs []*trantorpbtypes.Transaction) error {
+		// These are technically not delivered, but are guaranteed to be eventually delivered in a
+		// correct (non-faulty) node.
 		for _, tx := range txs {
 			state.DeliveryProgress.Add(tx.ClientId, tx.TxNo)
 		}
@@ -163,10 +165,6 @@ func IncludeBatchCreation( // nolint:gocyclo,gocognit
 				state.NumUnproposed--
 			}
 		}
-
-		// don't let client progress accumulate too many watermarks
-		state.ProposalProgress.GarbageCollect()
-		state.DeliveryProgress.GarbageCollect()
 
 		return nil
 	})
@@ -234,8 +232,7 @@ func IncludeBatchCreation( // nolint:gocyclo,gocognit
 	}
 
 	mppbdsl.UponNewEpoch(m,
-		func(epochNr tt.EpochNr, clientProgress *trantorpbtypes.ClientProgress) error {
-
+		func(epochNr tt.EpochNr, clientProgressDsl *trantorpbtypes.ClientProgress) error {
 			// Update the local view of the epoch number.
 			state.Epoch = epochNr
 
@@ -248,7 +245,7 @@ func IncludeBatchCreation( // nolint:gocyclo,gocognit
 			//   A potential solution would be to keep an index of pending transactions similar to
 			//   ClientProgress - for each client, list of pending transactions sorted by TxNo - that
 			//   would make pruning significantly more efficient.
-			state.DeliveryProgress.LoadPb(clientProgress.Pb())
+			state.DeliveryProgress.MergeIn(clientprogress.FromDslStruct(clientProgressDsl))
 			_, removedTXs := state.Transactions.RemoveSelected(func(txID tt.TxID, tx *trantorpbtypes.Transaction) bool {
 				return state.DeliveryProgress.Contains(tx.ClientId, tx.TxNo)
 			})

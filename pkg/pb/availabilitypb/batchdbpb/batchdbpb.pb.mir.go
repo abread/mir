@@ -13,6 +13,7 @@ func (*Event) ReflectTypeOptions() []reflect.Type {
 		reflect.TypeOf((*Event_Store)(nil)),
 		reflect.TypeOf((*Event_Stored)(nil)),
 		reflect.TypeOf((*Event_GarbageCollect)(nil)),
+		reflect.TypeOf((*Event_UpdateRet)(nil)),
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	types8 "github.com/filecoin-project/mir/pkg/pb/abbapb/types"
 	types10 "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/types"
 	types9 "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/types"
+	types11 "github.com/filecoin-project/mir/pkg/pb/aleapb/directorpb/types"
 	types3 "github.com/filecoin-project/mir/pkg/pb/availabilitypb/mscpb/types"
 	types2 "github.com/filecoin-project/mir/pkg/pb/bcbpb/types"
 	types5 "github.com/filecoin-project/mir/pkg/pb/checkpointpb/types"
@@ -14,7 +15,8 @@ import (
 	messagepb "github.com/filecoin-project/mir/pkg/pb/messagepb"
 	types6 "github.com/filecoin-project/mir/pkg/pb/ordererpb/types"
 	types4 "github.com/filecoin-project/mir/pkg/pb/pingpongpb/types"
-	types11 "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/messages/types"
+	types12 "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/messages/types"
+	types13 "github.com/filecoin-project/mir/pkg/pb/threshcheckpointpb/types"
 	types7 "github.com/filecoin-project/mir/pkg/pb/vcbpb/types"
 	types "github.com/filecoin-project/mir/pkg/types"
 	reflectutil "github.com/filecoin-project/mir/pkg/util/reflectutil"
@@ -61,8 +63,12 @@ func Message_TypeFromPb(pb messagepb.Message_Type) Message_Type {
 		return &Message_AleaBroadcast{AleaBroadcast: types9.MessageFromPb(pb.AleaBroadcast)}
 	case *messagepb.Message_AleaAgreement:
 		return &Message_AleaAgreement{AleaAgreement: types10.MessageFromPb(pb.AleaAgreement)}
+	case *messagepb.Message_AleaDirector:
+		return &Message_AleaDirector{AleaDirector: types11.MessageFromPb(pb.AleaDirector)}
 	case *messagepb.Message_ReliableNet:
-		return &Message_ReliableNet{ReliableNet: types11.MessageFromPb(pb.ReliableNet)}
+		return &Message_ReliableNet{ReliableNet: types12.MessageFromPb(pb.ReliableNet)}
+	case *messagepb.Message_Threshcheckpoint:
+		return &Message_Threshcheckpoint{Threshcheckpoint: types13.MessageFromPb(pb.Threshcheckpoint)}
 	}
 	return nil
 }
@@ -307,13 +313,37 @@ func (*Message_AleaAgreement) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*messagepb.Message_AleaAgreement]()}
 }
 
+type Message_AleaDirector struct {
+	AleaDirector *types11.Message
+}
+
+func (*Message_AleaDirector) isMessage_Type() {}
+
+func (w *Message_AleaDirector) Unwrap() *types11.Message {
+	return w.AleaDirector
+}
+
+func (w *Message_AleaDirector) Pb() messagepb.Message_Type {
+	if w == nil {
+		return nil
+	}
+	if w.AleaDirector == nil {
+		return &messagepb.Message_AleaDirector{}
+	}
+	return &messagepb.Message_AleaDirector{AleaDirector: (w.AleaDirector).Pb()}
+}
+
+func (*Message_AleaDirector) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*messagepb.Message_AleaDirector]()}
+}
+
 type Message_ReliableNet struct {
-	ReliableNet *types11.Message
+	ReliableNet *types12.Message
 }
 
 func (*Message_ReliableNet) isMessage_Type() {}
 
-func (w *Message_ReliableNet) Unwrap() *types11.Message {
+func (w *Message_ReliableNet) Unwrap() *types12.Message {
 	return w.ReliableNet
 }
 
@@ -329,6 +359,30 @@ func (w *Message_ReliableNet) Pb() messagepb.Message_Type {
 
 func (*Message_ReliableNet) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*messagepb.Message_ReliableNet]()}
+}
+
+type Message_Threshcheckpoint struct {
+	Threshcheckpoint *types13.Message
+}
+
+func (*Message_Threshcheckpoint) isMessage_Type() {}
+
+func (w *Message_Threshcheckpoint) Unwrap() *types13.Message {
+	return w.Threshcheckpoint
+}
+
+func (w *Message_Threshcheckpoint) Pb() messagepb.Message_Type {
+	if w == nil {
+		return nil
+	}
+	if w.Threshcheckpoint == nil {
+		return &messagepb.Message_Threshcheckpoint{}
+	}
+	return &messagepb.Message_Threshcheckpoint{Threshcheckpoint: (w.Threshcheckpoint).Pb()}
+}
+
+func (*Message_Threshcheckpoint) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*messagepb.Message_Threshcheckpoint]()}
 }
 
 func MessageFromPb(pb *messagepb.Message) *Message {

@@ -173,6 +173,8 @@ func (m *Module) splitEventsByDest(eventsIn events.EventList) map[uint64]*events
 			continue
 		}
 
+		// TODO: avoid allocating list for events that will never be delivered (?)
+
 		evList, ok := res[subID]
 		if !ok {
 			evList = &events.EventList{}
@@ -291,6 +293,14 @@ func (m *Module) AdvanceViewToAtLeastSubmodule(id uint64) error {
 
 	// m.logger.Log(logging.LevelDebug, "fast-forwarded view", "newMinid", id)
 	return nil
+}
+func (m *Module) FreePast() {
+	for i := 0; i < len(m.ring); i++ {
+		if !m.ring[i].isCurrent {
+			// leave slot completely free
+			m.ring[i] = submodule{}
+		}
+	}
 }
 
 func (m *Module) MarkSubmodulePast(id uint64) error {

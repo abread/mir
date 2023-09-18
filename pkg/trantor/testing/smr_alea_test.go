@@ -22,8 +22,10 @@ import (
 	"golang.org/x/exp/slices"
 
 	"github.com/filecoin-project/mir"
+	"github.com/filecoin-project/mir/pkg/checkpoint"
 	"github.com/filecoin-project/mir/pkg/deploytest"
 	"github.com/filecoin-project/mir/pkg/eventmangler"
+	"github.com/filecoin-project/mir/pkg/iss"
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/modules"
 	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
@@ -388,7 +390,12 @@ func newDeploymentAlea(conf *TestConfig) (*deploytest.Deployment, error) {
 
 	// TODO: fix for weighted stuff
 	F := (len(conf.NodeIDsWeight) - 1) / 3
-	cryptoSystem := deploytest.NewLocalThreshCryptoSystem("dummy", nodeIDs, 2*F+1)
+	threshCryptoSystem := deploytest.NewLocalThreshCryptoSystem("dummy", nodeIDs, 2*F+1)
+
+	cryptoSystem, err := deploytest.NewLocalCryptoSystem("pseudo", nodeIDs, everythingLogger)
+	if err != nil {
+		return nil, es.Errorf("could not create a local crypto system: %w", err)
+	}
 
 	nodeModules := make(map[types.NodeID]modules.Modules)
 	fakeApps := make(map[types.NodeID]*deploytest.FakeApp)
@@ -400,6 +407,10 @@ func newDeploymentAlea(conf *TestConfig) (*deploytest.Deployment, error) {
 		))
 		nodeLogger = logging.Decorate(nodeLogger, fmt.Sprintf("Node %s: ", nodeID))
 		fakeApp := deploytest.NewFakeApp(logging.Decorate(nodeLogger, "FakeApp: "))
+		initialSnapshot, err := fakeApp.Snapshot()
+		if err != nil {
+			return nil, err
+		}
 
 		tConf := trantor.DefaultParams(transportLayer.Membership())
 		tConf.Alea.MaxConcurrentVcbPerQueue = 2
@@ -425,15 +436,24 @@ func newDeploymentAlea(conf *TestConfig) (*deploytest.Deployment, error) {
 		}
 		transport = deploytest.NewFilteredTransport(transport, nodeID, conf.TransportFilter)
 
-		localTCrypto, err := cryptoSystem.ThreshCrypto(nodeID)
+		localCrypto, err := cryptoSystem.Crypto(nodeID)
+		if err != nil {
+			return nil, es.Errorf("error creating local crypto system for node %v: %w", nodeID, err)
+		}
+		localTCrypto, err := threshCryptoSystem.ThreshCrypto(nodeID)
 		if err != nil {
 			return nil, es.Errorf("error creating local threshcrypto system for node %v: %w", nodeID, err)
 		}
 
+		stateSnapshot, err := iss.InitialStateSnapshot(initialSnapshot, tConf.Iss)
+		if err != nil {
+			return nil, es.Errorf("error initializing Mir state snapshot: %w", err)
+		}
 		system, err := trantor.NewAlea(
 			nodeID,
 			transport,
-			nil,
+			checkpoint.Genesis(stateSnapshot),
+			localCrypto,
 			localTCrypto,
 			appmodule.AppLogicFromStatic(fakeApp, transportLayer.Membership()),
 			tConf,

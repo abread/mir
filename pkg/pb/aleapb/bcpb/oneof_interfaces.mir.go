@@ -33,6 +33,10 @@ func (w *Event_FillGap) Unwrap() *DoFillGap {
 	return w.FillGap
 }
 
+func (w *Event_MarkStable) Unwrap() *MarkStableProposal {
+	return w.MarkStable
+}
+
 type Message_Type = isMessage_Type
 
 type Message_TypeWrapper[T any] interface {

@@ -1,13 +1,12 @@
 package alea
 
 import (
-	"time"
-
 	es "github.com/go-errors/errors"
 
 	"github.com/filecoin-project/mir/pkg/alea/agreement"
 	"github.com/filecoin-project/mir/pkg/alea/broadcast"
 	"github.com/filecoin-project/mir/pkg/alea/director"
+	"github.com/filecoin-project/mir/pkg/alea/queueselectionpolicy"
 	"github.com/filecoin-project/mir/pkg/checkpoint"
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/modules"
@@ -21,6 +20,8 @@ type Config struct {
 	AleaDirector  t.ModuleID
 	AleaBroadcast t.ModuleID
 	AleaAgreement t.ModuleID
+	Checkpoint    t.ModuleID
+	ChkpValidator t.ModuleID
 	Consumer      t.ModuleID
 	BatchDB       t.ModuleID
 	Hasher        t.ModuleID
@@ -28,6 +29,7 @@ type Config struct {
 	Net           t.ModuleID
 	ReliableNet   t.ModuleID
 	ThreshCrypto  t.ModuleID
+	Crypto        t.ModuleID
 	Timer         t.ModuleID
 	Null          t.ModuleID
 }
@@ -68,13 +70,14 @@ type Params struct {
 	// Subprotocol duration estimates window size
 	EstimateWindowSize int
 
-	// Maximum time to stall agreement round waiting for broadcasts to complete
-	MaxAgreementDelay time.Duration
-
 	// How slower can the F slowest nodes be compared to the rest
 	// A factor of 2, means we allow F nodes to take double the time we expect the rest to take.
 	// Must be >=1
 	MaxExtSlowdownFactor float64
+
+	QueueSelectionPolicyType queueselectionpolicy.QueuePolicyType
+	EpochLength              uint64
+	RetainEpochs             uint64
 }
 
 // DefaultParams returns the default configuration for a given membership.
@@ -84,21 +87,28 @@ type Params struct {
 // A proper deployment is expected to craft a custom configuration,
 // for which DefaultParams can serve as a starting point.
 func DefaultParams(membership *trantorpbtypes.Membership) Params {
-	MaxUnagreedBatchCount := 3
-	MaxConcurrentVcbPerQueue := MaxUnagreedBatchCount*2 + 1
-	MaxAgRoundLookahead := 32
+	EpochLength := 256
+	N := len(membership.Nodes)
+
+	MaxOwnUnagreedBatchCount := 2
+	MaxConcurrentVcbPerQueue := (EpochLength/N + 1) * 2
+	if MaxConcurrentVcbPerQueue < MaxOwnUnagreedBatchCount*2 {
+		MaxConcurrentVcbPerQueue = MaxOwnUnagreedBatchCount * 2
+	}
 
 	return Params{
 		InstanceUID:              []byte{42},
 		Membership:               membership,
 		MaxConcurrentVcbPerQueue: MaxConcurrentVcbPerQueue,
-		MaxOwnUnagreedBatchCount: MaxUnagreedBatchCount,
+		MaxOwnUnagreedBatchCount: MaxOwnUnagreedBatchCount,
 		MaxAbbaRoundLookahead:    4,
-		MaxAgRoundLookahead:      MaxAgRoundLookahead,
-		MaxAgRoundAdvanceInput:   MaxAgRoundLookahead/2 - 1,
+		MaxAgRoundLookahead:      EpochLength * 2,
+		MaxAgRoundAdvanceInput:   EpochLength - 1,
 		EstimateWindowSize:       32,
-		MaxAgreementDelay:        time.Second,
-		MaxExtSlowdownFactor:     1.25,
+		MaxExtSlowdownFactor:     1.5,
+		QueueSelectionPolicyType: queueselectionpolicy.RoundRobin,
+		EpochLength:              uint64(EpochLength),
+		RetainEpochs:             2,
 	}
 }
 
@@ -120,9 +130,12 @@ func New(ownID t.NodeID, config Config, params Params, startingChkp *checkpoint.
 		return nil, es.Errorf("invalid Alea parameters: %w", err)
 	}
 
-	if startingChkp != nil {
-		// TODO: checkpointing
-		return nil, es.Errorf("alea checkpointing not implemented")
+	if startingChkp == nil {
+		return nil, es.Errorf("missing initial checkpoint")
+	}
+	qsp, err := queueselectionpolicy.QueuePolicyFromBytes(startingChkp.Snapshot.EpochData.LeaderPolicy)
+	if err != nil {
+		return nil, err
 	}
 
 	// TODO: support weighted voting
@@ -141,9 +154,10 @@ func New(ownID t.NodeID, config Config, params Params, startingChkp *checkpoint.
 
 	aleaDir := director.NewModule(
 		director.ModuleConfig{
-			Self:     config.AleaDirector,
-			Consumer: config.Consumer,
-			// TODO: implement proper epoch change/checkpointing
+			Self:          config.AleaDirector,
+			Checkpoint:    config.Checkpoint,
+			ChkpValidator: config.ChkpValidator,
+			App:           config.Consumer,
 			AleaBroadcast: config.AleaBroadcast.Then(t.NewModuleIDFromInt(0)),
 			AleaAgreement: config.AleaAgreement,
 			BatchDB:       config.BatchDB,
@@ -156,17 +170,19 @@ func New(ownID t.NodeID, config Config, params Params, startingChkp *checkpoint.
 			Null:          config.Null,
 		},
 		director.ModuleParams{
-			InstanceUID: append(params.InstanceUID, 'd'),
-			AllNodes:    allNodes,
+			InstanceUID:  append(params.InstanceUID, 'd'),
+			Membership:   params.Membership,
+			EpochLength:  params.EpochLength,
+			RetainEpochs: params.RetainEpochs,
 		},
 		director.ModuleTunables{
 			MaxConcurrentVcbPerQueue: params.MaxConcurrentVcbPerQueue,
 			MaxOwnUnagreedBatchCount: params.MaxOwnUnagreedBatchCount,
 			EstimateWindowSize:       params.EstimateWindowSize,
-			MaxAgreementDelay:        params.MaxAgreementDelay,
 			MaxExtSlowdownFactor:     params.MaxExtSlowdownFactor,
 		},
 		ownID,
+		qsp,
 		logging.Decorate(logger, "AleaDirector: "),
 	)
 
@@ -182,8 +198,10 @@ func New(ownID t.NodeID, config Config, params Params, startingChkp *checkpoint.
 			Timer:        config.Timer,
 		},
 		broadcast.ModuleParams{
-			InstanceUID: append(params.InstanceUID, 'b'),
-			AllNodes:    allNodes,
+			InstanceUID:  append(params.InstanceUID, 'b'),
+			AllNodes:     allNodes,
+			EpochLength:  params.EpochLength,
+			RetainEpochs: params.RetainEpochs,
 		},
 		broadcast.ModuleTunables{
 			MaxConcurrentVcbPerQueue: params.MaxConcurrentVcbPerQueue,
@@ -207,8 +225,10 @@ func New(ownID t.NodeID, config Config, params Params, startingChkp *checkpoint.
 			ThreshCrypto: config.ThreshCrypto,
 		},
 		agreement.ModuleParams{
-			InstanceUID: append(params.InstanceUID, 'a'),
-			AllNodes:    allNodes,
+			InstanceUID:  append(params.InstanceUID, 'a'),
+			AllNodes:     allNodes,
+			EpochLength:  params.EpochLength,
+			RetainEpochs: params.RetainEpochs,
 		},
 		agreement.ModuleTunables{
 			MaxRoundLookahead:     params.MaxAgRoundLookahead,

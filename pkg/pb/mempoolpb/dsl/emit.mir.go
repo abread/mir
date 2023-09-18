@@ -86,6 +86,6 @@ func NewEpoch(m dsl.Module, destModule types.ModuleID, epochNr types1.EpochNr, c
 	dsl.EmitEvent(m, events.NewEpoch(destModule, epochNr, clientProgress))
 }
 
-func MarkDelivered(m dsl.Module, destModule types.ModuleID, txs []*types3.Transaction) {
-	dsl.EmitEvent(m, events.MarkDelivered(destModule, txs))
+func MarkStableProposal(m dsl.Module, destModule types.ModuleID, txs []*types3.Transaction) {
+	dsl.EmitEvent(m, events.MarkStableProposal(destModule, txs))
 }

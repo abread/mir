@@ -1,7 +1,6 @@
 package bccommon
 
 import (
-	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -20,15 +19,11 @@ type ModuleConfig struct {
 // ModuleParams sets the values for the parameters of an instance of the protocol.
 // All replicas are expected to use identical module parameters.
 type ModuleParams struct {
-	GlobalParams
-	EpochNr tt.RetentionIndex
-}
-
-// ModuleParams sets the values for the parameters of an instance of the protocol.
-// All replicas are expected to use identical module parameters.
-type GlobalParams struct {
 	InstanceUID []byte     // must be the alea instance uid followed by 'b'
 	AllNodes    []t.NodeID // the list of participating nodes, which must be the same as the set of nodes in the threshcrypto module
+
+	EpochLength  uint64
+	RetainEpochs uint64
 }
 
 // ModuleTunables sets the values of protocol tunables that need not be the same across all nodes.

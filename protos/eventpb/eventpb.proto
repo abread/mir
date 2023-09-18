@@ -30,6 +30,8 @@ import "aleapb/bcqueuepb/bcqueuepb.proto";
 import "aleapb/agreementpb/agevents/agevents.proto";
 import "aleapb/directorpb/directorpb.proto";
 import "reliablenetpb/reliablenetpb.proto";
+import "threshcheckpointpb/threshcheckpointpb.proto";
+import "threshcheckpointpb/threshchkpvalidatorpb/threshchkpvalidatorpb.proto";
 
 import "mir/codegen_extensions.proto";
 
@@ -68,6 +70,9 @@ message Event {
        reliablenetpb.Event reliable_net    = 26;
                vcbpb.Event vcb             = 27;
               abbapb.Event abba            = 28;
+
+     threshcheckpointpb.Event threshcheckpoint     = 33;
+  threshchkpvalidatorpb.Event threshchkp_validator = 34;
 
            aleapb.bcpb.Event alea_bc        = 29;
       aleapb.bcqueuepb.Event alea_bcqueue   = 30;

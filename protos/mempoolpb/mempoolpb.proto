@@ -30,7 +30,7 @@ message Event {
     NewTransactions        new_transactions         = 9;
     BatchTimeout           batch_timeout            = 10;
     NewEpoch               new_epoch                = 11;
-    MarkDelivered          mark_delivered           = 12;
+    MarkStableProposal     mark_stable_proposal     = 12;
   }
 }
 
@@ -124,7 +124,7 @@ message BatchTimeout {
   uint64 batchReqID = 1;
 }
 
-message MarkDelivered {
+message MarkStableProposal {
   option (mir.event) = true;
 
   repeated trantorpb.Transaction txs = 1;

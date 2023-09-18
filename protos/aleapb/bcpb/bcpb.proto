@@ -19,12 +19,13 @@ message Event {
   oneof type {
     option (mir.event_type) = true;
 
-    RequestCert      request_cert    = 1;
-    DeliverCert      deliver_cert    = 2;
-    BcStarted        bc_started      = 3;
-    FreeSlot         free_slot       = 4;
-    EstimateUpdate estimate_update = 5;
-    DoFillGap        fill_gap        = 6;
+    RequestCert        request_cert    = 1;
+    DeliverCert        deliver_cert    = 2;
+    BcStarted          bc_started      = 3;
+    FreeSlot           free_slot       = 4;
+    EstimateUpdate     estimate_update = 5;
+    DoFillGap          fill_gap        = 6;
+    MarkStableProposal mark_stable     = 7;
   }
 }
 
@@ -71,6 +72,12 @@ message EstimateUpdate {
 }
 
 message DoFillGap {
+  option (mir.event) = true;
+
+  Slot slot = 1;
+}
+
+message MarkStableProposal {
   option (mir.event) = true;
 
   Slot slot = 1;

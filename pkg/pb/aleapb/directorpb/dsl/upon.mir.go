@@ -6,6 +6,8 @@ import (
 	dsl "github.com/filecoin-project/mir/pkg/dsl"
 	types "github.com/filecoin-project/mir/pkg/pb/aleapb/directorpb/types"
 	types1 "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
+	types2 "github.com/filecoin-project/mir/pkg/trantor/types"
+	types3 "github.com/filecoin-project/mir/pkg/types"
 )
 
 // Module-specific dsl functions for processing events.
@@ -24,5 +26,23 @@ func UponEvent[W types.Event_TypeWrapper[Ev], Ev any](m dsl.Module, handler func
 func UponHeartbeat(m dsl.Module, handler func() error) {
 	UponEvent[*types.Event_Heartbeat](m, func(ev *types.Heartbeat) error {
 		return handler()
+	})
+}
+
+func UponNewEpoch(m dsl.Module, handler func(epoch types2.EpochNr) error) {
+	UponEvent[*types.Event_NewEpoch](m, func(ev *types.NewEpoch) error {
+		return handler(ev.Epoch)
+	})
+}
+
+func UponEpochCheckpointed(m dsl.Module, handler func(epoch types2.EpochNr) error) {
+	UponEvent[*types.Event_EpochCheckpointed](m, func(ev *types.EpochCheckpointed) error {
+		return handler(ev.Epoch)
+	})
+}
+
+func UponHelpNode(m dsl.Module, handler func(nodeId types3.NodeID) error) {
+	UponEvent[*types.Event_HelpNode](m, func(ev *types.HelpNode) error {
+		return handler(ev.NodeId)
 	})
 }

@@ -1,0 +1,64 @@
+syntax = "proto3";
+
+package threshcheckpointpb;
+
+option go_package = "github.com/filecoin-project/mir/pkg/pb/threshcheckpointpb";
+
+import "trantorpb/trantorpb.proto";
+
+import "mir/codegen_extensions.proto";
+import "net/codegen_extensions.proto";
+
+// ============================================================
+// Messages
+// ============================================================
+
+message Message {
+  option (net.message_class) = true;
+
+  oneof type {
+    option (net.message_type) = true;
+
+    Checkpoint checkpoint = 1;
+  }
+}
+
+message Checkpoint {
+  option (net.message) = true;
+
+  uint64 epoch           = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/trantor/types.EpochNr"];
+  uint64 sn              = 2 [(mir.type) = "github.com/filecoin-project/mir/pkg/trantor/types.SeqNr"];
+  bytes  snapshotHash    = 3;
+  bytes  signature_share = 4 [(mir.type) = "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes.SigShare"];
+}
+
+// ============================================================
+// Events
+// ============================================================
+
+message Event {
+  option (mir.event_class) = true;
+
+  oneof type {
+    option (mir.event_type) = true;
+
+    StableCheckpoint      stable_checkpoint = 1;
+  }
+}
+
+message StableCheckpoint {
+  option (mir.event) = true;
+  option (net.message) = true;
+
+  uint64                  sn        = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/trantor/types.SeqNr"];
+  trantorpb.StateSnapshot snapshot  = 2;
+  bytes                   signature = 3 [(mir.type) = "github.com/filecoin-project/mir/pkg/threshcrypto/tctypes.FullSig"];
+}
+
+message InstanceParams {
+  option (mir.struct) = true;
+
+  trantorpb.Membership  membership         = 1;
+  bytes                 leader_policy_data = 2;
+  trantorpb.EpochConfig epoch_config       = 3;
+}

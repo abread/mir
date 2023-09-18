@@ -55,6 +55,8 @@ package protos
 //go:generate protoc-events abbapb/roundpb.proto
 //go:generate protoc-events reliablenetpb/reliablenetpb.proto
 //go:generate protoc-events reliablenetpb/messages/messages.proto
+//go:generate protoc-events threshcheckpointpb/threshcheckpointpb.proto
+//go:generate protoc-events threshcheckpointpb/threshchkpvalidatorpb/threshchkpvalidatorpb.proto
 
 // Build the custom code generators.
 //go:generate go build -o ../codegen/generators/mir-std-gen/mir-std-gen.bin ../codegen/generators/mir-std-gen
@@ -96,6 +98,8 @@ package protos
 //go:generate std-gen "github.com/filecoin-project/mir/pkg/pb/abbapb"
 //go:generate std-gen "github.com/filecoin-project/mir/pkg/pb/reliablenetpb"
 //go:generate std-gen "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/messages"
+//go:generate std-gen "github.com/filecoin-project/mir/pkg/pb/threshcheckpointpb"
+//go:generate std-gen "github.com/filecoin-project/mir/pkg/pb/threshcheckpointpb/threshchkpvalidatorpb"
 
 // Generate other things.
 //go:generate protoc --go_out=../pkg/ --go_opt=paths=source_relative --go-grpc_out=../pkg/ --go-grpc_opt=paths=source_relative transactionreceiver/transactionreceiver.proto

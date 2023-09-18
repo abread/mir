@@ -5,6 +5,7 @@ package directorpbevents
 import (
 	types2 "github.com/filecoin-project/mir/pkg/pb/aleapb/directorpb/types"
 	types1 "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
+	types3 "github.com/filecoin-project/mir/pkg/trantor/types"
 	types "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -15,6 +16,51 @@ func Heartbeat(destModule types.ModuleID) *types1.Event {
 			AleaDirector: &types2.Event{
 				Type: &types2.Event_Heartbeat{
 					Heartbeat: &types2.Heartbeat{},
+				},
+			},
+		},
+	}
+}
+
+func NewEpoch(destModule types.ModuleID, epoch types3.EpochNr) *types1.Event {
+	return &types1.Event{
+		DestModule: destModule,
+		Type: &types1.Event_AleaDirector{
+			AleaDirector: &types2.Event{
+				Type: &types2.Event_NewEpoch{
+					NewEpoch: &types2.NewEpoch{
+						Epoch: epoch,
+					},
+				},
+			},
+		},
+	}
+}
+
+func EpochCheckpointed(destModule types.ModuleID, epoch types3.EpochNr) *types1.Event {
+	return &types1.Event{
+		DestModule: destModule,
+		Type: &types1.Event_AleaDirector{
+			AleaDirector: &types2.Event{
+				Type: &types2.Event_EpochCheckpointed{
+					EpochCheckpointed: &types2.EpochCheckpointed{
+						Epoch: epoch,
+					},
+				},
+			},
+		},
+	}
+}
+
+func HelpNode(destModule types.ModuleID, nodeId types.NodeID) *types1.Event {
+	return &types1.Event{
+		DestModule: destModule,
+		Type: &types1.Event_AleaDirector{
+			AleaDirector: &types2.Event{
+				Type: &types2.Event_HelpNode{
+					HelpNode: &types2.HelpNode{
+						NodeId: nodeId,
+					},
 				},
 			},
 		},

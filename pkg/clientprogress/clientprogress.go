@@ -64,6 +64,15 @@ func (cp *ClientProgress) Clone() *ClientProgress {
 	return cloned
 }
 
+func (cp *ClientProgress) MergeIn(other *ClientProgress) {
+	for clientID, clientTracker := range other.ClientTrackers {
+		if _, ok := cp.ClientTrackers[clientID]; !ok {
+			cp.ClientTrackers[clientID] = other.ClientTrackers[clientID]
+		}
+		cp.ClientTrackers[clientID].MergeIn(clientTracker)
+	}
+}
+
 func (cp *ClientProgress) DslStruct() *trantorpbtypes.ClientProgress {
 	ds := make(map[tt.ClientID]*trantorpbtypes.DeliveredTXs)
 	for clientID, clientTracker := range cp.ClientTrackers {
@@ -97,5 +106,11 @@ func (cp *ClientProgress) LoadPb(pb *trantorpb.ClientProgress) {
 func FromPb(pb *trantorpb.ClientProgress) *ClientProgress {
 	cp := NewClientProgress()
 	cp.LoadPb(pb)
+	return cp
+}
+
+func FromDslStruct(ds *trantorpbtypes.ClientProgress) *ClientProgress {
+	cp := NewClientProgress()
+	cp.LoadDslStruct(ds)
 	return cp
 }

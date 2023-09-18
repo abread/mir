@@ -4,7 +4,10 @@ package aleapb.directorpb;
 
 option go_package = "github.com/filecoin-project/mir/pkg/pb/aleapb/directorpb";
 
+import "threshcheckpointpb/threshcheckpointpb.proto";
+
 import "mir/codegen_extensions.proto";
+import "net/codegen_extensions.proto";
 
 // ============================================================
 // Events
@@ -16,10 +19,51 @@ message Event {
   oneof type {
     option (mir.event_type) = true;
 
-    Heartbeat heartbeat = 1;
+    Heartbeat         heartbeat          = 1;
+    NewEpoch          new_epoch          = 2;
+    EpochCheckpointed epoch_checkpointed = 3;
+    HelpNode          help_node          = 4;
   }
 }
 
 message Heartbeat {
   option (mir.event) = true;
+}
+
+message NewEpoch {
+  option (mir.event) = true;
+
+  uint64 epoch = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/trantor/types.EpochNr"];
+}
+
+message EpochCheckpointed {
+  option (mir.event) = true;
+
+  uint64 epoch = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/trantor/types.EpochNr"];
+}
+
+message HelpNode {
+  option (mir.event) = true;
+
+  string node_id = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.NodeID"];
+}
+
+// ============================================================
+// Messages
+// ============================================================
+
+message Message {
+  option (net.message_class) = true;
+
+  oneof type {
+    option (net.message_type) = true;
+
+    StableCheckpoint stable_checkpoint = 1;
+  }
+}
+
+message StableCheckpoint {
+  option (net.message) = true;
+
+  threshcheckpointpb.StableCheckpoint checkpoint = 1;
 }

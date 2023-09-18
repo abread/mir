@@ -22,12 +22,16 @@ import (
 	agreementpbevents "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents/events"
 	agreementpbmsgdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/dsl"
 	agreementpbmsgs "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/msgs"
+	directorpbdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/directorpb/dsl"
+	apppbdsl "github.com/filecoin-project/mir/pkg/pb/apppb/dsl"
+	checkpointpbtypes "github.com/filecoin-project/mir/pkg/pb/checkpointpb/types"
 	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 	messagepbtypes "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
 	modringpbtypes "github.com/filecoin-project/mir/pkg/pb/modringpb/types"
 	reliablenetpbdsl "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/dsl"
 	transportpbdsl "github.com/filecoin-project/mir/pkg/pb/transportpb/dsl"
 	transportpbevents "github.com/filecoin-project/mir/pkg/pb/transportpb/events"
+	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -58,8 +62,10 @@ func DefaultModuleConfig() *ModuleConfig {
 // ModuleParams sets the values for the parameters of an instance of the protocol.
 // All replicas are expected to use identical module parameters.
 type ModuleParams struct {
-	InstanceUID []byte     // must be the alea ID followed by 'a'
-	AllNodes    []t.NodeID // the list of participating nodes, which must be the same as the set of nodes in the threshcrypto module
+	InstanceUID  []byte     // must be the alea ID followed by 'a'
+	AllNodes     []t.NodeID // the list of participating nodes, which must be the same as the set of nodes in the threshcrypto module
+	EpochLength  uint64
+	RetainEpochs uint64
 }
 
 // ModuleTunables sets the values of protocol tunables that need not be the same across all nodes.
@@ -105,6 +111,8 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 	F := (N - 1) / 3
 
 	state := &state{
+		roundDecisionHistory: NewAgRoundHistory(int(params.EpochLength)),
+
 		rounds: make(map[uint64]*round, tunables.MaxRoundLookahead),
 
 		// stalled inputs count can never go beyond the number of nodes
@@ -114,7 +122,7 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 		strongMaj: 2*F + 1,
 	}
 
-	controller := newAgController(mc, tunables, logger, state, agRounds)
+	controller := newAgController(mc, params, tunables, logger, state, agRounds)
 
 	perfSniffer := newAgRoundSniffer(mc, params, agRounds, state)
 
@@ -194,7 +202,7 @@ func (s *state) ensureRoundInitialized(roundNum uint64) *round {
 	return s.rounds[roundNum]
 }
 
-func newAgController(mc ModuleConfig, tunables ModuleTunables, logger logging.Logger, state *state, agRounds *modring.Module) modules.PassiveModule {
+func newAgController(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, logger logging.Logger, state *state, agRounds *modring.Module) modules.PassiveModule {
 	_ = logger // silence warnings
 
 	m := dsl.NewModule(mc.Self)
@@ -237,7 +245,7 @@ func newAgController(mc ModuleConfig, tunables ModuleTunables, logger logging.Lo
 			logger.Log(logging.LevelDebug, "delivering round", "agRound", state.currentRound, "decision", currentRound.decision)
 
 			agreementpbdsl.Deliver(m, mc.Consumer, state.currentRound, currentRound.decision, currentRound.posQuorumDuration, currentRound.posTotalDuration)
-			state.roundDecisionHistory.Push(currentRound.decision)
+			state.roundDecisionHistory.Store(state.currentRound, currentRound.decision)
 
 			// clean up metadata
 			delete(state.rounds, state.currentRound)
@@ -338,6 +346,11 @@ func newAgController(mc ModuleConfig, tunables ModuleTunables, logger logging.Lo
 		for _, msg := range messages {
 			decision, ok := state.roundDecisionHistory.Get(msg.DestId)
 			if !ok {
+				if msg.DestId < state.currentRound {
+					// remote node is behind, ask director to help (send checkpoint)
+					directorpbdsl.HelpNode(m, mc.Consumer, msg.From)
+				}
+
 				continue // we can't help
 			}
 
@@ -352,6 +365,40 @@ func newAgController(mc ModuleConfig, tunables ModuleTunables, logger logging.Lo
 				)
 			}
 		}
+
+		return nil
+	})
+
+	directorpbdsl.UponNewEpoch(m, func(_ tt.EpochNr) error {
+		// business as usual, we don't need to perform any special action
+		return nil
+	})
+	directorpbdsl.UponEpochCheckpointed(m, func(epoch tt.EpochNr) error {
+		if uint64(epoch) > params.RetainEpochs+1 {
+			// we can discard older rounds
+			state.roundDecisionHistory.FreeEpochs(uint64(epoch) - params.RetainEpochs)
+		}
+		return nil
+	})
+	apppbdsl.UponRestoreState(m, func(checkpoint *checkpointpbtypes.StableCheckpoint) error {
+		// restore the state from the checkpoint
+		state.currentRound = uint64(checkpoint.Sn)
+
+		// its simpler to destroy data from all older epochs
+		state.roundDecisionHistory.FreeEpochs(uint64(checkpoint.Snapshot.EpochData.EpochConfig.EpochNr))
+		for round := range state.pendingInput {
+			if round < uint64(checkpoint.Sn) {
+				delete(state.pendingInput, round)
+			}
+		}
+		for round := range state.rounds {
+			if round < uint64(checkpoint.Sn) {
+				delete(state.rounds, round)
+				reliablenetpbdsl.MarkModuleMsgsRecvd(m, mc.ReliableNet, mc.agRoundModuleID(round), params.AllNodes)
+			}
+		}
+		agRounds.AdvanceViewToAtLeastSubmodule(uint64(checkpoint.Sn))
+		agRounds.FreePast()
 
 		return nil
 	})

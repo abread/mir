@@ -19,7 +19,7 @@ func (*Event) ReflectTypeOptions() []reflect.Type {
 		reflect.TypeOf((*Event_NewTransactions)(nil)),
 		reflect.TypeOf((*Event_BatchTimeout)(nil)),
 		reflect.TypeOf((*Event_NewEpoch)(nil)),
-		reflect.TypeOf((*Event_MarkDelivered)(nil)),
+		reflect.TypeOf((*Event_MarkStableProposal)(nil)),
 	}
 }
 

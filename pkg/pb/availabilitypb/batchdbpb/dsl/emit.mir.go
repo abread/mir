@@ -47,3 +47,7 @@ func BatchStored(m dsl.Module, destModule types.ModuleID, origin *types2.StoreBa
 func GarbageCollect(m dsl.Module, destModule types.ModuleID, retentionIndex types4.RetentionIndex) {
 	dsl.EmitEvent(m, events.GarbageCollect(destModule, retentionIndex))
 }
+
+func UpdateBatchRetention(m dsl.Module, destModule types.ModuleID, batchId types1.BatchID, retentionIndex types4.RetentionIndex) {
+	dsl.EmitEvent(m, events.UpdateBatchRetention(destModule, batchId, retentionIndex))
+}

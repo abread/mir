@@ -25,6 +25,8 @@ message Event {
     StoreBatch          store           = 3;
     BatchStored         stored          = 4;
     GarbageCollect      garbage_collect = 5;
+
+    UpdateBatchRetention update_ret = 6;
   }
 }
 
@@ -68,6 +70,13 @@ message GarbageCollect {
   option (mir.event) = true;
 
   uint64 retention_index = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/trantor/types.RetentionIndex"];
+}
+
+message UpdateBatchRetention {
+  option (mir.event) = true;
+
+  bytes  batch_id        = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/availability/multisigcollector/types.BatchID"];
+  uint64 retention_index = 2 [(mir.type) = "github.com/filecoin-project/mir/pkg/trantor/types.RetentionIndex"];
 }
 
 // ============================================================

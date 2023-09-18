@@ -12,3 +12,26 @@ type Event_TypeWrapper[T any] interface {
 func (w *Event_Heartbeat) Unwrap() *Heartbeat {
 	return w.Heartbeat
 }
+
+func (w *Event_NewEpoch) Unwrap() *NewEpoch {
+	return w.NewEpoch
+}
+
+func (w *Event_EpochCheckpointed) Unwrap() *EpochCheckpointed {
+	return w.EpochCheckpointed
+}
+
+func (w *Event_HelpNode) Unwrap() *HelpNode {
+	return w.HelpNode
+}
+
+type Message_Type = isMessage_Type
+
+type Message_TypeWrapper[T any] interface {
+	Message_Type
+	Unwrap() *T
+}
+
+func (w *Message_StableCheckpoint) Unwrap() *StableCheckpoint {
+	return w.StableCheckpoint
+}

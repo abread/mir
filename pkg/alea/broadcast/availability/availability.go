@@ -8,6 +8,7 @@ import (
 	bcpbdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/dsl"
 	bcpbtypes "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/types"
 	bcqueuepbdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/dsl"
+	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -32,7 +33,7 @@ func New(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, nodeID t
 		return nil
 	})
 
-	bcqueuepbdsl.UponBcStarted(m, func(slot *bcpbtypes.Slot) error {
+	bcqueuepbdsl.UponBcStarted(m, func(slot *bcpbtypes.Slot, _ tt.EpochNr) error {
 		// propagate event to consumer
 		bcpbdsl.BcStarted(m, mc.Consumer, slot)
 		return nil

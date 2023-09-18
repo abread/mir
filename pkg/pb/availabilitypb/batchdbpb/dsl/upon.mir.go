@@ -75,3 +75,9 @@ func UponGarbageCollect(m dsl.Module, handler func(retentionIndex types4.Retenti
 		return handler(ev.RetentionIndex)
 	})
 }
+
+func UponUpdateBatchRetention(m dsl.Module, handler func(batchId types2.BatchID, retentionIndex types4.RetentionIndex) error) {
+	UponEvent[*types.Event_UpdateRet](m, func(ev *types.UpdateBatchRetention) error {
+		return handler(ev.BatchId, ev.RetentionIndex)
+	})
+}

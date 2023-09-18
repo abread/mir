@@ -58,8 +58,8 @@ func (w *Event_NewEpoch) Unwrap() *NewEpoch {
 	return w.NewEpoch
 }
 
-func (w *Event_MarkDelivered) Unwrap() *MarkDelivered {
-	return w.MarkDelivered
+func (w *Event_MarkStableProposal) Unwrap() *MarkStableProposal {
+	return w.MarkStableProposal
 }
 
 type RequestBatchOrigin_Type = isRequestBatchOrigin_Type

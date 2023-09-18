@@ -18,6 +18,7 @@ import (
 	bcpbtypes "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/types"
 	bcqueuepbdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/dsl"
 	bcqueuepbevents "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/events"
+	directorpbdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/directorpb/dsl"
 	messagepbtypes "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
 	modringpbtypes "github.com/filecoin-project/mir/pkg/pb/modringpb/types"
 	reliablenetpbdsl "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/dsl"
@@ -39,16 +40,16 @@ func New(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, nodeID t
 	}
 
 	slots := modring.New(mc.Self, tunables.MaxConcurrentVcb, modring.ModuleParams{
-		Generator:      newVcbGenerator(mc, params, nodeID, logger),
+		Generator:      newVcbGenerator(mc, &params, nodeID, logger),
 		PastMsgHandler: newPastMsgHandler(mc, params),
 	}, logging.Decorate(logger, "Modring controller: "))
 
-	controller := newQueueController(mc, params, tunables, nodeID, logger, slots)
+	controller := newQueueController(mc, &params, tunables, nodeID, logger, slots)
 
 	return modules.RoutedModule(mc.Self, controller, slots), nil
 }
 
-func newQueueController(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, nodeID t.NodeID, logger logging.Logger, slots *modring.Module) modules.PassiveModule {
+func newQueueController(mc ModuleConfig, params *ModuleParams, tunables ModuleTunables, nodeID t.NodeID, logger logging.Logger, slots *modring.Module) modules.PassiveModule {
 	m := dsl.NewModule(mc.Self)
 
 	bcqueuepbdsl.UponInputValue(m, func(queueSlot aleatypes.QueueSlot, txIDs []tt.TxID, txs []*trantorpbtypes.Transaction) error {
@@ -174,6 +175,11 @@ func newQueueController(mc ModuleConfig, params ModuleParams, tunables ModuleTun
 		return nil
 	})
 
+	directorpbdsl.UponNewEpoch(m, func(epoch tt.EpochNr) error {
+		params.EpochNr = epoch
+		return nil
+	})
+
 	return m
 }
 
@@ -202,7 +208,7 @@ func newPastMsgHandler(mc ModuleConfig, params ModuleParams) modring.PastMessage
 	}
 }
 
-func newVcbGenerator(queueMc ModuleConfig, queueParams ModuleParams, nodeID t.NodeID, logger logging.Logger) func(id t.ModuleID, idx uint64) (modules.PassiveModule, events.EventList, error) {
+func newVcbGenerator(queueMc ModuleConfig, queueParams *ModuleParams, nodeID t.NodeID, logger logging.Logger) func(id t.ModuleID, idx uint64) (modules.PassiveModule, events.EventList, error) {
 	baseConfig := vcb.ModuleConfig{
 		Self:         "INVALID",
 		Consumer:     queueMc.Self,
@@ -215,7 +221,7 @@ func newVcbGenerator(queueMc ModuleConfig, queueParams ModuleParams, nodeID t.No
 
 	baseParams := vcb.ModuleParams{
 		InstanceUID: nil,
-		EpochNr:     queueParams.EpochNr,
+		EpochNr:     tt.RetentionIndex(queueParams.EpochNr),
 		AllNodes:    queueParams.AllNodes,
 		Leader:      queueParams.QueueOwner,
 	}
@@ -235,7 +241,7 @@ func newVcbGenerator(queueMc ModuleConfig, queueParams ModuleParams, nodeID t.No
 			bcqueuepbevents.BcStarted(queueMc.Consumer, &bcpbtypes.Slot{
 				QueueIdx:  queueParams.QueueIdx,
 				QueueSlot: queueSlot,
-			}),
+			}, queueParams.EpochNr),
 		), nil
 	}
 }
