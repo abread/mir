@@ -76,11 +76,7 @@ func (conn *remoteConnection) Send(msg []byte) error {
 	case conn.msgBuffer <- msg:
 		return nil
 	default:
-		// send in background
-		go func() {
-			conn.msgBuffer <- msg
-		}()
-		return es.Errorf("warning: send buffer full")
+		return es.Errorf("warning: send buffer full. message dropped.")
 	}
 }
 
