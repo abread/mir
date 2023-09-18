@@ -500,7 +500,7 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 		// we got it, no longer pending
 		delete(state.liveStableCheckpoints, sn)
 
-		if sn > state.lastStableCheckpoint.Sn {
+		if state.lastStableCheckpoint == nil || sn > state.lastStableCheckpoint.Sn {
 			saveLatestStableCheckpoint(&threshcheckpointpbtypes.StableCheckpoint{
 				Sn:        sn,
 				Snapshot:  snapshot,
@@ -517,6 +517,10 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 			}
 		}
 
+		return nil
+	})
+	isspbdsl.UponNewConfig(m, func(epochNr tt.EpochNr, membership *trantorpbtypes.Membership) error {
+		// TODO: support membership changes
 		return nil
 	})
 

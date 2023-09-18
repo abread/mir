@@ -29,8 +29,8 @@ type dummyMulti struct {
 
 func (m *dummyMulti) ImplementsModule() {}
 func (m *dummyMulti) ApplyEvents(evs events.EventList) (events.EventList, error) {
-	// transform init event for abc into init event for abc/0
 	evs = evs.Transform(func(ev *eventpbtypes.Event) *eventpbtypes.Event {
+		// transform init event for abc into init event for abc/0
 		if ev.DestModule == m.selfID {
 			if _, ok := ev.Type.(*eventpbtypes.Event_Init); ok {
 				// make a shallow copy of the event
@@ -167,7 +167,7 @@ func (bc *bcMod) splitEvsIn(evsIn events.EventList) (map[modules.PassiveModule]*
 		if ev.DestModule == bc.selfID {
 			destID = ""
 		} else {
-			destID = ev.DestModule.StripParent(bc.selfID)
+			destID = ev.DestModule.StripParent(bc.selfID.Parent()).Sub()
 		}
 
 		var mod modules.PassiveModule

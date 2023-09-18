@@ -25,7 +25,7 @@ func Factory(mc ModuleConfig, ownID t.NodeID, logger logging.Logger) modules.Pas
 				submc.Self = submoduleID
 
 				// Get the instance parameters
-				p := params.Type.(*factorypbtypes.GeneratorParams_Checkpoint).Checkpoint
+				p := params.Type.(*factorypbtypes.GeneratorParams_ThreshCheckpoint).ThreshCheckpoint
 
 				chkpParams := &ModuleParams{
 					Membership:       p.Membership,

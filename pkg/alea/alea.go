@@ -92,22 +92,12 @@ type Params struct {
 // for which DefaultParams can serve as a starting point.
 func DefaultParams(membership *trantorpbtypes.Membership) Params {
 	EpochLength := 256
-	N := len(membership.Nodes)
-
 	MaxOwnUnagreedBatchCount := 2
-	MaxConcurrentVcbPerQueue := (EpochLength/N + 1) * 2
-	if MaxConcurrentVcbPerQueue < MaxOwnUnagreedBatchCount*2 {
-		MaxConcurrentVcbPerQueue = MaxOwnUnagreedBatchCount * 2
-	}
 
-	return Params{
+	p := Params{
 		InstanceUID:              []byte{42},
 		Membership:               membership,
-		MaxConcurrentVcbPerQueue: MaxConcurrentVcbPerQueue,
-		MaxOwnUnagreedBatchCount: MaxOwnUnagreedBatchCount,
 		MaxAbbaRoundLookahead:    4,
-		MaxAgRoundLookahead:      EpochLength * 2,
-		MaxAgRoundAdvanceInput:   EpochLength - 1,
 		EstimateWindowSize:       32,
 		MaxExtSlowdownFactor:     1.5,
 		QueueSelectionPolicyType: queueselectionpolicy.RoundRobin,
@@ -115,6 +105,22 @@ func DefaultParams(membership *trantorpbtypes.Membership) Params {
 		RetainEpochs:             2,
 		MaxAgStall:               30 * time.Second,
 	}
+	p.Adjust(EpochLength, MaxOwnUnagreedBatchCount)
+
+	return p
+}
+
+func (p *Params) Adjust(epochSz int, maxOwnUnagBatchCount int) {
+	N := len(p.Membership.Nodes)
+	p.MaxOwnUnagreedBatchCount = maxOwnUnagBatchCount
+	p.MaxConcurrentVcbPerQueue = (epochSz/N + 1) * 2
+	if p.MaxConcurrentVcbPerQueue < p.MaxOwnUnagreedBatchCount*2 {
+		p.MaxConcurrentVcbPerQueue = p.MaxOwnUnagreedBatchCount * 2
+	}
+
+	p.MaxAgRoundLookahead = epochSz * 2
+	p.MaxAgRoundAdvanceInput = epochSz - 1
+	p.EpochLength = uint64(epochSz)
 }
 
 // New returns a new initialized instance of the base Alea protocol modules to be used when instantiating a mir.Node.

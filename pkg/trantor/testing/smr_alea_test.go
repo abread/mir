@@ -28,6 +28,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/iss"
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/modules"
+	agreementpbtypes "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/types"
 	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 	messagepbtypes "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
 	"github.com/filecoin-project/mir/pkg/reliablenet" // nolint: typecheck
@@ -140,6 +141,16 @@ func testIntegrationWithAlea(t *testing.T) {
 				Transport:     "sim",
 				NumFakeTXs:    100,
 				Duration:      15 * time.Second,
+				ParamsModifier: func(params *trantor.Params) {
+					params.Alea.MaxConcurrentVcbPerQueue = 2
+					params.Alea.MaxOwnUnagreedBatchCount = 2
+					params.Alea.MaxAbbaRoundLookahead = 1
+					params.Alea.MaxAgRoundLookahead = 1
+					params.Alea.MaxAgRoundAdvanceInput = 0
+
+					// Use small retransmission delay to stress-test the reliablenet module.
+					params.ReliableNet.RetransmissionLoopInterval = 250 * time.Millisecond
+				},
 			}},
 		14: {"Submit 100 requests with 4 nodes and libp2p networking with optimizations",
 			&TestConfig{
@@ -185,6 +196,51 @@ func testIntegrationWithAlea(t *testing.T) {
 					params.Alea.MaxAbbaRoundLookahead = 10
 					params.Alea.MaxAgRoundLookahead = 10
 					params.Alea.MaxAgRoundAdvanceInput = 4
+				},
+			}},
+		101: {"Test checkpoint recovery with 4 nodes in simulation",
+			&TestConfig{
+				NodeIDsWeight: deploytest.NewNodeIDsDefaultWeights(4),
+				NumClients:    0,
+				Transport:     "libp2p",
+				NumFakeTXs:    128,
+				Duration:      30 * time.Second,
+				TransportFilter: func(msg *messagepbtypes.Message, from, to types.NodeID) bool {
+					node0 := types.NewNodeIDFromInt(0)
+					_, isVcb := msg.Type.(*messagepbtypes.Message_Vcb)
+
+					// drop all broadcast messages involving node 0
+					// node 0 will not receive broadcasts, but should be able to initiate them
+					if isVcb && to == node0 && from != to && !msg.DestModule.IsSubOf("abc/0/0") {
+						return false
+					}
+
+					// drop nearly all agreement messages involving node 0
+					_, isAbba := msg.Type.(*messagepbtypes.Message_Abba)
+					if isAbba && (to == node0 || from == node0) && from != to {
+						agRoundStr := msg.DestModule.Sub().Top()
+						agRound, _ := strconv.ParseUint(string(agRoundStr), 10, 64)
+						return agRound > 64-8-3
+					}
+					agMsgW, isAg := msg.Type.(*messagepbtypes.Message_AleaAgreement)
+					if isAg && (to == node0 || from == node0) && from != to {
+						finishMsgW := agMsgW.AleaAgreement.Type.(*agreementpbtypes.Message_FinishAbba)
+						return finishMsgW.FinishAbba.Round > 64-8-2
+					}
+
+					// drop all checkpoint-building messages involving node 0
+					_, isChkpBuild := msg.Type.(*messagepbtypes.Message_Threshcheckpoint)
+					if isChkpBuild && (to == node0 || from == node0) && from != to {
+						return false
+					}
+
+					return true
+				},
+				ParamsModifier: func(params *trantor.Params) {
+					params.Alea.Adjust(8, 2)
+					params.Alea.MaxAgStall = 1 * time.Second
+					params.ReliableNet.MaxRetransmissionBurst = 64
+					params.ReliableNet.RetransmissionLoopInterval = 500 * time.Millisecond
 				},
 			}},
 	}
@@ -413,16 +469,9 @@ func newDeploymentAlea(conf *TestConfig) (*deploytest.Deployment, error) {
 		}
 
 		tConf := trantor.DefaultParams(transportLayer.Membership())
-		tConf.Alea.MaxConcurrentVcbPerQueue = 2
-		tConf.Alea.MaxOwnUnagreedBatchCount = 2
-		tConf.Alea.MaxAbbaRoundLookahead = 1
-		tConf.Alea.MaxAgRoundLookahead = 1
-		tConf.Alea.MaxAgRoundAdvanceInput = 0
 
 		// Use small batches so even a few transactions keep being proposed even after epoch transitions.
 		tConf.Mempool.MaxTransactionsInBatch = 10
-		// Use small retransmission delay to stress-test the reliablenet module.
-		tConf.ReliableNet.RetransmissionLoopInterval = 250 * time.Millisecond
 		// Keep retransmission bursts low to avoid overloading the test system.
 		tConf.ReliableNet.MaxRetransmissionBurst = 4
 

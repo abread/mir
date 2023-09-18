@@ -39,6 +39,16 @@ func (mid ModuleID) Sub() ModuleID {
 	return ModuleID(sub)
 }
 
+// Parent returns the ID of the nearest parent module of the path, or "" if no parent exists.
+func (mid ModuleID) Parent() ModuleID {
+	lastSepIdx := strings.LastIndex(string(mid), Separator)
+	if lastSepIdx == -1 {
+		return ModuleID("")
+	}
+
+	return mid[:lastSepIdx]
+}
+
 func (mid ModuleID) StripParent(parent ModuleID) ModuleID {
 	stripped := strings.TrimPrefix(string(mid), string(parent)+Separator)
 	return ModuleID(stripped)

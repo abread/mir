@@ -414,6 +414,7 @@ func NewAlea(
 			Self:         moduleConfig.Consumer,
 			Availability: moduleConfig.AleaBroadcast,
 			Checkpoint:   moduleConfig.Checkpoint,
+			Mempool:      moduleConfig.Mempool,
 			Destination:  appID,
 		},
 		tt.EpochNr(0),
