@@ -56,6 +56,7 @@ type state struct {
 	slotsReadyToDeliver set[bcpbtypes.Slot]
 	agRound             uint64
 	stalledAgRound      bool
+	lastAgInput         time.Duration
 
 	minAgRound            uint64
 	nodeEpochMap          map[t.NodeID]tt.EpochNr
@@ -171,6 +172,7 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 			if state.stalledAgRound {
 				logger.Log(logging.LevelDebug, "INPUT AG (BC-current)", "round", nextRound, "value", true)
 				aagdsl.InputValue(m, mc.AleaAgreement, nextRound, true)
+				state.lastAgInput = time.Since(timeRef)
 				state.stalledAgRound = false
 			}
 		} else {
@@ -186,6 +188,7 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 
 			logger.Log(logging.LevelDebug, "INPUT AG (BC-future)", "round", nextRound, "value", true)
 			aagdsl.InputValue(m, mc.AleaAgreement, nextRound, true)
+			state.lastAgInput = time.Since(timeRef)
 		}
 
 		return nil
@@ -211,6 +214,7 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 		if _, present := state.slotsReadyToDeliver[slot]; present {
 			logger.Log(logging.LevelDebug, "INPUT AG (AG-done)", "round", nextRoundSameQueue, "value", true)
 			aagdsl.InputValue(m, mc.AleaAgreement, nextRoundSameQueue, true)
+			state.lastAgInput = time.Since(timeRef)
 
 			bcpbdsl.MarkStableProposal(m, mc.AleaBroadcast, &slot)
 		}
@@ -273,7 +277,7 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 	dsl.UponStateUpdates(m, func() error {
 		if !state.stalledAgRound {
 			return nil // nothing to do
-		} else if !agCanDeliverK(1) {
+		} else if !agCanDeliverK(1) && time.Since(timeRef) < state.lastAgInput+tunables.MaxAgStall {
 			// just continue stalling: we don't have anything to deliver yet
 			// TODO: fix liveness issue: F correct quiet get behind, F byz ahead get quiet => F+1 correct ahead get stuck
 			return nil
@@ -313,6 +317,7 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 
 		logger.Log(logging.LevelDebug, "INPUT AG (timeout)", "round", state.agRound, "value", false)
 		aagdsl.InputValue(m, mc.AleaAgreement, state.agRound, false)
+		state.lastAgInput = time.Since(timeRef)
 		state.stalledAgRound = false
 
 		return nil

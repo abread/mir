@@ -1,6 +1,8 @@
 package alea
 
 import (
+	"time"
+
 	es "github.com/go-errors/errors"
 
 	"github.com/filecoin-project/mir/pkg/alea/agreement"
@@ -78,6 +80,8 @@ type Params struct {
 	QueueSelectionPolicyType queueselectionpolicy.QueuePolicyType
 	EpochLength              uint64
 	RetainEpochs             uint64
+
+	MaxAgStall time.Duration
 }
 
 // DefaultParams returns the default configuration for a given membership.
@@ -109,6 +113,7 @@ func DefaultParams(membership *trantorpbtypes.Membership) Params {
 		QueueSelectionPolicyType: queueselectionpolicy.RoundRobin,
 		EpochLength:              uint64(EpochLength),
 		RetainEpochs:             2,
+		MaxAgStall:               30 * time.Second,
 	}
 }
 
@@ -180,6 +185,7 @@ func New(ownID t.NodeID, config Config, params Params, startingChkp *checkpoint.
 			MaxOwnUnagreedBatchCount: params.MaxOwnUnagreedBatchCount,
 			EstimateWindowSize:       params.EstimateWindowSize,
 			MaxExtSlowdownFactor:     params.MaxExtSlowdownFactor,
+			MaxAgStall:               params.MaxAgStall,
 		},
 		ownID,
 		qsp,

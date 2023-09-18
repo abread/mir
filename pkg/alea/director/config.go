@@ -1,6 +1,8 @@
 package director
 
 import (
+	"time"
+
 	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
@@ -52,4 +54,6 @@ type ModuleTunables struct {
 	// A factor of K will let the system wait up to <time for local deliver> + K * <time for 2F+1 VCB quorum done>
 	// Must be >= 1
 	MaxExtSlowdownFactor float64
+
+	MaxAgStall time.Duration
 }
