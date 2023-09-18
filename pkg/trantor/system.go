@@ -16,7 +16,6 @@ import (
 	"github.com/filecoin-project/mir/pkg/trantor/appmodule"
 
 	"github.com/pkg/errors"
-	"golang.org/x/exp/slices"
 
 	"github.com/filecoin-project/mir/pkg/alea"
 	"github.com/filecoin-project/mir/pkg/clientprogress"
