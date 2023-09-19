@@ -201,17 +201,16 @@ func testIntegrationWithAlea(t *testing.T) {
 		101: {"Test checkpoint recovery with 4 nodes in simulation",
 			&TestConfig{
 				NodeIDsWeight: deploytest.NewNodeIDsDefaultWeights(4),
-				NumClients:    0,
 				Transport:     "libp2p",
 				NumFakeTXs:    128,
-				Duration:      30 * time.Second,
+				Duration:      20 * time.Second,
 				TransportFilter: func(msg *messagepbtypes.Message, from, to types.NodeID) bool {
 					node0 := types.NewNodeIDFromInt(0)
 					_, isVcb := msg.Type.(*messagepbtypes.Message_Vcb)
 
 					// drop all broadcast messages involving node 0
 					// node 0 will not receive broadcasts, but should be able to initiate them
-					if isVcb && to == node0 && from != to && !msg.DestModule.IsSubOf("abc/0/0") {
+					if isVcb && to == node0 && from != to && msg.DestModule.Sub().Sub().Top() != types.ModuleID("0") {
 						return false
 					}
 
@@ -230,7 +229,7 @@ func testIntegrationWithAlea(t *testing.T) {
 
 					// drop all checkpoint-building messages involving node 0
 					_, isChkpBuild := msg.Type.(*messagepbtypes.Message_Threshcheckpoint)
-					if isChkpBuild && (to == node0 || from == node0) && from != to {
+					if isChkpBuild && to == node0 && from != to {
 						return false
 					}
 
@@ -238,8 +237,8 @@ func testIntegrationWithAlea(t *testing.T) {
 				},
 				ParamsModifier: func(params *trantor.Params) {
 					params.Alea.Adjust(8, 2)
-					params.Alea.MaxAgStall = 1 * time.Second
-					params.ReliableNet.MaxRetransmissionBurst = 64
+					params.Alea.MaxAgStall = 250 * time.Millisecond
+					params.ReliableNet.MaxRetransmissionBurst = 128
 					params.ReliableNet.RetransmissionLoopInterval = 500 * time.Millisecond
 				},
 			}},

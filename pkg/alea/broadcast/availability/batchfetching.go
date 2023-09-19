@@ -152,7 +152,9 @@ func includeBatchFetching(
 		}
 
 		state.epochFetchedSlots[state.epochNr] = append(state.epochFetchedSlots[state.epochNr], slot)
-		batchdbpbdsl.UpdateBatchRetention(m, mc.BatchDB, certDB[slot].BatchId, tt.RetentionIndex(state.epochNr))
+		if cert, ok := certDB[slot]; ok {
+			batchdbpbdsl.UpdateBatchRetention(m, mc.BatchDB, cert.BatchId, tt.RetentionIndex(state.epochNr))
+		}
 
 		if reqState.SentFillGap {
 			// no need for FILLER anymore

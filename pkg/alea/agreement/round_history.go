@@ -59,12 +59,18 @@ func (h AgRoundHistory) Len() int {
 
 func (h *AgRoundHistory) FreeEpochs(newMinEpoch uint64) {
 	if newMinEpoch > h.minEpoch {
-		h.history = h.history[newMinEpoch-h.minEpoch:]
-		h.minEpoch = newMinEpoch
+		if int(newMinEpoch-h.minEpoch) > len(h.history) {
+			// free all epochs, they're all stale
+			h.history = h.history[:0]
+		} else {
+			h.history = h.history[newMinEpoch-h.minEpoch:]
+		}
 
 		if len(h.history) == 0 {
 			// allocate slice for new epoch
 			h.history = append(h.history, make([]bool, 0, h.epochSize))
 		}
+
+		h.minEpoch = newMinEpoch
 	}
 }

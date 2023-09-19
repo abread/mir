@@ -34,6 +34,7 @@ import (
 	threshcheckpointpbdsl "github.com/filecoin-project/mir/pkg/pb/threshcheckpointpb/dsl"
 	threshchkpvalidatorpbdsl "github.com/filecoin-project/mir/pkg/pb/threshcheckpointpb/threshchkpvalidatorpb/dsl"
 	threshcheckpointpbtypes "github.com/filecoin-project/mir/pkg/pb/threshcheckpointpb/types"
+	transportpbdsl "github.com/filecoin-project/mir/pkg/pb/transportpb/dsl"
 	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	"github.com/filecoin-project/mir/pkg/reliablenet/rntypes"
 	"github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
@@ -117,31 +118,33 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 			return nil
 		}
 
-		if !decision {
-			// deliver empty batch
-			isspbdsl.DeliverCert(m, mc.App, tt.SeqNr(round), nil, true)
-		}
-
 		// pop queue
 		slot, err := state.queueSelectionPolicy.DeliverSn(round, decision)
 		if err != nil {
 			return es.Errorf("could not deliver round %d: %w", round, err)
 		}
 
-		// next round won't start until we say so, and previous rounds already delivered, so we can deliver immediately
-		logger.Log(logging.LevelDebug, "delivering cert", "agreementRound", round, "queueIdx", slot.QueueIdx, "queueSlot", slot.QueueSlot)
-		isspbdsl.DeliverCert(m, mc.App, tt.SeqNr(round), &availabilitypbtypes.Cert{
-			Type: &availabilitypbtypes.Cert_Alea{
-				Alea: &bcpbtypes.Cert{
-					Slot: &slot,
+		if decision {
+			// agreement component delivers in-order, so we can deliver immediately
+			logger.Log(logging.LevelDebug, "delivering cert", "agreementRound", round, "queueIdx", slot.QueueIdx, "queueSlot", slot.QueueSlot)
+			isspbdsl.DeliverCert(m, mc.App, tt.SeqNr(round), &availabilitypbtypes.Cert{
+				Type: &availabilitypbtypes.Cert_Alea{
+					Alea: &bcpbtypes.Cert{
+						Slot: &slot,
+					},
 				},
-			},
-		}, false)
+			}, false)
 
-		// remove tracked slot readiness (don't want to run out of memory)
-		// also free broadcast slot to allow broadcast component to make progress
-		delete(state.slotsReadyToDeliver, slot)
-		bcqueuepbdsl.FreeSlot(m, bccommon.BcQueueModuleID(mc.AleaBroadcast, slot.QueueIdx), slot.QueueSlot)
+			// remove tracked slot readiness (don't want to run out of memory)
+			// also free broadcast slot to allow broadcast component to make progress
+			delete(state.slotsReadyToDeliver, slot)
+			bcqueuepbdsl.FreeSlot(m, bccommon.BcQueueModuleID(mc.AleaBroadcast, slot.QueueIdx), slot.QueueSlot)
+		} else {
+			// deliver empty batch
+			isspbdsl.DeliverCert(m, mc.App, tt.SeqNr(round), nil, true)
+			logger.Log(logging.LevelDebug, "delivering empty cert", "agreementRound", round)
+			return nil
+		}
 
 		return nil
 	})
@@ -277,9 +280,9 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 	dsl.UponStateUpdates(m, func() error {
 		if !state.stalledAgRound {
 			return nil // nothing to do
-		} else if !agCanDeliverK(1) && time.Since(timeRef) < state.lastAgInput+tunables.MaxAgStall {
-			// just continue stalling: we don't have anything to deliver yet
-			// TODO: fix liveness issue: F correct quiet get behind, F byz ahead get quiet => F+1 correct ahead get stuck
+		} else if !agCanDeliverK(1) && tunables.MaxAgStall > (time.Since(timeRef)-state.lastAgInput) {
+			// just continue stalling for a while more: we don't have anything to deliver yet
+			state.wakeUpAfter(tunables.MaxAgStall - (time.Since(timeRef) - state.lastAgInput))
 			return nil
 		}
 
@@ -462,8 +465,8 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 
 		state.minAgRound = round + 1
 
-		if round%params.EpochLength == 0 && round > 0 {
-			epochNr := tt.EpochNr(round % params.EpochLength)
+		if (round+1)%params.EpochLength == 0 {
+			epochNr := tt.EpochNr(round / params.EpochLength)
 			return checkpointAndAdvanceEpoch(epochNr + 1)
 		}
 
@@ -515,6 +518,13 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 				// Note: we add the current node idx to avoid overloading the remote node with snapshots
 				if epochNr+tt.EpochNr(params.RetainEpochs)+tt.EpochNr(ownQueueIdx) < currentEpochNr {
 					directorpbdsl.HelpNode(m, mc.Self, nodeID)
+					transportpbdsl.SendMessage(m, mc.Net,
+						directorpbmsgs.StableCheckpoint(
+							mc.Self,
+							state.lastStableCheckpoint,
+						),
+						[]t.NodeID{nodeID},
+					)
 				}
 			}
 		}
@@ -536,24 +546,25 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 		}
 		return nil
 	})
-	directorpbdsl.UponHelpNode(m, func(nodeId t.NodeID) error {
+	directorpbdsl.UponHelpNode(m, func(nodeID t.NodeID) error {
+		logger.Log(logging.LevelDebug, "wanted to help", "node", nodeID)
 		if state.lastStableCheckpoint == nil {
 			// can't help if we don't have a checkpoint yet
 			return nil
 		}
 
 		epochNr := state.lastStableCheckpoint.Snapshot.EpochData.EpochConfig.EpochNr
-		if state.nodeEpochMap[nodeId] < epochNr {
-			state.nodeEpochMap[nodeId] = epochNr
-			state.helpedNodes[nodeId] = struct{}{}
+		if state.nodeEpochMap[nodeID] < epochNr {
+			state.nodeEpochMap[nodeID] = epochNr
+			state.helpedNodes[nodeID] = struct{}{}
 
-			logger.Log(logging.LevelDebug, "Helping node catch up", "node", nodeId, "chkpEpoch", epochNr, "theirEpoch", state.nodeEpochMap[nodeId])
+			logger.Log(logging.LevelDebug, "Helping node catch up", "node", nodeID, "chkpEpoch", epochNr, "theirEpoch", state.nodeEpochMap[nodeID])
 			reliablenetpbdsl.SendMessage(m, mc.ReliableNet, rntypes.MsgID(fmt.Sprintf("s%d", epochNr)),
 				directorpbmsgs.StableCheckpoint(
 					mc.Self,
 					state.lastStableCheckpoint,
 				),
-				[]t.NodeID{nodeId},
+				[]t.NodeID{nodeID},
 			)
 
 			// clear previous help attempts
@@ -586,7 +597,7 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 			return nil
 		}
 
-		if checkpoint.Sn < tt.SeqNr(state.agRound) {
+		if checkpoint.Sn <= tt.SeqNr(state.agRound) {
 			// stale checkpoint
 			return nil
 		}
@@ -603,17 +614,27 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 		}
 
 		// apply data from checkpoint across all relevant components
-		state.minAgRound = uint64(checkpoint.Sn) + params.EpochLength
-		state.stalledAgRound = true
-
 		for _, mod := range []t.ModuleID{mc.App, mc.AleaAgreement, mc.AleaBroadcast} {
 			apppbdsl.RestoreState(m, mod, regularCheckpoint)
 		}
 
+		// also apply it to the director
 		var errQs error
 		state.queueSelectionPolicy, errQs = queueselectionpolicy.QueuePolicyFromBytes(checkpoint.Snapshot.EpochData.LeaderPolicy)
 		if errQs != nil {
 			return errQs
+		}
+
+		// current round is the checkpoint round, and it starts waiting for input
+		state.minAgRound = uint64(checkpoint.Sn)
+		state.agRound = uint64(checkpoint.Sn)
+		state.stalledAgRound = true
+
+		// clear slots delivered indirectly through the checkpoint
+		for slot := range state.slotsReadyToDeliver {
+			if state.queueSelectionPolicy.SlotDelivered(slot) {
+				delete(state.slotsReadyToDeliver, slot)
+			}
 		}
 
 		// then advance to new epoch, and store the received checkpoint

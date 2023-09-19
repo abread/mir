@@ -381,7 +381,7 @@ func newAgController(mc ModuleConfig, params ModuleParams, tunables ModuleTunabl
 		// restore the state from the checkpoint
 		state.currentRound = uint64(checkpoint.Sn)
 
-		// its simpler to destroy data from all older epochs
+		// its simpler to destroy data from all older epochs, because we cannot easily reconstruct it
 		state.roundDecisionHistory.FreeEpochs(uint64(checkpoint.Snapshot.EpochData.EpochConfig.EpochNr))
 		for round := range state.pendingInput {
 			if round < uint64(checkpoint.Sn) {
@@ -394,7 +394,9 @@ func newAgController(mc ModuleConfig, params ModuleParams, tunables ModuleTunabl
 				reliablenetpbdsl.MarkModuleMsgsRecvd(m, mc.ReliableNet, mc.agRoundModuleID(round), params.AllNodes)
 			}
 		}
-		agRounds.AdvanceViewToAtLeastSubmodule(uint64(checkpoint.Sn))
+		if err := agRounds.AdvanceViewToAtLeastSubmodule(uint64(checkpoint.Sn)); err != nil {
+			return err
+		}
 		agRounds.FreePast()
 
 		return nil
