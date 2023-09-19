@@ -6,7 +6,6 @@ import (
 
 	es "github.com/go-errors/errors"
 
-	"github.com/filecoin-project/mir/pkg/alea/aleatypes"
 	"github.com/filecoin-project/mir/pkg/alea/broadcast/bccommon"
 	"github.com/filecoin-project/mir/pkg/alea/queueselectionpolicy"
 	"github.com/filecoin-project/mir/pkg/dsl"
@@ -42,8 +41,8 @@ type batchFetchingState struct {
 	epochNr tt.EpochNr
 
 	// track which slots were stored in which epoch for retention purposes
-	slotSavedEpochs     map[bcpbtypes.Slot]tt.EpochNr   // slot to epoch
-	epochDeliveredSlots map[tt.EpochNr][]bcpbtypes.Slot // epoch to slots
+	// this is used to garbage collect availability certs
+	epochFetchedSlots map[tt.EpochNr][]bcpbtypes.Slot // epoch to slots
 
 	RequestsState map[bcpbtypes.Slot]*RequestsState
 }
@@ -69,10 +68,8 @@ func includeBatchFetching(
 	_ = logger // silence warnings
 
 	state := batchFetchingState{
-		epochNr: 0,
-
-		slotSavedEpochs:     make(map[bcpbtypes.Slot]tt.EpochNr, int(params.RetainEpochs*params.EpochLength)),
-		epochDeliveredSlots: make(map[tt.EpochNr][]bcpbtypes.Slot, int(params.RetainEpochs)),
+		epochNr:           0,
+		epochFetchedSlots: make(map[tt.EpochNr][]bcpbtypes.Slot),
 
 		RequestsState: make(map[bcpbtypes.Slot]*RequestsState),
 	}
@@ -149,6 +146,22 @@ func includeBatchFetching(
 		return nil
 	})
 
+	fulfillRequests := func(reqState *RequestsState, slot bcpbtypes.Slot, txs []*trantorpbtypes.Transaction) {
+		for _, origin := range reqState.ReqOrigins {
+			availabilitypbdsl.ProvideTransactions(m, origin.Module, txs, origin)
+		}
+
+		state.epochFetchedSlots[state.epochNr] = append(state.epochFetchedSlots[state.epochNr], slot)
+		batchdbpbdsl.UpdateBatchRetention(m, mc.BatchDB, certDB[slot].BatchId, tt.RetentionIndex(state.epochNr))
+
+		if reqState.SentFillGap {
+			// no need for FILLER anymore
+			rnetdsl.MarkRecvd(m, mc.ReliableNet, mc.Self, FillGapMsgID(&slot), params.AllNodes)
+		}
+
+		delete(state.RequestsState, slot)
+	}
+
 	// If the batch is present in the local storage, return it. Otherwise, ask other nodes.
 	batchdbdsl.UponLookupBatchResponse(m, func(found bool, txs []*trantorpbtypes.Transaction, slot *bcpbtypes.Slot) error {
 		reqState, ok := state.RequestsState[*slot]
@@ -160,16 +173,8 @@ func includeBatchFetching(
 			return es.Errorf("inconsistent batch db state: missing txs for slot %v", slot)
 		}
 
-		for _, origin := range reqState.ReqOrigins {
-			availabilitypbdsl.ProvideTransactions(m, origin.Module, txs, origin)
-		}
+		fulfillRequests(reqState, *slot, txs)
 
-		if reqState.SentFillGap {
-			// no need for FILLER anymore
-			rnetdsl.MarkRecvd(m, mc.ReliableNet, mc.Self, FillGapMsgID(slot), params.AllNodes)
-		}
-
-		delete(state.RequestsState, *slot)
 		return nil
 	})
 
@@ -288,19 +293,13 @@ func includeBatchFetching(
 			return nil
 		}
 
-		// stop asking other nodes to send us stuff
-		rnetdsl.MarkRecvd(m, mc.ReliableNet, mc.Self, FillGapMsgID(context.cert.Slot), params.AllNodes)
+		fulfillRequests(requestState, *context.cert.Slot, context.txs)
 
 		// store batch/cert asynchronously
 		batchdbdsl.StoreBatch(m, mc.BatchDB, context.cert.BatchId, context.txs, tt.RetentionIndex(state.epochNr), context)
 
-		// send response to requests
-		// logger.Log(logging.LevelDebug, "satisfying delayed requests with FILLER", "queueIdx", context.slot.QueueIdx, "queueSlot", context.slot.QueueSlot)
-		for _, origin := range requestState.ReqOrigins {
-			availabilitypbdsl.ProvideTransactions(m, origin.Module, context.txs, origin)
-		}
+		// let mempool forget about these txs
 		mempooldsl.MarkStableProposal(m, mc.Mempool, context.txs)
-		delete(state.RequestsState, *context.cert.Slot)
 
 		return nil
 	})
@@ -316,96 +315,40 @@ func includeBatchFetching(
 
 	directorpbdsl.UponNewEpoch(m, func(epoch tt.EpochNr) error {
 		state.epochNr = epoch
-		state.epochDeliveredSlots[epoch] = make([]bcpbtypes.Slot, 0, params.EpochLength)
-
-		// propagate epoch changes to queues
-		for queueIdx := aleatypes.QueueIdx(0); queueIdx < aleatypes.QueueIdx(len(params.AllNodes)); queueIdx++ {
-			directorpbdsl.NewEpoch(m, bccommon.BcQueueModuleID(mc.Self, queueIdx), epoch)
-		}
+		state.epochFetchedSlots[epoch] = make([]bcpbtypes.Slot, 0, len(certDB)/len(state.epochFetchedSlots))
 		return nil
 	})
 
-	// ensure batch retention is updated on delivery
-	bcqueuepbdsl.UponBcStarted(m, func(slot *bcpbtypes.Slot, epoch tt.EpochNr) error {
-		state.slotSavedEpochs[*slot] = epoch
-		return nil
-	})
-	bcpbdsl.UponFreeSlot(m, func(slot *bcpbtypes.Slot) error {
-		slotSavedEpoch := state.slotSavedEpochs[*slot]
-
-		if slotSavedEpoch != state.epochNr {
-			// update retention index in batchdb to match delivery epoch
-			// this is required to avoid dropping batches too soon
-			batchdbpbdsl.UpdateBatchRetention(m, mc.BatchDB, certDB[*slot].BatchId, tt.RetentionIndex(state.epochNr))
-		}
-		// we no longer need to worry about this slot
-		delete(state.slotSavedEpochs, *slot)
-
-		// also note when this batch was delivered
-		state.epochDeliveredSlots[state.epochNr] = append(state.epochDeliveredSlots[state.epochNr], *slot)
-
-		return nil
-	})
-
-	directorpbdsl.UponEpochCheckpointed(m, func(epoch tt.EpochNr) error {
-		if epoch > tt.EpochNr(params.RetainEpochs)+1 {
-			// ensure previously broadcast (but not agreed) slots don't get garbage collected too soon
-			for slot, slotSavedEpoch := range state.slotSavedEpochs {
-				if slotSavedEpoch < epoch-tt.EpochNr(params.RetainEpochs) {
-					batchdbpbdsl.UpdateBatchRetention(m, mc.BatchDB, certDB[slot].BatchId, tt.RetentionIndex(state.epochNr))
+	directorpbdsl.UponGCEpochs(m, func(minEpoch tt.EpochNr) error {
+		// delete old availability certs from db
+		for epoch := range state.epochFetchedSlots {
+			if epoch < minEpoch {
+				for _, slot := range state.epochFetchedSlots[epoch] {
+					delete(certDB, slot)
 				}
-			}
 
-			// delete old batches from db
-			batchdbpbdsl.GarbageCollect(m, mc.BatchDB, tt.RetentionIndex(uint64(epoch)-params.RetainEpochs))
-
-			// delete old availability certs from db
-			for _, slot := range state.epochDeliveredSlots[epoch-tt.EpochNr(params.RetainEpochs)] {
-				delete(certDB, slot)
+				delete(state.epochFetchedSlots, epoch)
 			}
-			delete(state.epochDeliveredSlots, epoch-tt.EpochNr(params.RetainEpochs))
 		}
+
+		// delete old batches from db
+		batchdbpbdsl.GarbageCollect(m, mc.BatchDB, tt.RetentionIndex(uint64(minEpoch)))
 
 		return nil
 	})
 
 	apppbdsl.UponRestoreState(m, func(checkpoint *checkpointpbtypes.StableCheckpoint) error {
 		epochNr := checkpoint.Snapshot.EpochData.EpochConfig.EpochNr
-
-		// for batches that have not been delivered normally, set their retention index to the checkpoint epoch
-		for slot := range state.slotSavedEpochs {
-			batchdbpbdsl.UpdateBatchRetention(m, mc.BatchDB, certDB[slot].BatchId, tt.RetentionIndex(epochNr))
-		}
-		state.slotSavedEpochs = make(map[bcpbtypes.Slot]tt.EpochNr, len(state.slotSavedEpochs))
-
-		// delete old availability certs from db
-		var minEpoch tt.EpochNr
-		if uint64(epochNr) > params.RetainEpochs+1 {
-			minEpoch = epochNr - tt.EpochNr(params.RetainEpochs)
-		} else {
-			minEpoch = tt.EpochNr(0)
-		}
-		for epochNr, deliveredSlots := range state.epochDeliveredSlots {
-			if epochNr >= minEpoch {
-				continue
-			}
-
-			for _, slot := range deliveredSlots {
-				delete(certDB, slot)
-			}
-			delete(state.epochDeliveredSlots, epochNr)
-		}
-
 		qsp, err := queueselectionpolicy.QueuePolicyFromBytes(checkpoint.Snapshot.EpochData.LeaderPolicy)
 		if err != nil {
 			return err
 		}
 
-		// set delivered certificate retention index to the checkpoint epoch, to ensure they are not garbage collected too soon
-		// Note: this may add duplicates to state.epochDeliveredSlots, but that's ok (as long as memory is not a hard concern)
+		// set delivered certificate retention index to the checkpoint epoch, to ensure they are eventually GC-ed
+		// Note: this may add duplicates to state.epochFetchedSlots, but it SHOULD be fine
 		for slot := range certDB {
 			if qsp.SlotDelivered(slot) {
-				state.epochDeliveredSlots[epochNr] = append(state.epochDeliveredSlots[epochNr], slot)
+				state.epochFetchedSlots[epochNr] = append(state.epochFetchedSlots[epochNr], slot)
 			}
 		}
 

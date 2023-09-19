@@ -22,8 +22,7 @@ type ModuleParams struct {
 	InstanceUID []byte     // must be the alea instance uid followed by 'b'
 	AllNodes    []t.NodeID // the list of participating nodes, which must be the same as the set of nodes in the threshcrypto module
 
-	EpochLength  uint64
-	RetainEpochs uint64
+	EpochLength uint64
 }
 
 // ModuleTunables sets the values of protocol tunables that need not be the same across all nodes.

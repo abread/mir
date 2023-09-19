@@ -17,8 +17,8 @@ func (w *Event_NewEpoch) Unwrap() *NewEpoch {
 	return w.NewEpoch
 }
 
-func (w *Event_EpochCheckpointed) Unwrap() *EpochCheckpointed {
-	return w.EpochCheckpointed
+func (w *Event_GcEpochs) Unwrap() *GCEpochs {
+	return w.GcEpochs
 }
 
 func (w *Event_HelpNode) Unwrap() *HelpNode {

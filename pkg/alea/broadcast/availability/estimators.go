@@ -13,7 +13,6 @@ import (
 	bcpbdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/dsl"
 	bcpbtypes "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/types"
 	bcqueuepbdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/dsl"
-	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -70,7 +69,7 @@ func newBcEstimators(m dsl.Module, mc ModuleConfig, params ModuleParams, tunable
 	}
 	ownQueueIdx := aleatypes.QueueIdx(slices.Index(params.AllNodes, nodeID))
 
-	bcqueuepbdsl.UponBcStarted(m, func(slot *bcpbtypes.Slot, _ tt.EpochNr) error {
+	bcqueuepbdsl.UponBcStarted(m, func(slot *bcpbtypes.Slot) error {
 		if slot.QueueIdx != ownQueueIdx {
 			estimators.bcStartTimes[*slot] = time.Now()
 		}

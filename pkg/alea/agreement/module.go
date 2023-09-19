@@ -62,10 +62,9 @@ func DefaultModuleConfig() *ModuleConfig {
 // ModuleParams sets the values for the parameters of an instance of the protocol.
 // All replicas are expected to use identical module parameters.
 type ModuleParams struct {
-	InstanceUID  []byte     // must be the alea ID followed by 'a'
-	AllNodes     []t.NodeID // the list of participating nodes, which must be the same as the set of nodes in the threshcrypto module
-	EpochLength  uint64
-	RetainEpochs uint64
+	InstanceUID []byte     // must be the alea ID followed by 'a'
+	AllNodes    []t.NodeID // the list of participating nodes, which must be the same as the set of nodes in the threshcrypto module
+	EpochLength uint64
 }
 
 // ModuleTunables sets the values of protocol tunables that need not be the same across all nodes.
@@ -373,11 +372,9 @@ func newAgController(mc ModuleConfig, params ModuleParams, tunables ModuleTunabl
 		// business as usual, we don't need to perform any special action
 		return nil
 	})
-	directorpbdsl.UponEpochCheckpointed(m, func(epoch tt.EpochNr) error {
-		if uint64(epoch) > params.RetainEpochs+1 {
-			// we can discard older rounds
-			state.roundDecisionHistory.FreeEpochs(uint64(epoch) - params.RetainEpochs)
-		}
+	directorpbdsl.UponGCEpochs(m, func(epoch tt.EpochNr) error {
+		// we can discard older rounds
+		state.roundDecisionHistory.FreeEpochs(uint64(epoch))
 		return nil
 	})
 	apppbdsl.UponRestoreState(m, func(checkpoint *checkpointpbtypes.StableCheckpoint) error {

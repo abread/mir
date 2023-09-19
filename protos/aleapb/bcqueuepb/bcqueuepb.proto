@@ -63,7 +63,6 @@ message BcStarted {
   option (mir.event) = true;
 
   bcpb.Slot slot  = 1;
-  uint64    epoch = 2 [(mir.type) = "github.com/filecoin-project/mir/pkg/trantor/types.EpochNr"];
 }
 
 message BcQuorumDone {

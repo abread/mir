@@ -33,8 +33,8 @@ func PastVcbFinal(m dsl.Module, destModule types.ModuleID, queueSlot aleatypes.Q
 	dsl.EmitEvent(m, events.PastVcbFinal(destModule, queueSlot, txs, signature))
 }
 
-func BcStarted(m dsl.Module, destModule types.ModuleID, slot *types3.Slot, epoch types1.EpochNr) {
-	dsl.EmitEvent(m, events.BcStarted(destModule, slot, epoch))
+func BcStarted(m dsl.Module, destModule types.ModuleID, slot *types3.Slot) {
+	dsl.EmitEvent(m, events.BcStarted(destModule, slot))
 }
 
 func BcQuorumDone(m dsl.Module, destModule types.ModuleID, slot *types3.Slot, deliverDelta time.Duration) {

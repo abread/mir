@@ -106,7 +106,6 @@ func createQueues(bcMc ModuleConfig, bcParams bccommon.ModuleParams, bcTunables 
 		params := bcqueue.ModuleParams{
 			BcInstanceUID: bcParams.InstanceUID, // TODO: review
 			AllNodes:      bcParams.AllNodes,
-			EpochNr:       tt.EpochNr(0),
 
 			QueueIdx:   aleatypes.QueueIdx(idx),
 			QueueOwner: bcParams.AllNodes[idx],

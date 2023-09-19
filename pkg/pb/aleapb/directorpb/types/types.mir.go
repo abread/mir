@@ -35,8 +35,8 @@ func Event_TypeFromPb(pb directorpb.Event_Type) Event_Type {
 		return &Event_Heartbeat{Heartbeat: HeartbeatFromPb(pb.Heartbeat)}
 	case *directorpb.Event_NewEpoch:
 		return &Event_NewEpoch{NewEpoch: NewEpochFromPb(pb.NewEpoch)}
-	case *directorpb.Event_EpochCheckpointed:
-		return &Event_EpochCheckpointed{EpochCheckpointed: EpochCheckpointedFromPb(pb.EpochCheckpointed)}
+	case *directorpb.Event_GcEpochs:
+		return &Event_GcEpochs{GcEpochs: GCEpochsFromPb(pb.GcEpochs)}
 	case *directorpb.Event_HelpNode:
 		return &Event_HelpNode{HelpNode: HelpNodeFromPb(pb.HelpNode)}
 	}
@@ -91,28 +91,28 @@ func (*Event_NewEpoch) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*directorpb.Event_NewEpoch]()}
 }
 
-type Event_EpochCheckpointed struct {
-	EpochCheckpointed *EpochCheckpointed
+type Event_GcEpochs struct {
+	GcEpochs *GCEpochs
 }
 
-func (*Event_EpochCheckpointed) isEvent_Type() {}
+func (*Event_GcEpochs) isEvent_Type() {}
 
-func (w *Event_EpochCheckpointed) Unwrap() *EpochCheckpointed {
-	return w.EpochCheckpointed
+func (w *Event_GcEpochs) Unwrap() *GCEpochs {
+	return w.GcEpochs
 }
 
-func (w *Event_EpochCheckpointed) Pb() directorpb.Event_Type {
+func (w *Event_GcEpochs) Pb() directorpb.Event_Type {
 	if w == nil {
 		return nil
 	}
-	if w.EpochCheckpointed == nil {
-		return &directorpb.Event_EpochCheckpointed{}
+	if w.GcEpochs == nil {
+		return &directorpb.Event_GcEpochs{}
 	}
-	return &directorpb.Event_EpochCheckpointed{EpochCheckpointed: (w.EpochCheckpointed).Pb()}
+	return &directorpb.Event_GcEpochs{GcEpochs: (w.GcEpochs).Pb()}
 }
 
-func (*Event_EpochCheckpointed) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*directorpb.Event_EpochCheckpointed]()}
+func (*Event_GcEpochs) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*directorpb.Event_GcEpochs]()}
 }
 
 type Event_HelpNode struct {
@@ -219,33 +219,33 @@ func (*NewEpoch) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*directorpb.NewEpoch]()}
 }
 
-type EpochCheckpointed struct {
-	Epoch types.EpochNr
+type GCEpochs struct {
+	MinEpoch types.EpochNr
 }
 
-func EpochCheckpointedFromPb(pb *directorpb.EpochCheckpointed) *EpochCheckpointed {
+func GCEpochsFromPb(pb *directorpb.GCEpochs) *GCEpochs {
 	if pb == nil {
 		return nil
 	}
-	return &EpochCheckpointed{
-		Epoch: (types.EpochNr)(pb.Epoch),
+	return &GCEpochs{
+		MinEpoch: (types.EpochNr)(pb.MinEpoch),
 	}
 }
 
-func (m *EpochCheckpointed) Pb() *directorpb.EpochCheckpointed {
+func (m *GCEpochs) Pb() *directorpb.GCEpochs {
 	if m == nil {
 		return nil
 	}
-	pbMessage := &directorpb.EpochCheckpointed{}
+	pbMessage := &directorpb.GCEpochs{}
 	{
-		pbMessage.Epoch = (uint64)(m.Epoch)
+		pbMessage.MinEpoch = (uint64)(m.MinEpoch)
 	}
 
 	return pbMessage
 }
 
-func (*EpochCheckpointed) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*directorpb.EpochCheckpointed]()}
+func (*GCEpochs) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*directorpb.GCEpochs]()}
 }
 
 type HelpNode struct {

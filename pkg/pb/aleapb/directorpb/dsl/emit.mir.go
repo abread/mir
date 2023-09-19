@@ -19,8 +19,8 @@ func NewEpoch(m dsl.Module, destModule types.ModuleID, epoch types1.EpochNr) {
 	dsl.EmitEvent(m, events.NewEpoch(destModule, epoch))
 }
 
-func EpochCheckpointed(m dsl.Module, destModule types.ModuleID, epoch types1.EpochNr) {
-	dsl.EmitEvent(m, events.EpochCheckpointed(destModule, epoch))
+func GCEpochs(m dsl.Module, destModule types.ModuleID, minEpoch types1.EpochNr) {
+	dsl.EmitEvent(m, events.GCEpochs(destModule, minEpoch))
 }
 
 func HelpNode(m dsl.Module, destModule types.ModuleID, nodeId types.NodeID) {

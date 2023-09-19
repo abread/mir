@@ -393,8 +393,7 @@ func (*PastVcbFinal) MirReflect() mirreflect.Type {
 }
 
 type BcStarted struct {
-	Slot  *types3.Slot
-	Epoch types.EpochNr
+	Slot *types3.Slot
 }
 
 func BcStartedFromPb(pb *bcqueuepb.BcStarted) *BcStarted {
@@ -402,8 +401,7 @@ func BcStartedFromPb(pb *bcqueuepb.BcStarted) *BcStarted {
 		return nil
 	}
 	return &BcStarted{
-		Slot:  types3.SlotFromPb(pb.Slot),
-		Epoch: (types.EpochNr)(pb.Epoch),
+		Slot: types3.SlotFromPb(pb.Slot),
 	}
 }
 
@@ -416,7 +414,6 @@ func (m *BcStarted) Pb() *bcqueuepb.BcStarted {
 		if m.Slot != nil {
 			pbMessage.Slot = (m.Slot).Pb()
 		}
-		pbMessage.Epoch = (uint64)(m.Epoch)
 	}
 
 	return pbMessage

@@ -2,7 +2,6 @@ package bcqueue
 
 import (
 	"github.com/filecoin-project/mir/pkg/alea/aleatypes"
-	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -22,7 +21,6 @@ type ModuleConfig struct {
 type ModuleParams struct {
 	BcInstanceUID []byte
 	AllNodes      []t.NodeID // the list of participating nodes, which must be the same as the set of nodes in the threshcrypto module
-	EpochNr       tt.EpochNr
 
 	QueueIdx   aleatypes.QueueIdx
 	QueueOwner t.NodeID

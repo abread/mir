@@ -210,10 +210,9 @@ func New(ownID t.NodeID, config Config, params Params, startingChkp *checkpoint.
 			Timer:        config.Timer,
 		},
 		broadcast.ModuleParams{
-			InstanceUID:  append(params.InstanceUID, 'b'),
-			AllNodes:     allNodes,
-			EpochLength:  params.EpochLength,
-			RetainEpochs: params.RetainEpochs,
+			InstanceUID: append(params.InstanceUID, 'b'),
+			AllNodes:    allNodes,
+			EpochLength: params.EpochLength,
 		},
 		broadcast.ModuleTunables{
 			MaxConcurrentVcbPerQueue: params.MaxConcurrentVcbPerQueue,
@@ -237,10 +236,9 @@ func New(ownID t.NodeID, config Config, params Params, startingChkp *checkpoint.
 			ThreshCrypto: config.ThreshCrypto,
 		},
 		agreement.ModuleParams{
-			InstanceUID:  append(params.InstanceUID, 'a'),
-			AllNodes:     allNodes,
-			EpochLength:  params.EpochLength,
-			RetainEpochs: params.RetainEpochs,
+			InstanceUID: append(params.InstanceUID, 'a'),
+			AllNodes:    allNodes,
+			EpochLength: params.EpochLength,
 		},
 		agreement.ModuleTunables{
 			MaxRoundLookahead:     params.MaxAgRoundLookahead,

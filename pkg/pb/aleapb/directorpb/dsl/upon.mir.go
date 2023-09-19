@@ -35,9 +35,9 @@ func UponNewEpoch(m dsl.Module, handler func(epoch types2.EpochNr) error) {
 	})
 }
 
-func UponEpochCheckpointed(m dsl.Module, handler func(epoch types2.EpochNr) error) {
-	UponEvent[*types.Event_EpochCheckpointed](m, func(ev *types.EpochCheckpointed) error {
-		return handler(ev.Epoch)
+func UponGCEpochs(m dsl.Module, handler func(minEpoch types2.EpochNr) error) {
+	UponEvent[*types.Event_GcEpochs](m, func(ev *types.GCEpochs) error {
+		return handler(ev.MinEpoch)
 	})
 }
 

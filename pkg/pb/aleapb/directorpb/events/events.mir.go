@@ -37,14 +37,14 @@ func NewEpoch(destModule types.ModuleID, epoch types3.EpochNr) *types1.Event {
 	}
 }
 
-func EpochCheckpointed(destModule types.ModuleID, epoch types3.EpochNr) *types1.Event {
+func GCEpochs(destModule types.ModuleID, minEpoch types3.EpochNr) *types1.Event {
 	return &types1.Event{
 		DestModule: destModule,
 		Type: &types1.Event_AleaDirector{
 			AleaDirector: &types2.Event{
-				Type: &types2.Event_EpochCheckpointed{
-					EpochCheckpointed: &types2.EpochCheckpointed{
-						Epoch: epoch,
+				Type: &types2.Event_GcEpochs{
+					GcEpochs: &types2.GCEpochs{
+						MinEpoch: minEpoch,
 					},
 				},
 			},

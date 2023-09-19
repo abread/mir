@@ -473,15 +473,17 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 		state.lastStableCheckpoint = checkpoint
 		logger.Log(logging.LevelInfo, "Updated stable checkpoint", "epoch", checkpoint.Snapshot.EpochData.EpochConfig.EpochNr)
 
-		// inform components of the checkpoint stabilization to clear old data
 		epochNr := checkpoint.Snapshot.EpochData.EpochConfig.EpochNr
-		for _, mod := range []t.ModuleID{mc.AleaAgreement, mc.AleaBroadcast} {
-			directorpbdsl.EpochCheckpointed(m, mod, epochNr)
-		}
 
-		// cleanup old checkpointing instances
 		if uint64(epochNr) > params.RetainEpochs+1 {
 			firstRetainedEpoch := epochNr - tt.EpochNr(params.RetainEpochs)
+
+			// inform components of the checkpoint stabilization to clear old data
+			for _, mod := range []t.ModuleID{mc.AleaAgreement, mc.AleaBroadcast} {
+				directorpbdsl.GCEpochs(m, mod, firstRetainedEpoch)
+			}
+
+			// cleanup old checkpointing instances
 			factorypbdsl.GarbageCollect(m, mc.Checkpoint, tt.RetentionIndex(firstRetainedEpoch))
 
 			// ensure we don't retain stale checkpoint messages as well
@@ -614,7 +616,7 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 			return errQs
 		}
 
-		// then advance to new epoch
+		// then advance to new epoch, and store the received checkpoint
 		advanceEpoch(checkpoint.Snapshot.EpochData.EpochConfig.EpochNr + 1)
 		saveLatestStableCheckpoint(checkpoint)
 

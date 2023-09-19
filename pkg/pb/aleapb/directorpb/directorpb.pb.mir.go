@@ -10,7 +10,7 @@ func (*Event) ReflectTypeOptions() []reflect.Type {
 	return []reflect.Type{
 		reflect.TypeOf((*Event_Heartbeat)(nil)),
 		reflect.TypeOf((*Event_NewEpoch)(nil)),
-		reflect.TypeOf((*Event_EpochCheckpointed)(nil)),
+		reflect.TypeOf((*Event_GcEpochs)(nil)),
 		reflect.TypeOf((*Event_HelpNode)(nil)),
 	}
 }

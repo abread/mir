@@ -19,10 +19,10 @@ message Event {
   oneof type {
     option (mir.event_type) = true;
 
-    Heartbeat         heartbeat          = 1;
-    NewEpoch          new_epoch          = 2;
-    EpochCheckpointed epoch_checkpointed = 3;
-    HelpNode          help_node          = 4;
+    Heartbeat heartbeat = 1;
+    NewEpoch  new_epoch = 2;
+    GCEpochs  gc_epochs = 3;
+    HelpNode  help_node = 4;
   }
 }
 
@@ -36,10 +36,10 @@ message NewEpoch {
   uint64 epoch = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/trantor/types.EpochNr"];
 }
 
-message EpochCheckpointed {
+message GCEpochs {
   option (mir.event) = true;
 
-  uint64 epoch = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/trantor/types.EpochNr"];
+  uint64 min_epoch = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/trantor/types.EpochNr"];
 }
 
 message HelpNode {

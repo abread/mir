@@ -1,6 +1,7 @@
 package bcqueue
 
 import (
+	"math"
 	"strconv"
 	"time"
 
@@ -18,7 +19,6 @@ import (
 	bcpbtypes "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/types"
 	bcqueuepbdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/dsl"
 	bcqueuepbevents "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/events"
-	directorpbdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/directorpb/dsl"
 	messagepbtypes "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
 	modringpbtypes "github.com/filecoin-project/mir/pkg/pb/modringpb/types"
 	reliablenetpbdsl "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/dsl"
@@ -175,11 +175,6 @@ func newQueueController(mc ModuleConfig, params *ModuleParams, tunables ModuleTu
 		return nil
 	})
 
-	directorpbdsl.UponNewEpoch(m, func(epoch tt.EpochNr) error {
-		params.EpochNr = epoch
-		return nil
-	})
-
 	return m
 }
 
@@ -221,9 +216,10 @@ func newVcbGenerator(queueMc ModuleConfig, queueParams *ModuleParams, nodeID t.N
 
 	baseParams := vcb.ModuleParams{
 		InstanceUID: nil,
-		EpochNr:     tt.RetentionIndex(queueParams.EpochNr),
-		AllNodes:    queueParams.AllNodes,
-		Leader:      queueParams.QueueOwner,
+		// retention index will be updated later when the batch is fetched
+		EpochNr:  tt.RetentionIndex(math.MaxUint64),
+		AllNodes: queueParams.AllNodes,
+		Leader:   queueParams.QueueOwner,
 	}
 
 	return func(id t.ModuleID, idx uint64) (modules.PassiveModule, events.EventList, error) {
@@ -241,7 +237,7 @@ func newVcbGenerator(queueMc ModuleConfig, queueParams *ModuleParams, nodeID t.N
 			bcqueuepbevents.BcStarted(queueMc.Consumer, &bcpbtypes.Slot{
 				QueueIdx:  queueParams.QueueIdx,
 				QueueSlot: queueSlot,
-			}, queueParams.EpochNr),
+			}),
 		), nil
 	}
 }
