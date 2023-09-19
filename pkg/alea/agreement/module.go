@@ -94,7 +94,7 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, st
 		return nil, es.Errorf("MaxRoundAdvanceInput must be at least 0")
 	} else if tunables.MaxRoundAdvanceInput > tunables.MaxRoundLookahead {
 		return nil, es.Errorf("MaxRoundAdvanceInput must be less than MaxRoundLookahead")
-	} else if startingSn % tt.SeqNr(params.EpochLength) != 0 {
+	} else if startingSn%tt.SeqNr(params.EpochLength) != 0 {
 		return nil, es.Errorf("startingSn must be a multiple of EpochLength (the start of an epoch)")
 	}
 
@@ -399,13 +399,14 @@ func newAgController(mc ModuleConfig, params ModuleParams, tunables ModuleTunabl
 		for round := range state.rounds {
 			if round < uint64(checkpoint.Sn) {
 				delete(state.rounds, round)
-				reliablenetpbdsl.MarkModuleMsgsRecvd(m, mc.ReliableNet, mc.agRoundModuleID(round), params.AllNodes)
 			}
 		}
 		if err := agRounds.AdvanceViewToAtLeastSubmodule(uint64(checkpoint.Sn)); err != nil {
 			return err
 		}
-		agRounds.FreePast()
+		agRounds.FreePast(func(round uint64) {
+			reliablenetpbdsl.MarkModuleMsgsRecvd(m, mc.ReliableNet, mc.agRoundModuleID(round), params.AllNodes)
+		})
 
 		return nil
 	})

@@ -294,9 +294,10 @@ func (m *Module) AdvanceViewToAtLeastSubmodule(id uint64) error {
 	// m.logger.Log(logging.LevelDebug, "fast-forwarded view", "newMinid", id)
 	return nil
 }
-func (m *Module) FreePast() {
+func (m *Module) FreePast(freedSlotCallback func(uint64)) {
 	for i := 0; i < len(m.ring); i++ {
 		if !m.ring[i].isCurrent {
+			freedSlotCallback(m.ring[i].subID)
 			// leave slot completely free
 			m.ring[i] = submodule{}
 		}

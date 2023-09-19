@@ -175,6 +175,17 @@ func newQueueController(mc ModuleConfig, params *ModuleParams, tunables ModuleTu
 		return nil
 	})
 
+	bcqueuepbdsl.UponFreeStale(m, func(queueSlot aleatypes.QueueSlot) error {
+		if err := slots.AdvanceViewToAtLeastSubmodule(uint64(queueSlot)); err != nil {
+			return err
+		}
+		slots.FreePast(func(subID uint64) {
+			reliablenetpbdsl.MarkModuleMsgsRecvd(m, mc.ReliableNet, mc.Self.Then(t.NewModuleIDFromInt(subID)), params.AllNodes)
+		})
+
+		return nil
+	})
+
 	return m
 }
 

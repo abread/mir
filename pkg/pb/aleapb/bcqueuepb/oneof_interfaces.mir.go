@@ -36,3 +36,7 @@ func (w *Event_BcQuorumDone) Unwrap() *BcQuorumDone {
 func (w *Event_BcAllDone) Unwrap() *BcAllDone {
 	return w.BcAllDone
 }
+
+func (w *Event_FreeStale) Unwrap() *FreeStale {
+	return w.FreeStale
+}

@@ -51,6 +51,8 @@ func Event_TypeFromPb(pb bcqueuepb.Event_Type) Event_Type {
 		return &Event_BcQuorumDone{BcQuorumDone: BcQuorumDoneFromPb(pb.BcQuorumDone)}
 	case *bcqueuepb.Event_BcAllDone:
 		return &Event_BcAllDone{BcAllDone: BcAllDoneFromPb(pb.BcAllDone)}
+	case *bcqueuepb.Event_FreeStale:
+		return &Event_FreeStale{FreeStale: FreeStaleFromPb(pb.FreeStale)}
 	}
 	return nil
 }
@@ -221,6 +223,30 @@ func (w *Event_BcAllDone) Pb() bcqueuepb.Event_Type {
 
 func (*Event_BcAllDone) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*bcqueuepb.Event_BcAllDone]()}
+}
+
+type Event_FreeStale struct {
+	FreeStale *FreeStale
+}
+
+func (*Event_FreeStale) isEvent_Type() {}
+
+func (w *Event_FreeStale) Unwrap() *FreeStale {
+	return w.FreeStale
+}
+
+func (w *Event_FreeStale) Pb() bcqueuepb.Event_Type {
+	if w == nil {
+		return nil
+	}
+	if w.FreeStale == nil {
+		return &bcqueuepb.Event_FreeStale{}
+	}
+	return &bcqueuepb.Event_FreeStale{FreeStale: (w.FreeStale).Pb()}
+}
+
+func (*Event_FreeStale) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*bcqueuepb.Event_FreeStale]()}
 }
 
 func EventFromPb(pb *bcqueuepb.Event) *Event {
@@ -489,4 +515,33 @@ func (m *BcAllDone) Pb() *bcqueuepb.BcAllDone {
 
 func (*BcAllDone) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*bcqueuepb.BcAllDone]()}
+}
+
+type FreeStale struct {
+	QueueSlot aleatypes.QueueSlot
+}
+
+func FreeStaleFromPb(pb *bcqueuepb.FreeStale) *FreeStale {
+	if pb == nil {
+		return nil
+	}
+	return &FreeStale{
+		QueueSlot: (aleatypes.QueueSlot)(pb.QueueSlot),
+	}
+}
+
+func (m *FreeStale) Pb() *bcqueuepb.FreeStale {
+	if m == nil {
+		return nil
+	}
+	pbMessage := &bcqueuepb.FreeStale{}
+	{
+		pbMessage.QueueSlot = (uint64)(m.QueueSlot)
+	}
+
+	return pbMessage
+}
+
+func (*FreeStale) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*bcqueuepb.FreeStale]()}
 }

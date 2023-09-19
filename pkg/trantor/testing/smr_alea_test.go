@@ -175,7 +175,7 @@ func testIntegrationWithAlea(t *testing.T) {
 				NodeIDsWeight: deploytest.NewNodeIDsDefaultWeights(4),
 				Transport:     "sim",
 				NumFakeTXs:    10,
-				Duration:      10 * time.Second,
+				Duration:      15 * time.Second,
 				TransportFilter: func(msg *messagepbtypes.Message, from, to types.NodeID) bool {
 					node0 := types.NewNodeIDFromInt(0)
 					_, isVcb := msg.Type.(*messagepbtypes.Message_Vcb)

@@ -69,3 +69,9 @@ func UponBcAllDone(m dsl.Module, handler func(slot *types4.Slot, quorumDoneDelta
 		return handler(ev.Slot, ev.QuorumDoneDelta)
 	})
 }
+
+func UponFreeStale(m dsl.Module, handler func(queueSlot aleatypes.QueueSlot) error) {
+	UponEvent[*types.Event_FreeStale](m, func(ev *types.FreeStale) error {
+		return handler(ev.QueueSlot)
+	})
+}
