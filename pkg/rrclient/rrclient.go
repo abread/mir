@@ -116,15 +116,35 @@ func (rrc *RoundRobinClient) SubmitTransaction(data []byte) error {
 	}
 	rrc.nextTxNo++
 
-	nID := rrc.clientIDs[rrc.nextClientIdx]
-	client := rrc.clients[nID]
-	rrc.nextClientIdx = (rrc.nextClientIdx + 1) % len(rrc.clients)
+	var err error
+	for i := 0; i < len(rrc.clientIDs) && (err != nil || i == 0); i++ {
+		rrc.nextClientIdx = (rrc.nextClientIdx + 1) % len(rrc.clients)
+		nID := rrc.clientIDs[rrc.nextClientIdx]
+		client, ok := rrc.clients[nID]
+		if !ok {
+			continue
+		}
 
-	if err := client.Send(tx.Pb()); err != nil {
-		return es.Errorf("failed sending transaction to node (%v): %w", nID, err)
+		if innerErr := client.Send(tx.Pb()); innerErr != nil {
+			err = es.Errorf("failed sending transaction to node (%v): %w", nID, innerErr)
+
+			conn := rrc.conns[nID]
+			go func() {
+				if _, err := client.CloseAndRecv(); err != nil {
+					rrc.logger.Log(logging.LevelWarn, fmt.Sprintf("Could not close gRPC client %v", nID))
+				}
+				if err := conn.Close(); err != nil {
+					rrc.logger.Log(logging.LevelWarn, fmt.Sprintf("Could not close connection to node %v", nID))
+				}
+			}()
+			delete(rrc.clients, nID)
+			delete(rrc.conns, nID)
+		} else {
+			err = nil
+		}
 	}
 
-	return nil
+	return err
 }
 
 // Disconnect closes all open connections to Mir nodes.
