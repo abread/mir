@@ -19,6 +19,8 @@
 package formbatchesint
 
 import (
+	"math"
+
 	es "github.com/go-errors/errors"
 
 	"github.com/filecoin-project/mir/pkg/clientprogress"
@@ -322,8 +324,8 @@ func IncludeBatchCreation( // nolint:gocyclo,gocognit
 	})
 
 	mppbdsl.UponRequestBatch(m, func(epoch tt.EpochNr, origin *mppbtypes.RequestBatchOrigin) error {
-		if epoch == state.Epoch {
-			// Only handle batch requests from the current epoch.
+		if epoch == state.Epoch || epoch == tt.EpochNr(math.MaxUint64) {
+			// Only handle batch requests from the current epoch (or from the special "whatever" epoch).
 			handleNewBatchRequest(origin)
 		} else if epoch > state.Epoch {
 			// Buffer requests from future epochs.

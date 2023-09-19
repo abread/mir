@@ -1,6 +1,8 @@
 package availability
 
 import (
+	"math"
+
 	es "github.com/go-errors/errors"
 	"golang.org/x/exp/slices"
 
@@ -39,7 +41,7 @@ func includeCertCreation(
 
 	// Alea-specific
 	bcpbdsl.UponRequestCert(m, func() error {
-		mempoolpbdsl.RequestBatch[struct{}](m, mc.Mempool, tt.EpochNr(0), nil)
+		mempoolpbdsl.RequestBatch[struct{}](m, mc.Mempool, tt.EpochNr(math.MaxUint64), nil)
 		return nil
 	})
 	mempoolpbdsl.UponNewBatch(m, func(txIDs []tt.TxID, txs []*trantorpbtypes.Transaction, _context *struct{}) error {

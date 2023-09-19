@@ -296,8 +296,9 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 
 		// delay inputting 0 when a broadcast is in progress
 		if bcRuntime, ok := est.BcRuntime(nextSlot); ok {
-			if nextSlot.QueueIdx == ownQueueIdx && bcRuntime < est.OwnBcMedianDurationEstNoMargin() {
+			if nextSlot.QueueIdx == ownQueueIdx && bcRuntime < est.OwnBcMedianDurationEstNoMargin() && bcRuntime < tunables.MaxAgStall {
 				//logger.Log(logging.LevelDebug, "stalling agreement input for own batch")
+				state.wakeUpAfter(tunables.MaxAgStall - bcRuntime)
 				return nil
 			}
 
@@ -342,6 +343,10 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 	// upon nice condition (unagreed batch count < max, no batch being cut, timeToNextAgForThisNode < estBc+margin || stalled ag), cut a new batch and broadcast it
 	// TODO: move to bc component
 	dsl.UponStateUpdates(m, func() error {
+		if state.queueSelectionPolicy.QueueHead(ownQueueIdx) > state.bcOwnQueueHead {
+			return es.Errorf("inconsistency: queue policy is ahead of bcOwnQueueHead")
+		}
+
 		// bcOwnQueueHead is the next slot to be broadcast
 		// agQueueHeads[ownQueueIdx] is the next slot to be agreed on
 		unagreedOwnBatchCount := uint64(state.bcOwnQueueHead - state.queueSelectionPolicy.QueueHead(ownQueueIdx))
@@ -378,7 +383,7 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 			return nil
 		}
 
-		// logger.Log(logging.LevelDebug, "requesting more transactions")
+		logger.Log(logging.LevelDebug, "requesting more transactions")
 		state.stalledBatchCut = false
 
 		est.MarkBcStartedNow(bcpbtypes.Slot{QueueIdx: ownQueueIdx, QueueSlot: state.bcOwnQueueHead})
@@ -441,6 +446,7 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 							Length:      params.EpochLength,
 							Memberships: memberships,
 						},
+						Threshold: uint64(2*F + 1),
 					},
 				},
 			},

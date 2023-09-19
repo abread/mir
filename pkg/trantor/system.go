@@ -19,10 +19,8 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/filecoin-project/mir/pkg/alea"
-	"github.com/filecoin-project/mir/pkg/clientprogress"
 	"github.com/filecoin-project/mir/pkg/reliablenet"
 	"github.com/filecoin-project/mir/pkg/threshcrypto"
-	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 
 	"github.com/filecoin-project/mir/pkg/batchfetcher"
 	"github.com/filecoin-project/mir/pkg/checkpoint"
@@ -222,6 +220,7 @@ func NewISS(
 	// It acts as a proxy between the application module and the rest of the system.
 	trantorModules[moduleConfig.BatchFetcher] = batchfetcher.NewModule(
 		moduleConfig.ConfigureBatchFetcher(),
+		false,
 		startingCheckpoint.Epoch(),
 		startingCheckpoint.ClientProgress(),
 		logger,
@@ -417,8 +416,9 @@ func NewAlea(
 			Mempool:      moduleConfig.Mempool,
 			Destination:  appID,
 		},
-		tt.EpochNr(0),
-		clientprogress.NewClientProgress(),
+		true,
+		startingCheckpoint.Epoch(),
+		startingCheckpoint.ClientProgress(),
 		logging.Decorate(logger, "BatchFetcher: "),
 	)
 

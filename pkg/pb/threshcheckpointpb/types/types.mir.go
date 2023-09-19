@@ -244,6 +244,7 @@ type InstanceParams struct {
 	Membership       *types1.Membership
 	LeaderPolicyData []uint8
 	EpochConfig      *types1.EpochConfig
+	Threshold        uint64
 }
 
 func InstanceParamsFromPb(pb *threshcheckpointpb.InstanceParams) *InstanceParams {
@@ -254,6 +255,7 @@ func InstanceParamsFromPb(pb *threshcheckpointpb.InstanceParams) *InstanceParams
 		Membership:       types1.MembershipFromPb(pb.Membership),
 		LeaderPolicyData: pb.LeaderPolicyData,
 		EpochConfig:      types1.EpochConfigFromPb(pb.EpochConfig),
+		Threshold:        pb.Threshold,
 	}
 }
 
@@ -270,6 +272,7 @@ func (m *InstanceParams) Pb() *threshcheckpointpb.InstanceParams {
 		if m.EpochConfig != nil {
 			pbMessage.EpochConfig = (m.EpochConfig).Pb()
 		}
+		pbMessage.Threshold = m.Threshold
 	}
 
 	return pbMessage

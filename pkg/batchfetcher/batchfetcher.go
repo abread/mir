@@ -40,12 +40,16 @@ import (
 // and provides it to the checkpoint module when relaying a state snapshot request to the application.
 // Analogously, when relaying a RestoreState event, it restores its state (including the delivered transactions)
 // using the relayed information.
-func NewModule(mc ModuleConfig, epochNr tt.EpochNr, clientProgress *clientprogress.ClientProgress, logger logging.Logger) modules.Module {
+func NewModule(mc ModuleConfig, unifiedAvailability bool, epochNr tt.EpochNr, clientProgress *clientprogress.ClientProgress, logger logging.Logger) modules.Module {
 	m := dsl.NewModule(mc.Self)
 	// Queue of output events. It is required for buffering events being relayed
 	// in case a DeliverCert event received earlier has not yet been transformed to a ProvideTransactions event.
 	// In such a case, events received later must not be relayed until the pending certificate has been resolved.
 	var output outputQueue
+
+	if !unifiedAvailability {
+		mc.Availability = mc.Availability.Then(t.NewModuleIDFromInt(0))
+	}
 
 	// filterDuplicates takes a NewOrderedBatch event and removes all the contained transactions
 	// that have already been added to the clientProgress, i.e., that have already been delivered.
@@ -72,6 +76,11 @@ func NewModule(mc ModuleConfig, epochNr tt.EpochNr, clientProgress *clientprogre
 	// The NewEpoch handler updates the current epoch number and forwards the event to the output.
 	apppbdsl.UponNewEpoch(m, func(newEpochNr tt.EpochNr, protocolModule t.ModuleID) error {
 		epochNr = newEpochNr
+
+		if !unifiedAvailability {
+			mc.Availability = mc.Availability.Parent().Then(t.NewModuleIDFromInt(epochNr))
+		}
+
 		output.Enqueue(&outputItem{
 			event: apppbevents.NewEpoch(mc.Destination, epochNr, protocolModule),
 			f: func(_ *eventpbtypes.Event) {
@@ -118,7 +127,7 @@ func NewModule(mc ModuleConfig, epochNr tt.EpochNr, clientProgress *clientprogre
 			// If this is a proper certificate, request transactions from the availability layer.
 			availabilitypbdsl.RequestTransactions(
 				m,
-				mc.Availability.Then(t.NewModuleIDFromInt(epochNr)),
+				mc.Availability,
 				cert,
 				&txRequestContext{queueItem: &item},
 			)

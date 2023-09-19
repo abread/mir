@@ -85,7 +85,7 @@ type ModuleTunables struct {
 	MaxRoundAdvanceInput int
 }
 
-func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
+func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, startingSn tt.SeqNr, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
 	if tunables.MaxRoundLookahead <= 0 {
 		return nil, es.Errorf("MaxRoundLookahead must be at least 1")
 	} else if tunables.MaxAbbaRoundLookahead <= 0 {
@@ -94,6 +94,8 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 		return nil, es.Errorf("MaxRoundAdvanceInput must be at least 0")
 	} else if tunables.MaxRoundAdvanceInput > tunables.MaxRoundLookahead {
 		return nil, es.Errorf("MaxRoundAdvanceInput must be less than MaxRoundLookahead")
+	} else if startingSn % tt.SeqNr(params.EpochLength) != 0 {
+		return nil, es.Errorf("startingSn must be a multiple of EpochLength (the start of an epoch)")
 	}
 
 	agRounds := modring.New(
@@ -105,12 +107,17 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 		},
 		logging.Decorate(logger, "Modring controller: "),
 	)
+	if err := agRounds.AdvanceViewToAtLeastSubmodule(uint64(startingSn)); err != nil {
+		return nil, err
+	}
 
 	N := len(params.AllNodes)
 	F := (N - 1) / 3
 
 	state := &state{
 		roundDecisionHistory: NewAgRoundHistory(int(params.EpochLength)),
+
+		currentRound: uint64(startingSn),
 
 		rounds: make(map[uint64]*round, tunables.MaxRoundLookahead),
 
@@ -120,6 +127,7 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 		N:         N,
 		strongMaj: 2*F + 1,
 	}
+	state.roundDecisionHistory.FreeEpochs(uint64(startingSn) / params.EpochLength)
 
 	controller := newAgController(mc, params, tunables, logger, state, agRounds)
 

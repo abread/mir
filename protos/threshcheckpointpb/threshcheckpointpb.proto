@@ -61,4 +61,5 @@ message InstanceParams {
   trantorpb.Membership  membership         = 1;
   bytes                 leader_policy_data = 2;
   trantorpb.EpochConfig epoch_config       = 3;
+  uint64                threshold          = 4;
 }

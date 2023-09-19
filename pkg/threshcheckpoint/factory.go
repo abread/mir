@@ -31,6 +31,7 @@ func Factory(mc ModuleConfig, ownID t.NodeID, logger logging.Logger) modules.Pas
 					Membership:       p.Membership,
 					EpochConfig:      p.EpochConfig,
 					LeaderPolicyData: p.LeaderPolicyData,
+					Threshold:        int(p.Threshold),
 				}
 
 				protocol := NewModule(

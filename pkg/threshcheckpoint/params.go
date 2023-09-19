@@ -2,15 +2,11 @@ package threshcheckpoint
 
 import (
 	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
-	t "github.com/filecoin-project/mir/pkg/types"
 )
 
 // ModuleParams represents the state associated with a single instance of the checkpoint protocol
 // (establishing a single stable checkpoint).
 type ModuleParams struct {
-
-	// The ID of the node executing this instance of the protocol.
-	OwnID t.NodeID
 
 	// The IDs of nodes to execute this instance of the checkpoint protocol.
 	// Note that it is the Membership of Epoch e-1 that constructs the Membership for Epoch e.

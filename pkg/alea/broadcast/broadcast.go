@@ -22,43 +22,6 @@ type ModuleConfig = bccommon.ModuleConfig
 type ModuleParams = bccommon.ModuleParams
 type ModuleTunables = bccommon.ModuleTunables
 
-type dummyMulti struct {
-	selfID t.ModuleID
-	mod    modules.PassiveModule
-}
-
-func (m *dummyMulti) ImplementsModule() {}
-func (m *dummyMulti) ApplyEvents(evs events.EventList) (events.EventList, error) {
-	evs = evs.Transform(func(ev *eventpbtypes.Event) *eventpbtypes.Event {
-		// transform init event for abc into init event for abc/0
-		if ev.DestModule == m.selfID {
-			if _, ok := ev.Type.(*eventpbtypes.Event_Init); ok {
-				// make a shallow copy of the event
-				newEv := *ev
-				ev = &newEv
-
-				ev.DestModule = m.selfID.Then(t.NewModuleIDFromInt(0))
-			}
-		}
-
-		return ev
-	})
-
-	return m.mod.ApplyEvents(evs)
-}
-
-func NewMulti(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, nodeID t.NodeID, logger logging.Logger) (modules.Module, error) {
-	origSelf := mc.Self
-
-	mc.Self = mc.Self.Then(t.NewModuleIDFromInt(0))
-	mod, err := NewInstance(mc, params, tunables, tt.EpochNr(0), nodeID, logger)
-	if err != nil {
-		return nil, err
-	}
-
-	return &dummyMulti{origSelf, mod}, nil
-}
-
 type bcMod struct {
 	selfID  t.ModuleID
 	epochNr tt.EpochNr
@@ -67,7 +30,7 @@ type bcMod struct {
 	availability modules.PassiveModule
 }
 
-func NewInstance(mc ModuleConfig, params bccommon.ModuleParams, tunables ModuleTunables, epochNr tt.EpochNr, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
+func NewModule(mc ModuleConfig, params bccommon.ModuleParams, tunables ModuleTunables, epochNr tt.EpochNr, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
 	queues, err := createQueues(mc, params, tunables, nodeID, logger)
 	if err != nil {
 		return nil, err
@@ -166,7 +129,7 @@ func (bc *bcMod) splitEvsIn(evsIn events.EventList) (map[modules.PassiveModule]*
 		if ev.DestModule == bc.selfID {
 			destID = ""
 		} else {
-			destID = ev.DestModule.StripParent(bc.selfID.Parent()).Sub()
+			destID = ev.DestModule.StripParent(bc.selfID)
 		}
 
 		var mod modules.PassiveModule

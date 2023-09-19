@@ -103,7 +103,7 @@ func DefaultParams(membership *trantorpbtypes.Membership) Params {
 		QueueSelectionPolicyType: queueselectionpolicy.RoundRobin,
 		EpochLength:              uint64(EpochLength),
 		RetainEpochs:             2,
-		MaxAgStall:               30 * time.Second,
+		MaxAgStall:               10 * time.Second,
 	}
 	p.Adjust(EpochLength, MaxOwnUnagreedBatchCount)
 
@@ -169,7 +169,7 @@ func New(ownID t.NodeID, config Config, params Params, startingChkp *checkpoint.
 			Checkpoint:    config.Checkpoint,
 			ChkpValidator: config.ChkpValidator,
 			App:           config.Consumer,
-			AleaBroadcast: config.AleaBroadcast.Then(t.NewModuleIDFromInt(0)),
+			AleaBroadcast: config.AleaBroadcast,
 			AleaAgreement: config.AleaAgreement,
 			BatchDB:       config.BatchDB,
 			Mempool:       config.Mempool,
@@ -198,7 +198,7 @@ func New(ownID t.NodeID, config Config, params Params, startingChkp *checkpoint.
 		logging.Decorate(logger, "AleaDirector: "),
 	)
 
-	aleaBc, errAleaBc := broadcast.NewMulti(
+	aleaBc, errAleaBc := broadcast.NewModule(
 		broadcast.ModuleConfig{
 			Self:         config.AleaBroadcast,
 			Consumer:     config.AleaDirector,
@@ -219,6 +219,7 @@ func New(ownID t.NodeID, config Config, params Params, startingChkp *checkpoint.
 			EstimateWindowSize:       params.EstimateWindowSize,
 			MaxExtSlowdownFactor:     params.MaxExtSlowdownFactor,
 		},
+		startingChkp.Epoch(),
 		ownID,
 		logging.Decorate(logger, "AleaBroadcast: "),
 	)
@@ -245,6 +246,7 @@ func New(ownID t.NodeID, config Config, params Params, startingChkp *checkpoint.
 			MaxAbbaRoundLookahead: params.MaxAbbaRoundLookahead,
 			MaxRoundAdvanceInput:  params.MaxAgRoundAdvanceInput,
 		},
+		startingChkp.SeqNr(),
 		ownID,
 		logging.Decorate(logger, "AleaAgreement: "),
 	)
