@@ -132,6 +132,9 @@ func (m *simTransportModule) applyEvent(ctx context.Context, e *eventpbtypes.Eve
 		// do nothing
 	case *eventpbtypes.Event_Transport:
 		switch e := e.Transport.Type.(type) {
+		case *transportpbtypes.Event_ForceSendMessage:
+			targets := e.ForceSendMessage.Destinations
+			m.multicastMessage(ctx, e.ForceSendMessage.Msg, targets)
 		case *transportpbtypes.Event_SendMessage:
 			targets := e.SendMessage.Destinations
 			m.multicastMessage(ctx, e.SendMessage.Msg, targets)

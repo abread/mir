@@ -130,6 +130,10 @@ func (conn *selfConnection) process() {
 	defer close(conn.done)
 
 	recvMsg := func(encodedMsg []byte) {
+		if len(encodedMsg) == 0 {
+			return
+		}
+
 		var msgPb messagepb.Message
 		err := proto.Unmarshal(encodedMsg, &msgPb)
 		if err != nil {
@@ -163,7 +167,7 @@ func (conn *selfConnection) process() {
 		case <-conn.stop:
 			return
 		case <-conn.forceSendMsgPresent:
-			recvMsg(conn.forceSendMsg.Swap(nil).([]byte))
+			recvMsg(conn.forceSendMsg.Swap([]byte{}).([]byte))
 		default:
 			// Nothing to do in this case, continue.
 		}
@@ -173,7 +177,7 @@ func (conn *selfConnection) process() {
 			return
 		// still consider force send here
 		case <-conn.forceSendMsgPresent:
-			recvMsg(conn.forceSendMsg.Swap(nil).([]byte))
+			recvMsg(conn.forceSendMsg.Swap([]byte{}).([]byte))
 		case encodedMsg := <-conn.msgBuffer:
 			recvMsg(encodedMsg)
 		}

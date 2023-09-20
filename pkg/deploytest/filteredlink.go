@@ -43,6 +43,16 @@ func getSendMessageEv(ev *eventpbtypes.Event) (*transportpbtypes.SendMessage, bo
 	return nil, false
 }
 
+func getForceSendMessageEv(ev *eventpbtypes.Event) (*transportpbtypes.ForceSendMessage, bool) {
+	if te, ok := ev.Type.(*eventpbtypes.Event_Transport); ok {
+		if sme, ok := te.Transport.Type.(*transportpbtypes.Event_ForceSendMessage); ok {
+			return sme.ForceSendMessage, true
+		}
+	}
+
+	return nil, false
+}
+
 func (fl *FilteredLink) applyFilterToEventSlice(events []*eventpbtypes.Event) []*eventpbtypes.Event {
 	filtered := make([]*eventpbtypes.Event, 0, len(events))
 
@@ -73,6 +83,30 @@ func (fl *FilteredLink) filterEvent(event *eventpbtypes.Event) *eventpbtypes.Eve
 					Transport: &transportpbtypes.Event{
 						Type: &transportpbtypes.Event_SendMessage{
 							SendMessage: ev,
+						},
+					},
+				},
+				Next: fl.applyFilterToEventSlice(event.Next),
+			}
+		}
+
+		return nil
+	} else if ev, ok := getForceSendMessageEv(event); ok {
+		// don't mutate the original event to avoid races
+		newEv := *ev
+		ev = &newEv
+
+		ev.Destinations = sliceutil.Filter(ev.Destinations, func(_ int, dest t.NodeID) bool {
+			return fl.filter(ev.Msg, fl.ownID, dest)
+		})
+
+		if len(ev.Destinations) > 0 {
+			return &eventpbtypes.Event{
+				DestModule: event.DestModule,
+				Type: &eventpbtypes.Event_Transport{
+					Transport: &transportpbtypes.Event{
+						Type: &transportpbtypes.Event_ForceSendMessage{
+							ForceSendMessage: ev,
 						},
 					},
 				},

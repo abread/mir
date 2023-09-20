@@ -291,22 +291,24 @@ func (conn *remoteConnection) process() {
 		}
 
 		// Get the next message if there is no pending unsent message.
-		if msgData == nil {
+		if len(msgData) == 0 {
 			// prioritize force-send message
 			select {
 			case <-conn.stop:
 				return
 			case <-conn.forceSendMsgPresent:
-				msgData = conn.forceSendMsg.Swap(nil).([]byte)
+				msgData = conn.forceSendMsg.Swap([]byte{}).([]byte)
+			default:
+				// Nothing to do in this case, continue.
 			}
 		}
-		if msgData == nil {
+		for len(msgData) == 0 {
 			select {
 			case <-conn.stop:
 				return
 			// still consider the force send message here
 			case <-conn.forceSendMsgPresent:
-				msgData = conn.forceSendMsg.Swap(nil).([]byte)
+				msgData = conn.forceSendMsg.Swap([]byte{}).([]byte)
 			case msgData = <-conn.msgBuffer:
 			}
 		}

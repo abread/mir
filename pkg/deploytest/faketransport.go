@@ -49,6 +49,31 @@ func (fl *FakeLink) ApplyEvents(
 			// no actions on init
 		case *eventpbtypes.Event_Transport:
 			switch e := e.Transport.Type.(type) {
+			case *transportpbtypes.Event_ForceSendMessage:
+				// TODO: make it match the og implementation
+				for _, destID := range e.ForceSendMessage.Destinations {
+					if destID == fl.Source {
+						// Send message to myself bypassing the network.
+
+						receivedEvent := transportpbevents.MessageReceived(
+							e.ForceSendMessage.Msg.DestModule,
+							fl.Source,
+							e.ForceSendMessage.Msg,
+						)
+						eventsOut := fl.FakeTransport.NodeSinks[fl.Source]
+						go func() {
+							select {
+							case eventsOut <- events.ListOf(receivedEvent):
+							case <-ctx.Done():
+							}
+						}()
+					} else {
+						// Send message to another node.
+						if err := fl.Send(destID, e.ForceSendMessage.Msg); err != nil {
+							fl.FakeTransport.logger.Log(logging.LevelWarn, "failed to send a message", "err", err)
+						}
+					}
+				}
 			case *transportpbtypes.Event_SendMessage:
 				for _, destID := range e.SendMessage.Destinations {
 					if destID == fl.Source {

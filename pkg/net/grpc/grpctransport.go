@@ -121,6 +121,32 @@ func (gt *Transport) ApplyEvents(
 			// no actions on init
 		case *eventpbtypes.Event_Transport:
 			switch e := e.Transport.Type.(type) {
+			case *transportpbtypes.Event_ForceSendMessage:
+				// TODO: real implementation
+				for _, destID := range e.ForceSendMessage.Destinations {
+					if destID == gt.ownID {
+						// Send message to myself bypassing the network.
+						// The sending must be done in its own goroutine in case writing to gt.incomingMessages blocks.
+						// (Processing of input events must be non-blocking.)
+						receivedEvent := transportpbevents.MessageReceived(
+							e.ForceSendMessage.Msg.DestModule,
+							gt.ownID,
+							e.ForceSendMessage.Msg,
+						)
+						go func() {
+							select {
+							case gt.incomingMessages <- events.ListOf(receivedEvent):
+							case <-ctx.Done():
+							}
+						}()
+					} else {
+						// Send message to another node.
+						if err := gt.Send(destID, e.ForceSendMessage.Msg); err != nil {
+							// TODO: This violates the non-blocking operation of ApplyEvents method. Fix it.
+							gt.logger.Log(logging.LevelWarn, "failed to send a message", "err", err)
+						}
+					}
+				}
 			case *transportpbtypes.Event_SendMessage:
 				for _, destID := range e.SendMessage.Destinations {
 					if destID == gt.ownID {
