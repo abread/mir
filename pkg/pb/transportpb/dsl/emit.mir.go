@@ -18,3 +18,7 @@ func SendMessage(m dsl.Module, destModule types.ModuleID, msg *types1.Message, d
 func MessageReceived(m dsl.Module, destModule types.ModuleID, from types.NodeID, msg *types1.Message) {
 	dsl.EmitEvent(m, events.MessageReceived(destModule, from, msg))
 }
+
+func ForceSendMessage(m dsl.Module, destModule types.ModuleID, msg *types1.Message, destinations []types.NodeID) {
+	dsl.EmitEvent(m, events.ForceSendMessage(destModule, msg, destinations))
+}

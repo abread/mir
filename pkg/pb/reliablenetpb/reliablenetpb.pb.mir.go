@@ -13,5 +13,6 @@ func (*Event) ReflectTypeOptions() []reflect.Type {
 		reflect.TypeOf((*Event_MarkRecvd)(nil)),
 		reflect.TypeOf((*Event_MarkModuleMsgsRecvd)(nil)),
 		reflect.TypeOf((*Event_RetransmitAll)(nil)),
+		reflect.TypeOf((*Event_ForceSendMessage)(nil)),
 	}
 }

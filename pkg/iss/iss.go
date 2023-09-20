@@ -419,7 +419,7 @@ func New(
 				"delayed", delayed, "numNodes", len(iss.epoch.Membership.Nodes), "nodeEpochMap", iss.nodeEpochMap)
 		}
 
-		transportpbdsl.SendMessage(iss.m,
+		transportpbdsl.ForceSendMessage(iss.m,
 			iss.moduleConfig.Net,
 			chkppbmsgs.StableCheckpoint(iss.moduleConfig.Self, iss.lastStableCheckpoint.SeqNr(),
 				iss.lastStableCheckpoint.StateSnapshot(),

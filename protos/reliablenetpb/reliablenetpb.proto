@@ -23,6 +23,7 @@ message Event {
     MarkRecvd           mark_recvd             = 3;
     MarkModuleMsgsRecvd mark_module_msgs_recvd = 4;
     RetransmitAll       retransmit_all         = 5;
+    ForceSendMessage    force_send_message     = 6;
   }
 }
 
@@ -59,4 +60,12 @@ message MarkRecvd {
 
 message RetransmitAll {
   option (mir.event) = true;
+}
+
+message ForceSendMessage {
+  option (mir.event) = true;
+
+  string            msg_id       = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/reliablenet/rntypes.MsgID"];
+  messagepb.Message msg          = 2;
+  repeated string   destinations = 3 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.NodeID"];
 }

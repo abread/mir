@@ -96,6 +96,17 @@ func (tr *Transport) ApplyEvents(_ context.Context, eventList events.EventList) 
 						tr.logger.Log(logging.LevelWarn, "Failed to send a message", "dest", destID, "err", err)
 					}
 				}
+			case *transportpbtypes.Event_ForceSendMessage:
+				serializedMsg, err := tr.serializeMessage(e.ForceSendMessage.Msg)
+				if err != nil {
+					return es.Errorf("failed to serialize message: %w", err)
+				}
+
+				for _, destID := range e.ForceSendMessage.Destinations {
+					if err := tr.forceSendSerialized(destID, serializedMsg); err != nil {
+						tr.logger.Log(logging.LevelWarn, "Failed to send a message", "dest", destID, "err", err)
+					}
+				}
 			default:
 				return es.Errorf("unexpected transport event: %T", e)
 			}
@@ -188,6 +199,15 @@ func (tr *Transport) Send(dest t.NodeID, msg *messagepbtypes.Message) error {
 	return tr.sendSerialized(dest, serialized)
 }
 
+func (tr *Transport) ForceSend(dest t.NodeID, msg *messagepbtypes.Message) error {
+	serialized, err := tr.serializeMessage(msg)
+	if err != nil {
+		return err
+	}
+
+	return tr.forceSendSerialized(dest, serialized)
+}
+
 func (tr *Transport) serializeMessage(msg *messagepbtypes.Message) ([]byte, error) {
 	msgPb := msg.Pb()
 
@@ -210,6 +230,15 @@ func (tr *Transport) sendSerialized(dest t.NodeID, serializedMsg []byte) error {
 	}
 
 	return conn.Send(serializedMsg)
+}
+
+func (tr *Transport) forceSendSerialized(dest t.NodeID, serializedMsg []byte) error {
+	conn, err := tr.getConnection(dest)
+	if err != nil {
+		return err
+	}
+
+	return conn.ForceSend(serializedMsg)
 }
 
 func (tr *Transport) WaitFor(n int) error {

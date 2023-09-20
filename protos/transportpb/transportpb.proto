@@ -14,8 +14,9 @@ message Event {
   oneof Type {
     option (mir.event_type) = true;
 
-    SendMessage     send_message     = 1;
-    MessageReceived message_received = 2;
+    SendMessage      send_message       = 1;
+    MessageReceived  message_received   = 2;
+    ForceSendMessage force_send_message = 3;
   }
 }
 
@@ -31,4 +32,11 @@ message MessageReceived {
 
   string            from = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.NodeID"];
   messagepb.Message msg  = 2;
+}
+
+message ForceSendMessage {
+  option (mir.event) = true;
+
+  messagepb.Message msg          = 1;
+  repeated string   destinations = 2 [(mir.type) = "github.com/filecoin-project/mir/pkg/types.NodeID"];
 }

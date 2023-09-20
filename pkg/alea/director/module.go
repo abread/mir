@@ -524,7 +524,7 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 				// Note: we add the current node idx to avoid overloading the remote node with snapshots
 				if epochNr+tt.EpochNr(params.RetainEpochs)+tt.EpochNr(ownQueueIdx) < currentEpochNr {
 					directorpbdsl.HelpNode(m, mc.Self, nodeID)
-					transportpbdsl.SendMessage(m, mc.Net,
+					transportpbdsl.ForceSendMessage(m, mc.Net,
 						directorpbmsgs.StableCheckpoint(
 							mc.Self,
 							state.lastStableCheckpoint,
@@ -560,12 +560,15 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 		}
 
 		epochNr := state.lastStableCheckpoint.Snapshot.EpochData.EpochConfig.EpochNr
-		if state.nodeEpochMap[nodeID] < epochNr {
+		if state.nodeEpochMap[nodeID] < epochNr+tt.EpochNr(params.RetainEpochs) {
+			if _, ok := state.helpedNodes[nodeID]; ok {
+				return nil // already helped
+			}
 			state.nodeEpochMap[nodeID] = epochNr
 			state.helpedNodes[nodeID] = struct{}{}
 
 			logger.Log(logging.LevelDebug, "Helping node catch up", "node", nodeID, "chkpEpoch", epochNr, "theirEpoch", state.nodeEpochMap[nodeID])
-			reliablenetpbdsl.SendMessage(m, mc.ReliableNet, rntypes.MsgID(fmt.Sprintf("s%d", epochNr)),
+			reliablenetpbdsl.ForceSendMessage(m, mc.ReliableNet, rntypes.MsgID(fmt.Sprintf("s%d", epochNr)),
 				directorpbmsgs.StableCheckpoint(
 					mc.Self,
 					state.lastStableCheckpoint,
@@ -591,6 +594,9 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 			// stale checkpoint
 			return nil
 		}
+
+		// TODO: use go 1.21's clear method
+		state.helpedNodes = make(map[t.NodeID]struct{})
 
 		threshchkpvalidatorpbdsl.ValidateCheckpoint(m, mc.ChkpValidator, checkpoint, 0, memberships, checkpoint)
 		return nil

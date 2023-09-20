@@ -34,3 +34,9 @@ func UponMessageReceived(m dsl.Module, handler func(from types3.NodeID, msg *typ
 		return handler(ev.From, ev.Msg)
 	})
 }
+
+func UponForceSendMessage(m dsl.Module, handler func(msg *types2.Message, destinations []types3.NodeID) error) {
+	UponEvent[*types.Event_ForceSendMessage](m, func(ev *types.ForceSendMessage) error {
+		return handler(ev.Msg, ev.Destinations)
+	})
+}

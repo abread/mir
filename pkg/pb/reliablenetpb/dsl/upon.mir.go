@@ -53,3 +53,9 @@ func UponRetransmitAll(m dsl.Module, handler func() error) {
 		return handler()
 	})
 }
+
+func UponForceSendMessage(m dsl.Module, handler func(msgId rntypes.MsgID, msg *types2.Message, destinations []types3.NodeID) error) {
+	UponEvent[*types.Event_ForceSendMessage](m, func(ev *types.ForceSendMessage) error {
+		return handler(ev.MsgId, ev.Msg, ev.Destinations)
+	})
+}

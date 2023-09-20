@@ -89,3 +89,20 @@ func RetransmitAll(destModule types.ModuleID) *types2.Event {
 		},
 	}
 }
+
+func ForceSendMessage(destModule types.ModuleID, msgId rntypes.MsgID, msg *types1.Message, destinations []types.NodeID) *types2.Event {
+	return &types2.Event{
+		DestModule: destModule,
+		Type: &types2.Event_ReliableNet{
+			ReliableNet: &types3.Event{
+				Type: &types3.Event_ForceSendMessage{
+					ForceSendMessage: &types3.ForceSendMessage{
+						MsgId:        msgId,
+						Msg:          msg,
+						Destinations: destinations,
+					},
+				},
+			},
+		},
+	}
+}

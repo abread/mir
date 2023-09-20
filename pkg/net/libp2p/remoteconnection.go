@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/fxamacker/cbor/v2"
@@ -18,18 +19,20 @@ import (
 )
 
 type remoteConnection struct {
-	params        Params
-	ownID         t.NodeID
-	addrInfo      *peer.AddrInfo
-	logger        logging.Logger
-	host          host.Host
-	encMode       cbor.EncMode
-	streamWriter  *cbor.Encoder
-	stream        network.Stream
-	msgBuffer     chan []byte
-	stop          chan struct{}
-	done          chan struct{}
-	connectedCond *sync.Cond
+	params              Params
+	ownID               t.NodeID
+	addrInfo            *peer.AddrInfo
+	logger              logging.Logger
+	host                host.Host
+	encMode             cbor.EncMode
+	streamWriter        *cbor.Encoder
+	stream              network.Stream
+	msgBuffer           chan []byte
+	forceSendMsg        atomic.Value
+	forceSendMsgPresent chan struct{}
+	stop                chan struct{}
+	done                chan struct{}
+	connectedCond       *sync.Cond
 }
 
 func newRemoteConnection(
@@ -45,18 +48,19 @@ func newRemoteConnection(
 		return nil, es.Errorf("failed to parse address: %w", err)
 	}
 	conn := &remoteConnection{
-		params:        params,
-		ownID:         ownID,
-		addrInfo:      addrInfo,
-		logger:        logger,
-		host:          h,
-		encMode:       encMode,
-		streamWriter:  nil,
-		stream:        nil,
-		msgBuffer:     make(chan []byte, params.ConnectionBufferSize),
-		stop:          make(chan struct{}),
-		done:          make(chan struct{}),
-		connectedCond: sync.NewCond(&sync.Mutex{}),
+		params:              params,
+		ownID:               ownID,
+		addrInfo:            addrInfo,
+		logger:              logger,
+		host:                h,
+		encMode:             encMode,
+		streamWriter:        nil,
+		stream:              nil,
+		msgBuffer:           make(chan []byte, params.ConnectionBufferSize),
+		forceSendMsgPresent: make(chan struct{}),
+		stop:                make(chan struct{}),
+		done:                make(chan struct{}),
+		connectedCond:       sync.NewCond(&sync.Mutex{}),
 	}
 	go conn.process()
 	return conn, nil
@@ -77,6 +81,23 @@ func (conn *remoteConnection) Send(msg []byte) error {
 		return nil
 	default:
 		return es.Errorf("warning: send buffer full. message dropped.")
+	}
+}
+
+// ForceSend places a message at the top of the send queue in a special slot.
+// If a message was previously placed in this slot, it is replaced by the new one.
+// This operation is non-blocking.
+func (conn *remoteConnection) ForceSend(msg []byte) error {
+	conn.forceSendMsg.Store(msg)
+
+	select {
+	case conn.forceSendMsgPresent <- struct{}{}:
+		return nil
+	default:
+		// We could not mark the forceSendMsgPresent channel as present, but this is fine.
+		// It means the worker goroutine hasn't processed the force message yet and will consider
+		// the new message.
+		return nil
 	}
 }
 
@@ -270,9 +291,21 @@ func (conn *remoteConnection) process() {
 
 		// Get the next message if there is no pending unsent message.
 		if msgData == nil {
+			// prioritize force-send message
 			select {
 			case <-conn.stop:
 				return
+			case <-conn.forceSendMsgPresent:
+				msgData = conn.forceSendMsg.Swap(nil).([]byte)
+			}
+		}
+		if msgData == nil {
+			select {
+			case <-conn.stop:
+				return
+			// still consider the force send message here
+			case <-conn.forceSendMsgPresent:
+				msgData = conn.forceSendMsg.Swap(nil).([]byte)
 			case msgData = <-conn.msgBuffer:
 			}
 		}

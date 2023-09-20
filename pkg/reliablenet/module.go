@@ -127,6 +127,8 @@ func (m *Module) applyRNEvent(event *reliablenetpbtypes.Event) (events.EventList
 	switch ev := event.Type.(type) {
 	case *reliablenetpbtypes.Event_RetransmitAll:
 		return m.retransmitAll()
+	case *reliablenetpbtypes.Event_ForceSendMessage:
+		return m.ForceSendMessage(ev.ForceSendMessage.MsgId, ev.ForceSendMessage.Msg, ev.ForceSendMessage.Destinations)
 	case *reliablenetpbtypes.Event_SendMessage:
 		return m.SendMessage(ev.SendMessage.MsgId, ev.SendMessage.Msg, ev.SendMessage.Destinations)
 	case *reliablenetpbtypes.Event_MarkModuleMsgsRecvd:
@@ -216,6 +218,25 @@ func (m *Module) retransmitAll() (events.EventList, error) {
 }
 
 func (m *Module) SendMessage(id rntypes.MsgID, msg *messagepbtypes.Message, destinations []t.NodeID) (events.EventList, error) {
+	evsOut := m.enqueueMessage(id, msg, destinations)
+
+	evsOut.PushBack(
+		transportpbevents.SendMessage(m.config.Net, msg, destinations),
+	)
+	return evsOut, nil
+}
+
+func (m *Module) ForceSendMessage(id rntypes.MsgID, msg *messagepbtypes.Message, destinations []t.NodeID) (events.EventList, error) {
+	evsOut := m.enqueueMessage(id, msg, destinations)
+
+	evsOut.PushBack(
+		transportpbevents.ForceSendMessage(m.config.Net, msg, destinations),
+	)
+	return evsOut, nil
+}
+
+func (m *Module) enqueueMessage(id rntypes.MsgID, msg *messagepbtypes.Message, destinations []t.NodeID) events.EventList {
+
 	qmsg := &QueuedMessage{
 		Msg:          msg,
 		Destinations: destinations,
@@ -226,21 +247,20 @@ func (m *Module) SendMessage(id rntypes.MsgID, msg *messagepbtypes.Message, dest
 	m.ensureSubqueueIndexExists(msg.DestModule)
 	m.queueIndex[msg.DestModule][id] = listEl
 
-	evsOut := events.ListOf(
-		transportpbevents.SendMessage(m.config.Net, msg, destinations),
-	)
-
 	if !m.retransmitLoopScheduled {
 		// m.logger.Log(logging.LevelDebug, "rescheduling retransmission loop")
+		m.retransmitLoopScheduled = true
+
+		evsOut := events.EmptyListWithCapacity(2)
 		evsOut.PushBack(eventpbevents.TimerDelay(
 			m.config.Timer,
 			[]*eventpbtypes.Event{rnEvents.RetransmitAll(m.config.Self)},
 			timert.Duration(m.params.RetransmissionLoopInterval),
 		))
-		m.retransmitLoopScheduled = true
+		return evsOut
 	}
 
-	return evsOut, nil
+	return events.EmptyListWithCapacity(1)
 }
 
 // Initial capacity for message queue associated to a module

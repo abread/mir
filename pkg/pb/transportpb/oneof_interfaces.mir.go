@@ -16,3 +16,7 @@ func (w *Event_SendMessage) Unwrap() *SendMessage {
 func (w *Event_MessageReceived) Unwrap() *MessageReceived {
 	return w.MessageReceived
 }
+
+func (w *Event_ForceSendMessage) Unwrap() *ForceSendMessage {
+	return w.ForceSendMessage
+}

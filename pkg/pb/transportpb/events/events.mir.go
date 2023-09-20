@@ -40,3 +40,19 @@ func MessageReceived(destModule types.ModuleID, from types.NodeID, msg *types1.M
 		},
 	}
 }
+
+func ForceSendMessage(destModule types.ModuleID, msg *types1.Message, destinations []types.NodeID) *types2.Event {
+	return &types2.Event{
+		DestModule: destModule,
+		Type: &types2.Event_Transport{
+			Transport: &types3.Event{
+				Type: &types3.Event_ForceSendMessage{
+					ForceSendMessage: &types3.ForceSendMessage{
+						Msg:          msg,
+						Destinations: destinations,
+					},
+				},
+			},
+		},
+	}
+}

@@ -42,6 +42,8 @@ func Event_TypeFromPb(pb reliablenetpb.Event_Type) Event_Type {
 		return &Event_MarkModuleMsgsRecvd{MarkModuleMsgsRecvd: MarkModuleMsgsRecvdFromPb(pb.MarkModuleMsgsRecvd)}
 	case *reliablenetpb.Event_RetransmitAll:
 		return &Event_RetransmitAll{RetransmitAll: RetransmitAllFromPb(pb.RetransmitAll)}
+	case *reliablenetpb.Event_ForceSendMessage:
+		return &Event_ForceSendMessage{ForceSendMessage: ForceSendMessageFromPb(pb.ForceSendMessage)}
 	}
 	return nil
 }
@@ -164,6 +166,30 @@ func (w *Event_RetransmitAll) Pb() reliablenetpb.Event_Type {
 
 func (*Event_RetransmitAll) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*reliablenetpb.Event_RetransmitAll]()}
+}
+
+type Event_ForceSendMessage struct {
+	ForceSendMessage *ForceSendMessage
+}
+
+func (*Event_ForceSendMessage) isEvent_Type() {}
+
+func (w *Event_ForceSendMessage) Unwrap() *ForceSendMessage {
+	return w.ForceSendMessage
+}
+
+func (w *Event_ForceSendMessage) Pb() reliablenetpb.Event_Type {
+	if w == nil {
+		return nil
+	}
+	if w.ForceSendMessage == nil {
+		return &reliablenetpb.Event_ForceSendMessage{}
+	}
+	return &reliablenetpb.Event_ForceSendMessage{ForceSendMessage: (w.ForceSendMessage).Pb()}
+}
+
+func (*Event_ForceSendMessage) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*reliablenetpb.Event_ForceSendMessage]()}
 }
 
 func EventFromPb(pb *reliablenetpb.Event) *Event {
@@ -366,4 +392,45 @@ func (m *RetransmitAll) Pb() *reliablenetpb.RetransmitAll {
 
 func (*RetransmitAll) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*reliablenetpb.RetransmitAll]()}
+}
+
+type ForceSendMessage struct {
+	MsgId        rntypes.MsgID
+	Msg          *types.Message
+	Destinations []types1.NodeID
+}
+
+func ForceSendMessageFromPb(pb *reliablenetpb.ForceSendMessage) *ForceSendMessage {
+	if pb == nil {
+		return nil
+	}
+	return &ForceSendMessage{
+		MsgId: (rntypes.MsgID)(pb.MsgId),
+		Msg:   types.MessageFromPb(pb.Msg),
+		Destinations: types2.ConvertSlice(pb.Destinations, func(t string) types1.NodeID {
+			return (types1.NodeID)(t)
+		}),
+	}
+}
+
+func (m *ForceSendMessage) Pb() *reliablenetpb.ForceSendMessage {
+	if m == nil {
+		return nil
+	}
+	pbMessage := &reliablenetpb.ForceSendMessage{}
+	{
+		pbMessage.MsgId = (string)(m.MsgId)
+		if m.Msg != nil {
+			pbMessage.Msg = (m.Msg).Pb()
+		}
+		pbMessage.Destinations = types2.ConvertSlice(m.Destinations, func(t types1.NodeID) string {
+			return (string)(t)
+		})
+	}
+
+	return pbMessage
+}
+
+func (*ForceSendMessage) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*reliablenetpb.ForceSendMessage]()}
 }

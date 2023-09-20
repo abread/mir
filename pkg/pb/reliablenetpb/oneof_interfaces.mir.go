@@ -28,3 +28,7 @@ func (w *Event_MarkModuleMsgsRecvd) Unwrap() *MarkModuleMsgsRecvd {
 func (w *Event_RetransmitAll) Unwrap() *RetransmitAll {
 	return w.RetransmitAll
 }
+
+func (w *Event_ForceSendMessage) Unwrap() *ForceSendMessage {
+	return w.ForceSendMessage
+}

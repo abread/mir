@@ -1,6 +1,8 @@
 package libp2p
 
 import (
+	"sync/atomic"
+
 	es "github.com/go-errors/errors"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"google.golang.org/protobuf/proto"
@@ -19,8 +21,14 @@ type selfConnection struct {
 	peerID      peer.ID
 	msgBuffer   chan []byte
 	deliverChan chan<- events.EventList
-	stop        chan struct{}
-	done        chan struct{}
+
+	// We receive all messages in selfConnection, so this probably isn't strictly necessary
+	// but it's here for complete consistency with remoteConnections
+	forceSendMsg        atomic.Value
+	forceSendMsgPresent chan struct{}
+
+	stop chan struct{}
+	done chan struct{}
 }
 
 // newSelfConnection returns a connection to self.
@@ -34,12 +42,13 @@ func newSelfConnection(params Params, ownID t.NodeID, ownAddr t.NodeAddress, del
 	}
 
 	conn := &selfConnection{
-		ownID:       ownID,
-		peerID:      addrInfo.ID,
-		msgBuffer:   make(chan []byte, params.ConnectionBufferSize),
-		deliverChan: deliverChan,
-		stop:        make(chan struct{}),
-		done:        make(chan struct{}),
+		ownID:               ownID,
+		peerID:              addrInfo.ID,
+		msgBuffer:           make(chan []byte, params.ConnectionBufferSize),
+		deliverChan:         deliverChan,
+		forceSendMsgPresent: make(chan struct{}),
+		stop:                make(chan struct{}),
+		done:                make(chan struct{}),
 	}
 
 	go conn.process()
@@ -64,6 +73,23 @@ func (conn *selfConnection) Send(msg []byte) error {
 			conn.msgBuffer <- msg
 		}()
 		return es.Errorf("send buffer full")
+	}
+}
+
+// ForceSend places a message at the top of the send queue in a special slot.
+// If a message was previously placed in this slot, it is replaced by the new one.
+// This operation is non-blocking.
+func (conn *selfConnection) ForceSend(msg []byte) error {
+	conn.forceSendMsg.Store(msg)
+
+	select {
+	case conn.forceSendMsgPresent <- struct{}{}:
+		return nil
+	default:
+		// We could not mark the forceSendMsgPresent channel as present, but this is fine.
+		// It means the worker goroutine hasn't processed the force message yet and will consider
+		// the new message.
+		return nil
 	}
 }
 
@@ -103,29 +129,53 @@ func (conn *selfConnection) process() {
 	// When done, make the Close method return.
 	defer close(conn.done)
 
+	recvMsg := func(encodedMsg []byte) {
+		var msgPb messagepb.Message
+		err := proto.Unmarshal(encodedMsg, &msgPb)
+		if err != nil {
+			panic(es.Errorf("failed to unmarshal message from self: %w", err))
+		}
+
+		msg := messagepbtypes.MessageFromPb(&msgPb)
+
+		select {
+		case <-conn.stop:
+			return
+		case conn.deliverChan <- events.ListOf(transportpbevents.MessageReceived(
+			msg.DestModule,
+			conn.ownID,
+			msg,
+		)):
+			// Nothing to do in this case, message has been delivered.
+		}
+	}
+
 	for {
 		select {
 		case <-conn.stop:
 			return
+		default:
+			// Nothing to do in this case, continue.
+		}
+
+		// Give priority to force send
+		select {
+		case <-conn.stop:
+			return
+		case <-conn.forceSendMsgPresent:
+			recvMsg(conn.forceSendMsg.Swap(nil).([]byte))
+		default:
+			// Nothing to do in this case, continue.
+		}
+
+		select {
+		case <-conn.stop:
+			return
+		// still consider force send here
+		case <-conn.forceSendMsgPresent:
+			recvMsg(conn.forceSendMsg.Swap(nil).([]byte))
 		case encodedMsg := <-conn.msgBuffer:
-			var msgPb messagepb.Message
-			err := proto.Unmarshal(encodedMsg, &msgPb)
-			if err != nil {
-				panic(es.Errorf("failed to unmarshal message from self: %w", err))
-			}
-
-			msg := messagepbtypes.MessageFromPb(&msgPb)
-
-			select {
-			case <-conn.stop:
-				return
-			case conn.deliverChan <- events.ListOf(transportpbevents.MessageReceived(
-				msg.DestModule,
-				conn.ownID,
-				msg,
-			)):
-				// Nothing to do in this case, message has been delivered.
-			}
+			recvMsg(encodedMsg)
 		}
 	}
 }

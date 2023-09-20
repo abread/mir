@@ -35,6 +35,8 @@ func Event_TypeFromPb(pb transportpb.Event_Type) Event_Type {
 		return &Event_SendMessage{SendMessage: SendMessageFromPb(pb.SendMessage)}
 	case *transportpb.Event_MessageReceived:
 		return &Event_MessageReceived{MessageReceived: MessageReceivedFromPb(pb.MessageReceived)}
+	case *transportpb.Event_ForceSendMessage:
+		return &Event_ForceSendMessage{ForceSendMessage: ForceSendMessageFromPb(pb.ForceSendMessage)}
 	}
 	return nil
 }
@@ -85,6 +87,30 @@ func (w *Event_MessageReceived) Pb() transportpb.Event_Type {
 
 func (*Event_MessageReceived) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*transportpb.Event_MessageReceived]()}
+}
+
+type Event_ForceSendMessage struct {
+	ForceSendMessage *ForceSendMessage
+}
+
+func (*Event_ForceSendMessage) isEvent_Type() {}
+
+func (w *Event_ForceSendMessage) Unwrap() *ForceSendMessage {
+	return w.ForceSendMessage
+}
+
+func (w *Event_ForceSendMessage) Pb() transportpb.Event_Type {
+	if w == nil {
+		return nil
+	}
+	if w.ForceSendMessage == nil {
+		return &transportpb.Event_ForceSendMessage{}
+	}
+	return &transportpb.Event_ForceSendMessage{ForceSendMessage: (w.ForceSendMessage).Pb()}
+}
+
+func (*Event_ForceSendMessage) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*transportpb.Event_ForceSendMessage]()}
 }
 
 func EventFromPb(pb *transportpb.Event) *Event {
@@ -184,4 +210,42 @@ func (m *MessageReceived) Pb() *transportpb.MessageReceived {
 
 func (*MessageReceived) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*transportpb.MessageReceived]()}
+}
+
+type ForceSendMessage struct {
+	Msg          *types.Message
+	Destinations []types1.NodeID
+}
+
+func ForceSendMessageFromPb(pb *transportpb.ForceSendMessage) *ForceSendMessage {
+	if pb == nil {
+		return nil
+	}
+	return &ForceSendMessage{
+		Msg: types.MessageFromPb(pb.Msg),
+		Destinations: types2.ConvertSlice(pb.Destinations, func(t string) types1.NodeID {
+			return (types1.NodeID)(t)
+		}),
+	}
+}
+
+func (m *ForceSendMessage) Pb() *transportpb.ForceSendMessage {
+	if m == nil {
+		return nil
+	}
+	pbMessage := &transportpb.ForceSendMessage{}
+	{
+		if m.Msg != nil {
+			pbMessage.Msg = (m.Msg).Pb()
+		}
+		pbMessage.Destinations = types2.ConvertSlice(m.Destinations, func(t types1.NodeID) string {
+			return (string)(t)
+		})
+	}
+
+	return pbMessage
+}
+
+func (*ForceSendMessage) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*transportpb.ForceSendMessage]()}
 }

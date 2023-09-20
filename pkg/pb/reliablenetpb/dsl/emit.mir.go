@@ -31,3 +31,7 @@ func MarkModuleMsgsRecvd(m dsl.Module, destModule types.ModuleID, destModule0 ty
 func RetransmitAll(m dsl.Module, destModule types.ModuleID) {
 	dsl.EmitEvent(m, events.RetransmitAll(destModule))
 }
+
+func ForceSendMessage(m dsl.Module, destModule types.ModuleID, msgId rntypes.MsgID, msg *types1.Message, destinations []types.NodeID) {
+	dsl.EmitEvent(m, events.ForceSendMessage(destModule, msgId, msg, destinations))
+}

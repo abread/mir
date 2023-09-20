@@ -10,5 +10,6 @@ func (*Event) ReflectTypeOptions() []reflect.Type {
 	return []reflect.Type{
 		reflect.TypeOf((*Event_SendMessage)(nil)),
 		reflect.TypeOf((*Event_MessageReceived)(nil)),
+		reflect.TypeOf((*Event_ForceSendMessage)(nil)),
 	}
 }

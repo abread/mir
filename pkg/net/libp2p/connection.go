@@ -15,6 +15,11 @@ type connection interface {
 	// the message might not have yet been physically sent.
 	Send(message []byte) error
 
+	// ForceSend places a message at the top of the send queue in a special slot.
+	// If a message was previously placed in this slot, it is replaced by the new one.
+	// This operation is non-blocking.
+	ForceSend(message []byte) error
+
 	// Close closes the connection. No data will be sent to the underlying stream after Close returns.
 	Close()
 
