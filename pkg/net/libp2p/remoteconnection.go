@@ -80,7 +80,8 @@ func (conn *remoteConnection) Send(msg []byte) error {
 	case conn.msgBuffer <- msg:
 		return nil
 	default:
-		return es.Errorf("warning: send buffer full. message dropped.")
+		return nil
+		//return es.Errorf("warning: send buffer full. message dropped.")
 	}
 }
 
