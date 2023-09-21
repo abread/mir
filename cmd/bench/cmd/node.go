@@ -50,6 +50,7 @@ var (
 	statPeriod     time.Duration
 	traceFileName  string
 	cryptoImplType string
+	timeout        time.Duration
 
 	nodeCmd = &cobra.Command{
 		Use:   "node",
@@ -69,6 +70,7 @@ func init() {
 	nodeCmd.Flags().DurationVar(&statPeriod, "statPeriod", time.Second, "statistic record period")
 	nodeCmd.Flags().StringVar(&traceFileName, "traceFile", "", "output file for alea tracing")
 	nodeCmd.Flags().StringVarP(&cryptoImplType, "cryptoImplType", "c", "pseudo", "type of cryptography to use (acceptable values: pseudo or dummy)")
+	nodeCmd.Flags().DurationVar(&timeout, "timeout", 10*time.Second, "time to remain after all clients exit")
 }
 
 func issSMRFactory(app *App, ownID t.NodeID, transport net.Transport, initialMembership *trantorpbtypes.Membership, smrParams trantor.Params, logger logging.Logger) (*trantor.System, error) {
@@ -139,6 +141,8 @@ var smrFactories = map[string]smrFactory{
 }
 
 func runNode(ctx context.Context) error {
+	ctx, cancel := context.WithCancel(ctx)
+
 	var logger logging.Logger
 	if verbose {
 		logger = logging.ConsoleDebugLogger
@@ -324,6 +328,43 @@ func runNode(ctx context.Context) error {
 	}
 	txReceiver.Start(txReceiverListener)
 	defer txReceiver.Stop()
+
+	go func() {
+		for txReceiver.ClientCount() == 0 {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(1 * time.Second):
+			}
+		}
+
+	Outer:
+		for {
+			for txReceiver.ClientCount() > 0 {
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(timeout / 2):
+				}
+			}
+
+			t := time.Now()
+			for time.Since(t) < timeout {
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(1 * time.Second):
+				}
+
+				if txReceiver.ClientCount() > 0 {
+					continue Outer
+				}
+			}
+
+			cancel()
+			return
+		}
+	}()
 
 	if err := benchSystem.Start(); err != nil {
 		return es.Errorf("could not start bench app: %w", err)

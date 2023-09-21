@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"sync/atomic"
 
 	es "github.com/go-errors/errors"
 	"google.golang.org/grpc"
@@ -48,6 +49,8 @@ type TransactionReceiver struct {
 
 	// output listeners set
 	outputListeners sync.Map
+
+	clientCount atomic.Int64
 }
 
 // NewTransactionReceiver returns a new initialized transaction receiver.
@@ -73,6 +76,8 @@ func NewTransactionReceiver(node *mir.Node, moduleID t.ModuleID, logger logging.
 // This function is called by the gRPC system on every new connection
 // from a Mir client's gRPC client.
 func (rr *TransactionReceiver) Listen(srv TransactionReceiver_ListenServer) error {
+	rr.clientCount.Add(1)
+	defer rr.clientCount.Add(-1)
 
 	// Print address of incoming connection.
 	p, ok := peer.FromContext(srv.Context())
@@ -124,6 +129,9 @@ func (rr *TransactionReceiver) NotifyBatchDeliver(deliveredBatch []*trantorpb.Tr
 }
 
 func (rr *TransactionReceiver) Output(_ *Empty, srv TransactionReceiver_OutputServer) error {
+	rr.clientCount.Add(1)
+	defer rr.clientCount.Add(-1)
+
 	input := make(chan []*trantorpb.Transaction, 16)
 	rr.outputListeners.Store(input, struct{}{})
 	defer rr.outputListeners.Delete(input)
@@ -179,4 +187,8 @@ func (rr *TransactionReceiver) Stop() {
 // ServerError() must not be called before the TransactionReceiver is stopped and its Stop() method has returned.
 func (rr *TransactionReceiver) ServerError() error {
 	return rr.grpcServerError
+}
+
+func(rr *TransactionReceiver) ClientCount() int64 {
+	return rr.clientCount.Load()
 }
