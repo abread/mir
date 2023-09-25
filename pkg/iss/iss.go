@@ -575,10 +575,9 @@ func InitialStateSnapshot(
 				Length:      firstEpochLength,
 				Memberships: memberships,
 			},
-			ClientProgress: trantorpbtypes.ClientProgressFromPb(clientprogress.NewClientProgress().Pb()),
-			LeaderPolicy:   leaderPolicyData,
-			// TODO: Revisit this when nil values are properly supported in generated types.
-			PreviousMembership: &trantorpbtypes.Membership{Nodes: make(map[t.NodeID]*trantorpbtypes.NodeIdentity)},
+			ClientProgress:     clientprogress.NewClientProgress().DslStruct(),
+			LeaderPolicy:       leaderPolicyData,
+			PreviousMembership: nil,
 		},
 	}, nil
 }

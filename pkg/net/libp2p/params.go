@@ -17,6 +17,7 @@ type Params struct {
 	ConnectionBufferSize int           `json:",string"`
 	StreamWriteTimeout   time.Duration `json:",string"`
 	ReconnectionPeriod   time.Duration `json:",string"`
+	MinComplainPeriod    time.Duration `json:",string"`
 	MaxMessageSize       int           `json:",string"`
 
 	// For some strange reason, a call to Write() on a libp2p stream tends to pretend to time out (without the timeout
@@ -30,9 +31,10 @@ func DefaultParams() Params {
 	return Params{
 		ProtocolID:           "/mir/0.0.1",
 		ConnectionTTL:        DefaultConnectionTTL,
-		ConnectionBufferSize: 128,
+		ConnectionBufferSize: 384, // enough for ISS-PBFT view change avalanche
 		StreamWriteTimeout:   100 * time.Millisecond,
 		ReconnectionPeriod:   time.Second,
+		MinComplainPeriod:    time.Second,
 		MaxMessageSize:       2 * 1024 * 1024, // 2 MiB
 		MaxDataPerWrite:      100 * 1024,      // 100 kiB
 	}

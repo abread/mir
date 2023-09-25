@@ -40,7 +40,7 @@ func New(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, nodeID t
 
 	bcqueuepbdsl.UponBcStarted(m, func(slot *bcpbtypes.Slot) error {
 		// propagate event to consumer
-		bcpbdsl.BcStarted(m, mc.Consumer, slot)
+		bcpbdsl.BcStarted(m, mc.AleaDirector, slot)
 		return nil
 	})
 

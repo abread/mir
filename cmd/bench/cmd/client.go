@@ -33,13 +33,17 @@ import (
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
+const (
+	TxReceiverBasePort = 20000
+)
+
 var (
-	txSize     int
-	rate       float64
-	burst      int
-	duration   time.Duration
-	clientType string
-	//statFileName string
+	txSize       int
+	rate         float64
+	burst        int
+	duration     time.Duration
+	clientType   string
+	statFileName string
 	//statPeriod   time.Duration
 
 	clientCmd = &cobra.Command{
@@ -54,6 +58,10 @@ var (
 
 func init() {
 	rootCmd.AddCommand(clientCmd)
+	clientCmd.Flags().StringVarP(&membershipFile, "membership", "m", "", "total number of nodes")
+	_ = clientCmd.MarkFlagRequired("membership")
+	clientCmd.PersistentFlags().StringVarP(&id, "id", "i", "", "client ID")
+	_ = clientCmd.MarkPersistentFlagRequired("id")
 	clientCmd.Flags().IntVarP(&txSize, "txSize", "s", 256, "size of each transaction in bytes")
 	clientCmd.Flags().Float64VarP(&rate, "rate", "r", 1000, "average number of transactions per second")
 	clientCmd.Flags().IntVarP(&burst, "burst", "b", 1, "maximum number of transactions in a burst")

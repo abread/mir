@@ -7,7 +7,7 @@ import (
 // ModuleConfig sets the module ids. All replicas are expected to use identical module configurations.
 type ModuleConfig struct {
 	Self         t.ModuleID // prefix for queue module IDs
-	Consumer     t.ModuleID
+	AleaDirector t.ModuleID
 	BatchDB      t.ModuleID
 	Mempool      t.ModuleID
 	Net          t.ModuleID

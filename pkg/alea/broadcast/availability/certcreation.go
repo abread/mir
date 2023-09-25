@@ -67,7 +67,7 @@ func includeCertCreation(
 		// register that we received this batch
 		certDB[*cert.Slot] = cert
 
-		bcpbdsl.DeliverCert(m, mc.Consumer, cert)
+		bcpbdsl.DeliverCert(m, mc.AleaDirector, cert)
 		return nil
 	})
 

@@ -5,11 +5,8 @@
 package stats
 
 import (
-	"time"
-
 	"github.com/filecoin-project/mir/pkg/events"
 	ageventstypes "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents/types"
-	bcqueuepbtypes "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/types"
 	batchfetcherpbtypes "github.com/filecoin-project/mir/pkg/pb/batchfetcherpb/types"
 	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 	mempoolpbtypes "github.com/filecoin-project/mir/pkg/pb/mempoolpb/types"
@@ -17,7 +14,7 @@ import (
 )
 
 type StatInterceptor struct {
-	*Stats
+	*LiveStats
 
 	// ID of the module that is consuming the transactions.
 	// Statistics will only be performed on transactions destined to this module
@@ -25,9 +22,7 @@ type StatInterceptor struct {
 	txConsumerModule t.ModuleID
 }
 
-var timeRef = time.Now()
-
-func NewStatInterceptor(s *Stats, txConsumer t.ModuleID) *StatInterceptor {
+func NewStatInterceptor(s *LiveStats, txConsumer t.ModuleID) *StatInterceptor {
 	return &StatInterceptor{s, txConsumer}
 }
 
@@ -47,12 +42,9 @@ func (i *StatInterceptor) Intercept(events events.EventList) error {
 		case *eventpbtypes.Event_Mempool:
 			switch e := e.Mempool.Type.(type) {
 			case *mempoolpbtypes.Event_NewTransactions:
-				ts := time.Since(timeRef)
 				for _, tx := range e.NewTransactions.Transactions {
-					i.Stats.NewTX(tx, int64(ts))
+					i.LiveStats.Submit(tx)
 				}
-			case *mempoolpbtypes.Event_NewBatch:
-				i.Stats.MempoolNewBatch()
 			}
 		case *eventpbtypes.Event_BatchFetcher:
 
@@ -63,21 +55,19 @@ func (i *StatInterceptor) Intercept(events events.EventList) error {
 
 			switch e := e.BatchFetcher.Type.(type) {
 			case *batchfetcherpbtypes.Event_NewOrderedBatch:
-				ts := time.Since(timeRef)
 				for _, tx := range e.NewOrderedBatch.Txs {
-					i.Stats.Delivered(tx, int64(ts))
+					i.LiveStats.Deliver(tx)
 				}
 			}
 		case *eventpbtypes.Event_AleaAgreement:
-			if e2, ok := e.AleaAgreement.Type.(*ageventstypes.Event_Deliver); ok {
-				i.Stats.DeliveredAgRound(e2.Deliver)
+			switch e2 := e.AleaAgreement.Type.(type) {
+			case *ageventstypes.Event_InputValue:
+				i.LiveStats.AgInput(e2.InputValue)
+			case *ageventstypes.Event_Deliver:
+				i.LiveStats.AgDeliver(e2.Deliver)
+			case *ageventstypes.Event_InnerAbbaRoundTime:
+				i.LiveStats.InnerAbbaTime(e2.InnerAbbaRoundTime)
 			}
-		case *eventpbtypes.Event_AleaBcqueue:
-			if _, ok := e.AleaBcqueue.Type.(*bcqueuepbtypes.Event_Deliver); ok {
-				i.Stats.DeliveredBcSlot()
-			}
-		case *eventpbtypes.Event_ThreshCrypto:
-			i.Stats.ThreshCryptoEvent(e.ThreshCrypto)
 		}
 	}
 

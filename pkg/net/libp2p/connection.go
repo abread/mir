@@ -2,6 +2,8 @@ package libp2p
 
 import (
 	"github.com/libp2p/go-libp2p/core/peer"
+
+	t "github.com/filecoin-project/mir/pkg/types"
 )
 
 // connection represents a connection to a (local or remote) peer.
@@ -13,12 +15,12 @@ type connection interface {
 	// Send makes a non-blocking attempt to send a message to this connection.
 	// Send might use internal buffering. Thus, even if it returns nil,
 	// the message might not have yet been physically sent.
-	Send(message []byte) error
+	Send(message []byte, destModule t.ModuleID) error
 
 	// ForceSend places a message at the top of the send queue in a special slot.
 	// If a message was previously placed in this slot, it is replaced by the new one.
 	// This operation is non-blocking.
-	ForceSend(message []byte) error
+	ForceSend(message []byte, destModule t.ModuleID) error
 
 	// Close closes the connection. No data will be sent to the underlying stream after Close returns.
 	Close()

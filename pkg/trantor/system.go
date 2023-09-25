@@ -5,7 +5,9 @@ import (
 
 	es "github.com/go-errors/errors"
 
-	"github.com/filecoin-project/mir/pkg/alea/queueselectionpolicy"
+	"github.com/filecoin-project/mir/pkg/alea/agreement"
+	"github.com/filecoin-project/mir/pkg/alea/broadcast"
+	"github.com/filecoin-project/mir/pkg/alea/director"
 	"github.com/filecoin-project/mir/pkg/availability/batchdb/fakebatchdb"
 	"github.com/filecoin-project/mir/pkg/availability/multisigcollector"
 	"github.com/filecoin-project/mir/pkg/mempool/simplemempool"
@@ -84,12 +86,12 @@ func (sys *System) Stop() {
 	sys.transport.Stop()
 }
 
-// NewISS creates a new SMR system using the ISS protocol.
+// New creates a new SMR system.
 // It instantiates the various Mir modules that make up the system and configures them to work together.
 // The returned system's Start method must be called before the system can be used.
 // The returned system's Stop method should be called when the system is no longer needed.
 // The returned system's Modules method can be used to obtain the Mir modules to be passed to mir.NewNode.
-func NewISS(
+func New(
 	// The ID of this node.
 	ownID t.NodeID,
 
@@ -102,6 +104,9 @@ func NewISS(
 
 	// Implementation of the cryptographic primitives to be used for signing and verifying protocol messages.
 	cryptoImpl mircrypto.Crypto,
+
+	// Implementation of the threshold criptography primitives to be used for signing and verifying protocol messages.
+	threshCryptoImpl threshcrypto.ThreshCrypto,
 
 	// The replicated application logic.
 	// This is what the user of the SMR system is expected to implement.
@@ -124,6 +129,194 @@ func NewISS(
 	moduleConfig := DefaultModuleConfig()
 	trantorModules := make(map[t.ModuleID]modules.Module)
 
+	if params.Protocol == "iss" {
+		// The availability component takes transactions from the mempool and disseminates them (including their payload)
+		// to other nodes to guarantee their retrievability.
+		// It produces availability certificates for batches of transactions.
+		// The multisig collector's certificates consist of signatures of a quorum of the nodes.
+		trantorModules[moduleConfig.Availability] = multisigcollector.NewReconfigurableModule(
+			moduleConfig.ConfigureMultisigCollector(),
+			params.Availability,
+			logging.Decorate(logger, "AVA: "),
+		)
+
+		// The ISS protocol orders availability certificates produced by the availability component
+		// and outputs them in the same order on all nodes.
+		issProtocol, err := iss.New(
+			ownID,
+			moduleConfig.ConfigureISS(),
+			params.Iss,
+			startingCheckpoint,
+			hashImpl,
+			cryptoImpl,
+			logging.Decorate(logger, "ISS: "),
+		)
+
+		if err != nil {
+			return nil, errors.Wrap(err, "error creating ISS protocol module")
+		}
+		trantorModules[moduleConfig.ISS] = issProtocol
+
+		// The ordering module, dynamically creating instances of the PBFT protocol as segments are created by ISS.
+		// Each segment is ordered by a separate instance of the ordering protocol.
+		// The results are then multiplexed by ISS to a single totally ordered log.
+		trantorModules[moduleConfig.Ordering] = orderers.Factory(
+			moduleConfig.ConfigureOrdering(),
+			params.Iss,
+			ownID,
+			logging.Decorate(logger, "PBFT: "),
+		)
+
+		// The preprepare validator (PPV) module check the validity of preprepare messages
+		// produced by the ordering protocol (PBFT).
+		trantorModules[moduleConfig.PPrepValidator] = ppv.NewModule(
+			moduleConfig.ConfigurePreprepareValidator(),
+			ppv.NewPermissiveValidityChecker(),
+		)
+
+		// The checkpoint preprepare validator checks the validity of preprepare messages containing checkpoints
+		// that are being agreed upon in each epoch before Trantor outputs them to the application.
+		// It is a factory creating a new validator as a submodule in each epoch,
+		// because the validation rules dynamically change - the membership against to verify the checkpoint certificate
+		// might reconfigure.
+		// Note that this validator (verifying PBFT preprepare messages whose content happens to be a checkpoint)
+		// is different from the checkpoint validator (see below),
+		// which directly validates received checkpoints from which state is to be restored.
+		trantorModules[moduleConfig.PPrepValidatorChkp] = ppv.NewPprepValidatorChkpFactory(
+			moduleConfig.ConfigurePreprepareValidatorChkp(),
+			hashImpl,
+			cryptoImpl,
+			params.Iss.ConfigOffset,
+			logging.Decorate(logger, "PPV: "),
+		)
+
+		// The checkpoint protocol periodically (at the beginning of each epoch) creates a checkpoint of the system state.
+		// It is created as a factory, since each checkpoint uses its own instance of the checkpointing protocol.
+		trantorModules[moduleConfig.Checkpointing] = checkpoint.Factory(
+			moduleConfig.ConfigureCheckpointing(),
+			ownID,
+			logging.Decorate(logger, "CHKP: "),
+		)
+
+		// The checkpoint validator verifies checkpoints from which state is to be restored.
+		// Note that this is different from the checkpoint preprepare validator which is attached to the agreement protocol
+		// in which the proposals happen to be checkpoints.
+		trantorModules[moduleConfig.ChkpValidator] = cv.NewModule(moduleConfig.ConfigureChkpValidator(), cv.NewPermissiveCV(
+			params.Iss.ConfigOffset,
+			ownID,
+			hashImpl,
+			cryptoImpl,
+			logger,
+		))
+
+		// tune params for ISS
+		params.Mempool.BatchTimeout = params.Iss.MaxProposeDelay
+		params.Iss.MaxProposeDelay = 0
+	} else if params.Protocol == "alea" {
+		// Check whether the passed configuration is valid.
+		if err := params.Alea.Check(); err != nil {
+			return nil, es.Errorf("invalid Alea parameters: %w", err)
+		}
+
+		allNodes := params.Alea.AllNodes()
+
+		var err error
+		trantorModules[moduleConfig.AleaDirector], err = director.NewModule(
+			moduleConfig.ConfigureAleaDirector(),
+			director.ModuleParams{
+				InstanceUID:  append(params.Alea.InstanceUID, 'd'),
+				Membership:   params.Alea.Membership,
+				EpochLength:  params.Alea.EpochLength,
+				RetainEpochs: params.Alea.RetainEpochs,
+			},
+			director.ModuleTunables{
+				MaxConcurrentVcbPerQueue: params.Alea.MaxConcurrentVcbPerQueue,
+				MaxOwnUnagreedBatchCount: params.Alea.MaxOwnUnagreedBatchCount,
+				EstimateWindowSize:       params.Alea.EstimateWindowSize,
+				MaxExtSlowdownFactor:     params.Alea.MaxExtSlowdownFactor,
+				MaxAgStall:               params.Alea.MaxAgStall,
+			},
+			startingCheckpoint,
+			ownID,
+			logging.Decorate(logger, "AleaDirector: "),
+		)
+		if err != nil {
+			return nil, es.Errorf("error creating alea director: %w", err)
+		}
+
+		trantorModules[moduleConfig.AleaBroadcast], err = broadcast.NewModule(
+			moduleConfig.ConfigureAleaBroadcast(),
+			broadcast.ModuleParams{
+				InstanceUID: append(params.Alea.InstanceUID, 'b'),
+				AllNodes:    allNodes,
+				EpochLength: params.Alea.EpochLength,
+			},
+			broadcast.ModuleTunables{
+				MaxConcurrentVcbPerQueue: params.Alea.MaxConcurrentVcbPerQueue,
+				EstimateWindowSize:       params.Alea.EstimateWindowSize,
+				MaxExtSlowdownFactor:     params.Alea.MaxExtSlowdownFactor,
+			},
+			startingCheckpoint,
+			ownID,
+			logging.Decorate(logger, "AleaBroadcast: "),
+		)
+		if err != nil {
+			return nil, es.Errorf("error creating alea broadcast: %w", err)
+		}
+
+		trantorModules[moduleConfig.AleaAgreement], err = agreement.NewModule(
+			moduleConfig.ConfigureAleaAgreement(),
+			agreement.ModuleParams{
+				InstanceUID: append(params.Alea.InstanceUID, 'a'),
+				AllNodes:    allNodes,
+				EpochLength: params.Alea.EpochLength,
+			},
+			agreement.ModuleTunables{
+				MaxRoundLookahead:     params.Alea.MaxAgRoundLookahead,
+				MaxAbbaRoundLookahead: params.Alea.MaxAbbaRoundLookahead,
+				MaxRoundAdvanceInput:  params.Alea.MaxAgRoundAdvanceInput,
+			},
+			startingCheckpoint,
+			ownID,
+			logging.Decorate(logger, "AleaAgreement: "),
+		)
+		if err != nil {
+			return nil, es.Errorf("error creating alea agreement: %w", err)
+		}
+
+		// The checkpoint protocol periodically (at the beginning of each epoch) creates a checkpoint of the system state.
+		// It is created as a factory, since each checkpoint uses its own instance of the checkpointing protocol.
+		trantorModules[moduleConfig.Checkpointing] = threshcheckpoint.Factory(
+			moduleConfig.ConfigureThreshCheckpointing(),
+			ownID,
+			logging.Decorate(logger, "CHKP: "),
+		)
+
+		// The checkpoint validator verifies checkpoints from which state is to be restored.
+		// Note that this is different from the checkpoint preprepare validator which is attached to the agreement protocol
+		// in which the proposals happen to be checkpoints.
+		trantorModules[moduleConfig.ChkpValidator] = tcv.NewModule(
+			tcv.ModuleConfig{
+				Self: moduleConfig.ChkpValidator,
+			}, tcv.NewPermissiveCV(
+				0,
+				ownID,
+				hashImpl,
+				threshCryptoImpl,
+				logger,
+			))
+
+		// tune mempool for alea
+		if params.Mempool.MinTransactionsInBatch == 0 {
+			// Alea does not broadcast empty batches
+			params.Mempool.MinTransactionsInBatch = 1
+		}
+		params.Mempool.BatchTimeout = 0
+	} else {
+		// TODO: move protocol-specific code out of trantor
+		return nil, es.Errorf("unsupported trantor protocol: %s", params.Protocol)
+	}
+
 	// The mempool stores the incoming transactions waiting to be proposed.
 	// The simple mempool implementation stores all those transactions in memory.
 	trantorModules[moduleConfig.Mempool] = simplemempool.NewModule(
@@ -132,88 +325,9 @@ func NewISS(
 		logger,
 	)
 
-	// The availability component takes transactions from the mempool and disseminates them (including their payload)
-	// to other nodes to guarantee their retrievability.
-	// It produces availability certificates for batches of transactions.
-	// The multisig collector's certificates consist of signatures of a quorum of the nodes.
-	trantorModules[moduleConfig.Availability] = multisigcollector.NewReconfigurableModule(
-		moduleConfig.ConfigureMultisigCollector(),
-		params.Availability,
-		logging.Decorate(logger, "AVA: "),
-	)
-
 	// The batch DB persistently stores the transactions this nodes is involved in making available.
 	// We currently use a fake, volatile database, that only stores batches in memory and does not persist them to disk.
 	trantorModules[moduleConfig.BatchDB] = fakebatchdb.NewModule(moduleConfig.ConfigureFakeBatchDB())
-
-	// The ISS protocol orders availability certificates produced by the availability component
-	// and outputs them in the same order on all nodes.
-	issProtocol, err := iss.New(
-		ownID,
-		moduleConfig.ConfigureISS(),
-		params.Iss,
-		startingCheckpoint,
-		hashImpl,
-		cryptoImpl,
-		logging.Decorate(logger, "ISS: "),
-	)
-
-	if err != nil {
-		return nil, errors.Wrap(err, "error creating ISS protocol module")
-	}
-	trantorModules[moduleConfig.ISS] = issProtocol
-
-	// The ordering module, dynamically creating instances of the PBFT protocol as segments are created by ISS.
-	// Each segment is ordered by a separate instance of the ordering protocol.
-	// The results are then multiplexed by ISS to a single totally ordered log.
-	trantorModules[moduleConfig.Ordering] = orderers.Factory(
-		moduleConfig.ConfigureOrdering(),
-		params.Iss,
-		ownID,
-		logging.Decorate(logger, "PBFT: "),
-	)
-
-	// The preprepare validator (PPV) module check the validity of preprepare messages
-	// produced by the ordering protocol (PBFT).
-	trantorModules[moduleConfig.PPrepValidator] = ppv.NewModule(
-		moduleConfig.ConfigurePreprepareValidator(),
-		ppv.NewPermissiveValidityChecker(),
-	)
-
-	// The checkpoint preprepare validator checks the validity of preprepare messages containing checkpoints
-	// that are being agreed upon in each epoch before Trantor outputs them to the application.
-	// It is a factory creating a new validator as a submodule in each epoch,
-	// because the validation rules dynamically change - the membership against to verify the checkpoint certificate
-	// might reconfigure.
-	// Note that this validator (verifying PBFT preprepare messages whose content happens to be a checkpoint)
-	// is different from the checkpoint validator (see below),
-	// which directly validates received checkpoints from which state is to be restored.
-	trantorModules[moduleConfig.PPrepValidatorChkp] = ppv.NewPprepValidatorChkpFactory(
-		moduleConfig.ConfigurePreprepareValidatorChkp(),
-		hashImpl,
-		cryptoImpl,
-		params.Iss.ConfigOffset,
-		logging.Decorate(logger, "PPV: "),
-	)
-
-	// The checkpoint protocol periodically (at the beginning of each epoch) creates a checkpoint of the system state.
-	// It is created as a factory, since each checkpoint uses its own instance of the checkpointing protocol.
-	trantorModules[moduleConfig.Checkpointing] = checkpoint.Factory(
-		moduleConfig.ConfigureCheckpointing(),
-		ownID,
-		logging.Decorate(logger, "CHKP: "),
-	)
-
-	// The checkpoint validator verifies checkpoints from which state is to be restored.
-	// Note that this is different from the checkpoint preprepare validator which is attached to the agreement protocol
-	// in which the proposals happen to be checkpoints.
-	trantorModules[moduleConfig.ChkpValidator] = cv.NewModule(moduleConfig.ConfigureChkpValidator(), cv.NewPermissiveCV(
-		params.Iss.ConfigOffset,
-		ownID,
-		hashImpl,
-		cryptoImpl,
-		logger,
-	))
 
 	// The batch fetcher module transforms availability certificates ordered by ISS
 	// into batches of transactions that can be applied to the replicated application.
@@ -233,112 +347,8 @@ func NewISS(
 	// The transport module is responsible for sending and receiving messages over the network.
 	trantorModules[moduleConfig.Net] = transport
 
-	// Utility modules.
-	trantorModules[moduleConfig.Hasher] = mircrypto.NewHasher(hashImpl)
-	trantorModules[moduleConfig.Crypto] = mircrypto.New(cryptoImpl)
-	trantorModules[moduleConfig.Timer] = timer.New()
-	trantorModules[moduleConfig.Null] = modules.NullPassive{}
-
-	return &System{
-		modules:            trantorModules,
-		transport:          transport,
-		initialMemberships: startingCheckpoint.Memberships(),
-	}, nil
-}
-
-// NewAlea creates a new SMR system using the Alea protocol.
-// It instantiates the various Mir modules that make up the system and configures them to work together.
-// The returned system's Start method must be called before the system can be used.
-// The returned system's Stop method should be called when the system is no longer needed.
-// The returned system's Modules method can be used to obtain the Mir modules to be passed to mir.NewNode.
-func NewAlea(
-	// The ID of this node.
-	ownID t.NodeID,
-
-	// Network transport system to be used by Trantor to send and receive messages.
-	transport net.Transport,
-
-	// Initial checkpoint of the application state and configuration.
-	// The SMR system will continue operating from this checkpoint.
-	startingCheckpoint *checkpoint.StableCheckpoint,
-
-	// Implementation of the cryptographic primitives to be used for signing and verifying protocol messages.
-	cryptoImpl mircrypto.Crypto,
-
-	// Implementation of the threshold criptography primitives to be used for signing and verifying protocol messages.
-	threshCrypto threshcrypto.ThreshCrypto,
-
-	// The replicated application logic.
-	// This is what the user of the SMR system is expected to implement.
-	// If the system needs to support reconfiguration,
-	// the user is expected to implement the AppLogic interface directly.
-	// For a static application, the user can implement the StaticAppLogic interface instead and transform it into to AppLogic
-	// using AppLogicFromStatic.
-	app appmodule.AppLogic,
-
-	// Parameters of the SMR system, like batch size or batch timeout.
-	params Params,
-
-	// The logger to which the system will pass all its log messages.
-	logger logging.Logger,
-) (*System, error) {
-
-	// Hash function to be used by all modules of the system.
-	hashImpl := crypto.SHA256
-
-	// TODO: incorporate this into GenesisCheckpoint function, once we have a better way to switch trantor protocols
-	if startingCheckpoint.Sn == 0 {
-		var err error
-		startingCheckpoint.Snapshot.EpochData.LeaderPolicy, err = queueselectionpolicy.NewQueuePolicy(params.Alea.QueueSelectionPolicyType, params.Alea.Membership).Bytes()
-		if err != nil {
-			return nil, err
-		}
-
-		startingCheckpoint.Snapshot.EpochData.EpochConfig.Length = uint64(params.Alea.EpochLength)
-	}
-
-	// tune mempool for alea
-	if params.Mempool.MinTransactionsInBatch == 0 {
-		// Alea does not broadcast empty batches
-		params.Mempool.MinTransactionsInBatch = 1
-	}
-	params.Mempool.BatchTimeout = 0
-
-	// Instantiate the Alea ordering protocol with default configuration.
-	// We use the Alea's default module configuration (the expected IDs of modules it interacts with)
-	// also to configure other modules of the system.
-	moduleConfig := alea.Config{
-		AleaDirector:  "adir",
-		AleaBroadcast: "abc",
-		AleaAgreement: "aag",
-		Checkpoint:    "chkp",
-		ChkpValidator: "chkpv",
-		Consumer:      "bf",
-		Crypto:        "crypto",
-		BatchDB:       "batchdb",
-		Hasher:        "hasher",
-		Mempool:       "mempool",
-		Net:           "net",
-		ReliableNet:   "rnet",
-		ThreshCrypto:  "tc",
-		Timer:         "timer",
-		Null:          "null",
-	}
-	aleaProtocolModules, err := alea.New(
-		ownID,
-		moduleConfig,
-		params.Alea,
-		startingCheckpoint,
-		logging.Decorate(logger, "Alea: "),
-	)
-	if err != nil {
-		return nil, es.Errorf("error creating Alea protocol modules: %w", err)
-	}
-
-	aleaProtocolModules[moduleConfig.Null] = modules.NullPassive{}
-
-	aleaProtocolModules[moduleConfig.Net] = transport
-	aleaProtocolModules[moduleConfig.ReliableNet], err = reliablenet.New(
+	var err error
+	trantorModules[moduleConfig.ReliableNet], err = reliablenet.New(
 		ownID,
 		reliablenet.ModuleConfig{
 			Self:  moduleConfig.ReliableNet,
@@ -352,82 +362,17 @@ func NewAlea(
 		return nil, es.Errorf("error creating reliablenet: %w", err)
 	}
 
-	aleaProtocolModules[moduleConfig.ThreshCrypto] = threshcrypto.New(threshCrypto)
-	aleaProtocolModules[moduleConfig.Timer] = timer.New()
-
-	// Use a simple mempool for incoming requests.
-	aleaProtocolModules[moduleConfig.Mempool] = simplemempool.NewModule(
-		simplemempool.ModuleConfig{
-			Self:   moduleConfig.Mempool,
-			Hasher: moduleConfig.Hasher,
-			Timer:  moduleConfig.Timer,
-		},
-		params.Mempool,
-		logging.Decorate(logger, "Mempool"),
-	)
-
-	// Use fake batch database that only stores batches in memory and does not persist them to disk.
-	aleaProtocolModules[moduleConfig.BatchDB] = fakebatchdb.NewModule(
-		fakebatchdb.ModuleConfig{
-			Self: moduleConfig.BatchDB,
-		},
-	)
-
-	aleaProtocolModules[moduleConfig.Hasher] = mircrypto.NewHasher(hashImpl)
-	aleaProtocolModules[moduleConfig.Crypto] = mircrypto.New(cryptoImpl)
-
-	// The checkpoint protocol periodically (at the beginning of each epoch) creates a checkpoint of the system state.
-	// It is created as a factory, since each checkpoint uses its own instance of the checkpointing protocol.
-	aleaProtocolModules[moduleConfig.Checkpoint] = threshcheckpoint.Factory(
-		threshcheckpoint.ModuleConfig{
-			Self:         moduleConfig.Checkpoint,
-			App:          moduleConfig.Consumer,
-			Hasher:       moduleConfig.Hasher,
-			ThreshCrypto: moduleConfig.ThreshCrypto,
-			ReliableNet:  moduleConfig.ReliableNet,
-			Ord:          moduleConfig.AleaDirector,
-		},
-		ownID,
-		logging.Decorate(logger, "CHKP: "),
-	)
-
-	// The checkpoint validator verifies checkpoints from which state is to be restored.
-	// Note that this is different from the checkpoint preprepare validator which is attached to the agreement protocol
-	// in which the proposals happen to be checkpoints.
-	aleaProtocolModules[moduleConfig.ChkpValidator] = tcv.NewModule(
-		tcv.ModuleConfig{
-			Self: moduleConfig.ChkpValidator,
-		}, tcv.NewPermissiveCV(
-			0,
-			ownID,
-			hashImpl,
-			threshCrypto,
-			logger,
-		))
-
-	// Instantiate the batch fetcher module that transforms availability certificates ordered by Alea
-	// into batches of transactions that can be applied to the replicated application.
-	appID := t.ModuleID("app")
-	aleaProtocolModules[moduleConfig.Consumer] = batchfetcher.NewModule(
-		batchfetcher.ModuleConfig{
-			Self:         moduleConfig.Consumer,
-			Availability: moduleConfig.AleaBroadcast,
-			Checkpoint:   moduleConfig.Checkpoint,
-			Mempool:      moduleConfig.Mempool,
-			Destination:  appID,
-		},
-		true,
-		startingCheckpoint.Epoch(),
-		startingCheckpoint.ClientProgress(),
-		logging.Decorate(logger, "BatchFetcher: "),
-	)
-
-	aleaProtocolModules[appID] = appmodule.NewAppModule(app, transport, moduleConfig.AleaDirector)
+	// Utility modules.
+	trantorModules[moduleConfig.Hasher] = mircrypto.NewHasher(hashImpl)
+	trantorModules[moduleConfig.Crypto] = mircrypto.New(cryptoImpl)
+	trantorModules[moduleConfig.ThreshCrypto] = threshcrypto.New(threshCryptoImpl)
+	trantorModules[moduleConfig.Timer] = timer.New()
+	trantorModules[moduleConfig.Null] = modules.NullPassive{}
 
 	return &System{
-		modules:            aleaProtocolModules,
+		modules:            trantorModules,
 		transport:          transport,
-		initialMemberships: []*trantorpbtypes.Membership{params.Alea.Membership},
+		initialMemberships: startingCheckpoint.Memberships(),
 	}, nil
 }
 
@@ -436,9 +381,18 @@ func NewAlea(
 // (the serialization of which is passed as the initialAppState parameter) before applying any transactions.
 // The associated certificate is empty (and should still be considered valid, as a special case).
 func GenesisCheckpoint(initialAppState []byte, params Params) (*checkpoint.StableCheckpoint, error) {
-	stateSnapshotpb, err := iss.InitialStateSnapshot(initialAppState, params.Iss)
+	var stateSnapshot *trantorpbtypes.StateSnapshot
+	var err error
+	if params.Protocol == "iss" {
+		stateSnapshot, err = iss.InitialStateSnapshot(initialAppState, params.Iss)
+	} else if params.Protocol == "alea" {
+		stateSnapshot, err = alea.InitialStateSnapshot(initialAppState, params.Alea)
+	} else {
+		err = es.Errorf("unsupported trantor protocol: %s", params.Protocol)
+	}
+
 	if err != nil {
 		return nil, err
 	}
-	return checkpoint.Genesis(stateSnapshotpb), nil
+	return checkpoint.Genesis(stateSnapshot), nil
 }

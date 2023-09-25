@@ -66,11 +66,11 @@ func QueuePolicyFromBytes(bytes []byte) (QueueSelectionPolicy, error) {
 
 }
 
-func NewQueuePolicy(queuePolicyType QueuePolicyType, membership *trantorpbtypes.Membership) QueueSelectionPolicy {
+func NewQueuePolicy(queuePolicyType QueuePolicyType, membership *trantorpbtypes.Membership) (QueueSelectionPolicy, error) {
 	switch queuePolicyType {
 	case RoundRobin:
-		return NewRoundRobinQueuePolicy(membership)
+		return NewRoundRobinQueuePolicy(membership), nil
 	default:
-		panic("invalid LeaderSelectionPolicy type")
+		return nil, es.Errorf("invalid LeaderSelectionPolicy type")
 	}
 }

@@ -428,6 +428,9 @@ func newDeployment(conf *TestConfig) (*deploytest.Deployment, error) {
 	if err != nil {
 		return nil, es.Errorf("could not create a local crypto system: %w", err)
 	}
+	// TODO: fix for weighted stuff
+	F := len(nodeIDs)/3 - 1
+	threshCryptoSystem := deploytest.NewLocalThreshCryptoSystem("pseudo", nodeIDs, 2*F+1)
 
 	nodeModules := make(map[t.NodeID]modules.Modules)
 	fakeApps := make(map[t.NodeID]*deploytest.FakeApp)
@@ -443,6 +446,13 @@ func newDeployment(conf *TestConfig) (*deploytest.Deployment, error) {
 
 		// Trantor configuration
 		tConf := trantor.DefaultParams(transportLayer.Membership())
+		// Use small batches so even a few transactions keep being proposed even after epoch transitions.
+		tConf.Mempool = simplemempool.DefaultModuleParams()
+		tConf.Mempool.MaxTransactionsInBatch = 10
+		tConf.Availability = multisigcollector.DefaultParamsTemplate()
+		tConf.Availability.Limit = 1 // This prevents "batching of batches" by the availability component.
+		tConf.Net = libp2p.Params{}  // should be unused anyway
+
 		if conf.SlowProposeReplicas[i] {
 			// Increase MaxProposeDelay such that it is likely to trigger view change by the SN timeout.
 			// Since a sensible value for the segment timeout needs to be stricter than the SN timeout,
@@ -463,25 +473,19 @@ func newDeployment(conf *TestConfig) (*deploytest.Deployment, error) {
 		if err != nil {
 			return nil, es.Errorf("error creating local crypto system for node %v: %w", nodeID, err)
 		}
+		localThreshCrypto, err := threshCryptoSystem.ThreshCrypto(nodeID)
+		if err != nil {
+			return nil, es.Errorf("error creating local thresh crypto system for node %v: %w", nodeID, err)
+		}
 
-		// Use small batches so even a few transactions keep being proposed even after epoch transitions.
-		mempoolParams := simplemempool.DefaultModuleParams()
-		mempoolParams.MaxTransactionsInBatch = 10
-		avParamsTemplate := multisigcollector.DefaultParamsTemplate()
-		avParamsTemplate.Limit = 1 // This prevents "batching of batches" by the availability component.
-
-		system, err := trantor.NewISS(
+		system, err := trantor.New(
 			nodeID,
 			transport,
 			checkpoint.Genesis(stateSnapshotpb),
 			localCrypto,
+			localThreshCrypto,
 			appmodule.AppLogicFromStatic(fakeApp, transportLayer.Membership()),
-			trantor.Params{
-				Mempool:      mempoolParams,
-				Iss:          tConf.Iss,
-				Net:          libp2p.Params{},
-				Availability: avParamsTemplate,
-			},
+			tConf,
 			nodeLogger,
 		)
 		if err != nil {

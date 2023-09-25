@@ -9,6 +9,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/alea/broadcast/availability"
 	"github.com/filecoin-project/mir/pkg/alea/broadcast/bccommon"
 	"github.com/filecoin-project/mir/pkg/alea/broadcast/bcqueue"
+	"github.com/filecoin-project/mir/pkg/checkpoint"
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/modules"
@@ -30,7 +31,19 @@ type bcMod struct {
 	availability modules.PassiveModule
 }
 
-func NewModule(mc ModuleConfig, params bccommon.ModuleParams, tunables ModuleTunables, epochNr tt.EpochNr, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
+func NewModule(
+	mc ModuleConfig,
+	params ModuleParams,
+	tunables ModuleTunables,
+	startingChkp *checkpoint.StableCheckpoint,
+	nodeID t.NodeID,
+	logger logging.Logger,
+) (modules.PassiveModule, error) {
+	if startingChkp == nil {
+		return nil, es.Errorf("missing initial checkpoint")
+	}
+	epochNr := startingChkp.Epoch()
+
 	queues, err := createQueues(mc, params, tunables, nodeID, logger)
 	if err != nil {
 		return nil, err

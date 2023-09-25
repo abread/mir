@@ -212,7 +212,7 @@ func includeBatchFetching(
 		} else {
 			// node is likely to be behind, send help
 			// TODO: add some check to avoid sending help to nodes that are not behind (see slot data in cert)
-			directorpbdsl.HelpNode(m, mc.Consumer, from)
+			directorpbdsl.HelpNode(m, mc.AleaDirector, from)
 		}
 		// TODO: send indication of no-reply
 

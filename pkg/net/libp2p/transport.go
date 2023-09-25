@@ -3,6 +3,7 @@ package libp2p
 import (
 	"context"
 	"sync"
+	"time"
 
 	es "github.com/go-errors/errors"
 	"github.com/libp2p/go-libp2p/core/host"
@@ -24,6 +25,16 @@ import (
 	cbor "github.com/fxamacker/cbor/v2"
 )
 
+// Stats represents a statistics tracker for networking.
+// It tracks the amount of data that is sent, received, and dropped (i.e., not sent).
+// The data can be categorized using string labels, and it is the implementation's choice how to interpret them.
+// All method implementations must be thread-save, as they can be called concurrently.
+type Stats interface {
+	Sent(nBytes int, label string)
+	Received(nBytes int, label string)
+	Dropped(nBytes int, label string)
+}
+
 type TransportMessage struct {
 	Payload []byte
 }
@@ -33,6 +44,7 @@ type Transport struct {
 	ownID  t.NodeID
 	host   host.Host
 	logger logging.Logger
+	stats  Stats
 
 	decMode cbor.DecMode
 	encMode cbor.EncMode
@@ -41,11 +53,13 @@ type Transport struct {
 	nodeIDs         map[peer.ID]t.NodeID
 	connectionsLock sync.RWMutex
 	stop            chan struct{}
+	incomingConnWg  sync.WaitGroup
+	lastComplaint   time.Time
 
 	incomingMessages chan events.EventList
 }
 
-func NewTransport(params Params, ownID t.NodeID, h host.Host, logger logging.Logger) *Transport {
+func NewTransport(params Params, ownID t.NodeID, h host.Host, logger logging.Logger, stats Stats) *Transport {
 	decOptions := cbor.DecOptions{
 		MaxArrayElements: params.MaxMessageSize,
 		IndefLength:      cbor.IndefLengthForbidden,
@@ -71,10 +85,36 @@ func NewTransport(params Params, ownID t.NodeID, h host.Host, logger logging.Log
 		nodeIDs:          make(map[peer.ID]t.NodeID),
 		incomingMessages: make(chan events.EventList),
 		stop:             make(chan struct{}),
+		stats:            stats,
 	}
 }
 
 func (tr *Transport) ImplementsModule() {}
+
+func (tr *Transport) sendWith(sendMethod func(destID t.NodeID, serializedMsg []byte, destModule t.ModuleID) error, destinations []t.NodeID, msg *messagepbtypes.Message) error {
+	serializedMsg, err := tr.serializeMessage(msg)
+	if err != nil {
+		return es.Errorf("failed to serialize message: %w", err)
+	}
+
+	for _, destID := range destinations {
+		if err := sendMethod(destID, serializedMsg, msg.DestModule); err != nil {
+			// Complain if not complained recently.
+			if time.Since(tr.lastComplaint) >= tr.params.MinComplainPeriod {
+				tr.logger.Log(logging.LevelWarn, "Failed to send a message", "dest", destID, "err", err)
+				tr.lastComplaint = time.Now()
+			}
+
+			// Update statistics about dropped message.
+			if tr.stats != nil {
+				// TODO: this does not count CBOR overhead, but that is small and fixed-size so it shouldn't be a big deal.
+				tr.stats.Dropped(len(serializedMsg), string(msg.DestModule.Top()))
+			}
+		}
+	}
+
+	return nil
+}
 
 func (tr *Transport) ApplyEvents(_ context.Context, eventList events.EventList) error {
 	iter := eventList.Iterator()
@@ -83,29 +123,16 @@ func (tr *Transport) ApplyEvents(_ context.Context, eventList events.EventList) 
 		switch e := event.Type.(type) {
 		case *eventpbtypes.Event_Init:
 			// no actions on init
+
 		case *eventpbtypes.Event_Transport:
 			switch e := e.Transport.Type.(type) {
 			case *transportpbtypes.Event_SendMessage:
-				serializedMsg, err := tr.serializeMessage(e.SendMessage.Msg)
-				if err != nil {
-					return es.Errorf("failed to serialize message: %w", err)
-				}
-
-				for _, destID := range e.SendMessage.Destinations {
-					if err := tr.sendSerialized(destID, serializedMsg); err != nil {
-						tr.logger.Log(logging.LevelWarn, "Failed to send a message", "dest", destID, "err", err)
-					}
+				if err := tr.sendWith(tr.sendSerialized, e.SendMessage.Destinations, e.SendMessage.Msg); err != nil {
+					return err
 				}
 			case *transportpbtypes.Event_ForceSendMessage:
-				serializedMsg, err := tr.serializeMessage(e.ForceSendMessage.Msg)
-				if err != nil {
-					return es.Errorf("failed to serialize message: %w", err)
-				}
-
-				for _, destID := range e.ForceSendMessage.Destinations {
-					if err := tr.forceSendSerialized(destID, serializedMsg); err != nil {
-						tr.logger.Log(logging.LevelWarn, "Failed to send a message", "dest", destID, "err", err)
-					}
+				if err := tr.sendWith(tr.forceSendSerialized, e.ForceSendMessage.Destinations, e.ForceSendMessage.Msg); err != nil {
+					return err
 				}
 			default:
 				return es.Errorf("unexpected transport event: %T", e)
@@ -128,11 +155,19 @@ func (tr *Transport) Start() error {
 }
 
 func (tr *Transport) Stop() {
+
+	// Stop receiving new connections.
+	// After the lock is released, no new incoming connections can be created anymore.
+	tr.connectionsLock.Lock()
 	tr.host.RemoveStreamHandler(tr.params.ProtocolID)
 	close(tr.stop)
+	tr.connectionsLock.Unlock()
+
 	// Passing an empty membership means that no connections will be kept.
 	tr.CloseOldConnections(&trantorpbtypes.Membership{map[t.NodeID]*trantorpbtypes.NodeIdentity{}}) // nolint:govet
-	// TODO: Force the termination of incoming connections too and wait here until that happens.
+
+	// Wait for incoming connection handlers to terminate.
+	tr.incomingConnWg.Wait()
 }
 
 func (tr *Transport) Connect(membership *trantorpbtypes.Membership) {
@@ -173,6 +208,7 @@ func (tr *Transport) Connect(membership *trantorpbtypes.Membership) {
 					addr,
 					tr.host,
 					logging.Decorate(tr.logger, "SND: ", "dest", nodeID),
+					tr.stats,
 				)
 			}
 
@@ -196,7 +232,7 @@ func (tr *Transport) Send(dest t.NodeID, msg *messagepbtypes.Message) error {
 		return err
 	}
 
-	return tr.sendSerialized(dest, serialized)
+	return tr.sendSerialized(dest, serialized, msg.DestModule)
 }
 
 func (tr *Transport) ForceSend(dest t.NodeID, msg *messagepbtypes.Message) error {
@@ -205,7 +241,7 @@ func (tr *Transport) ForceSend(dest t.NodeID, msg *messagepbtypes.Message) error
 		return err
 	}
 
-	return tr.forceSendSerialized(dest, serialized)
+	return tr.forceSendSerialized(dest, serialized, msg.DestModule)
 }
 
 func (tr *Transport) serializeMessage(msg *messagepbtypes.Message) ([]byte, error) {
@@ -223,22 +259,22 @@ func (tr *Transport) serializeMessage(msg *messagepbtypes.Message) ([]byte, erro
 	return serialized, nil
 }
 
-func (tr *Transport) sendSerialized(dest t.NodeID, serializedMsg []byte) error {
+func (tr *Transport) sendSerialized(dest t.NodeID, serializedMsg []byte, destModule t.ModuleID) error {
 	conn, err := tr.getConnection(dest)
 	if err != nil {
 		return err
 	}
 
-	return conn.Send(serializedMsg)
+	return conn.Send(serializedMsg, destModule)
 }
 
-func (tr *Transport) forceSendSerialized(dest t.NodeID, serializedMsg []byte) error {
+func (tr *Transport) forceSendSerialized(dest t.NodeID, serializedMsg []byte, destModule t.ModuleID) error {
 	conn, err := tr.getConnection(dest)
 	if err != nil {
 		return err
 	}
 
-	return conn.ForceSend(serializedMsg)
+	return conn.ForceSend(serializedMsg, destModule)
 }
 
 func (tr *Transport) WaitFor(n int) error {
@@ -326,6 +362,16 @@ func (tr *Transport) getConnection(nodeID t.NodeID) (connection, error) {
 }
 
 func (tr *Transport) handleIncomingConnection(s network.Stream) {
+	// In case there is a panic in the main processing loop, log an error message.
+	// (Otherwise, since this function is run as a goroutine, panicking would be completely silent.)
+	defer func() {
+		if r := recover(); r != nil {
+			err := es.New(r)
+			tr.logger.Log(logging.LevelError, "Incoming connection handler panicked.",
+				"cause", r, "stack", err.ErrorStack())
+		}
+	}()
+
 	peerID := s.Conn().RemotePeer()
 
 	tr.logger.Log(logging.LevelDebug, "Incoming connection", "remotePeer", peerID)
@@ -340,22 +386,56 @@ func (tr *Transport) handleIncomingConnection(s network.Stream) {
 		}
 	}()
 
-	// Check if connection has been received from a known node (as per ID declared by the remote node).
 	tr.connectionsLock.RLock()
+
+	// Check if connection has been received from a known node (as per ID declared by the remote node).
+	// (The actual check is performed after we release the lock.)
 	peerNodeID, ok := tr.nodeIDs[peerID]
-	// TODO: Also keep a synchronized map of incoming streams.
-	//       On shutdown, close them all and wait until the corresponding handlers return.
+
+	select {
+	case <-tr.stop:
+		// If we are shutting down right now, ignore this connection.
+		return
+	default:
+		// If new connections are still accepted, make sure we will wait for this handler to terminate when stopping.
+		tr.incomingConnWg.Add(1)
+		defer tr.incomingConnWg.Done()
+	}
+
 	tr.connectionsLock.RUnlock()
+
 	if !ok {
 		tr.logger.Log(logging.LevelWarn, "Received message from unknown peer. Stopping incoming connection",
 			"remotePeer", peerID)
 		return
 	}
 
-	decoder := tr.decMode.NewDecoder(s)
+	// Create a goroutine watching for the stop signal (closing tr.stop) and closing the connection on shutdown.
+	// It is necessary for the case where the handler is blocked on tr.readAndProcessMessages and needs to shut down.
+	// TODO: Resetting and closing the connection is done both in this goroutine and when the handler returns.
+	//   This might be redundant and is, in general, a mess. Clean it up.
+	connStopChan := make(chan struct{})
+	defer close(connStopChan)
+	go func() {
+		select {
+		case <-tr.stop:
+			if err := s.Reset(); err != nil {
+				tr.logger.Log(logging.LevelWarn, "Could not reset incoming stream on shutdown.",
+					"remotePeer", peerID, "err", err)
+			}
+			if err := s.Close(); err != nil {
+				tr.logger.Log(logging.LevelWarn, "Could not close incoming stream on shutdown.",
+					"remotePeer", peerID, "err", err)
+			}
+		case <-connStopChan:
+			// Do nothing here.
+			// This is only used to return from this goroutine if the connection handler stops by itself.
+		}
+	}()
 
 	// Start reading and processig incoming messages.
 	// This call blocks until an error occurs (e.g. the connection breaks) or the Transport is explicitly shut down.
+	decoder := tr.decMode.NewDecoder(s)
 	tr.readAndProcessMessages(decoder, peerNodeID, peerID)
 }
 
@@ -364,7 +444,7 @@ func (tr *Transport) handleIncomingConnection(s network.Stream) {
 func (tr *Transport) readAndProcessMessages(s *cbor.Decoder, peerNodeID t.NodeID, peerID peer.ID) {
 	for {
 		// Read message from the network.
-		msg, err := readAndDecode(s)
+		msg, err := readAndDecode(s, tr.stats)
 		if err != nil {
 			tr.logger.Log(logging.LevelDebug, "Failed reading message. Stopping incoming connection",
 				"remotePeer", peerID, "err", err)
@@ -388,7 +468,7 @@ func (tr *Transport) readAndProcessMessages(s *cbor.Decoder, peerNodeID t.NodeID
 	}
 }
 
-func readAndDecode(s *cbor.Decoder) (*messagepb.Message, error) {
+func readAndDecode(s *cbor.Decoder, stats Stats) (*messagepb.Message, error) {
 	var tm TransportMessage
 	err := s.Decode(&tm)
 	if err != nil {
@@ -399,5 +479,12 @@ func readAndDecode(s *cbor.Decoder) (*messagepb.Message, error) {
 	if err := proto.Unmarshal(tm.Payload, &msg); err != nil {
 		return nil, err
 	}
+
+	// Record statistics about received data.
+	// TODO: we don't record the CBOR overhead, but it's probably not worth it as it's small and fixed size.
+	if stats != nil {
+		stats.Received(len(tm.Payload), string(t.ModuleID(msg.DestModule).Top()))
+	}
+
 	return &msg, nil
 }

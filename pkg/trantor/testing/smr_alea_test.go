@@ -22,12 +22,13 @@ import (
 	"golang.org/x/exp/slices"
 
 	"github.com/filecoin-project/mir"
+	"github.com/filecoin-project/mir/pkg/alea"
 	"github.com/filecoin-project/mir/pkg/checkpoint"
 	"github.com/filecoin-project/mir/pkg/deploytest"
 	"github.com/filecoin-project/mir/pkg/eventmangler"
-	"github.com/filecoin-project/mir/pkg/iss"
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/modules"
+	"github.com/filecoin-project/mir/pkg/net/libp2p"
 	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 	messagepbtypes "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
 	"github.com/filecoin-project/mir/pkg/reliablenet" // nolint: typecheck
@@ -371,7 +372,7 @@ func runIntegrationWithAleaConfig(tb testing.TB, conf *TestConfig) (heapObjects 
 	assert.NoError(tb, checkEventTraces(deployment.EventLogFiles(), conf.NumNetTXs*conf.NumClients+conf.NumFakeTXs))
 
 	for _, replica := range deployment.TestReplicas {
-		// Check if all requests were delivered.
+		// Check if all transactions were delivered.
 		app := deployment.TestConfig.FakeApps[replica.ID]
 		assert.Equal(tb, conf.NumNetTXs*conf.NumClients+conf.NumFakeTXs, int(app.TransactionsProcessed))
 
@@ -469,11 +470,13 @@ func newDeploymentAlea(conf *TestConfig) (*deploytest.Deployment, error) {
 		}
 
 		tConf := trantor.DefaultParams(transportLayer.Membership())
-
+		// Use Alea
+		tConf.Protocol = "alea"
 		// Use small batches so even a few transactions keep being proposed even after epoch transitions.
 		tConf.Mempool.MaxTransactionsInBatch = 10
 		// Keep retransmission bursts low to avoid overloading the test system.
 		tConf.ReliableNet.MaxRetransmissionBurst = 4
+		tConf.Net = libp2p.Params{} // should be unused anyway
 
 		if conf.ParamsModifier != nil {
 			conf.ParamsModifier(&tConf)
@@ -494,11 +497,11 @@ func newDeploymentAlea(conf *TestConfig) (*deploytest.Deployment, error) {
 			return nil, es.Errorf("error creating local threshcrypto system for node %v: %w", nodeID, err)
 		}
 
-		stateSnapshot, err := iss.InitialStateSnapshot(initialSnapshot, tConf.Iss)
+		stateSnapshot, err := alea.InitialStateSnapshot(initialSnapshot, tConf.Alea)
 		if err != nil {
 			return nil, es.Errorf("error initializing Mir state snapshot: %w", err)
 		}
-		system, err := trantor.NewAlea(
+		system, err := trantor.New(
 			nodeID,
 			transport,
 			checkpoint.Genesis(stateSnapshot),

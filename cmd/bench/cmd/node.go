@@ -7,7 +7,7 @@ package cmd
 import (
 	"context"
 	"encoding/csv"
-	"errors"
+	"encoding/json"
 	"fmt"
 	gonet "net"
 	"os"
@@ -23,125 +23,77 @@ import (
 
 	"github.com/filecoin-project/mir"
 	"github.com/filecoin-project/mir/cmd/bench/aleatracer"
+	"github.com/filecoin-project/mir/cmd/bench/localtxgenerator"
 	"github.com/filecoin-project/mir/cmd/bench/stats"
 	"github.com/filecoin-project/mir/pkg/alea/aleatypes"
 	"github.com/filecoin-project/mir/pkg/deploytest"
 	"github.com/filecoin-project/mir/pkg/eventlog"
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/membership"
-	"github.com/filecoin-project/mir/pkg/net"
 	libp2p2 "github.com/filecoin-project/mir/pkg/net/libp2p"
-	"github.com/filecoin-project/mir/pkg/pb/trantorpb"
-	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
-	"github.com/filecoin-project/mir/pkg/transactionreceiver"
+	"github.com/filecoin-project/mir/pkg/rendezvous"
 	"github.com/filecoin-project/mir/pkg/trantor"
+	"github.com/filecoin-project/mir/pkg/trantor/appmodule"
+	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 	"github.com/filecoin-project/mir/pkg/util/libp2p"
+	"github.com/filecoin-project/mir/pkg/util/maputil"
 )
 
 const (
-	TxReceiverBasePort = 20000
+	syncLimit        = 30 * time.Second
+	syncPollInterval = 100 * time.Millisecond
 )
 
 var (
-	protocol       string
-	batchSize      int
-	statFileName   string
-	statPeriod     time.Duration
-	traceFileName  string
-	cryptoImplType string
-	timeout        time.Duration
+	configFileName      string
+	liveStatFileName    string
+	clientStatFileName  string
+	statPeriod          time.Duration
+	traceFileName       string
+	readySyncFileName   string
+	deliverSyncFileName string
 
 	nodeCmd = &cobra.Command{
 		Use:   "node",
 		Short: "Start a Mir node",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			return runNode(ctx)
+			if err := runNode(ctx); !es.Is(err, mir.ErrStopped) {
+				return err
+			}
+			return nil
 		},
 	}
 )
 
 func init() {
 	rootCmd.AddCommand(nodeCmd)
-	nodeCmd.Flags().StringVarP(&protocol, "protocol", "p", "iss", "protocol to use")
-	nodeCmd.Flags().IntVarP(&batchSize, "batchSize", "b", 1024, "maximum number of transactions in a batch (mempool module)")
-	nodeCmd.Flags().StringVarP(&statFileName, "statFile", "o", "", "output file for statistics")
-	nodeCmd.Flags().DurationVar(&statPeriod, "statPeriod", time.Second, "statistic record period")
+
+	// Required arguments
+	nodeCmd.Flags().StringVarP(&configFileName, "config-file", "c", "", "configuration file")
+	_ = nodeCmd.MarkFlagRequired("config-file")
+	nodeCmd.PersistentFlags().StringVarP(&id, "id", "i", "", "node ID")
+	_ = nodeCmd.MarkPersistentFlagRequired("id")
+
+	// Optional arguments
+	nodeCmd.Flags().DurationVar(&statPeriod, "stat-period", time.Second, "statistic record period")
+	nodeCmd.Flags().StringVar(&clientStatFileName, "client-stat-file", "bench-output.json", "statistics output file")
+	nodeCmd.Flags().StringVar(&liveStatFileName, "live-stat-file", "", "output file for live statistics, default is standard output")
 	nodeCmd.Flags().StringVar(&traceFileName, "traceFile", "", "output file for alea tracing")
-	nodeCmd.Flags().StringVarP(&cryptoImplType, "cryptoImplType", "c", "pseudo", "type of cryptography to use (acceptable values: pseudo or dummy)")
-	nodeCmd.Flags().DurationVar(&timeout, "timeout", 10*time.Second, "time to remain after all clients exit")
-}
 
-func issSMRFactory(app *App, ownID t.NodeID, transport net.Transport, initialMembership *trantorpbtypes.Membership, smrParams trantor.Params, logger logging.Logger) (*trantor.System, error) {
-	localCS, err := deploytest.NewLocalCryptoSystem(cryptoImplType, membership.GetIDs(initialMembership), logger)
-	if err != nil {
-		return nil, es.Errorf("could not create a local crypto system: %w", err)
-	}
-	localCrypto, err := localCS.Crypto(ownID)
-	if err != nil {
-		return nil, es.Errorf("could not create a local crypto system: %w", err)
-	}
-
-	genesisCheckpoint, err := trantor.GenesisCheckpoint([]byte{}, smrParams)
-	if err != nil {
-		return nil, es.Errorf("could not create genesis checkpoint: %w", err)
-	}
-
-	return trantor.NewISS(
-		ownID,
-		transport,
-		genesisCheckpoint,
-		localCrypto,
-		app,
-		smrParams,
-		logger,
-	)
-}
-
-func aleaSMRFactory(app *App, ownID t.NodeID, transport net.Transport, initialMembership *trantorpbtypes.Membership, smrParams trantor.Params, logger logging.Logger) (*trantor.System, error) {
-	localCS, err := deploytest.NewLocalCryptoSystem(cryptoImplType, membership.GetIDs(initialMembership), logger)
-	if err != nil {
-		return nil, es.Errorf("could not create a local crypto system: %w", err)
-	}
-	localCrypto, err := localCS.Crypto(ownID)
-	if err != nil {
-		return nil, es.Errorf("could not create a local crypto system: %w", err)
-	}
-
-	F := (len(initialMembership.Nodes) - 1) / 3
-	localTCS := deploytest.NewLocalThreshCryptoSystem(cryptoImplType, membership.GetIDs(initialMembership), 2*F+1)
-	localThreshCrypto, err := localTCS.ThreshCrypto(ownID)
-	if err != nil {
-		return nil, es.Errorf("could not create a local threshcrypto system: %w", err)
-	}
-
-	genesisCheckpoint, err := trantor.GenesisCheckpoint([]byte{}, smrParams)
-	if err != nil {
-		return nil, es.Errorf("could not create genesis checkpoint: %w", err)
-	}
-
-	return trantor.NewAlea(
-		ownID,
-		transport,
-		genesisCheckpoint,
-		localCrypto,
-		localThreshCrypto,
-		app,
-		smrParams,
-		logger,
-	)
-}
-
-type smrFactory func(app *App, ownID t.NodeID, transport net.Transport, initialMembership *trantorpbtypes.Membership, smrParams trantor.Params, logger logging.Logger) (*trantor.System, error)
-
-var smrFactories = map[string]smrFactory{
-	"iss":  issSMRFactory,
-	"alea": aleaSMRFactory,
+	// Sync files
+	nodeCmd.Flags().StringVar(&readySyncFileName, "ready-sync-file", "", "file to use for initial synchronization when ready to start the benchmark")
+	nodeCmd.Flags().StringVar(&deliverSyncFileName, "deliver-sync-file", "", "file to use for synchronization when waiting to deliver all transactions")
 }
 
 func runNode(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	// TODO: remove
+	ctx, cancelCtx := context.WithCancel(context.Background())
+	defer cancelCtx()
 
 	var logger logging.Logger
 	if verbose {
@@ -150,57 +102,33 @@ func runNode(ctx context.Context) error {
 		logger = logging.ConsoleWarnLogger
 	}
 
-	// Load system membership.
-	nodeAddrs, err := membership.FromFileName(membershipFile)
-	if err != nil {
-		return es.Errorf("could not load membership: %w", err)
-	}
-	initialMembership, err := membership.DummyMultiAddrs(nodeAddrs)
-	if err != nil {
-		return es.Errorf("could not create dummy multiaddrs: %w", err)
+	// Load configuration parameters
+	var params BenchParams
+	if err := loadFromFile(configFileName, &params); err != nil {
+		return es.Errorf("could not load parameters from file '%s': %w", configFileName, err)
 	}
 
 	// Parse own ID.
 	ownNumericID, err := strconv.Atoi(id)
 	if err != nil {
 		return es.Errorf("unable to convert node ID: %w", err)
-	} else if ownNumericID < 0 || ownNumericID >= len(initialMembership.Nodes) {
-		return es.Errorf("ID must be in [0, %d]", len(initialMembership.Nodes)-1)
+	}
+
+	// Check if own id is in the membership
+	initialMembership := params.Trantor.Iss.InitialMembership
+	if _, ok := initialMembership.Nodes[t.NodeID(id)]; !ok {
+		return es.Errorf("own ID (%v) not found in membership (%v)", id, maputil.GetKeys(initialMembership.Nodes))
 	}
 	ownID := t.NodeID(id)
 
-	// Set Trantor parameters.
-	smrParams := trantor.DefaultParams(initialMembership)
-	smrParams.Mempool.MaxTransactionsInBatch = batchSize
-
-	// use params from ISS paper for ISS-PBFT
-	// Note: smrParams.Iss.EpochLength is not currently implemented
-	if len(initialMembership.Nodes) < 256/2 {
-		// min epoch length = 256
-		smrParams.Iss.SegmentLength = 256 / len(initialMembership.Nodes)
-	} else {
-		// min seg length = 2
-		smrParams.Iss.SegmentLength = 2
-	}
-	smrParams.Iss.AdjustSpeed(4 * time.Second)
-
-	// ensure network messages can accommodate the chosen batch size
-	batchAdjustedMaxMsgSize := batchSize * 512 * 105 / 100
-	if smrParams.Net.MaxMessageSize < batchAdjustedMaxMsgSize {
-		smrParams.Net.MaxMessageSize = batchAdjustedMaxMsgSize
-	}
-
-	smrParams.Net.ConnectionBufferSize = 384
-
-	// derived to match mean alea latency with 1tx/s load (directed at the next leader replica) - 2ms
-	//smrParams.AdjustSpeed(time.Duration(10879+1467*len(initialMembership.Nodes)) * time.Microsecond)
-
 	// Assemble listening address.
-	// In this benchmark code, we always listen on tha address 0.0.0.0.
+	// In this benchmark code, we always listen on the address 0.0.0.0.
 	portStr, err := getPortStr(initialMembership.Nodes[ownID].Addr)
 	if err != nil {
 		return es.Errorf("could not parse port from own address: %w", err)
 	}
+
+	// Create libp2p host (supporting all default protocols: TCP, QUIC, and WebTransport over IPv4 and IPv6).
 	h, err := libp2p.NewDummyHostWithPrivKey(
 		portStr,
 		libp2p.NewDummyHostKey(ownNumericID),
@@ -209,40 +137,60 @@ func runNode(ctx context.Context) error {
 		return es.Errorf("failed to create libp2p host: %w", err)
 	}
 
+	// Initialize tracking of networking statistics.
+	netStats := stats.NewNetStats(time.Second)
+
 	// Initialize the libp2p transport subsystem.
-	transport := libp2p2.NewTransport(smrParams.Net, ownID, h, logger)
+	transport := libp2p2.NewTransport(params.Trantor.Net, ownID, h, logger, netStats)
 
-	app := &App{Logger: logger, Membership: initialMembership}
+	// Instantiate the crypto module.
+	localCryptoSystem, err := deploytest.NewLocalCryptoSystem(params.CryptoImpl, membership.GetIDs(initialMembership), logger)
+	if err != nil {
+		return es.Errorf("could not create a local crypto system: %w", err)
+	}
+	localCrypto, err := localCryptoSystem.Crypto(ownID)
+	if err != nil {
+		return es.Errorf("could not create a local crypto module: %w", err)
+	}
 
-	benchSystem, err := smrFactories[protocol](app, ownID, transport, initialMembership, smrParams, logger)
+	// Instantiate the threshold crypto module.
+	F := len(initialMembership.Nodes)/3 - 1
+	thresh := 2*F + 1
+	localThreshCryptoSystem := deploytest.NewLocalThreshCryptoSystem(params.ThreshCryptoImpl, membership.GetIDs(initialMembership), thresh)
+	localThreshCrypto, err := localThreshCryptoSystem.ThreshCrypto(ownID)
+	if err != nil {
+		return es.Errorf("could not create a local crypto module: %w", err)
+	}
+
+	// Generate the initial checkpoint.
+	genesisCheckpoint, err := trantor.GenesisCheckpoint([]byte{}, params.Trantor)
+	if err != nil {
+		return es.Errorf("could not create genesis checkpoint: %w", err)
+	}
+
+	// Create a local transaction generator.
+	// It has, at the same time, the interface of a trantor App,
+	// so it knows when transactions are delivered and can submit new ones accordingly.
+	// If the client ID is not specified, use the local node's ID
+	if params.TxGen.ClientID == "" {
+		params.TxGen.ClientID = tt.ClientID(ownID)
+	}
+	txGen := localtxgenerator.New(localtxgenerator.DefaultModuleConfig(), params.TxGen)
+
+	// Create a Trantor instance.
+	trantorInstance, err := trantor.New(
+		ownID,
+		transport,
+		genesisCheckpoint,
+		localCrypto,
+		localThreshCrypto,
+		appmodule.AppLogicFromStatic(txGen, initialMembership), // The transaction generator is also a static app.
+		params.Trantor,
+		logger,
+	)
 	if err != nil {
 		return es.Errorf("could not create bench app: %w", err)
 	}
-
-	/*recorder, err := eventlog.NewRecorder(
-		ownID,
-		"bench-output",
-		logging.Decorate(logger, "EVTLOG: "),
-		eventlog.EventFilterOpt(func(e *eventpb.Event) bool {
-			switch e := e.Type.(type) {
-			case *eventpb.Event_Mempool:
-				switch e.Mempool.Type.(type) {
-				case *mempoolpb.Event_NewTransactions:
-					return true
-				}
-			case *eventpb.Event_BatchFetcher:
-				switch e.BatchFetcher.Type.(type) {
-				case *batchfetcherpb.Event_NewOrderedBatch:
-					return true
-				}
-			}
-			return false
-		}),
-	)
-	defer recorder.Stop()
-	if err != nil {
-		return es.Errorf("cannot create event recorder: %w", err)
-	}*/
 
 	var tracer eventlog.Interceptor = eventlog.NilInterceptor
 	if traceFileName != "" {
@@ -254,129 +202,191 @@ func runNode(ctx context.Context) error {
 			_ = traceFile.Close()
 		}()
 
-		ownQueueIdx := slices.Index(smrParams.Alea.AllNodes(), ownID)
+		ownQueueIdx := slices.Index(params.Trantor.Alea.AllNodes(), ownID)
 		aleaTracer := aleatracer.NewAleaTracer(ctx, aleatypes.QueueIdx(ownQueueIdx), len(initialMembership.Nodes), traceFile)
 		defer aleaTracer.Stop()
 		tracer = aleaTracer
 	}
+	interceptor := tracer
 
-	var statTracer eventlog.Interceptor = eventlog.NilInterceptor
-	if statFileName != "/dev/null" {
-		stat := stats.NewStats()
-		statTracer = stats.NewStatInterceptor(stat, "app")
+	// Add transaction generator module to the setup.
+	trantorInstance.WithModule("localtxgen", txGen)
 
-		var statFile *os.File
-		if statFileName != "" {
-			statFile, err = os.Create(statFileName)
-			if err != nil {
-				return es.Errorf("could not open output file for statistics: %w", err)
-			}
-		} else {
-			statFile = os.Stdout
-		}
+	// Create trackers for gathering statistics about the performance.
+	liveStats := stats.NewLiveStats()
+	clientStats := stats.NewClientStats(time.Millisecond, time.Second)
+	txGen.TrackStats(liveStats)
+	txGen.TrackStats(clientStats)
 
-		statCSV := csv.NewWriter(statFile)
-		stat.WriteCSVHeader(statCSV)
-
-		go func() {
-			timestamp := time.Now()
-			for {
-				ticker := time.NewTicker(statPeriod)
-				defer ticker.Stop()
-
-				select {
-				case <-ctx.Done():
-					return
-				case ts := <-ticker.C:
-					d := ts.Sub(timestamp)
-					stat.WriteCSVRecordAndReset(statCSV, d)
-					statCSV.Flush()
-					timestamp = ts
-				}
-			}
-		}()
-	}
-
-	interceptor := eventlog.MultiInterceptor(
-		//recorder,
-		statTracer,
-		tracer,
-	)
-
+	// Instantiate the Mir Node.
 	nodeConfig := mir.DefaultNodeConfig().WithLogger(logger)
-	nodeModules := benchSystem.Modules().ConvertConcurrentEventAppliersToGoroutinePools(ctx, runtime.NumCPU())
+	nodeConfig.Stats.Period = time.Second
+	nodeModules := trantorInstance.Modules().ConvertConcurrentEventAppliersToGoroutinePools(ctx, runtime.NumCPU())
 	node, err := mir.NewNode(t.NodeID(id), nodeConfig, nodeModules, interceptor)
 	if err != nil {
 		return es.Errorf("could not create node: %w", err)
 	}
 
-	txReceiverListener, err := gonet.Listen("tcp", fmt.Sprintf(":%v", TxReceiverBasePort+ownNumericID))
-	if err != nil {
-		return es.Errorf("could not create tx receiver listener: %w", err)
+	if err := trantorInstance.Start(); err != nil {
+		return es.Errorf("could not start bench app: %w", err)
 	}
 
-	txReceiver := transactionreceiver.NewTransactionReceiver(node, "mempool", logger)
-	app.DeliverHook = func(txs []*trantorpbtypes.Transaction) error {
-		if len(txs) != 0 {
-			txsPb := make([]*trantorpb.Transaction, len(txs))
-			for i, tx := range txs {
-				txsPb[i] = tx.Pb()
-			}
-			txReceiver.NotifyBatchDeliver(txsPb)
+	if err := transport.WaitFor(len(initialMembership.Nodes)); err != nil {
+		return es.Errorf("failed waiting for network connections: %w", err)
+	}
+
+	// Synchronize with other nodes if necessary.
+	// If invoked, this code blocks until all the nodes have connected to each other.
+	// (The file created by Ready must be deleted by some external code (or manually) after all nodes have created it.)
+	if readySyncFileName != "" {
+		syncCtx, cancelFunc := context.WithTimeout(ctx, syncLimit)
+		err = rendezvous.NewFileSyncer(readySyncFileName, syncPollInterval).Ready(syncCtx)
+		cancelFunc()
+		if err != nil {
+			return fmt.Errorf("error synchronizing nodes: %w", err)
 		}
-		return nil
 	}
-	txReceiver.Start(txReceiverListener)
-	defer txReceiver.Stop()
 
-	go func() {
-		for txReceiver.ClientCount() == 0 {
+	// Output the statistics.
+	var statFile *os.File
+	if liveStatFileName != "" {
+		statFile, err = os.Create(liveStatFileName)
+		if err != nil {
+			return es.Errorf("could not open output file for statistics: %w", err)
+		}
+	} else {
+		statFile = os.Stdout
+	}
+
+	statCSV := csv.NewWriter(statFile)
+	stopLiveStats := goDisplayLiveStats(ctx, liveStats, statCSV)
+
+	// Stop outputting real-time stats and submitting transactions,
+	// wait until everything is delivered, and stop node.
+	shutDown := func() {
+
+		stopLiveStats()
+		txGen.Stop()
+
+		// Wait for other nodes to deliver their transactions.
+		if deliverSyncFileName != "" {
+			syncerCtx, stopWaiting := context.WithTimeout(ctx, syncLimit)
+			err := rendezvous.NewFileSyncer(deliverSyncFileName, syncPollInterval).Ready(syncerCtx)
+			stopWaiting()
+			if err != nil {
+				logger.Log(logging.LevelError, "Aborting waiting for other nodes transaction delivery.", "error", err)
+			} else {
+				logger.Log(logging.LevelInfo, "All nodes successfully delivered all transactions they submitted.",
+					"error", err)
+			}
+		}
+
+		// Stop Mir node and Trantor instance.
+		logger.Log(logging.LevelInfo, "Stopping Mir node.")
+		node.Stop()
+		logger.Log(logging.LevelInfo, "Mir node stopped.")
+		logger.Log(logging.LevelInfo, "Stopping Trantor.")
+		trantorInstance.Stop()
+		logger.Log(logging.LevelInfo, "Trantor stopped.")
+
+		// At this point, no statistics are updated anymore, and we can start dumping them to the output.
+		writeFinalStats(clientStats, netStats, clientStatFileName, statCSV, logger)
+
+	}
+
+	done := make(chan struct{})
+	if params.Duration > 0 {
+		go func() {
+			// Wait until the end of the benchmark and shut down the node.
 			select {
 			case <-ctx.Done():
-				return
-			case <-time.After(1 * time.Second):
+			case <-time.After(params.Duration):
 			}
+			shutDown()
+			close(done)
+		}()
+	} else {
+		// TODO: This is not right. Only have this branch to quit on node error.
+		//   Set up signal handlers so that the nodes stops and cleans up after itself upon SIGINT and / or SIGTERM.
+		close(done)
+	}
+
+	// Start generating the load and measuring performance.
+	clientStats.Start()
+	netStats.Start()
+	txGen.Start()
+
+	nodeError := node.Run(ctx)
+	<-done
+	return nodeError
+}
+
+func writeFinalStats(
+	clientStats *stats.ClientStats,
+	netStats *stats.NetStats,
+	statFileName string,
+	liveStatCSV *csv.Writer,
+	logger logging.Logger,
+) {
+	// Fill (potentially empty) statistics with zeroes where no activity was happening.
+	clientStats.Fill()
+	netStats.Fill()
+
+	if err := clientStats.WriteCSVHeader(liveStatCSV); err != nil {
+		logger.Log(logging.LevelError, "Could not write client stats header.", "error", err)
+	}
+	if err := clientStats.WriteCSVRecord(liveStatCSV); err != nil {
+		logger.Log(logging.LevelError, "Could not write client statistics.", "error", err)
+	}
+	liveStatCSV.Flush()
+
+	if err := netStats.WriteCSVHeader(liveStatCSV); err != nil {
+		logger.Log(logging.LevelError, "Could not write networking stats header.", "error", err)
+	}
+	if err := netStats.WriteCSVRecord(liveStatCSV); err != nil {
+		logger.Log(logging.LevelError, "Could not write networking statistics.", "error", err)
+	}
+	liveStatCSV.Flush()
+
+	if statFileName != "" {
+		data := make(map[string]any)
+		data["Net"] = netStats
+		data["Client"] = clientStats
+
+		statsData, err := json.MarshalIndent(data, "", "  ")
+		if err != nil {
+			logger.Log(logging.LevelError, "Could not marshal benchmark output", "error", err)
 		}
+		if err = os.WriteFile(clientStatFileName, []byte(fmt.Sprintf("%s\n", string(statsData))), 0600); err != nil {
+			logger.Log(logging.LevelError, "Could not write benchmark output to file",
+				"file", clientStatFileName, "error", err)
+		}
+	}
+}
 
-	Outer:
+func goDisplayLiveStats(ctx context.Context, liveStats *stats.LiveStats, statCSV *csv.Writer) func() {
+	liveStats.WriteCSVHeader(statCSV)
+	liveStatsCtx, stopFunc := context.WithCancel(ctx)
+
+	go func() {
+		timestamp := time.Now()
+		ticker := time.NewTicker(statPeriod)
+		defer ticker.Stop()
 		for {
-			for txReceiver.ClientCount() > 0 {
-				select {
-				case <-ctx.Done():
-					return
-				case <-time.After(timeout / 2):
-				}
+			select {
+			case <-liveStatsCtx.Done():
+				return
+			case ts := <-ticker.C:
+				d := ts.Sub(timestamp)
+				liveStats.WriteCSVRecord(statCSV, d)
+				statCSV.Flush()
+				timestamp = ts
+				liveStats.Reset()
 			}
-
-			t := time.Now()
-			for time.Since(t) < timeout {
-				select {
-				case <-ctx.Done():
-					return
-				case <-time.After(1 * time.Second):
-				}
-
-				if txReceiver.ClientCount() > 0 {
-					continue Outer
-				}
-			}
-
-			cancel()
-			return
 		}
 	}()
 
-	if err := benchSystem.Start(); err != nil {
-		return es.Errorf("could not start bench app: %w", err)
-	}
-	defer benchSystem.Stop()
-
-	defer node.Stop()
-	nodeErr := node.Run(ctx)
-	if nodeErr != nil && errors.Is(nodeErr, mir.ErrStopped) {
-		nodeErr = nil
-	}
-	return nodeErr
+	return stopFunc
 }
 
 func getPortStr(addressStr string) (string, error) {

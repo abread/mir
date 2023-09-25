@@ -26,9 +26,9 @@ type ModuleParams = common.ModuleParams
 func DefaultModuleParams() *ModuleParams {
 	return &ModuleParams{
 		MinTransactionsInBatch: 0,
-		MaxTransactionsInBatch: 1024,
-		MaxPayloadInBatch:      1024 * 1024, // 1 MiB
-		BatchTimeout:           1 * time.Second,
+		MaxTransactionsInBatch: 2048,            // match ISS paper
+		MaxPayloadInBatch:      2048 * 1024,     // 2 MiB
+		BatchTimeout:           4 * time.Second, // match ISS paper
 		TxFetcher:              nil,
 	}
 }

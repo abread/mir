@@ -124,7 +124,7 @@ func newBcEstimators(m dsl.Module, mc ModuleConfig, params ModuleParams, tunable
 
 	dsl.UponStateUpdates(m, func() error {
 		if estimators.estimatesModified {
-			bcpbdsl.EstimateUpdate(m, mc.Consumer, estimators.MaxOwnBcDuration(), estimators.MaxOwnBcLocalDuration(), estimators.MaxExtBcDuration())
+			bcpbdsl.EstimateUpdate(m, mc.AleaDirector, estimators.MaxOwnBcDuration(), estimators.MaxOwnBcLocalDuration(), estimators.MaxExtBcDuration())
 			estimators.estimatesModified = false
 		}
 

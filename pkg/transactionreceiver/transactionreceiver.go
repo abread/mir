@@ -189,6 +189,6 @@ func (rr *TransactionReceiver) ServerError() error {
 	return rr.grpcServerError
 }
 
-func(rr *TransactionReceiver) ClientCount() int64 {
+func (rr *TransactionReceiver) ClientCount() int64 {
 	return rr.clientCount.Load()
 }

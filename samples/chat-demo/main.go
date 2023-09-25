@@ -38,6 +38,7 @@ import (
 	libp2p2 "github.com/filecoin-project/mir/pkg/net/libp2p"
 	mempoolpbevents "github.com/filecoin-project/mir/pkg/pb/mempoolpb/events"
 	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
+	"github.com/filecoin-project/mir/pkg/threshcrypto"
 	"github.com/filecoin-project/mir/pkg/trantor"
 	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 	t "github.com/filecoin-project/mir/pkg/types"
@@ -152,7 +153,7 @@ func run() error {
 	}
 
 	// Initialize the libp2p transport subsystem.
-	transport := libp2p2.NewTransport(trantorParams.Net, args.OwnID, h, logger)
+	transport := libp2p2.NewTransport(trantorParams.Net, args.OwnID, h, logger, nil)
 	if err != nil {
 		return errors.Wrap(err, "failed to create libp2p transport")
 	}
@@ -160,6 +161,11 @@ func run() error {
 	// Create a dummy crypto implementation that locally generates all keys in a pseudo-random manner.
 	// localCrypto := deploytest.NewLocalCryptoSystem("pseudo", membership.GetIDs(initialMembership), logger)
 	crypto := &mircrypto.DummyCrypto{DummySig: []byte{0}}
+
+	threshCrypto := &threshcrypto.DummyCrypto{
+		DummySigShareSuffix: []byte{0},
+		NodeID:              args.OwnID,
+	}
 
 	// Assemble checkpoint directory name and instantiate the chat app logic.
 	chkpDir := ""
@@ -199,11 +205,12 @@ func run() error {
 	}
 
 	// Create a Mir SMR system.
-	trantorSystem, err := trantor.NewISS(
+	trantorSystem, err := trantor.New(
 		args.OwnID,
 		transport,
 		genesis,
 		crypto,
+		threshCrypto,
 		chatApp,
 		trantorParams,
 		logger,

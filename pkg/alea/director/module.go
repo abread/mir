@@ -12,6 +12,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/alea/aleatypes"
 	"github.com/filecoin-project/mir/pkg/alea/broadcast/bccommon"
 	"github.com/filecoin-project/mir/pkg/alea/queueselectionpolicy"
+	"github.com/filecoin-project/mir/pkg/checkpoint"
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/logging"
 	aagdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents/dsl"
@@ -70,13 +71,28 @@ type state struct {
 	lastScheduledWakeup        time.Duration
 }
 
-func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, nodeID t.NodeID, qsp queueselectionpolicy.QueueSelectionPolicy, logger logging.Logger) dsl.Module { // nolint: gocyclo,gocognit
+func NewModule( // nolint: gocyclo,gocognit
+	mc ModuleConfig,
+	params ModuleParams,
+	tunables ModuleTunables,
+	startingChkp *checkpoint.StableCheckpoint,
+	nodeID t.NodeID,
+	logger logging.Logger,
+) (dsl.Module, error) {
+	if startingChkp == nil {
+		return nil, es.Errorf("missing initial checkpoint")
+	}
+	initialQsp, err := queueselectionpolicy.QueuePolicyFromBytes(startingChkp.Snapshot.EpochData.LeaderPolicy)
+	if err != nil {
+		return nil, err
+	}
+
 	m := dsl.NewModule(mc.Self)
 	allNodes := maputil.GetSortedKeys(params.Membership.Nodes)
 	ownQueueIdx := aleatypes.QueueIdx(slices.Index(allNodes, nodeID))
 
 	est := newEstimators(m, params, tunables, nodeID)
-	state := newState(params, tunables, qsp)
+	state := newState(params, tunables, initialQsp)
 
 	N := len(allNodes)
 	F := (N - 1) / 3
@@ -127,7 +143,7 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 		if decision {
 			// agreement component delivers in-order, so we can deliver immediately
 			logger.Log(logging.LevelDebug, "delivering cert", "agreementRound", round, "queueIdx", slot.QueueIdx, "queueSlot", slot.QueueSlot)
-			isspbdsl.DeliverCert(m, mc.App, tt.SeqNr(round), &availabilitypbtypes.Cert{
+			isspbdsl.DeliverCert(m, mc.BatchFetcher, tt.SeqNr(round), &availabilitypbtypes.Cert{
 				Type: &availabilitypbtypes.Cert_Alea{
 					Alea: &bcpbtypes.Cert{
 						Slot: &slot,
@@ -141,7 +157,7 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 			bcqueuepbdsl.FreeSlot(m, bccommon.BcQueueModuleID(mc.AleaBroadcast, slot.QueueIdx), slot.QueueSlot)
 		} else {
 			// deliver empty batch
-			isspbdsl.DeliverCert(m, mc.App, tt.SeqNr(round), nil, true)
+			isspbdsl.DeliverCert(m, mc.BatchFetcher, tt.SeqNr(round), nil, true)
 			logger.Log(logging.LevelDebug, "delivering empty cert", "agreementRound", round)
 			return nil
 		}
@@ -414,7 +430,7 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 		for _, mod := range []t.ModuleID{mc.AleaAgreement, mc.AleaBroadcast} {
 			directorpbdsl.NewEpoch(m, mod, newEpoch)
 		}
-		apppbdsl.NewEpoch(m, mc.App, newEpoch, mc.Self)
+		apppbdsl.NewEpoch(m, mc.BatchFetcher, newEpoch, mc.Self)
 		logger.Log(logging.LevelInfo, "Advanced to new epoch", "epoch", newEpoch)
 	}
 	checkpointAndAdvanceEpoch := func(newEpoch tt.EpochNr) error {
@@ -457,7 +473,7 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 		// but it is guaranteed to be created before the application's response.
 		// This is because the NewModule event will already be enqueued for the checkpoint factory
 		// when the application receives the snapshot request.
-		apppbdsl.SnapshotRequest(m, mc.App, chkpModuleID)
+		apppbdsl.SnapshotRequest(m, mc.BatchFetcher, chkpModuleID)
 
 		state.liveStableCheckpoints[nextSeqNr] = struct{}{}
 
@@ -626,7 +642,7 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 		}
 
 		// apply data from checkpoint across all relevant components
-		for _, mod := range []t.ModuleID{mc.App, mc.AleaAgreement, mc.AleaBroadcast} {
+		for _, mod := range []t.ModuleID{mc.BatchFetcher, mc.AleaAgreement, mc.AleaBroadcast} {
 			apppbdsl.RestoreState(m, mod, regularCheckpoint)
 		}
 
@@ -683,7 +699,7 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 		return nil
 	})
 
-	return m
+	return m, nil
 }
 
 func (state *state) wakeUpAfter(d time.Duration) {

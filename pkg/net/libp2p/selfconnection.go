@@ -63,7 +63,7 @@ func (conn *selfConnection) PeerID() peer.ID {
 
 // Send feeds the given message directly to the sink of delivered messages.
 // Send is non-blocking and if the buffer for delivered messages is full, the message is dropped.
-func (conn *selfConnection) Send(msg []byte) error {
+func (conn *selfConnection) Send(msg []byte, _ t.ModuleID) error {
 
 	select {
 	case conn.msgBuffer <- msg:
@@ -79,7 +79,7 @@ func (conn *selfConnection) Send(msg []byte) error {
 // ForceSend places a message at the top of the send queue in a special slot.
 // If a message was previously placed in this slot, it is replaced by the new one.
 // This operation is non-blocking.
-func (conn *selfConnection) ForceSend(msg []byte) error {
+func (conn *selfConnection) ForceSend(msg []byte, _ t.ModuleID) error {
 	conn.forceSendMsg.Store(msg)
 
 	select {

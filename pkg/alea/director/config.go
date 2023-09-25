@@ -10,7 +10,7 @@ import (
 // ModuleConfig sets the module ids. All replicas are expected to use identical module configurations.
 type ModuleConfig struct {
 	Self          t.ModuleID // id of this module
-	App           t.ModuleID
+	BatchFetcher  t.ModuleID
 	Checkpoint    t.ModuleID
 	ChkpValidator t.ModuleID
 	AleaBroadcast t.ModuleID

@@ -9,6 +9,7 @@ import (
 
 	"github.com/filecoin-project/mir/pkg/abba"
 	"github.com/filecoin-project/mir/pkg/abba/abbatypes"
+	"github.com/filecoin-project/mir/pkg/checkpoint"
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/logging"
@@ -40,7 +41,7 @@ var timeRef = time.Now()
 // ModuleConfig sets the module ids. All replicas are expected to use identical module configurations.
 type ModuleConfig struct {
 	Self         t.ModuleID // id of this module
-	Consumer     t.ModuleID
+	AleaDirector t.ModuleID
 	Hasher       t.ModuleID
 	ReliableNet  t.ModuleID
 	Net          t.ModuleID
@@ -51,7 +52,7 @@ type ModuleConfig struct {
 func DefaultModuleConfig() *ModuleConfig {
 	return &ModuleConfig{
 		Self:         "alea_ag",
-		Consumer:     "alea_dir",
+		AleaDirector: "alea_dir",
 		Hasher:       "hasher",
 		ReliableNet:  "reliablenet",
 		Net:          "net",
@@ -85,7 +86,19 @@ type ModuleTunables struct {
 	MaxRoundAdvanceInput int
 }
 
-func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, startingSn tt.SeqNr, nodeID t.NodeID, logger logging.Logger) (modules.PassiveModule, error) {
+func NewModule(
+	mc ModuleConfig,
+	params ModuleParams,
+	tunables ModuleTunables,
+	startingChkp *checkpoint.StableCheckpoint,
+	nodeID t.NodeID,
+	logger logging.Logger,
+) (modules.PassiveModule, error) {
+	if startingChkp == nil {
+		return nil, es.Errorf("missing initial checkpoint")
+	}
+	startingSn := startingChkp.SeqNr()
+
 	if tunables.MaxRoundLookahead <= 0 {
 		return nil, es.Errorf("MaxRoundLookahead must be at least 1")
 	} else if tunables.MaxAbbaRoundLookahead <= 0 {
@@ -251,7 +264,7 @@ func newAgController(mc ModuleConfig, params ModuleParams, tunables ModuleTunabl
 		for currentRoundRunning && currentRound.delivered {
 			logger.Log(logging.LevelDebug, "delivering round", "agRound", state.currentRound, "decision", currentRound.decision)
 
-			agreementpbdsl.Deliver(m, mc.Consumer, state.currentRound, currentRound.decision, currentRound.posQuorumDuration, currentRound.posTotalDuration)
+			agreementpbdsl.Deliver(m, mc.AleaDirector, state.currentRound, currentRound.decision, currentRound.posQuorumDuration, currentRound.posTotalDuration)
 			state.roundDecisionHistory.Store(state.currentRound, currentRound.decision)
 
 			// clean up metadata
@@ -355,7 +368,7 @@ func newAgController(mc ModuleConfig, params ModuleParams, tunables ModuleTunabl
 			if !ok {
 				if msg.DestId < state.currentRound {
 					// remote node is behind, ask director to help (send checkpoint)
-					directorpbdsl.HelpNode(m, mc.Consumer, msg.From)
+					directorpbdsl.HelpNode(m, mc.AleaDirector, msg.From)
 				}
 
 				continue // we can't help
@@ -521,7 +534,7 @@ func newAgRoundSniffer(mc ModuleConfig, params ModuleParams, agRounds *modring.M
 					}
 
 					durationNoCoin := abbaRoundEv.Deliver.DurationNoCoin
-					agreementpbdsl.InnerAbbaRoundTime(m, mc.Consumer, durationNoCoin)
+					agreementpbdsl.InnerAbbaRoundTime(m, mc.AleaDirector, durationNoCoin)
 				}
 
 			}

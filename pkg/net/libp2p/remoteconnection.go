@@ -27,12 +27,20 @@ type remoteConnection struct {
 	encMode             cbor.EncMode
 	streamWriter        *cbor.Encoder
 	stream              network.Stream
-	msgBuffer           chan []byte
+	msgBuffer           chan PendingMsg
 	forceSendMsg        atomic.Value
 	forceSendMsgPresent chan struct{}
 	stop                chan struct{}
 	done                chan struct{}
 	connectedCond       *sync.Cond
+
+	currentMsgStatsLabel string
+	stats                Stats
+}
+
+type PendingMsg struct {
+	Payload    []byte
+	DestModule t.ModuleID
 }
 
 func newRemoteConnection(
@@ -42,6 +50,7 @@ func newRemoteConnection(
 	addr t.NodeAddress,
 	h host.Host,
 	logger logging.Logger,
+	stats Stats,
 ) (*remoteConnection, error) {
 	addrInfo, err := peer.AddrInfoFromP2pAddr(addr)
 	if err != nil {
@@ -56,11 +65,12 @@ func newRemoteConnection(
 		encMode:             encMode,
 		streamWriter:        nil,
 		stream:              nil,
-		msgBuffer:           make(chan []byte, params.ConnectionBufferSize),
+		msgBuffer:           make(chan PendingMsg, params.ConnectionBufferSize),
 		forceSendMsgPresent: make(chan struct{}),
 		stop:                make(chan struct{}),
 		done:                make(chan struct{}),
 		connectedCond:       sync.NewCond(&sync.Mutex{}),
+		stats:               stats,
 	}
 	go conn.process()
 	return conn, nil
@@ -74,22 +84,21 @@ func (conn *remoteConnection) PeerID() peer.ID {
 // Send makes a non-blocking attempt to send a message to this connection.
 // Send might use internal buffering. Thus, even if it returns nil,
 // the message might not have yet been sent to the network.
-func (conn *remoteConnection) Send(msg []byte) error {
+func (conn *remoteConnection) Send(msg []byte, destModule t.ModuleID) error {
 
 	select {
-	case conn.msgBuffer <- msg:
+	case conn.msgBuffer <- PendingMsg{msg, destModule}:
 		return nil
 	default:
-		return nil
-		//return es.Errorf("warning: send buffer full. message dropped.")
+		return es.Errorf("send buffer full (" + conn.addrInfo.String() + ")")
 	}
 }
 
 // ForceSend places a message at the top of the send queue in a special slot.
 // If a message was previously placed in this slot, it is replaced by the new one.
 // This operation is non-blocking.
-func (conn *remoteConnection) ForceSend(msg []byte) error {
-	conn.forceSendMsg.Store(msg)
+func (conn *remoteConnection) ForceSend(msg []byte, destModule t.ModuleID) error {
+	conn.forceSendMsg.Store(PendingMsg{msg, destModule})
 
 	select {
 	case conn.forceSendMsgPresent <- struct{}{}:
@@ -265,7 +274,7 @@ func (conn *remoteConnection) process() {
 
 	// Data to be sent to the connection.
 	// If nil, a new message from conn.msgBuffer will be read, encoded, and stored here.
-	var msgData []byte
+	var msgData PendingMsg
 
 	for {
 		// The processing loop runs indefinitely (until interrupted by explicitly returning).
@@ -291,37 +300,38 @@ func (conn *remoteConnection) process() {
 		}
 
 		// Get the next message if there is no pending unsent message.
-		if len(msgData) == 0 {
+		if msgData.Payload == nil {
 			// prioritize force-send message
 			select {
 			case <-conn.stop:
 				return
 			case <-conn.forceSendMsgPresent:
-				msgData = conn.forceSendMsg.Swap([]byte{}).([]byte)
+				msgData = conn.forceSendMsg.Swap(PendingMsg{}).(PendingMsg)
 			default:
 				// Nothing to do in this case, continue.
 			}
 		}
-		for len(msgData) == 0 {
+		for len(msgData.Payload) == 0 {
 			select {
 			case <-conn.stop:
 				return
 			// still consider the force send message here
 			case <-conn.forceSendMsgPresent:
-				msgData = conn.forceSendMsg.Swap([]byte{}).([]byte)
+				msgData = conn.forceSendMsg.Swap(PendingMsg{}).(PendingMsg)
 			case msgData = <-conn.msgBuffer:
 			}
 		}
+		conn.currentMsgStatsLabel = string(t.ModuleID(msgData.DestModule).Top())
 
 		// Write the encoded data to the network stream.
-		if err := conn.streamWriter.Encode(TransportMessage{msgData}); err != nil {
+		if err := conn.streamWriter.Encode(TransportMessage{msgData.Payload}); err != nil {
 			// If writing fails, close the stream, such that a new one will be re-established in the next iteration.
 			conn.logger.Log(logging.LevelWarn, "Failed sending data.", "err", err)
 			conn.closeStream()
 		} else {
 			// On success, clear the pending message (that has just been sent)
 			// so a new one can be read from the msbBuffer on the next iteration.
-			msgData = nil
+			msgData = PendingMsg{}
 		}
 	}
 }
@@ -376,10 +386,14 @@ func (s *disconnectAwareOutputStream) Write(data []byte) (int, error) {
 		data = data[bytesWritten:]
 		n += bytesWritten
 
+		// Gather statistics if applicable.
+		if bytesWritten > 0 && s.stats != nil {
+			s.stats.Sent(bytesWritten, s.currentMsgStatsLabel)
+		}
+
 		if err == nil && len(data) == 0 {
 			// If all data was successfully written, return.
 			return n, nil
-
 		} else if errors.Is(err, yamux.ErrTimeout) {
 			// If a timeout occurred, check if the connection has not been closed in the meantime.
 			// If the connection is still open, retry sending the rest of the data in the next iteration.
