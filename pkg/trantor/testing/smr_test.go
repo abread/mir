@@ -449,6 +449,9 @@ func newDeployment(conf *TestConfig) (*deploytest.Deployment, error) {
 
 		// Trantor configuration
 		tConf := trantor.DefaultParams(transportLayer.Membership())
+		tConf.Iss.SegmentLength = 4
+		tConf.AdjustSpeed(1 * time.Second)
+
 		// Use small batches so even a few transactions keep being proposed even after epoch transitions.
 		tConf.Mempool = simplemempool.DefaultModuleParams()
 		tConf.Mempool.MaxTransactionsInBatch = 10
