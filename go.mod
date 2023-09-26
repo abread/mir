@@ -30,19 +30,14 @@ require (
 	github.com/go-errors/errors v1.4.2
 	github.com/herumi/bls-eth-go-binary v1.29.1
 	github.com/libp2p/go-yamux/v4 v4.0.1
-	github.com/ipfs/go-cid v0.4.1
 	github.com/mattn/go-sqlite3 v1.14.16
 	github.com/multiformats/go-multiaddr v0.10.1
 	github.com/reactivex/rxgo/v2 v2.5.0
 	github.com/spf13/cobra v1.5.0
-	go.uber.org/goleak v1.1.12
-	golang.org/x/time v0.0.0-20220722155302-e5dcc9cfc0b9
 	github.com/tidwall/gjson v1.14.2
 	github.com/tidwall/sjson v1.2.5
-	github.com/whyrusleeping/cbor-gen v0.0.0-20220514204315-f29c37e9c44c
-	go.uber.org/atomic v1.11.0
 	go.uber.org/goleak v1.1.12
-	golang.org/x/xerrors v0.0.0-20220411194840-2f41105eb62f
+	golang.org/x/time v0.0.0-20220722155302-e5dcc9cfc0b9
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -127,6 +122,7 @@ require (
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.0 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
+	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/dig v1.17.0 // indirect
 	go.uber.org/fx v1.20.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
@@ -137,6 +133,5 @@ require (
 	golang.org/x/term v0.10.0 // indirect
 	golang.org/x/text v0.11.0 // indirect
 	golang.org/x/tools v0.11.0 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 	lukechampine.com/blake3 v1.2.1 // indirect
 )
