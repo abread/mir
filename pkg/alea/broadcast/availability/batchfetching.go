@@ -230,6 +230,10 @@ func includeBatchFetching(
 			bcpbmsgs.FillerMessage(mc.Self, context.cert, txs),
 			[]t.NodeID{context.requester},
 		)
+
+		// mark vcb messages as received
+		vcbModID := bccommon.BcQueueModuleID(mc.Self, context.cert.Slot.QueueIdx).Then(t.NewModuleIDFromInt(context.cert.Slot.QueueSlot))
+		rnetdsl.MarkModuleMsgsRecvd(m, mc.ReliableNet, vcbModID, []t.NodeID{context.requester})
 		return nil
 	})
 

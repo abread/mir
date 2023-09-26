@@ -30,6 +30,7 @@ import (
 	messagepbtypes "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
 	modringpbtypes "github.com/filecoin-project/mir/pkg/pb/modringpb/types"
 	reliablenetpbdsl "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/dsl"
+	reliablenetpbevents "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/events"
 	transportpbdsl "github.com/filecoin-project/mir/pkg/pb/transportpb/dsl"
 	transportpbevents "github.com/filecoin-project/mir/pkg/pb/transportpb/events"
 	tt "github.com/filecoin-project/mir/pkg/trantor/types"
@@ -115,7 +116,13 @@ func NewModule(
 		mc.Self,
 		tunables.MaxRoundLookahead,
 		modring.ModuleParams{
-			Generator:      newAbbaGenerator(mc, params, tunables, nodeID, logger),
+			Generator: newAbbaGenerator(mc, params, tunables, nodeID, logger),
+			CleanupHandler: func(id uint64) (events.EventList, error) {
+				// free all remaining pending messages
+				return events.ListOf(
+					reliablenetpbevents.MarkModuleMsgsRecvd(mc.ReliableNet, mc.agRoundModuleID(id), params.AllNodes),
+				), nil
+			},
 			PastMsgHandler: newPastMessageHandler(mc),
 		},
 		logging.Decorate(logger, "Modring controller: "),
@@ -285,9 +292,11 @@ func newAgController(mc ModuleConfig, params ModuleParams, tunables ModuleTunabl
 		}
 
 		logger.Log(logging.LevelDebug, "garbage-collecting round", "agRound", roundNumber)
-		if err := agRounds.MarkSubmodulePast(roundNumber); err != nil {
+		evsOut, err := agRounds.MarkSubmodulePast(roundNumber)
+		if err != nil {
 			return es.Errorf("failed to clean up finished agreement round: %w", err)
 		}
+		dsl.EmitEvents(m, evsOut)
 
 		return nil
 	})
@@ -417,9 +426,11 @@ func newAgController(mc ModuleConfig, params ModuleParams, tunables ModuleTunabl
 		if err := agRounds.AdvanceViewToAtLeastSubmodule(uint64(checkpoint.Sn)); err != nil {
 			return err
 		}
-		agRounds.FreePast(func(round uint64) {
-			reliablenetpbdsl.MarkModuleMsgsRecvd(m, mc.ReliableNet, mc.agRoundModuleID(round), params.AllNodes)
-		})
+		evsOut, err := agRounds.FreePast()
+		if err != nil {
+			return err
+		}
+		dsl.EmitEvents(m, evsOut)
 
 		return nil
 	})

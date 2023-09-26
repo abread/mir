@@ -15,6 +15,7 @@ import (
 	abbadsl "github.com/filecoin-project/mir/pkg/pb/abbapb/dsl"
 	abbapbmsgs "github.com/filecoin-project/mir/pkg/pb/abbapb/msgs"
 	rnetdsl "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/dsl"
+	reliablenetpbevents "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/events"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -70,6 +71,11 @@ func NewModule(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, no
 	// rounds use a submodule namespace to allow us to mark all round messages as received at once
 	rounds := modring.New(mc.Self.Then(ModringSubName), tunables.MaxRoundLookahead, modring.ModuleParams{
 		Generator: newRoundGenerator(mc, params, nodeID, logger),
+		CleanupHandler: func(roundID uint64) (events.EventList, error) {
+			return events.ListOf(
+				reliablenetpbevents.MarkModuleMsgsRecvd(mc.ReliableNet, mc.Self.Then(ModringSubName).Then(t.NewModuleIDFromInt(roundID)), params.AllNodes),
+			), nil
+		},
 	}, logging.Decorate(logger, "Modring controller: "))
 
 	controller := newController(mc, params, logger, rounds)
@@ -195,9 +201,11 @@ func newController(mc ModuleConfig, params ModuleParams, logger logging.Logger, 
 		}
 
 		// clean up old round
-		if err := rounds.MarkSubmodulePast(state.currentRound); err != nil {
+		evsOut, err := rounds.MarkSubmodulePast(state.currentRound)
+		if err != nil {
 			return es.Errorf("failed to clean up previous round: %w", err)
 		}
+		dsl.EmitEvents(m, evsOut)
 
 		state.currentRound++
 		abbadsl.RoundInputValue(m, mc.RoundID(state.currentRound), nextEstimate)

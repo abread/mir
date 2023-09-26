@@ -148,6 +148,11 @@ func EmitEvent(m Module, ev *eventpbtypes.Event) {
 	m.DslHandle().impl.outputEvents.PushBack(ev)
 }
 
+// EmitEvents adds the event to the queue of output events
+func EmitEvents(m Module, evList events.EventList) {
+	m.DslHandle().impl.outputEvents.PushBackList(evList)
+}
+
 // ApplyEvents applies a list of input events to the module, making it advance its state
 // and returns a (potentially empty) list of output events that the application of the input events results in.
 func (m *dslModuleImpl) ApplyEvents(evs events.EventList) (events.EventList, error) {

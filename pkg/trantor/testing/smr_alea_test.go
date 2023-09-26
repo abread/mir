@@ -200,7 +200,7 @@ func testIntegrationWithAlea(t *testing.T) {
 				},
 			}},
 
-		// TODO: fix test (sim terminates everything too early. forced ag rounds seem to stop with no reason even in libp2p)
+		// TODO: fix test - check app state, not delivered tx events
 		/*101: {"Test checkpoint recovery with 4 nodes in simulation",
 		&TestConfig{
 			NodeIDsWeight: deploytest.NewNodeIDsDefaultWeights(4),
@@ -213,7 +213,7 @@ func testIntegrationWithAlea(t *testing.T) {
 
 				// drop all broadcast messages involving node 0
 				// node 0 will not receive broadcasts, but should be able to initiate them
-				if isVcb && to == node0 && from != to && msg.DestModule.Sub().Sub().Top() != types.ModuleID("0") {
+				if isVcb && to == node0 && from != to && msg.DestModule.Sub().Top() != types.ModuleID("0") {
 					return false
 				}
 
@@ -222,24 +222,26 @@ func testIntegrationWithAlea(t *testing.T) {
 				if isAbba && (to == node0 || from == node0) && from != to {
 					agRoundStr := msg.DestModule.Sub().Top()
 					agRound, _ := strconv.ParseUint(string(agRoundStr), 10, 64)
-					return agRound > 64-8-3
+					return agRound > 32-8-3
 				}
 				agMsgW, isAg := msg.Type.(*messagepbtypes.Message_AleaAgreement)
 				if isAg && (to == node0 || from == node0) && from != to {
 					finishMsgW := agMsgW.AleaAgreement.Type.(*agreementpbtypes.Message_FinishAbba)
-					return finishMsgW.FinishAbba.Round > 64-8-2
+					return finishMsgW.FinishAbba.Round > 32-8-2
 				}
 
-				// drop all checkpoint-building messages involving node 0
+				// drop all checkpoint-building messages involving node 0 up to checkpoint 32/8
 				_, isChkpBuild := msg.Type.(*messagepbtypes.Message_Threshcheckpoint)
 				if isChkpBuild && to == node0 && from != to {
-					return false
+					chkpNum, _ := strconv.ParseUint(string(msg.DestModule.Sub().Top()), 10, 64)
+					return chkpNum > 32/8
 				}
 
 				return true
 			},
 			ParamsModifier: func(params *trantor.Params) {
 				params.Alea.Adjust(8, 2)
+				params.Alea.RetainEpochs = 2
 				params.Alea.MaxAgStall = 250 * time.Millisecond
 				params.ReliableNet.MaxRetransmissionBurst = 128
 				params.ReliableNet.RetransmissionLoopInterval = 500 * time.Millisecond

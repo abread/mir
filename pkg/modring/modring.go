@@ -22,6 +22,7 @@ import (
 type Module struct {
 	ownID          t.ModuleID
 	generator      ModuleGenerator
+	cleanupHandler CleanupHandler
 	pastMsgHandler PastMessagesHandler
 
 	minID uint64
@@ -44,12 +45,20 @@ func New(ownID t.ModuleID, ringSize int, params ModuleParams, logger logging.Log
 	m := &Module{
 		ownID:          ownID,
 		generator:      params.Generator,
+		cleanupHandler: params.CleanupHandler,
 		pastMsgHandler: params.PastMsgHandler,
 
 		minID: 0,
 		ring:  make([]submodule, ringSize),
 
 		logger: logger,
+	}
+
+	if m.cleanupHandler == nil {
+		m.cleanupHandler = nilCleanup
+	}
+	if m.pastMsgHandler == nil {
+		m.pastMsgHandler = nilPastMsgHandler
 	}
 
 	for i := range m.ring {
@@ -66,7 +75,7 @@ func (m *Module) ApplyEvents(eventsIn events.EventList) (events.EventList, error
 	// Note: this method is similar to ApplyEvents, but it only parallelizes execution across different
 	// modules, not all events.
 	subEventsByDest := m.splitEventsByDest(eventsIn)
-	subEventsIn, pastMsgs, err := m.updateSubsAndFilterIncomingEvents(subEventsByDest)
+	eventsOut, subEventsIn, pastMsgs, err := m.updateSubsAndFilterIncomingEvents(subEventsByDest)
 	if err != nil {
 		return events.EmptyList(), err
 	}
@@ -75,7 +84,7 @@ func (m *Module) ApplyEvents(eventsIn events.EventList) (events.EventList, error
 	errorChan := make(chan error)
 
 	// The event processing results will be aggregated here
-	eventsOut := events.EventList{}
+	// var eventsOut events.EventList // already created above
 	var firstError error
 
 	// Start one concurrent worker for each submodule
@@ -138,7 +147,7 @@ func (m *Module) ApplyEvents(eventsIn events.EventList) (events.EventList, error
 		return events.EmptyList(), firstError
 	}
 
-	if len(pastMsgs) > 0 && m.pastMsgHandler != nil {
+	if len(pastMsgs) > 0 {
 		evsOut, err := (m.pastMsgHandler)(pastMsgs)
 		if err != nil {
 			return events.EmptyList(), err
@@ -186,7 +195,8 @@ func (m *Module) splitEventsByDest(eventsIn events.EventList) map[uint64]*events
 	return res
 }
 
-func (m *Module) updateSubsAndFilterIncomingEvents(eventsByDest map[uint64]*events.EventList) ([]events.EventList, []*modringpbtypes.PastMessage, error) {
+func (m *Module) updateSubsAndFilterIncomingEvents(eventsByDest map[uint64]*events.EventList) (events.EventList, []events.EventList, []*modringpbtypes.PastMessage, error) {
+	evsOut := events.EmptyList()
 	evsIn := make([]events.EventList, len(m.ring))
 	var pastMsgs []*modringpbtypes.PastMessage
 
@@ -222,6 +232,13 @@ func (m *Module) updateSubsAndFilterIncomingEvents(eventsByDest map[uint64]*even
 			oldEvs := evsIn[idx]
 
 			// garbage-collect old module and advance view
+			if m.ring[idx].mod != nil {
+				evs, err := m.cleanupHandler(m.ring[idx].subID)
+				if err != nil {
+					return evsOut, nil, nil, err
+				}
+				evsOut.PushBackList(evs)
+			}
 			m.ring[idx] = submodule{
 				mod:       nil,
 				subID:     subID,
@@ -246,13 +263,13 @@ func (m *Module) updateSubsAndFilterIncomingEvents(eventsByDest map[uint64]*even
 		}
 
 		if evsIn[idx].Len() > 0 {
-			return nil, nil, es.Errorf("inconsistency in updateSubsAndFilterIncomingEvents: tried to assign events to the same ring position twice")
+			return evsOut, nil, nil, es.Errorf("inconsistency in updateSubsAndFilterIncomingEvents: tried to assign events to the same ring position twice")
 		}
 
 		evsIn[idx] = *eventsByDest[subID]
 	}
 
-	return evsIn, pastMsgs, nil
+	return evsOut, evsIn, pastMsgs, nil
 }
 
 func (m *Module) getSubByRingIdx(ringIdx int) (modules.PassiveModule, events.EventList, error) {
@@ -294,23 +311,36 @@ func (m *Module) AdvanceViewToAtLeastSubmodule(id uint64) error {
 	// m.logger.Log(logging.LevelDebug, "fast-forwarded view", "newMinid", id)
 	return nil
 }
-func (m *Module) FreePast(freedSlotCallback func(uint64)) {
+func (m *Module) FreePast() (events.EventList, error) {
+	evsOut := events.EmptyList()
+
 	for i := 0; i < len(m.ring); i++ {
 		if !m.ring[i].isCurrent {
-			freedSlotCallback(m.ring[i].subID)
+			if m.ring[i].mod != nil {
+				evs, err := m.cleanupHandler(m.ring[i].subID)
+				if err != nil {
+					return evsOut, err
+				}
+				evsOut.PushBackList(evs)
+			}
+
 			// leave slot completely free
 			m.ring[i] = submodule{}
 		}
 	}
+
+	return evsOut, nil
 }
 
-func (m *Module) MarkSubmodulePast(id uint64) error {
+func (m *Module) MarkSubmodulePast(id uint64) (events.EventList, error) {
+	evsOut := events.EmptyList()
+
 	if id < m.minID {
-		return nil // already marked as past
+		return evsOut, nil // already marked as past
 	} else if id >= m.minID+uint64(len(m.ring)) {
-		return es.Errorf("tried to mark far-in-the future submodule (%d) as past (minId is %d)", id, m.minID)
+		return evsOut, es.Errorf("tried to mark far-in-the future submodule (%d) as past (minId is %d)", id, m.minID)
 	} else if id == math.MaxUint64 {
-		return es.Errorf("tried to mark the unreachable marker slot as past")
+		return evsOut, es.Errorf("tried to mark the unreachable marker slot as past")
 	}
 
 	idx := id % uint64(len(m.ring))
@@ -319,6 +349,13 @@ func (m *Module) MarkSubmodulePast(id uint64) error {
 	} else {
 		// garbage collect really old module
 		// m.logger.Log(logging.LevelDebug, "freed submodule", "id", m.ring[idx].subID)
+		if m.ring[idx].mod != nil {
+			evs, err := m.cleanupHandler(m.ring[idx].subID)
+			if err != nil {
+				return evsOut, err
+			}
+			evsOut.PushBackList(evs)
+		}
 
 		m.ring[idx] = submodule{
 			mod:       nil,
@@ -335,7 +372,7 @@ func (m *Module) MarkSubmodulePast(id uint64) error {
 	}
 
 	// m.logger.Log(logging.LevelDebug, "module marked as past", "id", id, "newMinID", m.minID)
-	return nil
+	return evsOut, nil
 }
 
 func (m *Module) IsInView(id uint64) bool {
@@ -369,10 +406,18 @@ func multiApplySafely(
 	return module.ApplyEvents(events)
 }
 
-func (m *Module) MarkPastAndFreeAll() {
+func (m *Module) MarkPastAndFreeAll() (events.EventList, error) {
+	evsOut := events.EmptyList()
 	m.minID = math.MaxUint64
 
 	for i := 0; i < len(m.ring); i++ {
+		if m.ring[i].mod != nil {
+			evs, err := m.cleanupHandler(m.ring[i].subID)
+			if err != nil {
+				return evsOut, err
+			}
+			evsOut.PushBackList(evs)
+		}
 		m.ring[i] = submodule{
 			mod:       nil,
 			subID:     math.MaxUint64,
@@ -381,4 +426,5 @@ func (m *Module) MarkPastAndFreeAll() {
 	}
 
 	// m.logger.Log(logging.LevelDebug, "freed all submodules, and marked everything as past")
+	return evsOut, nil
 }

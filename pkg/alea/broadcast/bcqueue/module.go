@@ -21,7 +21,7 @@ import (
 	bcqueuepbevents "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/events"
 	messagepbtypes "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
 	modringpbtypes "github.com/filecoin-project/mir/pkg/pb/modringpb/types"
-	reliablenetpbdsl "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/dsl"
+	reliablenetpbevents "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/events"
 	transportpbevents "github.com/filecoin-project/mir/pkg/pb/transportpb/events"
 	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	vcbpbdsl "github.com/filecoin-project/mir/pkg/pb/vcbpb/dsl"
@@ -40,7 +40,12 @@ func New(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, nodeID t
 	}
 
 	slots := modring.New(mc.Self, tunables.MaxConcurrentVcb, modring.ModuleParams{
-		Generator:      newVcbGenerator(mc, &params, nodeID, logger),
+		Generator: newVcbGenerator(mc, &params, nodeID, logger),
+		CleanupHandler: func(slot uint64) (events.EventList, error) {
+			return events.ListOf(
+				reliablenetpbevents.MarkModuleMsgsRecvd(mc.ReliableNet, mc.Self.Then(t.NewModuleIDFromInt(slot)), params.AllNodes),
+			), nil
+		},
 		PastMsgHandler: newPastMsgHandler(mc, params),
 	}, logging.Decorate(logger, "Modring controller: "))
 
@@ -165,13 +170,11 @@ func newQueueController(mc ModuleConfig, params *ModuleParams, tunables ModuleTu
 			return es.Errorf("could not advance view to free queue slot: %w", err)
 		}
 
-		if err := slots.MarkSubmodulePast(uint64(queueSlot)); err != nil {
+		evsOut, err := slots.MarkSubmodulePast(uint64(queueSlot))
+		if err != nil {
 			return es.Errorf("failed to free queue slot: %w", err)
 		}
-
-		// clean up old messages
-		reliablenetpbdsl.MarkModuleMsgsRecvd(m, mc.ReliableNet, mc.Self.Then(t.NewModuleIDFromInt(queueSlot)), params.AllNodes)
-
+		dsl.EmitEvents(m, evsOut)
 		return nil
 	})
 
@@ -179,9 +182,11 @@ func newQueueController(mc ModuleConfig, params *ModuleParams, tunables ModuleTu
 		if err := slots.AdvanceViewToAtLeastSubmodule(uint64(queueSlot)); err != nil {
 			return err
 		}
-		slots.FreePast(func(subID uint64) {
-			reliablenetpbdsl.MarkModuleMsgsRecvd(m, mc.ReliableNet, mc.Self.Then(t.NewModuleIDFromInt(subID)), params.AllNodes)
-		})
+		evsOut, err := slots.FreePast()
+		if err != nil {
+			return err
+		}
+		dsl.EmitEvents(m, evsOut)
 
 		return nil
 	})
