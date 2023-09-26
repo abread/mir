@@ -251,9 +251,7 @@ func IncludeViewChange( //nolint:gocognit,gocyclo
 		// in case a malicious node has sent conflicting ones before.
 		primary := state.Segment.PrimaryNode(context.View)
 		for _, preprepare := range context.Preprepares {
-			if err := goodcase.ApplyMsgPreprepare(m, moduleConfig, preprepare, primary); err != nil {
-				return err
-			}
+			goodcase.ApplyMsgPreprepare(m, moduleConfig, preprepare, primary)
 		}
 
 		// Apply all messages buffered for this view.
@@ -270,9 +268,7 @@ func IncludeViewChange( //nolint:gocognit,gocyclo
 					return messagebuffer.Future
 				}
 			}, func(msgPb proto.Message) {
-				if err := goodcase.ApplyBufferedMsg(m, state, params, moduleConfig, msgPb, from, logger); err != nil {
-					panic(err) // TODO: propagate error normally
-				}
+				goodcase.ApplyBufferedMsg(m, state, params, moduleConfig, msgPb, from, logger)
 			})
 		}
 

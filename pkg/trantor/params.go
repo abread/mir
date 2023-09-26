@@ -55,7 +55,5 @@ func (p *Params) AdjustBatchSize(batchSize int, txSize int) *Params {
 
 func (p *Params) AdjustSpeed(maxProposeDelay time.Duration) *Params {
 	p.Iss.AdjustSpeed(maxProposeDelay)
-	p.Iss.MaxProposeDelay = 0                // simplemempool will handle this
-	p.Mempool.BatchTimeout = maxProposeDelay // TODO: account for processing time
 	return p
 }
