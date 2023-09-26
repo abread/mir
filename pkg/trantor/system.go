@@ -38,6 +38,12 @@ import (
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
+// protocols
+const (
+	Alea = "alea"
+	ISS  = "iss"
+)
+
 // System represents a Trantor system.
 // It groups and configures the various Mir modules that need to work together to implement state machine replication.
 type System struct {
@@ -129,7 +135,7 @@ func New(
 	moduleConfig := DefaultModuleConfig()
 	trantorModules := make(map[t.ModuleID]modules.Module)
 
-	if params.Protocol == "iss" {
+	if params.Protocol == ISS {
 		// The availability component takes transactions from the mempool and disseminates them (including their payload)
 		// to other nodes to guarantee their retrievability.
 		// It produces availability certificates for batches of transactions.
@@ -212,7 +218,7 @@ func New(
 		// tune params for ISS
 		params.Mempool.BatchTimeout = params.Iss.MaxProposeDelay
 		params.Iss.MaxProposeDelay = 0
-	} else if params.Protocol == "alea" {
+	} else if params.Protocol == Alea {
 		// Check whether the passed configuration is valid.
 		if err := params.Alea.Check(); err != nil {
 			return nil, es.Errorf("invalid Alea parameters: %w", err)
@@ -334,7 +340,7 @@ func New(
 	// It acts as a proxy between the application module and the rest of the system.
 	trantorModules[moduleConfig.BatchFetcher] = batchfetcher.NewModule(
 		moduleConfig.ConfigureBatchFetcher(),
-		params.Protocol == "alea",
+		params.Protocol == Alea,
 		startingCheckpoint.Epoch(),
 		startingCheckpoint.ClientProgress(),
 		logger,
@@ -383,9 +389,9 @@ func New(
 func GenesisCheckpoint(initialAppState []byte, params Params) (*checkpoint.StableCheckpoint, error) {
 	var stateSnapshot *trantorpbtypes.StateSnapshot
 	var err error
-	if params.Protocol == "iss" {
+	if params.Protocol == ISS {
 		stateSnapshot, err = iss.InitialStateSnapshot(initialAppState, params.Iss)
-	} else if params.Protocol == "alea" {
+	} else if params.Protocol == Alea {
 		stateSnapshot, err = alea.InitialStateSnapshot(initialAppState, params.Alea)
 	} else {
 		err = es.Errorf("unsupported trantor protocol: %s", params.Protocol)

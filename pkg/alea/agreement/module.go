@@ -149,7 +149,7 @@ func NewModule(
 	}
 	state.roundDecisionHistory.FreeEpochs(uint64(startingSn) / params.EpochLength)
 
-	controller := newAgController(mc, params, tunables, logger, state, agRounds)
+	controller := newAgController(mc, tunables, logger, state, agRounds)
 
 	perfSniffer := newAgRoundSniffer(mc, params, agRounds, state)
 
@@ -229,7 +229,7 @@ func (s *state) ensureRoundInitialized(roundNum uint64) *round {
 	return s.rounds[roundNum]
 }
 
-func newAgController(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, logger logging.Logger, state *state, agRounds *modring.Module) modules.PassiveModule {
+func newAgController(mc ModuleConfig, tunables ModuleTunables, logger logging.Logger, state *state, agRounds *modring.Module) modules.PassiveModule { // nolint: gocognit
 	_ = logger // silence warnings
 
 	m := dsl.NewModule(mc.Self)

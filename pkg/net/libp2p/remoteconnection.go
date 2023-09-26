@@ -321,7 +321,7 @@ func (conn *remoteConnection) process() {
 			case msgData = <-conn.msgBuffer:
 			}
 		}
-		conn.currentMsgStatsLabel = string(t.ModuleID(msgData.DestModule).Top())
+		conn.currentMsgStatsLabel = string(msgData.DestModule.Top())
 
 		// Write the encoded data to the network stream.
 		if err := conn.streamWriter.Encode(TransportMessage{msgData.Payload}); err != nil {

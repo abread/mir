@@ -166,7 +166,10 @@ func newDeployment(conf *TestConfig) (*deploytest.Deployment, error) {
 		return nil, es.Errorf("failed to create local transport: %w", err)
 	}
 
-	threshCryptoSystem := deploytest.NewLocalThreshCryptoSystem("pseudo", nodeIDs, 2*conf.F+1)
+	threshCryptoSystem, err := deploytest.NewLocalThreshCryptoSystem("pseudo", nodeIDs, 2*conf.F+1)
+	if err != nil {
+		return nil, es.Errorf("failed to create local threshold crypto system: %w", err)
+	}
 
 	nodeModules := make(map[types.NodeID]modules.Modules)
 

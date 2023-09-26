@@ -88,11 +88,7 @@ func init() {
 }
 
 func runNode(ctx context.Context) error {
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	// TODO: remove
-	ctx, cancelCtx := context.WithCancel(context.Background())
+	ctx, cancelCtx := context.WithCancel(ctx)
 	defer cancelCtx()
 
 	var logger logging.Logger

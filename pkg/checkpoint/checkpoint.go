@@ -212,7 +212,7 @@ func (sc *StableCheckpoint) Verify(
 		if err := sc.VerifyCert(hashImpl, chkpVerifier, membership); err != nil {
 			return es.Errorf("invalid checkpoint: %w", err)
 		}
-	} else if len(sc.PreviousMembership().Nodes) > 0 {
+	} else if sc.PreviousMembership() != nil {
 		return es.Errorf("invalid checkpoint: certificate not empty for first epoch")
 	}
 
@@ -309,11 +309,11 @@ func (sc *StableCheckpoint) SyntacticCheck(
 		}
 	}
 
-	if sc.PreviousMembership() == nil {
-		return es.Errorf("previous membership is nil")
-	}
-
 	if sc.Epoch() > 0 {
+		if sc.PreviousMembership() == nil {
+			return es.Errorf("previous membership is nil")
+		}
+
 		if err := membutil.Valid(sc.PreviousMembership()); err != nil {
 			return es.Errorf("invalid previous membership: %w", err)
 		}

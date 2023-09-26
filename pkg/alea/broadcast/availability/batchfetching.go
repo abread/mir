@@ -17,7 +17,6 @@ import (
 	bcqueuepbdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/dsl"
 	directorpbdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/directorpb/dsl"
 	apppbdsl "github.com/filecoin-project/mir/pkg/pb/apppb/dsl"
-	batchdbdsl "github.com/filecoin-project/mir/pkg/pb/availabilitypb/batchdbpb/dsl"
 	batchdbpbdsl "github.com/filecoin-project/mir/pkg/pb/availabilitypb/batchdbpb/dsl"
 	availabilitypbdsl "github.com/filecoin-project/mir/pkg/pb/availabilitypb/dsl"
 	availabilitypbtypes "github.com/filecoin-project/mir/pkg/pb/availabilitypb/types"
@@ -57,7 +56,7 @@ type RequestsState struct {
 }
 
 // includeBatchFetching registers event handlers for processing availabilitypb.RequestTransactions events.
-func includeBatchFetching(
+func includeBatchFetching( // nolint: gocognit,gocyclo
 	m dsl.Module,
 	mc ModuleConfig,
 	params ModuleParams,
@@ -119,7 +118,7 @@ func includeBatchFetching(
 
 			// try resolving locally first
 			if cert, ok := certDB[*slot]; ok {
-				batchdbdsl.LookupBatch(m, mc.BatchDB, cert.BatchId, slot)
+				batchdbpbdsl.LookupBatch(m, mc.BatchDB, cert.BatchId, slot)
 			} else {
 				if err := scheduleFillGap(slot, reqState); err != nil {
 					return err
@@ -140,7 +139,7 @@ func includeBatchFetching(
 			// if bc delivers right after the transaction starts, two lookups will be performed.
 
 			// retry locally, you will now succeed!
-			batchdbdsl.LookupBatch(m, mc.BatchDB, cert.BatchId, cert.Slot)
+			batchdbpbdsl.LookupBatch(m, mc.BatchDB, cert.BatchId, cert.Slot)
 		}
 
 		return nil
@@ -165,7 +164,7 @@ func includeBatchFetching(
 	}
 
 	// If the batch is present in the local storage, return it. Otherwise, ask other nodes.
-	batchdbdsl.UponLookupBatchResponse(m, func(found bool, txs []*trantorpbtypes.Transaction, slot *bcpbtypes.Slot) error {
+	batchdbpbdsl.UponLookupBatchResponse(m, func(found bool, txs []*trantorpbtypes.Transaction, slot *bcpbtypes.Slot) error {
 		reqState, ok := state.RequestsState[*slot]
 		if !ok {
 			return nil // stale request
@@ -208,7 +207,7 @@ func includeBatchFetching(
 
 		if cert, ok := certDB[*slot]; ok {
 			// we have it! go get the batch
-			batchdbdsl.LookupBatch(m, mc.BatchDB, cert.BatchId, &lookupBatchOnRemoteRequestContext{from, cert})
+			batchdbpbdsl.LookupBatch(m, mc.BatchDB, cert.BatchId, &lookupBatchOnRemoteRequestContext{from, cert})
 		} else {
 			// node is likely to be behind, send help
 			// TODO: add some check to avoid sending help to nodes that are not behind (see slot data in cert)
@@ -220,7 +219,7 @@ func includeBatchFetching(
 	})
 
 	// If the batch is found in the local storage, send it to the requesting node.
-	batchdbdsl.UponLookupBatchResponse(m, func(found bool, txs []*trantorpbtypes.Transaction, context *lookupBatchOnRemoteRequestContext) error {
+	batchdbpbdsl.UponLookupBatchResponse(m, func(found bool, txs []*trantorpbtypes.Transaction, context *lookupBatchOnRemoteRequestContext) error {
 		if !found {
 			return es.Errorf("inconsistency between dbs: cert was in certdb, but no batch present")
 		}
@@ -302,14 +301,14 @@ func includeBatchFetching(
 		fulfillRequests(requestState, *context.cert.Slot, context.txs)
 
 		// store batch/cert asynchronously
-		batchdbdsl.StoreBatch(m, mc.BatchDB, context.cert.BatchId, context.txs, tt.RetentionIndex(state.epochNr), context)
+		batchdbpbdsl.StoreBatch(m, mc.BatchDB, context.cert.BatchId, context.txs, tt.RetentionIndex(state.epochNr), context)
 
 		// let mempool forget about these txs
 		mempooldsl.MarkStableProposal(m, mc.Mempool, context.txs)
 
 		return nil
 	})
-	batchdbdsl.UponBatchStored(m, func(context *handleFillerContext) error {
+	batchdbpbdsl.UponBatchStored(m, func(context *handleFillerContext) error {
 		// batch is stored, we can now store the corresponding cert
 		certDB[*context.cert.Slot] = context.cert
 

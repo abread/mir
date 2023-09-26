@@ -163,7 +163,7 @@ func (sc *StableCheckpoint) Certificate() tctypes.FullSig {
 // For simplicity, we require all nodes that signed the certificate to be contained in the provided membership,
 // as well as all signatures to be valid.
 // Moreover, the number of nodes that signed the certificate must be greater than one third of the membership size.
-func (sc *StableCheckpoint) VerifyCert(h crypto.HashImpl, v Verifier, membership *trantorpbtypes.Membership) error {
+func (sc *StableCheckpoint) VerifyCert(h crypto.HashImpl, v Verifier, _ *trantorpbtypes.Membership) error {
 	// Check if the signature is valid.
 	snapshotData, err := serializeSnapshotForHash(sc.StateSnapshot())
 	if err != nil {

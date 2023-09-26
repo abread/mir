@@ -483,7 +483,7 @@ func newDeploymentAlea(conf *TestConfig) (*deploytest.Deployment, error) {
 
 		tConf := trantor.DefaultParams(transportLayer.Membership())
 		// Use Alea
-		tConf.Protocol = "alea"
+		tConf.Protocol = trantor.Alea
 		// Use small batches so even a few transactions keep being proposed even after epoch transitions.
 		tConf.Mempool.MaxTransactionsInBatch = 10
 		// Keep retransmission bursts low to avoid overloading the test system.

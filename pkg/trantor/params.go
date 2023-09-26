@@ -27,6 +27,8 @@ type Params struct {
 func DefaultParams(initialMembership *trantorpbtypes.Membership) Params {
 	allNodes := maputil.GetSortedKeys(initialMembership.Nodes)
 	p := Params{
+		Protocol: ISS,
+
 		Mempool:      simplemempool.DefaultModuleParams(),
 		Iss:          issconfig.DefaultParams(initialMembership),
 		Net:          libp2p.DefaultParams(),
