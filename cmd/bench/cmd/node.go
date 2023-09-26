@@ -377,10 +377,9 @@ func goDisplayLiveStats(ctx context.Context, liveStats *stats.LiveStats, statCSV
 				return
 			case ts := <-ticker.C:
 				d := ts.Sub(timestamp)
-				liveStats.WriteCSVRecord(statCSV, d)
+				liveStats.WriteCSVRecordAndReset(statCSV, d)
 				statCSV.Flush()
 				timestamp = ts
-				liveStats.Reset()
 			}
 		}
 	}()

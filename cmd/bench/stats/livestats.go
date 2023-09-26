@@ -12,6 +12,7 @@ import (
 	"time"
 
 	ageventstypes "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents/types"
+	bcpbtypes "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/types"
 	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 )
@@ -23,14 +24,18 @@ type LiveStats struct {
 	timestampedTransactions int
 	deliveredTransactions   int
 
+	bcDelivers int
+
 	agInputTimestamps map[uint64]time.Time
 	stalledAgStart    time.Time
 	currentAgRound    uint64
 	avgAgStall        float64
 	cumPosAgStall     float64
+	trueAgDelivers    int
+	falseAgDelivers   int
 
-	avgUnanimousAgLatency float64
-	innerAbbaTimeCount    int
+	estUnanimousAgTime float64
+	innerAbbaTimeCount int
 }
 
 type txKey struct {
@@ -45,6 +50,12 @@ func NewLiveStats() *LiveStats {
 	}
 }
 
+func (s *LiveStats) BcDeliver(_ *bcpbtypes.DeliverCert) {
+	s.lock.Lock()
+	s.bcDelivers++
+	s.lock.Unlock()
+}
+
 func (s *LiveStats) AgDeliver(deliver *ageventstypes.Deliver) {
 	s.lock.Lock()
 	s.currentAgRound = deliver.Round + 1
@@ -57,6 +68,12 @@ func (s *LiveStats) AgDeliver(deliver *ageventstypes.Deliver) {
 		delete(s.agInputTimestamps, deliver.Round+1)
 	} else {
 		s.stalledAgStart = time.Now()
+	}
+
+	if deliver.Decision {
+		s.trueAgDelivers++
+	} else {
+		s.falseAgDelivers++
 	}
 	s.lock.Unlock()
 }
@@ -79,7 +96,7 @@ func (s *LiveStats) InnerAbbaTime(t *ageventstypes.InnerAbbaRoundTime) {
 	s.lock.Lock()
 	s.innerAbbaTimeCount++
 	unanimousLatency := t.DurationNoCoin / 3
-	s.avgUnanimousAgLatency += (float64(unanimousLatency) - s.avgUnanimousAgLatency) / float64(s.innerAbbaTimeCount)
+	s.estUnanimousAgTime += (float64(unanimousLatency) - s.estUnanimousAgTime) / float64(s.innerAbbaTimeCount)
 	s.lock.Unlock()
 }
 
@@ -119,32 +136,53 @@ func (s *LiveStats) DeliveredTransactions() int {
 	return s.deliveredTransactions
 }
 
-func (s *LiveStats) Reset() {
-	s.lock.Lock()
-	s.avgLatency = 0
-	s.timestampedTransactions = 0
-	s.deliveredTransactions = 0
-	s.lock.Unlock()
-}
-
 func (s *LiveStats) WriteCSVHeader(w *csv.Writer) {
 	record := []string{
+		"time",
 		"nrDelivered",
 		"tps",
 		"avgLatency",
+		"bcDelivers",
+		"trueAgDelivers",
+		"falseAgDelivers",
+		"avgAgStall",
+		"cumPosAgStall",
+		"estUnanimousAgTime",
 	}
 	_ = w.Write(record)
 }
 
-func (s *LiveStats) WriteCSVRecord(w *csv.Writer, d time.Duration) {
-	s.lock.RLock()
-	defer s.lock.RUnlock()
+func (s *LiveStats) WriteCSVRecordAndReset(w *csv.Writer, d time.Duration) {
+	s.lock.Lock()
+	deliveredTxs := s.deliveredTransactions
+	avgLatency := s.avgLatency
+	bcDelivers := s.bcDelivers
+	trueAgDelivers := s.trueAgDelivers
+	falseAgDelivers := s.falseAgDelivers
+	avgAgStall := s.avgAgStall
+	cumPosAgStall := s.cumPosAgStall
+	estUnanimousAgTime := s.estUnanimousAgTime
 
-	tps := float64(s.deliveredTransactions) / (float64(d) / float64(time.Second))
+	s.avgLatency = 0
+	s.timestampedTransactions = 0
+	s.deliveredTransactions = 0
+	s.bcDelivers = 0
+	s.trueAgDelivers = 0
+	s.falseAgDelivers = 0
+	s.lock.Unlock()
+
+	tps := float64(deliveredTxs) / (float64(d) / float64(time.Second))
 	record := []string{
-		strconv.Itoa(s.deliveredTransactions),
-		strconv.Itoa(int(tps)),
-		fmt.Sprintf("%.2f", time.Duration(s.avgLatency).Seconds()),
+		fmt.Sprintf("%.3f", float64(time.Now().UnixMilli())/1000.0),
+		strconv.Itoa(deliveredTxs),
+		fmt.Sprintf("%.1f", tps),
+		fmt.Sprintf("%.5f", time.Duration(avgLatency).Seconds()),
+		strconv.Itoa(bcDelivers),
+		strconv.Itoa(trueAgDelivers),
+		strconv.Itoa(falseAgDelivers),
+		fmt.Sprintf("%.5f", avgAgStall),
+		fmt.Sprintf("%.5f", cumPosAgStall),
+		fmt.Sprintf("%.5f", estUnanimousAgTime),
 	}
 	_ = w.Write(record)
 }

@@ -7,6 +7,7 @@ package stats
 import (
 	"github.com/filecoin-project/mir/pkg/events"
 	ageventstypes "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents/types"
+	bcpbtypes "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/types"
 	batchfetcherpbtypes "github.com/filecoin-project/mir/pkg/pb/batchfetcherpb/types"
 	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 	mempoolpbtypes "github.com/filecoin-project/mir/pkg/pb/mempoolpb/types"
@@ -67,6 +68,10 @@ func (i *StatInterceptor) Intercept(events events.EventList) error {
 				i.LiveStats.AgDeliver(e2.Deliver)
 			case *ageventstypes.Event_InnerAbbaRoundTime:
 				i.LiveStats.InnerAbbaTime(e2.InnerAbbaRoundTime)
+			}
+		case *eventpbtypes.Event_AleaBc:
+			if e2, ok := e.AleaBc.Type.(*bcpbtypes.Event_DeliverCert); ok {
+				i.LiveStats.BcDeliver(e2.DeliverCert)
 			}
 		}
 	}
