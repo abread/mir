@@ -14,6 +14,7 @@ import (
 	"time"
 
 	es "github.com/go-errors/errors"
+	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/otiai10/copy"
 	"github.com/stretchr/testify/assert"
@@ -183,7 +184,7 @@ func testIntegrationWithAlea(t *testing.T) {
 
 					// drop all broadcast messages involving node 0
 					// node 0 will not receive broadcasts, but should be able to deliver
-					if isVcb && to == node0 && from != to && !msg.DestModule.IsSubOf("abc/0/0") {
+					if isVcb && to == node0 && from != to && !msg.DestModule.IsSubOf("availability/0") {
 						return false
 					}
 					return true
@@ -377,9 +378,15 @@ func runIntegrationWithAleaConfig(tb testing.TB, conf *TestConfig) (heapObjects 
 		assert.Equal(tb, conf.NumNetTXs*conf.NumClients+conf.NumFakeTXs, int(app.TransactionsProcessed))
 
 		// Check if there are no un-acked messages
-		rnet := replica.Modules["rnet"].(*reliablenet.Module)
+		rnet := replica.Modules["reliablenet"].(*reliablenet.Module)
 		pendingMsgs := rnet.GetPendingMessages()
 		assert.Emptyf(tb, pendingMsgs, "replica %v has pending messages", replica.ID)
+		if len(pendingMsgs) > 0 {
+			for _, msg := range pendingMsgs {
+				msgJSON, _ := protojson.MarshalOptions{Multiline: true, Indent: "  "}.Marshal(msg.Msg.Pb())
+				tb.Logf("pending message for %v: %v", msg.Destinations, string(msgJSON))
+			}
+		}
 	}
 
 	// If the test failed, keep the generated data.

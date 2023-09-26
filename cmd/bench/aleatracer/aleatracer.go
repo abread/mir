@@ -326,7 +326,7 @@ func (at *AleaTracer) interceptOne(event *eventpbtypes.Event) error { // nolint:
 				}
 				at.startAbbaRoundSpan(ts, abbaRoundID)
 			case *abbapbtypes.RoundEvent_Deliver:
-				agRoundStr := event.DestModule.StripParent("aag")
+				agRoundStr := event.DestModule.StripParent("ordering")
 				agRound, err := strconv.ParseUint(string(agRoundStr), 10, 64)
 				if err != nil {
 					return es.Errorf("invalid ag round number: %w", err)
@@ -378,7 +378,7 @@ func (at *AleaTracer) interceptOne(event *eventpbtypes.Event) error { // nolint:
 	case *eventpbtypes.Event_Hasher:
 		switch ev.Hasher.Type.(type) {
 		case *hasherpbtypes.Event_ResultOne:
-			if strings.HasPrefix(string(event.DestModule), "abc/0/") {
+			if strings.HasPrefix(string(event.DestModule), "availability/0/") {
 				slot := parseSlotFromModuleID(event.DestModule)
 				at.endBcComputeSigDataSpan(ts, slot)
 			}
@@ -432,7 +432,7 @@ func (at *AleaTracer) interceptOne(event *eventpbtypes.Event) error { // nolint:
 			if !ok {
 				return nil
 			}
-			if strings.HasPrefix(string(e.Recover.Origin.Module), "abc/0/") {
+			if strings.HasPrefix(string(e.Recover.Origin.Module), "availability/0/") {
 				slot := parseSlotFromModuleID(e.Recover.Origin.Module)
 				if slot.QueueIdx == at.ownQueueIdx {
 					at.endBcAwaitEchoSpan(ts, slot)
@@ -455,7 +455,7 @@ func (at *AleaTracer) interceptOne(event *eventpbtypes.Event) error { // nolint:
 
 func (at *AleaTracer) registerModStart(ts time.Duration, event *eventpbtypes.Event) {
 	id := event.DestModule
-	if id.IsSubOf("aag") {
+	if id.IsSubOf("ordering") {
 		id = id.Sub()
 
 		agRound, err := strconv.ParseUint(string(id.Top()), 10, 64)
@@ -474,8 +474,8 @@ func (at *AleaTracer) registerModStart(ts time.Duration, event *eventpbtypes.Eve
 
 			at.startAbbaRoundModSpan(ts, abbaRoundID{agRound, abbaRound})
 		}
-	} else if strings.HasPrefix(string(id), "abc/0/") {
-		id = t.ModuleID(strings.TrimPrefix(string(id), "abc/0/"))
+	} else if strings.HasPrefix(string(id), "availability/0/") {
+		id = t.ModuleID(strings.TrimPrefix(string(id), "availability/0/"))
 
 		queueIdx, err := strconv.ParseUint(string(id.Top()), 10, 64)
 		if err != nil {
@@ -499,8 +499,8 @@ func (at *AleaTracer) registerModStart(ts time.Duration, event *eventpbtypes.Eve
 }
 
 func (at *AleaTracer) parseAgRoundID(id t.ModuleID) (uint64, error) {
-	if !id.IsSubOf("aag") {
-		return 0, es.Errorf("not aag/*")
+	if !id.IsSubOf("ordering") {
+		return 0, es.Errorf("not ordering/*")
 	}
 	id = id.Sub()
 
@@ -513,8 +513,8 @@ func (at *AleaTracer) parseAgRoundID(id t.ModuleID) (uint64, error) {
 }
 
 func (at *AleaTracer) parseAbbaRoundID(id t.ModuleID) (abbaRoundID, error) {
-	if !id.IsSubOf("aag") {
-		return abbaRoundID{}, es.Errorf("not aag/*")
+	if !id.IsSubOf("ordering") {
+		return abbaRoundID{}, es.Errorf("not ordering/*")
 	}
 	id = id.Sub()
 
@@ -1014,11 +1014,11 @@ func (at *AleaTracer) writeSpan(s *span) {
 }
 
 func parseSlotFromModuleID(moduleID t.ModuleID) bcpbtypes.Slot {
-	if !strings.HasPrefix(string(moduleID), "abc/0/") {
+	if !strings.HasPrefix(string(moduleID), "availability/0/") {
 		panic(es.Errorf("id is not from a bcqueue: %s", moduleID))
 	}
 
-	modID := t.ModuleID(strings.TrimPrefix(string(moduleID), "abc/0/"))
+	modID := t.ModuleID(strings.TrimPrefix(string(moduleID), "availability/0/"))
 	queueIdxStr := string(modID.Top())
 	queueSlotStr := string(modID.Sub().Top())
 
@@ -1039,11 +1039,11 @@ func parseSlotFromModuleID(moduleID t.ModuleID) bcpbtypes.Slot {
 }
 
 func parseQueueIdxFromModuleID(moduleID t.ModuleID) aleatypes.QueueIdx {
-	if !strings.HasPrefix(string(moduleID), "abc/0/") {
+	if !strings.HasPrefix(string(moduleID), "availability/0/") {
 		panic(es.Errorf("id is not from a bcqueue: %s", moduleID))
 	}
 
-	modID := t.ModuleID(strings.TrimPrefix(string(moduleID), "abc/0/"))
+	modID := t.ModuleID(strings.TrimPrefix(string(moduleID), "availability/0/"))
 	queueIdxStr := string(modID.Top())
 
 	queueIdx, err := strconv.ParseUint(queueIdxStr, 10, 32)

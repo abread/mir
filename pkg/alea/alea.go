@@ -8,7 +8,6 @@ import (
 	"github.com/filecoin-project/mir/pkg/alea/queueselectionpolicy"
 	"github.com/filecoin-project/mir/pkg/clientprogress"
 	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
-	"github.com/filecoin-project/mir/pkg/trantor/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 	"github.com/filecoin-project/mir/pkg/util/maputil"
 )
@@ -118,9 +117,14 @@ func (p *Params) Check() error {
 	// each operation this is probably best to encode in the threshcrypto module, since weighted
 	// threshold crypto schemes seem to exist (see "An Efficient and Secure Weighted Threshold
 	// Signcryption Scheme", Chien-Hua Tsai, Journal of Internet Technology, 2019)
+	w := ""
 	for _, identity := range p.Membership.Nodes {
-		if identity.Weight != types.VoteWeight("1") {
-			return es.Errorf("alea does not support weighted voting (yet): node %v cannot have weight %v != \"1\" (own weight)", identity.Id, identity.Weight)
+		if w == "" {
+			w = string(identity.Weight)
+		}
+
+		if string(identity.Weight) != w {
+			return es.Errorf("alea does not support weighted voting (yet): mismatched weights %v != %v", w, identity.Weight)
 		}
 	}
 

@@ -334,7 +334,7 @@ func New(
 	// It acts as a proxy between the application module and the rest of the system.
 	trantorModules[moduleConfig.BatchFetcher] = batchfetcher.NewModule(
 		moduleConfig.ConfigureBatchFetcher(),
-		false,
+		params.Protocol == "alea",
 		startingCheckpoint.Epoch(),
 		startingCheckpoint.ClientProgress(),
 		logger,

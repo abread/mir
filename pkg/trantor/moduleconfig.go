@@ -63,8 +63,8 @@ func DefaultModuleConfig() ModuleConfig {
 		Null:          "null",
 		Timer:         "timer",
 
-		ISS:                "iss",
 		Ordering:           "ordering",
+		ISS:                "iss",
 		PPrepValidator:     "pprepvalidator",
 		PPrepValidatorChkp: "pprepvalidatorchkp",
 
