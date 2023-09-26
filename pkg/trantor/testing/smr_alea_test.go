@@ -30,6 +30,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/net/libp2p"
+	agreementpbtypes "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/types"
 	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 	messagepbtypes "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
 	"github.com/filecoin-project/mir/pkg/reliablenet" // nolint: typecheck
@@ -61,7 +62,7 @@ func BenchmarkIntegrationAlea(b *testing.B) {
 	b.Run("Alea", benchmarkIntegrationWithAlea)
 }
 
-func testIntegrationWithAlea(t *testing.T) {
+func testIntegrationWithAlea(t *testing.T) { // nolint: gocognit,gocyclo
 	tests := map[int]struct {
 		Desc   string // test description
 		Config *TestConfig
@@ -201,52 +202,70 @@ func testIntegrationWithAlea(t *testing.T) {
 			}},
 
 		// TODO: fix test - check app state, not delivered tx events
-		/*101: {"Test checkpoint recovery with 4 nodes in simulation",
-		&TestConfig{
-			NodeIDsWeight: deploytest.NewNodeIDsDefaultWeights(4),
-			Transport:     "sim",
-			NumFakeTXs:    128,
-			Duration:      120 * time.Second,
-			TransportFilter: func(msg *messagepbtypes.Message, from, to types.NodeID) bool {
-				node0 := types.NewNodeIDFromInt(0)
-				_, isVcb := msg.Type.(*messagepbtypes.Message_Vcb)
+		101: {"Test checkpoint recovery with 4 nodes in simulation",
+			&TestConfig{
+				NodeIDsWeight: deploytest.NewNodeIDsDefaultWeights(4),
+				Transport:     "sim",
+				NumFakeTXs:    128,
+				Duration:      120 * time.Second,
+				TransportFilter: func(msg *messagepbtypes.Message, from, to types.NodeID) bool {
+					node0 := types.NewNodeIDFromInt(0)
+					_, isVcb := msg.Type.(*messagepbtypes.Message_Vcb)
 
-				// drop all broadcast messages involving node 0
-				// node 0 will not receive broadcasts, but should be able to initiate them
-				if isVcb && to == node0 && from != to && msg.DestModule.Sub().Top() != types.ModuleID("0") {
-					return false
-				}
+					// drop all broadcast messages involving node 0
+					// node 0 will not receive broadcasts, but should be able to initiate them
+					if isVcb && to == node0 && from != to && msg.DestModule.Sub().Top() != types.ModuleID("0") {
+						return false
+					}
 
-				// drop nearly all agreement messages involving node 0
-				_, isAbba := msg.Type.(*messagepbtypes.Message_Abba)
-				if isAbba && (to == node0 || from == node0) && from != to {
-					agRoundStr := msg.DestModule.Sub().Top()
-					agRound, _ := strconv.ParseUint(string(agRoundStr), 10, 64)
-					return agRound > 32-8-3
-				}
-				agMsgW, isAg := msg.Type.(*messagepbtypes.Message_AleaAgreement)
-				if isAg && (to == node0 || from == node0) && from != to {
-					finishMsgW := agMsgW.AleaAgreement.Type.(*agreementpbtypes.Message_FinishAbba)
-					return finishMsgW.FinishAbba.Round > 32-8-2
-				}
+					// drop nearly all agreement messages involving node 0
+					_, isAbba := msg.Type.(*messagepbtypes.Message_Abba)
+					if isAbba && (to == node0 || from == node0) && from != to {
+						agRoundStr := msg.DestModule.Sub().Top()
+						agRound, _ := strconv.ParseUint(string(agRoundStr), 10, 64)
+						return agRound > 32-8-3
+					}
+					agMsgW, isAg := msg.Type.(*messagepbtypes.Message_AleaAgreement)
+					if isAg && (to == node0 || from == node0) && from != to {
+						finishMsgW := agMsgW.AleaAgreement.Type.(*agreementpbtypes.Message_FinishAbba)
+						return finishMsgW.FinishAbba.Round > 32-8-2
+					}
 
-				// drop all checkpoint-building messages involving node 0 up to checkpoint 32/8
-				_, isChkpBuild := msg.Type.(*messagepbtypes.Message_Threshcheckpoint)
-				if isChkpBuild && to == node0 && from != to {
-					chkpNum, _ := strconv.ParseUint(string(msg.DestModule.Sub().Top()), 10, 64)
-					return chkpNum > 32/8
-				}
+					// drop all checkpoint-building messages involving node 0 up to checkpoint 32/8
+					_, isChkpBuild := msg.Type.(*messagepbtypes.Message_Threshcheckpoint)
+					if isChkpBuild && to == node0 && from != to {
+						chkpNum, _ := strconv.ParseUint(string(msg.DestModule.Sub().Top()), 10, 64)
+						return chkpNum > 32/8
+					}
 
-				return true
-			},
-			ParamsModifier: func(params *trantor.Params) {
-				params.Alea.Adjust(8, 2)
-				params.Alea.RetainEpochs = 2
-				params.Alea.MaxAgStall = 250 * time.Millisecond
-				params.ReliableNet.MaxRetransmissionBurst = 128
-				params.ReliableNet.RetransmissionLoopInterval = 500 * time.Millisecond
-			},
-		}},*/
+					return true
+				},
+				ParamsModifier: func(params *trantor.Params) {
+					params.Alea.Adjust(8, 2)
+					params.Alea.RetainEpochs = 2
+					params.Alea.MaxAgStall = 250 * time.Millisecond
+					params.ReliableNet.MaxRetransmissionBurst = 128
+					params.ReliableNet.RetransmissionLoopInterval = 500 * time.Millisecond
+				},
+				CheckFunc: func(tb testing.TB, deployment *deploytest.Deployment, conf *TestConfig) {
+					require.Error(tb, conf.ErrorExpected)
+					for _, replica := range deployment.TestReplicas {
+						app := deployment.TestConfig.FakeApps[replica.ID]
+						require.Equal(tb, conf.NumNetTXs+conf.NumFakeTXs, int(app.TransactionsProcessed))
+
+						// Check if there are no un-acked messages
+						rnet := replica.Modules["reliablenet"].(*reliablenet.Module)
+						pendingMsgs := rnet.GetPendingMessages()
+						assert.Emptyf(tb, pendingMsgs, "replica %v has pending messages", replica.ID)
+						if len(pendingMsgs) > 0 {
+							for _, msg := range pendingMsgs {
+								msgJSON, _ := protojson.MarshalOptions{Multiline: true, Indent: "  "}.Marshal(msg.Msg.Pb())
+								tb.Logf("pending message for %v: %v", msg.Destinations, string(msgJSON))
+							}
+						}
+					}
+				},
+			}},
 	}
 
 	for i, test := range tests {
