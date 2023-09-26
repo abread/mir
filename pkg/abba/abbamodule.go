@@ -167,11 +167,13 @@ func newController(mc ModuleConfig, params ModuleParams, logger logging.Logger, 
 				abbadsl.Done(m, mc.Consumer, mc.Self)
 				state.phase = phaseDone
 
-				rounds.MarkPastAndFreeAll()
-
 				// only care about finish messages from now on
 				// eventually instances that are out-of-date will receive them and be happy
-				rnetdsl.MarkModuleMsgsRecvd(m, mc.ReliableNet, mc.Self.Then(ModringSubName), params.AllNodes)
+				evsOut, err := rounds.MarkPastAndFreeAll()
+				if err != nil {
+					return err
+				}
+				dsl.EmitEvents(m, evsOut)
 			}
 		}
 		return nil
