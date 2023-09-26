@@ -154,9 +154,12 @@ func runNode(ctx context.Context) error {
 	}
 
 	// Instantiate the threshold crypto module.
-	F := len(initialMembership.Nodes)/3 - 1
+	F := (len(initialMembership.Nodes) - 1) / 3
 	thresh := 2*F + 1
-	localThreshCryptoSystem := deploytest.NewLocalThreshCryptoSystem(params.ThreshCryptoImpl, membership.GetIDs(initialMembership), thresh)
+	localThreshCryptoSystem, err := deploytest.NewLocalThreshCryptoSystem(params.ThreshCryptoImpl, membership.GetIDs(initialMembership), thresh)
+	if err != nil {
+		return es.Errorf("could not create threshcrypto system: %w", err)
+	}
 	localThreshCrypto, err := localThreshCryptoSystem.ThreshCrypto(ownID)
 	if err != nil {
 		return es.Errorf("could not create a local crypto module: %w", err)

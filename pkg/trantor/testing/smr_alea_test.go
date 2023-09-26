@@ -456,7 +456,10 @@ func newDeploymentAlea(conf *TestConfig) (*deploytest.Deployment, error) {
 
 	// TODO: fix for weighted stuff
 	F := (len(conf.NodeIDsWeight) - 1) / 3
-	threshCryptoSystem := deploytest.NewLocalThreshCryptoSystem("dummy", nodeIDs, 2*F+1)
+	threshCryptoSystem, err := deploytest.NewLocalThreshCryptoSystem("dummy", nodeIDs, 2*F+1)
+	if err != nil {
+		return nil, es.Errorf("could not create threshcrypto system: %w", err)
+	}
 
 	cryptoSystem, err := deploytest.NewLocalCryptoSystem("pseudo", nodeIDs, everythingLogger)
 	if err != nil {

@@ -22,8 +22,12 @@ type localPseudoThreshCryptoSystem struct {
 
 // NewLocalCryptoSystem creates an instance of LocalCryptoSystem suitable for tests.
 // In the current implementation, cryptoType can only be "pseudo", "dummy" or "pseudo-purego".
-func NewLocalThreshCryptoSystem(cryptoType string, nodeIDs []t.NodeID, threshold int) LocalThreshCryptoSystem {
-	return &localPseudoThreshCryptoSystem{cryptoType, nodeIDs, threshold}
+func NewLocalThreshCryptoSystem(cryptoType string, nodeIDs []t.NodeID, threshold int) (LocalThreshCryptoSystem, error) {
+	if threshold < 0 {
+		return nil, es.Errorf("negative threshold: %v", threshold)
+	}
+
+	return &localPseudoThreshCryptoSystem{cryptoType, nodeIDs, threshold}, nil
 }
 
 func (cs *localPseudoThreshCryptoSystem) ThreshCrypto(id t.NodeID) (threshcrypto.ThreshCrypto, error) {

@@ -429,8 +429,11 @@ func newDeployment(conf *TestConfig) (*deploytest.Deployment, error) {
 		return nil, es.Errorf("could not create a local crypto system: %w", err)
 	}
 	// TODO: fix for weighted stuff
-	F := len(nodeIDs)/3 - 1
-	threshCryptoSystem := deploytest.NewLocalThreshCryptoSystem("pseudo", nodeIDs, 2*F+1)
+	F := (len(nodeIDs) - 1) / 3
+	threshCryptoSystem, err := deploytest.NewLocalThreshCryptoSystem("pseudo", nodeIDs, 2*F+1)
+	if err != nil {
+		return nil, es.Errorf("could not create threshcrypto system: %w", err)
+	}
 
 	nodeModules := make(map[t.NodeID]modules.Modules)
 	fakeApps := make(map[t.NodeID]*deploytest.FakeApp)
