@@ -50,12 +50,14 @@ func init() {
 	paramsCmd.Flags().IntVarP(&expIDDigits, "digits", "w", 4, "Digits used for experiment id (only used with a settings file).")
 }
 
+type Duration time.Duration
+
 type BenchParams struct {
 	Trantor          trantor.Params
 	TxGen            localtxgenerator.ModuleParams
 	CryptoImpl       string
 	ThreshCryptoImpl string
-	Duration         time.Duration `json:",string"`
+	Duration         Duration
 }
 
 func generateParams(args []string) error {
@@ -258,4 +260,20 @@ func loadSettingsFile(fileName string) (parameterset.Set, error) {
 	}
 
 	return parameterSet, nil
+}
+
+func (d *Duration) UnmarshalJSON(b []byte) error {
+	var s string
+	if err := json.Unmarshal(b, &s); err != nil {
+		return es.Errorf("failed unmarshalling duration: %w", err)
+	}
+
+	var goD time.Duration
+	var err error
+	if goD, err = time.ParseDuration(s); err != nil {
+		return es.Errorf("failed parsing duration: %w", err)
+	}
+
+	*d = Duration(goD)
+	return nil
 }

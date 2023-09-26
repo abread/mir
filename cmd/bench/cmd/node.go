@@ -206,7 +206,6 @@ func runNode(ctx context.Context) error {
 		defer aleaTracer.Stop()
 		tracer = aleaTracer
 	}
-	interceptor := tracer
 
 	// Add transaction generator module to the setup.
 	trantorInstance.WithModule("localtxgen", txGen)
@@ -214,9 +213,10 @@ func runNode(ctx context.Context) error {
 	// Create trackers for gathering statistics about the performance.
 	liveStats := stats.NewLiveStats()
 	clientStats := stats.NewClientStats(time.Millisecond, time.Second)
-	txGen.TrackStats(liveStats)
+	//txGen.TrackStats(liveStats)
 	txGen.TrackStats(clientStats)
 
+	interceptor := eventlog.MultiInterceptor(tracer, stats.NewStatInterceptor(liveStats, trantor.DefaultModuleConfig().App))
 	// Instantiate the Mir Node.
 	nodeConfig := mir.DefaultNodeConfig().WithLogger(logger)
 	nodeConfig.Stats.Period = time.Second
@@ -299,7 +299,7 @@ func runNode(ctx context.Context) error {
 			// Wait until the end of the benchmark and shut down the node.
 			select {
 			case <-ctx.Done():
-			case <-time.After(params.Duration):
+			case <-time.After(time.Duration(params.Duration)):
 			}
 			shutDown()
 			close(done)

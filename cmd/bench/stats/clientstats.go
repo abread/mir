@@ -160,7 +160,7 @@ func (cs *ClientStats) WriteCSVHeader(w *csv.Writer) error {
 }
 
 func (cs *ClientStats) WriteCSVRecord(w *csv.Writer) error {
-
+	cs.timestampsLock.Lock()
 	record := []string{
 		fmt.Sprintf(fmt.Sprintf("%%%ds", width), cs.duration),
 		fmt.Sprintf(fmt.Sprintf("%%%dd", width), cs.AvgThroughput()),
@@ -169,5 +169,6 @@ func (cs *ClientStats) WriteCSVRecord(w *csv.Writer) error {
 		fmt.Sprintf(fmt.Sprintf("%%%ds", width), cs.LatencyPctile(0.95)),
 		fmt.Sprintf(fmt.Sprintf("%%%ds", width), cs.LatencyPctile(1.0)),
 	}
+	cs.timestampsLock.Unlock()
 	return w.Write(record)
 }
