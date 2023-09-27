@@ -122,6 +122,18 @@ func (s *LiveStats) Deliver(tx *trantorpbtypes.Transaction) {
 	s.lock.Unlock()
 }
 
+func (s *LiveStats) AssumeDelivered(tx *trantorpbtypes.Transaction) {
+	s.lock.Lock()
+
+	// Consider transaction for throughput measurement, but not for latency (latency is distorted).
+	s.deliveredTransactions++
+
+	k := txKey{tx.ClientId, tx.TxNo}
+	delete(s.txTimestamps, k)
+
+	s.lock.Unlock()
+}
+
 func (s *LiveStats) AvgLatency() time.Duration {
 	s.lock.RLock()
 	defer s.lock.RUnlock()

@@ -99,6 +99,18 @@ func (cs *ClientStats) Deliver(tx *trantorpbtypes.Transaction) {
 	cs.DeliveredTxs[t]++
 }
 
+func (cs *ClientStats) AssumeDelivered(tx *trantorpbtypes.Transaction) {
+	cs.timestampsLock.Lock()
+
+	// Consider transaction for throughput measurement, but not for latency (latency is distorted).
+	cs.totalDelivered++
+
+	txID := txKey{tx.ClientId, tx.TxNo}
+	delete(cs.txTimestamps, txID)
+
+	cs.timestampsLock.Unlock()
+}
+
 // Fill adds padding to DeliveredTxs. In case no transactions have been delivered for some time,
 // Fill adds zero values for these time slots.
 // Fill should be called once more at the very end of data collection,

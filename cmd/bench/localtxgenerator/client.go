@@ -10,6 +10,7 @@ import (
 	es "github.com/go-errors/errors"
 
 	"github.com/filecoin-project/mir/cmd/bench/stats"
+	"github.com/filecoin-project/mir/pkg/clientprogress"
 	"github.com/filecoin-project/mir/pkg/logging"
 	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 	mempoolpbevents "github.com/filecoin-project/mir/pkg/pb/mempoolpb/events"
@@ -18,33 +19,35 @@ import (
 )
 
 type client struct {
-	id            tt.ClientID
-	modules       ModuleConfig
-	params        ModuleParams
-	randSource    *rand.Rand
-	nextTXNo      tt.TxNo
-	statsTrackers []stats.Tracker
-	txOutChan     chan *eventpbtypes.Event
-	txDeliverChan chan *trantorpbtypes.Transaction
-	stopChan      chan struct{}
-	wg            sync.WaitGroup
-	logger        logging.Logger
+	id               tt.ClientID
+	modules          ModuleConfig
+	params           ModuleParams
+	randSource       *rand.Rand
+	nextTXNo         tt.TxNo
+	statsTrackers    []stats.Tracker
+	txOutChan        chan *eventpbtypes.Event
+	txDeliverChan    chan *trantorpbtypes.Transaction
+	restoreStateChan chan *clientprogress.DeliveredTXs
+	stopChan         chan struct{}
+	wg               sync.WaitGroup
+	logger           logging.Logger
 }
 
 func newClient(id tt.ClientID, moduleConfig ModuleConfig, params ModuleParams, txOutChan chan *eventpbtypes.Event, logger logging.Logger) *client {
 	seed := make([]byte, 8)
 	copy(seed, id.Bytes())
 	return &client{
-		id:            id,
-		modules:       moduleConfig,
-		params:        params,
-		randSource:    rand.New(rand.NewSource(int64(binary.BigEndian.Uint64(seed)))), // nolint:gosec
-		nextTXNo:      0,
-		statsTrackers: nil,
-		txOutChan:     txOutChan,
-		txDeliverChan: make(chan *trantorpbtypes.Transaction, 1),
-		stopChan:      make(chan struct{}),
-		logger:        logger,
+		id:               id,
+		modules:          moduleConfig,
+		params:           params,
+		randSource:       rand.New(rand.NewSource(int64(binary.BigEndian.Uint64(seed)))), // nolint:gosec
+		nextTXNo:         0,
+		statsTrackers:    nil,
+		txOutChan:        txOutChan,
+		txDeliverChan:    make(chan *trantorpbtypes.Transaction, 1),
+		restoreStateChan: make(chan *clientprogress.DeliveredTXs),
+		stopChan:         make(chan struct{}),
+		logger:           logger,
 	}
 }
 
@@ -71,13 +74,30 @@ func (c *client) Start(cnt *atomic.Int64) {
 				return
 			}
 
-			select {
-			case deliveredTx := <-c.txDeliverChan:
-				if err := c.registerDelivery(tx, deliveredTx); err != nil {
-					c.logger.Log(logging.LevelError, "Error registering transaction delivery.", "err", err)
+		WaitDelivery:
+			for {
+				select {
+				case deliveredTx := <-c.txDeliverChan:
+					if err := c.registerDelivery(tx, deliveredTx); err != nil {
+						c.logger.Log(logging.LevelError, "Error registering transaction delivery.", "err", err)
+					}
+					break WaitDelivery
+				case tracker := <-c.restoreStateChan:
+					if !tracker.Contains(tx.TxNo) {
+						continue // we haven't reached that transaction yet
+					}
+
+					if !tracker.DeliveredExactlyUpTo(tx.TxNo) {
+						panic(es.Errorf("transactions were forged (tracker: %v, last submmitted tx: %v)", tracker, tx))
+					}
+
+					if err := c.registerDelivery(tx, nil); err != nil {
+						c.logger.Log(logging.LevelError, "Error registering transaction delivery.", "err", err)
+					}
+					break WaitDelivery
+				case <-c.stopChan:
+					return
 				}
-			case <-c.stopChan:
-				return
 			}
 		}
 	}()
@@ -96,7 +116,22 @@ func (c *client) TrackStats(tracker stats.Tracker) {
 	c.statsTrackers = append(c.statsTrackers, tracker)
 }
 
+func (c *client) RestoreState(deliveredTxs *clientprogress.DeliveredTXs) {
+	c.restoreStateChan <- deliveredTxs
+}
+
 func (c *client) registerDelivery(submitted, delivered *trantorpbtypes.Transaction) error {
+	// Transactions that are not delivered can still be indirectly propagated via checkpointing.
+	if delivered == nil {
+		c.logger.Log(logging.LevelWarn, "assuming transaction was correctly delivered by other nodes (restored state from checkpoint)", "tx", submitted)
+
+		// Track delivery statistics.
+		for _, statsTracker := range c.statsTrackers {
+			statsTracker.AssumeDelivered(submitted)
+		}
+
+		return nil
+	}
 
 	// Sanity check that the submitted transaction was delivered.
 	if !reflect.DeepEqual(submitted, delivered) {

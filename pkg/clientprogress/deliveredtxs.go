@@ -70,6 +70,13 @@ func (dt *DeliveredTXs) LowWm() tt.TxNo {
 	return dt.lowWm
 }
 
+// DeliveredExactlyUpTo checks if this client's transactions were delivered exactly up to the provided
+// tx number, no more, no less.
+func (dt *DeliveredTXs) DeliveredExactlyUpTo(txNo tt.TxNo) bool {
+	dt.GarbageCollect()
+	return txNo+1 == dt.lowWm && len(dt.delivered) == 0
+}
+
 // Add adds a transaction number that is considered delivered to the DeliveredTXs.
 // Returns true if the transaction number has been added now (after not being previously present).
 // Returns false if the transaction number has already been added before the call to Add.

@@ -9,6 +9,7 @@ import (
 
 	"github.com/filecoin-project/mir/cmd/bench/stats"
 	"github.com/filecoin-project/mir/pkg/checkpoint"
+	"github.com/filecoin-project/mir/pkg/clientprogress"
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/logging"
 	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
@@ -185,7 +186,13 @@ func (gen *LocalTXGen) Snapshot() ([]byte, error) {
 	return []byte{0}, nil
 }
 
-func (gen *LocalTXGen) RestoreState(_ *checkpoint.StableCheckpoint) error {
+func (gen *LocalTXGen) RestoreState(chkp *checkpoint.StableCheckpoint) error {
+	clientProgress := chkp.Snapshot.EpochData.ClientProgress.Progress
+	for clientID, client := range gen.clients {
+		if deliveredTxs, ok := clientProgress[clientID]; ok {
+			client.RestoreState(clientprogress.DeliveredTXsFromDslStruct(deliveredTxs))
+		}
+	}
 	return nil
 }
 
