@@ -230,10 +230,10 @@ func New(
 		trantorModules[moduleConfig.AleaDirector], err = director.NewModule(
 			moduleConfig.ConfigureAleaDirector(),
 			director.ModuleParams{
-				InstanceUID:  append(params.Alea.InstanceUID, 'd'),
-				Membership:   params.Alea.Membership,
-				EpochLength:  params.Alea.EpochLength,
-				RetainEpochs: params.Alea.RetainEpochs,
+				AleaInstanceUID: params.Alea.InstanceUID,
+				Membership:      params.Alea.Membership,
+				EpochLength:     params.Alea.EpochLength,
+				RetainEpochs:    params.Alea.RetainEpochs,
 			},
 			director.ModuleTunables{
 				MaxConcurrentVcbPerQueue: params.Alea.MaxConcurrentVcbPerQueue,
@@ -253,9 +253,9 @@ func New(
 		trantorModules[moduleConfig.AleaBroadcast], err = broadcast.NewModule(
 			moduleConfig.ConfigureAleaBroadcast(),
 			broadcast.ModuleParams{
-				InstanceUID: append(params.Alea.InstanceUID, 'b'),
-				AllNodes:    allNodes,
-				EpochLength: params.Alea.EpochLength,
+				AleaInstanceUID: params.Alea.InstanceUID,
+				AllNodes:        allNodes,
+				EpochLength:     params.Alea.EpochLength,
 			},
 			broadcast.ModuleTunables{
 				MaxConcurrentVcbPerQueue: params.Alea.MaxConcurrentVcbPerQueue,
@@ -273,9 +273,9 @@ func New(
 		trantorModules[moduleConfig.AleaAgreement], err = agreement.NewModule(
 			moduleConfig.ConfigureAleaAgreement(),
 			agreement.ModuleParams{
-				InstanceUID: append(params.Alea.InstanceUID, 'a'),
-				AllNodes:    allNodes,
-				EpochLength: params.Alea.EpochLength,
+				AleaInstanceUID: params.Alea.InstanceUID,
+				AllNodes:        allNodes,
+				EpochLength:     params.Alea.EpochLength,
 			},
 			agreement.ModuleTunables{
 				MaxRoundLookahead:     params.Alea.MaxAgRoundLookahead,

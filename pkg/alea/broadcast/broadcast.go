@@ -80,8 +80,8 @@ func createQueues(bcMc ModuleConfig, bcParams bccommon.ModuleParams, bcTunables 
 		}
 
 		params := bcqueue.ModuleParams{
-			BcInstanceUID: bcParams.InstanceUID, // TODO: review
-			AllNodes:      bcParams.AllNodes,
+			AleaInstanceUID: bcParams.AleaInstanceUID, // TODO: review
+			AllNodes:        bcParams.AllNodes,
 
 			QueueIdx:   aleatypes.QueueIdx(idx),
 			QueueOwner: bcParams.AllNodes[idx],

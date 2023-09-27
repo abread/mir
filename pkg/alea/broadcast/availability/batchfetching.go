@@ -375,9 +375,7 @@ func includeBatchFetching( // nolint: gocognit,gocyclo
 }
 
 func certSigData(params *ModuleParams, cert *bcpbtypes.Cert) [][]byte {
-	aleaUID := params.InstanceUID[:len(params.InstanceUID)-1]
-	aleaBcInstanceUID := append(aleaUID, 'b')
-	return vcb.SigData(bccommon.VCBInstanceUID(aleaBcInstanceUID, cert.Slot.QueueIdx, cert.Slot.QueueSlot), cert.BatchId)
+	return vcb.SigData(bccommon.VCBInstanceUID(params.AleaInstanceUID, cert.Slot.QueueIdx, cert.Slot.QueueSlot), cert.BatchId)
 }
 
 const (

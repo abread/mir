@@ -19,8 +19,8 @@ type ModuleConfig struct {
 // ModuleParams sets the values for the parameters of an instance of the protocol.
 // All replicas are expected to use identical module parameters.
 type ModuleParams struct {
-	InstanceUID []byte     // must be the alea instance uid followed by 'b'
-	AllNodes    []t.NodeID // the list of participating nodes, which must be the same as the set of nodes in the threshcrypto module
+	AleaInstanceUID []byte     // must be the alea instance uid followed by 'b'
+	AllNodes        []t.NodeID // the list of participating nodes, which must be the same as the set of nodes in the threshcrypto module
 
 	EpochLength uint64
 }

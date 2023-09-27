@@ -28,8 +28,8 @@ type ModuleConfig struct {
 // ModuleParams sets the values for the parameters of an instance of the protocol.
 // All replicas are expected to use identical module parameters.
 type ModuleParams struct {
-	InstanceUID []byte                     // unique identifier for this instance of Alea, must be the same in Broadcast and Agreement components
-	Membership  *trantorpbtypes.Membership // identities of all nodes that execute the protocol, must not be empty
+	AleaInstanceUID []byte                     // unique identifier for this instance of Alea, must be the same in Broadcast and Agreement components
+	Membership      *trantorpbtypes.Membership // identities of all nodes that execute the protocol, must not be empty
 
 	// length of an epoch in ag rounds
 	EpochLength uint64

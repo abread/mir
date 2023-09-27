@@ -33,6 +33,7 @@ import (
 	reliablenetpbevents "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/events"
 	transportpbdsl "github.com/filecoin-project/mir/pkg/pb/transportpb/dsl"
 	transportpbevents "github.com/filecoin-project/mir/pkg/pb/transportpb/events"
+	"github.com/filecoin-project/mir/pkg/serializing"
 	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
@@ -64,9 +65,9 @@ func DefaultModuleConfig() *ModuleConfig {
 // ModuleParams sets the values for the parameters of an instance of the protocol.
 // All replicas are expected to use identical module parameters.
 type ModuleParams struct {
-	InstanceUID []byte     // must be the alea ID followed by 'a'
-	AllNodes    []t.NodeID // the list of participating nodes, which must be the same as the set of nodes in the threshcrypto module
-	EpochLength uint64
+	AleaInstanceUID []byte
+	AllNodes        []t.NodeID // the list of participating nodes, which must be the same as the set of nodes in the threshcrypto module
+	EpochLength     uint64
 }
 
 // ModuleTunables sets the values of protocol tunables that need not be the same across all nodes.
@@ -447,8 +448,8 @@ func newPastMessageHandler(mc ModuleConfig) func(pastMessages []*modringpbtypes.
 }
 
 func newAbbaGenerator(agMc ModuleConfig, agParams ModuleParams, agTunables ModuleTunables, nodeID t.NodeID, logger logging.Logger) func(id t.ModuleID, idx uint64) (modules.PassiveModule, events.EventList, error) {
-	params := abba.ModuleParams{
-		InstanceUID: agParams.InstanceUID, // TODO: review
+	paramsTemplate := abba.ModuleParams{
+		InstanceUID: append(agParams.AleaInstanceUID, 'a'), // TODO: review
 		AllNodes:    agParams.AllNodes,
 	}
 	tunables := abba.ModuleTunables{
@@ -463,6 +464,9 @@ func newAbbaGenerator(agMc ModuleConfig, agParams ModuleParams, agTunables Modul
 			ThreshCrypto: agMc.ThreshCrypto,
 			Hasher:       agMc.Hasher,
 		}
+
+		params := paramsTemplate
+		params.InstanceUID = append(params.InstanceUID, serializing.Uint64ToBytes(idx)...) // TODO: review
 
 		mod, err := abba.NewModule(mc, params, tunables, nodeID, logging.Decorate(logger, "Abba: ", "agRound", idx))
 		if err != nil {

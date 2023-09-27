@@ -21,7 +21,7 @@ func includeCertVerification(m dsl.Module, mc ModuleConfig, params ModuleParams)
 		aleaCert := aleaCertWrapped.Alea
 
 		sigData := vcb.SigData(
-			bccommon.VCBInstanceUID(params.InstanceUID, aleaCert.Slot.QueueIdx, aleaCert.Slot.QueueSlot),
+			bccommon.VCBInstanceUID(params.AleaInstanceUID, aleaCert.Slot.QueueIdx, aleaCert.Slot.QueueSlot),
 			aleaCert.BatchId,
 		)
 		threshcryptopbdsl.VerifyFull(m, mc.ThreshCrypto, sigData, aleaCert.Signature, origin)

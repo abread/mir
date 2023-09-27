@@ -27,13 +27,17 @@ func NewLocalThreshCryptoSystem(cryptoType string, nodeIDs []t.NodeID, threshold
 		return nil, es.Errorf("negative threshold: %v", threshold)
 	}
 
+	if cryptoType == "pseudo" {
+		cryptoType = "herumi-pseudo"
+	}
+
 	return &localPseudoThreshCryptoSystem{cryptoType, nodeIDs, threshold}, nil
 }
 
 func (cs *localPseudoThreshCryptoSystem) ThreshCrypto(id t.NodeID) (threshcrypto.ThreshCrypto, error) {
-	if cs.cryptoType == "pseudo" {
+	if cs.cryptoType == "herumi-pseudo" {
 		return threshcrypto.HerumiTBLSPseudo(cs.nodeIDs, cs.threshold, id, mirCrypto.DefaultPseudoSeed)
-	} else if cs.cryptoType == "pseudo-purego" {
+	} else if cs.cryptoType == "kyber-pseudo" {
 		return threshcrypto.TBLSPseudo(cs.nodeIDs, cs.threshold, id, mirCrypto.DefaultPseudoSeed)
 	} else if cs.cryptoType == "dummy" {
 		return &threshcrypto.DummyCrypto{
