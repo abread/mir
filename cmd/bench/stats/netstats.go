@@ -225,11 +225,13 @@ func (ns *NetStats) WriteCSVHeader(w *csv.Writer) error {
 
 func (ns *NetStats) WriteCSVRecord(w *csv.Writer, _ time.Duration) error {
 
+	ns.Lock()
 	record := []string{
 		fmt.Sprintf(fmt.Sprintf("%%%ds", width), ns.duration),
 		fmt.Sprintf(fmt.Sprintf("%%%d.3f", width), float64(ns.AvgTotalSendRate())/(1024*1024)),
 		fmt.Sprintf(fmt.Sprintf("%%%d.3f", width), float64(ns.AvgTotalReceiveRate())/(1024*1024)),
 		fmt.Sprintf(fmt.Sprintf("%%%d.3f", width), float64(ns.AvgTotalDropRate())/(1024*1024)),
 	}
+	ns.Unlock()
 	return w.Write(record)
 }

@@ -62,10 +62,10 @@ func (s *LiveStats) AgDeliver(deliver *ageventstypes.Deliver) {
 	s.lock.Lock()
 	s.currentAgRound = deliver.Round + 1
 	if t, ok := s.agInputTimestamps[deliver.Round+1]; ok {
-		stall := -time.Since(t) // negative stall: input is after deliver
+		stall := -time.Since(t) // negative stall: input is before deliver of the previous round
 
 		// $CA_{n+1} = CA_n + {x_{n+1} - CA_n \over n + 1}$
-		s.avgAgStall += (float64(stall) - s.avgAgStall) / float64(deliver.Round+1)
+		s.avgAgStall += (stall.Seconds() - s.avgAgStall) / float64(deliver.Round+2)
 
 		delete(s.agInputTimestamps, deliver.Round+1)
 	} else {
@@ -81,13 +81,17 @@ func (s *LiveStats) AgDeliver(deliver *ageventstypes.Deliver) {
 }
 
 func (s *LiveStats) AgInput(input *ageventstypes.InputValue) {
+	if input.Round == 0 {
+		return // ignore first round
+	}
+
 	s.lock.Lock()
 	if s.currentAgRound == input.Round {
 		stall := time.Since(s.stalledAgStart)
 
 		s.cumPosAgStall += stall.Seconds()
 		// $CA_{n+1} = CA_n + {x_{n+1} - CA_n \over n + 1}$
-		s.avgAgStall += (stall.Seconds() - s.avgAgStall) / float64(input.Round)
+		s.avgAgStall += (stall.Seconds() - s.avgAgStall) / float64(input.Round+1)
 	} else {
 		s.agInputTimestamps[input.Round] = time.Now()
 	}
