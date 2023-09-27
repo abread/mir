@@ -79,6 +79,7 @@ func (cs *ClientStats) Deliver(tx *trantorpbtypes.Transaction) {
 	t := time.Since(cs.startTime)
 	txID := txKey{tx.ClientId, tx.TxNo}
 	lRaw := time.Since(cs.txTimestamps[txID])
+	delete(cs.txTimestamps, txID)
 
 	// Round values to the next lower step
 	t = (t / cs.SamplingPeriod) * cs.SamplingPeriod
