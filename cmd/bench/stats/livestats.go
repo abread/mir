@@ -83,9 +83,9 @@ func (s *LiveStats) AgInput(input *ageventstypes.InputValue) {
 	if s.currentAgRound == input.Round {
 		stall := time.Since(s.stalledAgStart)
 
-		s.cumPosAgStall += float64(stall)
+		s.cumPosAgStall += stall.Seconds()
 		// $CA_{n+1} = CA_n + {x_{n+1} - CA_n \over n + 1}$
-		s.avgAgStall += (float64(stall) - s.avgAgStall) / float64(input.Round)
+		s.avgAgStall += (stall.Seconds() - s.avgAgStall) / float64(input.Round)
 	} else {
 		s.agInputTimestamps[input.Round] = time.Now()
 	}
@@ -96,7 +96,7 @@ func (s *LiveStats) InnerAbbaTime(t *ageventstypes.InnerAbbaRoundTime) {
 	s.lock.Lock()
 	s.innerAbbaTimeCount++
 	unanimousLatency := t.DurationNoCoin / 3
-	s.estUnanimousAgTime += (float64(unanimousLatency) - s.estUnanimousAgTime) / float64(s.innerAbbaTimeCount)
+	s.estUnanimousAgTime += (unanimousLatency.Seconds() - s.estUnanimousAgTime) / float64(s.innerAbbaTimeCount)
 	s.lock.Unlock()
 }
 
