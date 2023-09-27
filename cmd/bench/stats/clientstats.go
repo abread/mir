@@ -14,7 +14,7 @@ import (
 type ClientStats struct {
 
 	// Times of submission for in-flight transactions and the lock that guards the map.
-	txTimestamps   map[string]time.Time
+	txTimestamps   map[txKey]time.Time
 	timestampsLock sync.Mutex
 
 	// Latency histogram. Latencies are truncated (down) to the nearest step.
@@ -46,7 +46,7 @@ func NewClientStats(
 	samplingPeriod time.Duration,
 ) *ClientStats {
 	return &ClientStats{
-		txTimestamps:   make(map[string]time.Time),
+		txTimestamps:   make(map[txKey]time.Time),
 		LatencyHist:    map[time.Duration]int{0: 0}, // The rest of the code can assume this map is never empty.
 		DeliveredTxs:   make(map[time.Duration]int),
 		latencyStep:    latencyStep,
@@ -65,7 +65,7 @@ func (cs *ClientStats) Start() {
 }
 
 func (cs *ClientStats) Submit(tx *trantorpbtypes.Transaction) {
-	txID := fmt.Sprintf("%s:%d", tx.ClientId, tx.TxNo)
+	txID := txKey{tx.ClientId, tx.TxNo}
 	cs.timestampsLock.Lock()
 	cs.txTimestamps[txID] = time.Now()
 	cs.timestampsLock.Unlock()
@@ -77,7 +77,7 @@ func (cs *ClientStats) Deliver(tx *trantorpbtypes.Transaction) {
 
 	// Get delivery time and latency.
 	t := time.Since(cs.startTime)
-	txID := fmt.Sprintf("%s:%d", tx.ClientId, tx.TxNo)
+	txID := txKey{tx.ClientId, tx.TxNo}
 	lRaw := time.Since(cs.txTimestamps[txID])
 
 	// Round values to the next lower step
