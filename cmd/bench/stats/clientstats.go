@@ -172,7 +172,7 @@ func (cs *ClientStats) WriteCSVHeader(w *csv.Writer) error {
 	return w.Write(record)
 }
 
-func (cs *ClientStats) WriteCSVRecord(w *csv.Writer) error {
+func (cs *ClientStats) WriteCSVRecord(w *csv.Writer, _ time.Duration) error {
 	cs.timestampsLock.Lock()
 	record := []string{
 		fmt.Sprintf(fmt.Sprintf("%%%ds", width), cs.duration),

@@ -223,7 +223,7 @@ func (ns *NetStats) WriteCSVHeader(w *csv.Writer) error {
 	return w.Write(record)
 }
 
-func (ns *NetStats) WriteCSVRecord(w *csv.Writer) error {
+func (ns *NetStats) WriteCSVRecord(w *csv.Writer, _ time.Duration) error {
 
 	record := []string{
 		fmt.Sprintf(fmt.Sprintf("%%%ds", width), ns.duration),

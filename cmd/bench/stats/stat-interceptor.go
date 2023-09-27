@@ -8,9 +8,10 @@ import (
 	"github.com/filecoin-project/mir/pkg/events"
 	ageventstypes "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents/types"
 	bcpbtypes "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/types"
-	batchfetcherpbtypes "github.com/filecoin-project/mir/pkg/pb/batchfetcherpb/types"
+
+	//batchfetcherpbtypes "github.com/filecoin-project/mir/pkg/pb/batchfetcherpb/types"
 	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
-	mempoolpbtypes "github.com/filecoin-project/mir/pkg/pb/mempoolpb/types"
+	//mempoolpbtypes "github.com/filecoin-project/mir/pkg/pb/mempoolpb/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -40,7 +41,7 @@ func (i *StatInterceptor) Intercept(events events.EventList) error {
 	it := events.Iterator()
 	for evt := it.Next(); evt != nil; evt = it.Next() {
 		switch e := evt.Type.(type) {
-		case *eventpbtypes.Event_Mempool:
+		/*case *eventpbtypes.Event_Mempool:
 			switch e := e.Mempool.Type.(type) {
 			case *mempoolpbtypes.Event_NewTransactions:
 				for _, tx := range e.NewTransactions.Transactions {
@@ -59,7 +60,7 @@ func (i *StatInterceptor) Intercept(events events.EventList) error {
 				for _, tx := range e.NewOrderedBatch.Txs {
 					i.LiveStats.Deliver(tx)
 				}
-			}
+			}*/
 		case *eventpbtypes.Event_AleaAgreement:
 			switch e2 := e.AleaAgreement.Type.(type) {
 			case *ageventstypes.Event_InputValue:

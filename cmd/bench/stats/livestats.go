@@ -50,6 +50,8 @@ func NewLiveStats() *LiveStats {
 	}
 }
 
+func (s *LiveStats) Fill() {}
+
 func (s *LiveStats) BcDeliver(_ *bcpbtypes.DeliverCert) {
 	s.lock.Lock()
 	s.bcDelivers++
@@ -148,7 +150,7 @@ func (s *LiveStats) DeliveredTransactions() int {
 	return s.deliveredTransactions
 }
 
-func (s *LiveStats) WriteCSVHeader(w *csv.Writer) {
+func (s *LiveStats) WriteCSVHeader(w *csv.Writer) error {
 	record := []string{
 		"time",
 		"nrDelivered",
@@ -161,10 +163,10 @@ func (s *LiveStats) WriteCSVHeader(w *csv.Writer) {
 		"cumPosAgStall",
 		"estUnanimousAgTime",
 	}
-	_ = w.Write(record)
+	return w.Write(record)
 }
 
-func (s *LiveStats) WriteCSVRecordAndReset(w *csv.Writer, d time.Duration) {
+func (s *LiveStats) WriteCSVRecord(w *csv.Writer, d time.Duration) error {
 	s.lock.Lock()
 	deliveredTxs := s.deliveredTransactions
 	avgLatency := s.avgLatency
@@ -196,5 +198,5 @@ func (s *LiveStats) WriteCSVRecordAndReset(w *csv.Writer, d time.Duration) {
 		fmt.Sprintf("%.5f", cumPosAgStall),
 		fmt.Sprintf("%.5f", estUnanimousAgTime),
 	}
-	_ = w.Write(record)
+	return w.Write(record)
 }

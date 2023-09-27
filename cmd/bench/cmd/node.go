@@ -13,6 +13,7 @@ import (
 	"os"
 	"runtime"
 	"strconv"
+	"sync"
 	"time"
 
 	es "github.com/go-errors/errors"
@@ -47,8 +48,10 @@ const (
 
 var (
 	configFileName      string
-	liveStatFileName    string
-	clientStatFileName  string
+	statSummaryFileName string
+	liveStatsFileName   string
+	clientStatsFileName string
+	netStatsFileName    string
 	statPeriod          time.Duration
 	traceFileName       string
 	readySyncFileName   string
@@ -77,9 +80,11 @@ func init() {
 	_ = nodeCmd.MarkPersistentFlagRequired("id")
 
 	// Optional arguments
-	nodeCmd.Flags().DurationVar(&statPeriod, "stat-period", time.Second, "statistic record period")
-	nodeCmd.Flags().StringVar(&clientStatFileName, "client-stat-file", "bench-output.json", "statistics output file")
-	nodeCmd.Flags().StringVar(&liveStatFileName, "live-stat-file", "", "output file for live statistics, default is standard output")
+	nodeCmd.Flags().DurationVar(&statPeriod, "stat-period", 5*time.Second, "statistic record period")
+	nodeCmd.Flags().StringVar(&clientStatsFileName, "client-stat-file", "", "live cumulative client statistics output file")
+	nodeCmd.Flags().StringVar(&netStatsFileName, "net-stat-file", "", "live cumulative net statistics output file")
+	nodeCmd.Flags().StringVar(&liveStatsFileName, "replica-stat-file", "", "output file for live statistics, default is standard output")
+	nodeCmd.Flags().StringVar(&statSummaryFileName, "summary-stat-file", "", "output file for summarized statistics")
 	nodeCmd.Flags().StringVar(&traceFileName, "traceFile", "", "output file for alea tracing")
 
 	// Sync files
@@ -212,14 +217,14 @@ func runNode(ctx context.Context) error {
 
 	// Create trackers for gathering statistics about the performance.
 	liveStats := stats.NewLiveStats()
-	clientStats := stats.NewClientStats(time.Millisecond, time.Second)
-	//txGen.TrackStats(liveStats)
+	clientStats := stats.NewClientStats(time.Millisecond, 5*time.Second)
+	txGen.TrackStats(liveStats)
 	txGen.TrackStats(clientStats)
 
 	interceptor := eventlog.MultiInterceptor(tracer, stats.NewStatInterceptor(liveStats, trantor.DefaultModuleConfig().App))
 	// Instantiate the Mir Node.
 	nodeConfig := mir.DefaultNodeConfig().WithLogger(logger)
-	nodeConfig.Stats.Period = time.Second
+	nodeConfig.Stats.Period = 5 * time.Second
 	nodeModules := trantorInstance.Modules().ConvertConcurrentEventAppliersToGoroutinePools(ctx, runtime.NumCPU())
 	node, err := mir.NewNode(t.NodeID(id), nodeConfig, nodeModules, interceptor)
 	if err != nil {
@@ -248,8 +253,8 @@ func runNode(ctx context.Context) error {
 
 	// Output the statistics.
 	var statFile *os.File
-	if liveStatFileName != "" {
-		statFile, err = os.Create(liveStatFileName)
+	if liveStatsFileName != "" {
+		statFile, err = os.Create(liveStatsFileName)
 		if err != nil {
 			return es.Errorf("could not open output file for statistics: %w", err)
 		}
@@ -257,14 +262,37 @@ func runNode(ctx context.Context) error {
 		statFile = os.Stdout
 	}
 
-	statCSV := csv.NewWriter(statFile)
-	stopLiveStats := goDisplayLiveStats(ctx, liveStats, statCSV)
+	trantorStopped := make(chan struct{})
+	statsWg := &sync.WaitGroup{}
+	statsCtx, stopStats := context.WithCancel(ctx)
+	defer stopStats()
+
+	replicaStatsCSV := csv.NewWriter(statFile)
+	goDisplayLiveStats(statsCtx, statsWg, trantorStopped, liveStats, replicaStatsCSV)
+
+	if clientStatsFileName != "" {
+		clientStatFile, err := os.Create(clientStatsFileName)
+		if err != nil {
+			return es.Errorf("could not open output file for client statistics: %w", err)
+		}
+		clientStatsCSV := csv.NewWriter(clientStatFile)
+		goDisplayLiveStats(statsCtx, statsWg, trantorStopped, clientStats, clientStatsCSV)
+	}
+
+	if netStatsFileName != "" {
+		netStatFile, err := os.Create(netStatsFileName)
+		if err != nil {
+			return es.Errorf("could not open output file for net statistics: %w", err)
+		}
+		netStatsCSV := csv.NewWriter(netStatFile)
+		goDisplayLiveStats(statsCtx, statsWg, trantorStopped, netStats, netStatsCSV)
+	}
 
 	// Stop outputting real-time stats and submitting transactions,
 	// wait until everything is delivered, and stop node.
 	shutDown := func() {
 
-		stopLiveStats()
+		stopStats()
 		txGen.Stop()
 
 		// Wait for other nodes to deliver their transactions.
@@ -288,9 +316,10 @@ func runNode(ctx context.Context) error {
 		trantorInstance.Stop()
 		logger.Log(logging.LevelInfo, "Trantor stopped.")
 
-		// At this point, no statistics are updated anymore, and we can start dumping them to the output.
-		writeFinalStats(clientStats, netStats, clientStatFileName, statCSV, logger)
+		close(trantorStopped)
+		statsWg.Wait()
 
+		writeFinalStats(clientStats, netStats, statSummaryFileName, logger)
 	}
 
 	done := make(chan struct{})
@@ -324,67 +353,59 @@ func writeFinalStats(
 	clientStats *stats.ClientStats,
 	netStats *stats.NetStats,
 	statFileName string,
-	liveStatCSV *csv.Writer,
 	logger logging.Logger,
 ) {
-	// Fill (potentially empty) statistics with zeroes where no activity was happening.
-	clientStats.Fill()
-	netStats.Fill()
-
-	if err := clientStats.WriteCSVHeader(liveStatCSV); err != nil {
-		logger.Log(logging.LevelError, "Could not write client stats header.", "error", err)
+	if statFileName == "" {
+		return
 	}
-	if err := clientStats.WriteCSVRecord(liveStatCSV); err != nil {
-		logger.Log(logging.LevelError, "Could not write client statistics.", "error", err)
-	}
-	liveStatCSV.Flush()
 
-	if err := netStats.WriteCSVHeader(liveStatCSV); err != nil {
-		logger.Log(logging.LevelError, "Could not write networking stats header.", "error", err)
-	}
-	if err := netStats.WriteCSVRecord(liveStatCSV); err != nil {
-		logger.Log(logging.LevelError, "Could not write networking statistics.", "error", err)
-	}
-	liveStatCSV.Flush()
+	data := make(map[string]any)
+	data["Net"] = netStats
+	data["Client"] = clientStats
 
-	if statFileName != "" {
-		data := make(map[string]any)
-		data["Net"] = netStats
-		data["Client"] = clientStats
-
-		statsData, err := json.MarshalIndent(data, "", "  ")
-		if err != nil {
-			logger.Log(logging.LevelError, "Could not marshal benchmark output", "error", err)
-		}
-		if err = os.WriteFile(clientStatFileName, []byte(fmt.Sprintf("%s\n", string(statsData))), 0600); err != nil {
-			logger.Log(logging.LevelError, "Could not write benchmark output to file",
-				"file", clientStatFileName, "error", err)
-		}
+	statsData, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		logger.Log(logging.LevelError, "Could not marshal benchmark output", "error", err)
+	}
+	if err = os.WriteFile(statFileName, []byte(fmt.Sprintf("%s\n", string(statsData))), 0600); err != nil {
+		logger.Log(logging.LevelError, "Could not write benchmark output to file",
+			"file", statFileName, "error", err)
 	}
 }
 
-func goDisplayLiveStats(ctx context.Context, liveStats *stats.LiveStats, statCSV *csv.Writer) func() {
-	liveStats.WriteCSVHeader(statCSV)
-	liveStatsCtx, stopFunc := context.WithCancel(ctx)
+func goDisplayLiveStats(ctx context.Context, statsWg *sync.WaitGroup, trantorStopped chan struct{}, statsProducer stats.Stats, statCSVConsumer *csv.Writer) {
+	statsWg.Add(1)
+	statsProducer.WriteCSVHeader(statCSVConsumer)
+	statCSVConsumer.Flush()
 
 	go func() {
+		defer statsWg.Done()
+
 		timestamp := time.Now()
 		ticker := time.NewTicker(statPeriod)
 		defer ticker.Stop()
+
+	StatOutputLoop:
 		for {
 			select {
-			case <-liveStatsCtx.Done():
-				return
+			case <-ctx.Done():
+				break StatOutputLoop
 			case ts := <-ticker.C:
 				d := ts.Sub(timestamp)
-				liveStats.WriteCSVRecordAndReset(statCSV, d)
-				statCSV.Flush()
+				statsProducer.WriteCSVRecord(statCSVConsumer, d)
+				statCSVConsumer.Flush()
 				timestamp = ts
 			}
 		}
-	}()
 
-	return stopFunc
+		// wait for trantor to fully stop
+		<-trantorStopped
+
+		statsProducer.Fill()
+		d := time.Since(timestamp)
+		statsProducer.WriteCSVRecord(statCSVConsumer, d)
+		statCSVConsumer.Flush()
+	}()
 }
 
 func getPortStr(addressStr string) (string, error) {
