@@ -40,7 +40,7 @@ func newClient(id tt.ClientID, moduleConfig ModuleConfig, params ModuleParams, t
 		params:        params,
 		randSource:    rand.New(rand.NewSource(int64(binary.BigEndian.Uint64(seed)))), // nolint:gosec
 		nextTXNo:      0,
-		statsTrackers: make([]stats.Tracker, 0),
+		statsTrackers: nil,
 		txOutChan:     txOutChan,
 		txDeliverChan: make(chan *trantorpbtypes.Transaction, 1),
 		stopChan:      make(chan struct{}),
