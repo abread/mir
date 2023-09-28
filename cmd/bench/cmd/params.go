@@ -59,7 +59,7 @@ type BenchParams struct {
 	TxGen            localtxgenerator.ModuleParams
 	CryptoImpl       string
 	ThreshCryptoImpl string
-	CryptoSeed       int64
+	CryptoSeed       int64 `json:",string"`
 	Duration         Duration
 	CrashAfter       Duration
 }
