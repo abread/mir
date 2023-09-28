@@ -10,6 +10,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/filecoin-project/mir/pkg/events"
@@ -248,7 +249,8 @@ func (tr *Transport) serializeMessage(msg *messagepbtypes.Message) ([]byte, erro
 	msgPb := msg.Pb()
 
 	if proto.Size(msgPb) > tr.params.MaxMessageSize {
-		return nil, es.Errorf("message too big: %v", msg)
+		json, _ := protojson.Marshal(msgPb)
+		return nil, es.Errorf("message too big: %v", string(json))
 	}
 
 	serialized, err := proto.Marshal(msgPb)
