@@ -61,6 +61,7 @@ type BenchParams struct {
 	ThreshCryptoImpl string
 	CryptoSeed       int64
 	Duration         Duration
+	CrashAfter       Duration
 }
 
 func (p *BenchParams) Fixup() {
@@ -128,6 +129,7 @@ func generateParams(args []string) error {
 			ThreshCryptoImpl: "pseudo",
 			CryptoSeed:       42,
 			Duration:         0,
+			CrashAfter:       0, // 0 = no crash
 		}
 	}
 

@@ -339,6 +339,18 @@ func runNode(ctx context.Context) error {
 		close(done)
 	}
 
+	if params.CrashAfter > 0 {
+		go func() {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(time.Duration(params.CrashAfter)):
+				logger.Log(logging.LevelError, "Simulating node crash")
+				os.Exit(0)
+			}
+		}()
+	}
+
 	// Start generating the load and measuring performance.
 	clientStats.Start()
 	netStats.Start()
