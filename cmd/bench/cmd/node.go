@@ -145,7 +145,7 @@ func runNode(ctx context.Context) error {
 	transport := libp2p2.NewTransport(params.Trantor.Net, ownID, h, logger, netStats)
 
 	// Instantiate the crypto module.
-	localCryptoSystem, err := deploytest.NewLocalCryptoSystem(params.CryptoImpl, membership.GetIDs(initialMembership), logger)
+	localCryptoSystem, err := deploytest.NewLocalCryptoSystem(params.CryptoImpl, params.CryptoSeed, membership.GetIDs(initialMembership), logger)
 	if err != nil {
 		return es.Errorf("could not create a local crypto system: %w", err)
 	}
@@ -157,7 +157,7 @@ func runNode(ctx context.Context) error {
 	// Instantiate the threshold crypto module.
 	F := (len(initialMembership.Nodes) - 1) / 3
 	thresh := 2*F + 1
-	localThreshCryptoSystem, err := deploytest.NewLocalThreshCryptoSystem(params.ThreshCryptoImpl, membership.GetIDs(initialMembership), thresh)
+	localThreshCryptoSystem, err := deploytest.NewLocalThreshCryptoSystem(params.ThreshCryptoImpl, params.CryptoSeed, membership.GetIDs(initialMembership), thresh)
 	if err != nil {
 		return es.Errorf("could not create threshcrypto system: %w", err)
 	}

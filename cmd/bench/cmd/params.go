@@ -59,6 +59,7 @@ type BenchParams struct {
 	TxGen            localtxgenerator.ModuleParams
 	CryptoImpl       string
 	ThreshCryptoImpl string
+	CryptoSeed       int64
 	Duration         Duration
 }
 
@@ -125,6 +126,7 @@ func generateParams(args []string) error {
 			TxGen:            localtxgenerator.DefaultModuleParams("0"),
 			CryptoImpl:       "pseudo",
 			ThreshCryptoImpl: "pseudo",
+			CryptoSeed:       42,
 			Duration:         0,
 		}
 	}

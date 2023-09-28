@@ -258,7 +258,7 @@ func newDeployment(conf *TestConfig) (*deploytest.Deployment, error) {
 		return nil, es.Errorf("could not create transport: %w", err)
 	}
 
-	threshCryptoSystem, err := deploytest.NewLocalThreshCryptoSystem("pseudo", nodeIDs, 2*conf.F+1)
+	threshCryptoSystem, err := deploytest.NewLocalThreshCryptoSystem("pseudo", mirCrypto.DefaultPseudoSeed, nodeIDs, 2*conf.F+1)
 	if err != nil {
 		return nil, es.Errorf("could not create threshcrypto system: %w", err)
 	}

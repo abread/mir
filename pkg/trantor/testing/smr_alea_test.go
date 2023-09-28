@@ -25,6 +25,7 @@ import (
 	"github.com/filecoin-project/mir"
 	"github.com/filecoin-project/mir/pkg/alea"
 	"github.com/filecoin-project/mir/pkg/checkpoint"
+	"github.com/filecoin-project/mir/pkg/crypto"
 	"github.com/filecoin-project/mir/pkg/deploytest"
 	"github.com/filecoin-project/mir/pkg/eventmangler"
 	"github.com/filecoin-project/mir/pkg/logging"
@@ -475,12 +476,12 @@ func newDeploymentAlea(conf *TestConfig) (*deploytest.Deployment, error) {
 
 	// TODO: fix for weighted stuff
 	F := (len(conf.NodeIDsWeight) - 1) / 3
-	threshCryptoSystem, err := deploytest.NewLocalThreshCryptoSystem("dummy", nodeIDs, 2*F+1)
+	threshCryptoSystem, err := deploytest.NewLocalThreshCryptoSystem("dummy", crypto.DefaultPseudoSeed, nodeIDs, 2*F+1)
 	if err != nil {
 		return nil, es.Errorf("could not create threshcrypto system: %w", err)
 	}
 
-	cryptoSystem, err := deploytest.NewLocalCryptoSystem("pseudo", nodeIDs, everythingLogger)
+	cryptoSystem, err := deploytest.NewLocalCryptoSystem("pseudo", crypto.DefaultPseudoSeed, nodeIDs, everythingLogger)
 	if err != nil {
 		return nil, es.Errorf("could not create a local crypto system: %w", err)
 	}

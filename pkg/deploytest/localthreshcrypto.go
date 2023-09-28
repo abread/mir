@@ -3,7 +3,6 @@ package deploytest
 import (
 	es "github.com/go-errors/errors"
 
-	mirCrypto "github.com/filecoin-project/mir/pkg/crypto"
 	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/threshcrypto"
 	t "github.com/filecoin-project/mir/pkg/types"
@@ -16,13 +15,14 @@ type LocalThreshCryptoSystem interface {
 
 type localPseudoThreshCryptoSystem struct {
 	cryptoType string
+	cryptoSeed int64
 	nodeIDs    []t.NodeID
 	threshold  int
 }
 
 // NewLocalCryptoSystem creates an instance of LocalCryptoSystem suitable for tests.
 // In the current implementation, cryptoType can only be "pseudo", "dummy" or "pseudo-purego".
-func NewLocalThreshCryptoSystem(cryptoType string, nodeIDs []t.NodeID, threshold int) (LocalThreshCryptoSystem, error) {
+func NewLocalThreshCryptoSystem(cryptoType string, cryptoSeed int64, nodeIDs []t.NodeID, threshold int) (LocalThreshCryptoSystem, error) {
 	if threshold < 0 {
 		return nil, es.Errorf("negative threshold: %v", threshold)
 	}
@@ -31,14 +31,14 @@ func NewLocalThreshCryptoSystem(cryptoType string, nodeIDs []t.NodeID, threshold
 		cryptoType = "herumi-pseudo"
 	}
 
-	return &localPseudoThreshCryptoSystem{cryptoType, nodeIDs, threshold}, nil
+	return &localPseudoThreshCryptoSystem{cryptoType, cryptoSeed, nodeIDs, threshold}, nil
 }
 
 func (cs *localPseudoThreshCryptoSystem) ThreshCrypto(id t.NodeID) (threshcrypto.ThreshCrypto, error) {
 	if cs.cryptoType == "herumi-pseudo" {
-		return threshcrypto.HerumiTBLSPseudo(cs.nodeIDs, cs.threshold, id, mirCrypto.DefaultPseudoSeed)
+		return threshcrypto.HerumiTBLSPseudo(cs.nodeIDs, cs.threshold, id, cs.cryptoSeed)
 	} else if cs.cryptoType == "kyber-pseudo" {
-		return threshcrypto.TBLSPseudo(cs.nodeIDs, cs.threshold, id, mirCrypto.DefaultPseudoSeed)
+		return threshcrypto.TBLSPseudo(cs.nodeIDs, cs.threshold, id, cs.cryptoSeed)
 	} else if cs.cryptoType == "dummy" {
 		return &threshcrypto.DummyCrypto{
 			DummySigShareSuffix: []byte("sigshare"),

@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/filecoin-project/mir/pkg/crypto"
 	"github.com/filecoin-project/mir/pkg/eventmangler"
 
 	"github.com/filecoin-project/mir/pkg/trantor/types"
@@ -424,13 +425,13 @@ func newDeployment(conf *TestConfig) (*deploytest.Deployment, error) {
 	if err != nil {
 		return nil, es.Errorf("error creating local transport system: %w", err)
 	}
-	cryptoSystem, err := deploytest.NewLocalCryptoSystem("pseudo", nodeIDs, logger)
+	cryptoSystem, err := deploytest.NewLocalCryptoSystem("pseudo", crypto.DefaultPseudoSeed, nodeIDs, logger)
 	if err != nil {
 		return nil, es.Errorf("could not create a local crypto system: %w", err)
 	}
 	// TODO: fix for weighted stuff
 	F := (len(nodeIDs) - 1) / 3
-	threshCryptoSystem, err := deploytest.NewLocalThreshCryptoSystem("pseudo", nodeIDs, 2*F+1)
+	threshCryptoSystem, err := deploytest.NewLocalThreshCryptoSystem("pseudo", crypto.DefaultPseudoSeed, nodeIDs, 2*F+1)
 	if err != nil {
 		return nil, es.Errorf("could not create threshcrypto system: %w", err)
 	}

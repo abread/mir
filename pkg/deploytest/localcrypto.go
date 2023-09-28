@@ -23,9 +23,9 @@ type localPseudoCryptoSystem struct {
 // NewLocalCryptoSystem creates an instance of LocalCryptoSystem suitable for tests.
 // In the current implementation, cryptoType can only be "pseudo" or "dummy".
 // TODO: Think about merging all the code in this file with the pseudo crypto implementation.
-func NewLocalCryptoSystem(cryptoType string, nodeIDs []t.NodeID, _ logging.Logger) (LocalCryptoSystem, error) {
+func NewLocalCryptoSystem(cryptoType string, cryptoSeed int64, nodeIDs []t.NodeID, _ logging.Logger) (LocalCryptoSystem, error) {
 	// Generate keys once. All crypto modules derived from this crypto system will use those keys.
-	keyPairs, err := mirCrypto.GenerateKeys(len(nodeIDs), mirCrypto.DefaultPseudoSeed)
+	keyPairs, err := mirCrypto.GenerateKeys(len(nodeIDs), cryptoSeed)
 	if err != nil {
 		return nil, err
 	}
