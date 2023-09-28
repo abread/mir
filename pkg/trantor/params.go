@@ -40,19 +40,6 @@ func DefaultParams(initialMembership *trantorpbtypes.Membership) Params {
 	return p
 }
 
-func (p *Params) AdjustBatchSize(batchSize int, txSize int) *Params {
-	p.Mempool.MaxTransactionsInBatch = batchSize
-	p.Mempool.MaxPayloadInBatch = batchSize * txSize * 105 / 100 // 5% overhead
-
-	// ensure network messages can accommodate the chosen batch size
-	batchAdjustedMaxMsgSize := p.Mempool.MaxPayloadInBatch * 105 / 100 // 5% overhead
-	if p.Net.MaxMessageSize < batchAdjustedMaxMsgSize {
-		p.Net.MaxMessageSize = batchAdjustedMaxMsgSize
-	}
-
-	return p
-}
-
 func (p *Params) AdjustSpeed(maxProposeDelay time.Duration) *Params {
 	p.Iss.AdjustSpeed(maxProposeDelay)
 	return p

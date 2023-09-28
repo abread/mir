@@ -60,6 +60,24 @@ type BenchParams struct {
 	Duration         Duration
 }
 
+func (p *BenchParams) Fixup() {
+	// ensure batches are adequately sized
+	minMaxPayloadInBatch := p.Trantor.Mempool.MaxTransactionsInBatch * p.TxGen.PayloadSize * 105 / 100 // 5% overhead
+	if p.Trantor.Mempool.MaxPayloadInBatch < minMaxPayloadInBatch {
+		p.Trantor.Mempool.MaxPayloadInBatch = minMaxPayloadInBatch
+	}
+
+	// ensure network messages can accommodate the chosen batch size
+	batchAdjustedMaxMsgSize := p.Trantor.Mempool.MaxPayloadInBatch * 105 / 100 // 5% overhead
+	if p.Trantor.Net.MaxMessageSize < batchAdjustedMaxMsgSize {
+		p.Trantor.Net.MaxMessageSize = batchAdjustedMaxMsgSize
+	}
+
+	// internal mempool takes care of ISS's propose timeout
+	p.Trantor.Mempool.BatchTimeout = p.Trantor.Iss.MaxProposeDelay
+	p.Trantor.Iss.MaxProposeDelay = 0
+}
+
 func generateParams(args []string) error {
 
 	// Load membership from file
@@ -119,8 +137,9 @@ func generateParams(args []string) error {
 	}
 
 	// Check if initial parameters are valid.
-	if err := checkParams(paramsJSON); err != nil {
-		return es.Errorf("generated parameters in valid: %w", err)
+	paramsJSON, err = fixupCheckParams(paramsJSON)
+	if err != nil {
+		return es.Errorf("generated parameters invalid: %w", err)
 	}
 
 	if settingsFile != "" {
@@ -158,7 +177,8 @@ func generateParams(args []string) error {
 			}
 
 			// Check if initial parameters are valid.
-			if err := checkParams(newJSON); err != nil {
+			newJSON, err := fixupCheckParams(newJSON)
+			if err != nil {
 				return es.Errorf("generated parameters for experiment %d in valid: %w", expID, err)
 			}
 
@@ -199,20 +219,27 @@ func setParam(paramsJSON string, paramName string, value string) (string, error)
 	return sjson.Set(paramsJSON, paramName, value)
 }
 
-func checkParams(paramsJSON string) error {
+func fixupCheckParams(paramsJSON string) (string, error) {
 
 	// Unmarshalling the parameters also serves as a (syntactic) sanity check.
 	var params BenchParams
 	if err := json.Unmarshal([]byte(paramsJSON), &params); err != nil {
-		return es.Errorf("generated parameters in valid: %w", err)
+		return "", es.Errorf("generated parameters in valid: %w", err)
 	}
+
+	params.Fixup()
 
 	// Check ISS parameters for consistency
 	if err := issconfig.CheckParams(params.Trantor.Iss); err != nil {
-		return es.Errorf("invalid ISS params: %w", err)
+		return "", es.Errorf("invalid ISS params: %w", err)
 	}
 
-	return nil
+	paramsNewJSON, err := json.MarshalIndent(params, "", "  ")
+	if err != nil {
+		return "", es.Errorf("unable to re-marshal params: %w", err)
+	}
+
+	return string(paramsNewJSON), nil
 }
 
 func loadFromFile(fileName string, dest *BenchParams) error {
@@ -263,17 +290,26 @@ func loadSettingsFile(fileName string) (parameterset.Set, error) {
 }
 
 func (d *Duration) UnmarshalJSON(b []byte) error {
-	var s string
-	if err := json.Unmarshal(b, &s); err != nil {
-		return es.Errorf("failed unmarshalling duration: %w", err)
+	var v any
+	if err := json.Unmarshal(b, &v); err != nil {
+		return err
+	}
+	switch v := v.(type) {
+	case string:
+		dur, err := time.ParseDuration(v)
+		if err != nil {
+			return err
+		}
+		*d = Duration(dur)
+	case float64:
+		*d = Duration(time.Duration(v))
+	default:
+		return fmt.Errorf("invalid duration: %v", v)
 	}
 
-	var goD time.Duration
-	var err error
-	if goD, err = time.ParseDuration(s); err != nil {
-		return es.Errorf("failed parsing duration: %w", err)
-	}
-
-	*d = Duration(goD)
 	return nil
+}
+
+func (d Duration) MarshalJSON() ([]byte, error) {
+	return json.Marshal(time.Duration(d).String())
 }

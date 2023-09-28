@@ -214,10 +214,6 @@ func New(
 			cryptoImpl,
 			logger,
 		))
-
-		// tune params for ISS
-		params.Mempool.BatchTimeout = params.Iss.MaxProposeDelay
-		params.Iss.MaxProposeDelay = 0
 	} else if params.Protocol == Alea {
 		// Check whether the passed configuration is valid.
 		if err := params.Alea.Check(); err != nil {
@@ -317,6 +313,8 @@ func New(
 			// Alea does not broadcast empty batches
 			params.Mempool.MinTransactionsInBatch = 1
 		}
+
+		// Alea uses custom timeouts for cutting new batches
 		params.Mempool.BatchTimeout = 0
 	} else {
 		// TODO: move protocol-specific code out of trantor
