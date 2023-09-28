@@ -359,6 +359,11 @@ func NewModule( // nolint: gocyclo,gocognit
 	// upon nice condition (unagreed batch count < max, no batch being cut, timeToNextAgForThisNode < estBc+margin || stalled ag), cut a new batch and broadcast it
 	// TODO: move to bc component
 	dsl.UponStateUpdates(m, func() error {
+		if !state.stalledBatchCut {
+			// no need to cut another batch while another is already being cut/broadcast
+			return nil
+		}
+
 		if state.queueSelectionPolicy.QueueHead(ownQueueIdx) > state.bcOwnQueueHead {
 			return es.Errorf("inconsistency: queue policy is ahead of bcOwnQueueHead")
 		}

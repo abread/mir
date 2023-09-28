@@ -89,7 +89,7 @@ func (pol *RoundRobinQueuePolicy) DeliverSn(sn uint64, agDecision bool) (bcpbtyp
 	queueIdx := pol.AgRound % uint64(len(pol.Membership))
 	slot := bcpbtypes.Slot{
 		QueueIdx:  aleatypes.QueueIdx(queueIdx),
-		QueueSlot: pol.AgQueueHeads[int(queueIdx)],
+		QueueSlot: pol.AgQueueHeads[queueIdx],
 	}
 
 	if agDecision {
