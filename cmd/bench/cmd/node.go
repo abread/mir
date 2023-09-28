@@ -238,6 +238,7 @@ func runNode(ctx context.Context) error {
 	if err := transport.WaitFor(len(initialMembership.Nodes)); err != nil {
 		return es.Errorf("failed waiting for network connections: %w", err)
 	}
+	time.Sleep(3 * time.Second) // wait a bit for the network to settle everywhere
 
 	// Synchronize with other nodes if necessary.
 	// If invoked, this code blocks until all the nodes have connected to each other.
