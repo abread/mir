@@ -150,7 +150,7 @@ func NewModule(
 	}
 	state.roundDecisionHistory.FreeEpochs(uint64(startingSn) / params.EpochLength)
 
-	controller := newAgController(mc, tunables, logger, state, agRounds)
+	controller := newAgController(mc, params, tunables, logger, state, agRounds)
 
 	perfSniffer := newAgRoundSniffer(mc, params, agRounds, state)
 
@@ -191,6 +191,7 @@ type state struct {
 
 	N         int
 	strongMaj int
+	minRound  uint64
 }
 
 func (s *state) storeRoundDecision(rounds *modring.Module, roundNum uint64, decision bool) error {
@@ -230,12 +231,16 @@ func (s *state) ensureRoundInitialized(roundNum uint64) *round {
 	return s.rounds[roundNum]
 }
 
-func newAgController(mc ModuleConfig, tunables ModuleTunables, logger logging.Logger, state *state, agRounds *modring.Module) modules.PassiveModule { // nolint: gocognit
+func newAgController(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, logger logging.Logger, state *state, agRounds *modring.Module) modules.PassiveModule { // nolint: gocognit
 	_ = logger // silence warnings
 
 	m := dsl.NewModule(mc.Self)
 
 	agreementpbdsl.UponInputValue(m, func(roundNum uint64, input bool) error {
+		if roundNum < state.minRound {
+			return es.Errorf("input for stale round: %v", roundNum) // stale round
+		}
+
 		// ensure we are not sending duplicate inputs
 		_, pendingPresent := state.pendingInput[roundNum]
 		round := state.ensureRoundInitialized(roundNum)
@@ -255,6 +260,10 @@ func newAgController(mc ModuleConfig, tunables ModuleTunables, logger logging.Lo
 		round, err := mc.agRoundNumber(srcModule)
 		if err != nil {
 			return err
+		}
+
+		if round < state.minRound {
+			return nil // stale round
 		}
 
 		// queue result for delivery (when ready)
@@ -406,6 +415,7 @@ func newAgController(mc ModuleConfig, tunables ModuleTunables, logger logging.Lo
 	directorpbdsl.UponGCEpochs(m, func(epoch tt.EpochNr) error {
 		// we can discard older rounds
 		state.roundDecisionHistory.FreeEpochs(uint64(epoch))
+		state.minRound = uint64(epoch) * params.EpochLength
 		return nil
 	})
 	apppbdsl.UponRestoreState(m, func(checkpoint *checkpointpbtypes.StableCheckpoint) error {
@@ -432,6 +442,8 @@ func newAgController(mc ModuleConfig, tunables ModuleTunables, logger logging.Lo
 			return err
 		}
 		dsl.EmitEvents(m, evsOut)
+
+		state.minRound = uint64(checkpoint.Sn)
 
 		return nil
 	})
