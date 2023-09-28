@@ -3,6 +3,7 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
+	"google.golang.org/protobuf/proto"
 	"gopkg.in/yaml.v3"
 
 	"github.com/filecoin-project/mir/cmd/bench/localtxgenerator"
@@ -71,6 +73,15 @@ func (p *BenchParams) Fixup() {
 	batchAdjustedMaxMsgSize := p.Trantor.Mempool.MaxPayloadInBatch * 105 / 100 // 5% overhead
 	if p.Trantor.Net.MaxMessageSize < batchAdjustedMaxMsgSize {
 		p.Trantor.Net.MaxMessageSize = batchAdjustedMaxMsgSize
+	}
+
+	// ensure network messages can accomodate the current config size
+	worstClientIDSz := int(math.Log2(float64(p.TxGen.NumClients))) + int(math.Log2(float64(len(p.Trantor.Iss.InitialMembership.Nodes)))) + 3
+	worstClientProgressSz := (proto.Size((&trantorpbtypes.DeliveredTXs{LowWm: math.MaxUint64}).Pb()) + worstClientIDSz + 16) * p.TxGen.NumClients * len(p.Trantor.Iss.InitialMembership.Nodes)
+	membershipSz := proto.Size(p.Trantor.Iss.InitialMembership.Pb())
+	worstSnapshotMsg := ((p.Trantor.Iss.ConfigOffset+1)*membershipSz + worstClientProgressSz + 1024) * 105 / 100 // 5% overhead
+	if p.Trantor.Net.MaxMessageSize < worstSnapshotMsg {
+		p.Trantor.Net.MaxMessageSize = worstSnapshotMsg
 	}
 
 	// internal mempool takes care of ISS's propose timeout
