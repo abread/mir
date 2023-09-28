@@ -8,6 +8,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/events"
 	ageventstypes "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents/types"
 	bcpbtypes "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/types"
+	batchfetcherpbtypes "github.com/filecoin-project/mir/pkg/pb/batchfetcherpb/types"
 
 	//batchfetcherpbtypes "github.com/filecoin-project/mir/pkg/pb/batchfetcherpb/types"
 	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
@@ -47,7 +48,7 @@ func (i *StatInterceptor) Intercept(events events.EventList) error {
 				for _, tx := range e.NewTransactions.Transactions {
 					i.LiveStats.Submit(tx)
 				}
-			}
+			}*/
 		case *eventpbtypes.Event_BatchFetcher:
 
 			// Skip events destined to other modules than the one consuming the transactions.
@@ -60,7 +61,7 @@ func (i *StatInterceptor) Intercept(events events.EventList) error {
 				for _, tx := range e.NewOrderedBatch.Txs {
 					i.LiveStats.Deliver(tx)
 				}
-			}*/
+			}
 		case *eventpbtypes.Event_AleaAgreement:
 			switch e2 := e.AleaAgreement.Type.(type) {
 			case *ageventstypes.Event_InputValue:
