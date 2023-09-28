@@ -75,7 +75,7 @@ func (p *BenchParams) Fixup() {
 		p.Trantor.Net.MaxMessageSize = batchAdjustedMaxMsgSize
 	}
 
-	// ensure network messages can accomodate the current config size
+	// ensure network messages can accommodate the current config size
 	worstClientIDSz := int(math.Log2(float64(p.TxGen.NumClients))) + int(math.Log2(float64(len(p.Trantor.Iss.InitialMembership.Nodes)))) + 3
 	worstClientProgressSz := (proto.Size((&trantorpbtypes.DeliveredTXs{LowWm: math.MaxUint64}).Pb()) + worstClientIDSz + 16) * p.TxGen.NumClients * len(p.Trantor.Iss.InitialMembership.Nodes)
 	membershipSz := proto.Size(p.Trantor.Iss.InitialMembership.Pb())
