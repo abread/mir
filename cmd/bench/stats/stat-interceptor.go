@@ -5,6 +5,8 @@
 package stats
 
 import (
+	"strings"
+
 	"github.com/filecoin-project/mir/pkg/events"
 	ageventstypes "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents/types"
 	bcpbtypes "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/types"
@@ -23,10 +25,12 @@ type StatInterceptor struct {
 	// Statistics will only be performed on transactions destined to this module
 	// and the rest of the events will be ignored by the StatInterceptor.
 	txConsumerModule t.ModuleID
+
+	ownClientIDPrefix string
 }
 
-func NewStatInterceptor(s *LiveStats, txConsumer t.ModuleID) *StatInterceptor {
-	return &StatInterceptor{s, txConsumer}
+func NewStatInterceptor(s *LiveStats, txConsumer t.ModuleID, ownClientIDPrefix string) *StatInterceptor {
+	return &StatInterceptor{s, txConsumer, ownClientIDPrefix}
 }
 
 func (i *StatInterceptor) Intercept(events events.EventList) error {
@@ -42,13 +46,14 @@ func (i *StatInterceptor) Intercept(events events.EventList) error {
 	it := events.Iterator()
 	for evt := it.Next(); evt != nil; evt = it.Next() {
 		switch e := evt.Type.(type) {
+		// only used for latency measurements, updated by client
 		/*case *eventpbtypes.Event_Mempool:
-			switch e := e.Mempool.Type.(type) {
-			case *mempoolpbtypes.Event_NewTransactions:
-				for _, tx := range e.NewTransactions.Transactions {
-					i.LiveStats.Submit(tx)
-				}
-			}*/
+		switch e := e.Mempool.Type.(type) {
+		case *mempoolpbtypes.Event_NewTransactions:
+			for _, tx := range e.NewTransactions.Transactions {
+				i.LiveStats.Submit(tx)
+			}
+		}*/
 		case *eventpbtypes.Event_BatchFetcher:
 
 			// Skip events destined to other modules than the one consuming the transactions.
@@ -59,7 +64,11 @@ func (i *StatInterceptor) Intercept(events events.EventList) error {
 			switch e := e.BatchFetcher.Type.(type) {
 			case *batchfetcherpbtypes.Event_NewOrderedBatch:
 				for _, tx := range e.NewOrderedBatch.Txs {
-					i.LiveStats.Deliver(tx)
+					// clients track their own deliveries
+					// only consider deliveries from other clients here (for throughput measurements)
+					if !strings.HasPrefix(string(tx.ClientId), i.ownClientIDPrefix) {
+						i.LiveStats.Deliver(tx)
+					}
 				}
 			}
 		case *eventpbtypes.Event_AleaAgreement:

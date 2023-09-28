@@ -221,7 +221,7 @@ func runNode(ctx context.Context) error {
 	txGen.TrackStats(liveStats)
 	txGen.TrackStats(clientStats)
 
-	interceptor := eventlog.MultiInterceptor(tracer, stats.NewStatInterceptor(liveStats, trantor.DefaultModuleConfig().App))
+	interceptor := eventlog.MultiInterceptor(tracer, stats.NewStatInterceptor(liveStats, trantor.DefaultModuleConfig().App, string(params.TxGen.ClientID)+"."))
 	// Instantiate the Mir Node.
 	nodeConfig := mir.DefaultNodeConfig().WithLogger(logger)
 	nodeConfig.Stats.Period = 5 * time.Second
