@@ -319,8 +319,6 @@ func runNode(ctx context.Context) error {
 
 		close(trantorStopped)
 		statsWg.Wait()
-
-		writeFinalStats(clientStats, netStats, statSummaryFileName, logger)
 	}
 
 	done := make(chan struct{})
@@ -359,6 +357,7 @@ func runNode(ctx context.Context) error {
 
 	nodeError := node.Run(ctx)
 	<-done
+	writeFinalStats(clientStats, netStats, statSummaryFileName, logger)
 	return nodeError
 }
 
