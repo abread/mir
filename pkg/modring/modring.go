@@ -211,7 +211,7 @@ func (m *Module) updateSubsAndFilterIncomingEvents(eventsByDest map[uint64]*even
 			continue // too far in the future
 		}
 
-		if m.ring[idx].subID > subID || (m.ring[idx].subID == subID && m.ring[idx].mod == nil && !m.ring[idx].isCurrent) {
+		if subID < m.minID || (m.ring[idx].subID == subID && m.ring[idx].mod == nil && !m.ring[idx].isCurrent) {
 			// events are in the past, forward received messages to past message handler
 			it := eventsByDest[subID].Iterator()
 			for event := it.Next(); event != nil; event = it.Next() {
