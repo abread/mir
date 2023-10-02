@@ -20,7 +20,7 @@ import (
 type LiveStats struct {
 	lock                    sync.RWMutex
 	txTimestamps            map[txKey]time.Time
-	avgLatency              float64
+	avgLatency              time.Duration
 	timestampedTransactions int
 	deliveredTransactions   int
 
@@ -29,12 +29,12 @@ type LiveStats struct {
 	agInputTimestamps map[uint64]time.Time
 	stalledAgStart    time.Time
 	currentAgRound    uint64
-	avgAgStall        float64
-	cumPosAgStall     float64
+	avgAgStall        time.Duration
+	cumPosAgStall     time.Duration
 	trueAgDelivers    int
 	falseAgDelivers   int
 
-	estUnanimousAgTime float64
+	estUnanimousAgTime time.Duration
 	innerAbbaTimeCount int
 }
 
@@ -65,7 +65,7 @@ func (s *LiveStats) AgDeliver(deliver *ageventstypes.Deliver) {
 		stall := -time.Since(t) // negative stall: input is before deliver of the previous round
 
 		// $CA_{n+1} = CA_n + {x_{n+1} - CA_n \over n + 1}$
-		s.avgAgStall += (stall.Seconds() - s.avgAgStall) / float64(deliver.Round+2)
+		s.avgAgStall += (stall - s.avgAgStall) / time.Duration(deliver.Round+2)
 
 		delete(s.agInputTimestamps, deliver.Round+1)
 	} else {
@@ -89,9 +89,9 @@ func (s *LiveStats) AgInput(input *ageventstypes.InputValue) {
 	if s.currentAgRound == input.Round {
 		stall := time.Since(s.stalledAgStart)
 
-		s.cumPosAgStall += stall.Seconds()
+		s.cumPosAgStall += stall
 		// $CA_{n+1} = CA_n + {x_{n+1} - CA_n \over n + 1}$
-		s.avgAgStall += (stall.Seconds() - s.avgAgStall) / float64(input.Round+1)
+		s.avgAgStall += (stall - s.avgAgStall) / time.Duration(input.Round+1)
 	} else {
 		s.agInputTimestamps[input.Round] = time.Now()
 	}
@@ -102,7 +102,7 @@ func (s *LiveStats) InnerAbbaTime(t *ageventstypes.InnerAbbaRoundTime) {
 	s.lock.Lock()
 	s.innerAbbaTimeCount++
 	unanimousLatency := t.DurationNoCoin / 3
-	s.estUnanimousAgTime += (unanimousLatency.Seconds() - s.estUnanimousAgTime) / float64(s.innerAbbaTimeCount)
+	s.estUnanimousAgTime += (unanimousLatency - s.estUnanimousAgTime) / time.Duration(s.innerAbbaTimeCount)
 	s.lock.Unlock()
 }
 
@@ -123,7 +123,7 @@ func (s *LiveStats) Deliver(tx *trantorpbtypes.Transaction) {
 		d := time.Since(t)
 
 		// $CA_{n+1} = CA_n + {x_{n+1} - CA_n \over n + 1}$
-		s.avgLatency += (float64(d) - s.avgLatency) / float64(s.timestampedTransactions)
+		s.avgLatency += (d - s.avgLatency) / time.Duration(s.timestampedTransactions)
 	}
 	s.lock.Unlock()
 }
@@ -144,7 +144,7 @@ func (s *LiveStats) AvgLatency() time.Duration {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
 
-	return time.Duration(s.avgLatency)
+	return s.avgLatency
 }
 
 func (s *LiveStats) DeliveredTransactions() int {
@@ -194,13 +194,13 @@ func (s *LiveStats) WriteCSVRecord(w *csv.Writer, d time.Duration) error {
 		fmt.Sprintf("%.3f", float64(time.Now().UnixMilli())/1000.0),
 		strconv.Itoa(deliveredTxs),
 		fmt.Sprintf("%.1f", tps),
-		fmt.Sprintf("%.5f", time.Duration(avgLatency).Seconds()),
+		fmt.Sprintf("%.6f", avgLatency.Seconds()),
 		strconv.Itoa(bcDelivers),
 		strconv.Itoa(trueAgDelivers),
 		strconv.Itoa(falseAgDelivers),
-		fmt.Sprintf("%.5f", avgAgStall),
-		fmt.Sprintf("%.5f", cumPosAgStall),
-		fmt.Sprintf("%.5f", estUnanimousAgTime),
+		fmt.Sprintf("%.6f", avgAgStall.Seconds()),
+		fmt.Sprintf("%.6f", cumPosAgStall.Seconds()),
+		fmt.Sprintf("%.6f", estUnanimousAgTime.Seconds()),
 	}
 	return w.Write(record)
 }

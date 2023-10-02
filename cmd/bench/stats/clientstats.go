@@ -158,16 +158,14 @@ func (cs *ClientStats) LatencyPctile(pctile float32) time.Duration {
 	return result
 }
 
-var width = 15
-
 func (cs *ClientStats) WriteCSVHeader(w *csv.Writer) error {
 	record := []string{
-		fmt.Sprintf(fmt.Sprintf("%%%ds", width), "duration"),
-		fmt.Sprintf(fmt.Sprintf("%%%ds", width), "throughput"),
-		fmt.Sprintf(fmt.Sprintf("%%%ds", width), "latency-avg"),
-		fmt.Sprintf(fmt.Sprintf("%%%ds", width), "latency-median"),
-		fmt.Sprintf(fmt.Sprintf("%%%ds", width), "latency-95p"),
-		fmt.Sprintf(fmt.Sprintf("%%%ds", width), "latency-max"),
+		"duration",
+		"throughput",
+		"latency-avg",
+		"latency-median",
+		"latency-95p",
+		"latency-max",
 	}
 	return w.Write(record)
 }
@@ -175,12 +173,12 @@ func (cs *ClientStats) WriteCSVHeader(w *csv.Writer) error {
 func (cs *ClientStats) WriteCSVRecord(w *csv.Writer, _ time.Duration) error {
 	cs.timestampsLock.Lock()
 	record := []string{
-		fmt.Sprintf(fmt.Sprintf("%%%ds", width), cs.duration),
-		fmt.Sprintf(fmt.Sprintf("%%%dd", width), cs.AvgThroughput()),
-		fmt.Sprintf(fmt.Sprintf("%%%ds", width), cs.AvgLatency()),
-		fmt.Sprintf(fmt.Sprintf("%%%ds", width), cs.LatencyPctile(0.5)),
-		fmt.Sprintf(fmt.Sprintf("%%%ds", width), cs.LatencyPctile(0.95)),
-		fmt.Sprintf(fmt.Sprintf("%%%ds", width), cs.LatencyPctile(1.0)),
+		fmt.Sprintf("%.6f", cs.duration.Seconds()),
+		fmt.Sprintf("%d", cs.AvgThroughput()),
+		fmt.Sprintf("%.6f", cs.AvgLatency().Seconds()),
+		fmt.Sprintf("%.6f", cs.LatencyPctile(0.5).Seconds()),
+		fmt.Sprintf("%.6f", cs.LatencyPctile(0.95).Seconds()),
+		fmt.Sprintf("%.6f", cs.LatencyPctile(1.0).Seconds()),
 	}
 	cs.timestampsLock.Unlock()
 	return w.Write(record)
