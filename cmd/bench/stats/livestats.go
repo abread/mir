@@ -36,6 +36,9 @@ type LiveStats struct {
 
 	estUnanimousAgTime time.Duration
 	innerAbbaTimeCount int
+
+	avgBatchSize256     int
+	deliveredBatchCount int
 }
 
 type txKey struct {
@@ -128,6 +131,16 @@ func (s *LiveStats) Deliver(tx *trantorpbtypes.Transaction) {
 	s.lock.Unlock()
 }
 
+func (s *LiveStats) CutBatch(batchSz int) {
+	s.lock.Lock()
+
+	s.deliveredBatchCount++
+	// batch size is multiplied by 256 to retain 8 bits of precision
+	s.avgBatchSize256 += (batchSz*256 - s.avgBatchSize256) / s.deliveredBatchCount
+
+	s.lock.Unlock()
+}
+
 func (s *LiveStats) AssumeDelivered(tx *trantorpbtypes.Transaction) {
 	s.lock.Lock()
 
@@ -166,6 +179,7 @@ func (s *LiveStats) WriteCSVHeader(w *csv.Writer) error {
 		"avgAgStall",
 		"cumPosAgStall",
 		"estUnanimousAgTime",
+		"avgBatchSize",
 	}
 	return w.Write(record)
 }
@@ -180,6 +194,7 @@ func (s *LiveStats) WriteCSVRecord(w *csv.Writer, d time.Duration) error {
 	avgAgStall := s.avgAgStall
 	cumPosAgStall := s.cumPosAgStall
 	estUnanimousAgTime := s.estUnanimousAgTime
+	avgBatchSize256 := s.avgBatchSize256
 
 	s.avgLatency = 0
 	s.timestampedTransactions = 0
@@ -187,6 +202,8 @@ func (s *LiveStats) WriteCSVRecord(w *csv.Writer, d time.Duration) error {
 	s.bcDelivers = 0
 	s.trueAgDelivers = 0
 	s.falseAgDelivers = 0
+	s.avgBatchSize256 = 0
+	s.deliveredBatchCount = 0
 	s.lock.Unlock()
 
 	tps := float64(deliveredTxs) / (float64(d) / float64(time.Second))
@@ -201,6 +218,7 @@ func (s *LiveStats) WriteCSVRecord(w *csv.Writer, d time.Duration) error {
 		fmt.Sprintf("%.6f", avgAgStall.Seconds()),
 		fmt.Sprintf("%.6f", cumPosAgStall.Seconds()),
 		fmt.Sprintf("%.6f", estUnanimousAgTime.Seconds()),
+		fmt.Sprintf("%.3f", float64(avgBatchSize256)/256.0),
 	}
 	return w.Write(record)
 }

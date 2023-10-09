@@ -11,6 +11,7 @@ import (
 	ageventstypes "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents/types"
 	bcpbtypes "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/types"
 	batchfetcherpbtypes "github.com/filecoin-project/mir/pkg/pb/batchfetcherpb/types"
+	mempoolpbtypes "github.com/filecoin-project/mir/pkg/pb/mempoolpb/types"
 
 	//batchfetcherpbtypes "github.com/filecoin-project/mir/pkg/pb/batchfetcherpb/types"
 	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
@@ -46,14 +47,16 @@ func (i *StatInterceptor) Intercept(events events.EventList) error {
 	it := events.Iterator()
 	for evt := it.Next(); evt != nil; evt = it.Next() {
 		switch e := evt.Type.(type) {
-		// only used for latency measurements, updated by client
-		/*case *eventpbtypes.Event_Mempool:
-		switch e := e.Mempool.Type.(type) {
-		case *mempoolpbtypes.Event_NewTransactions:
-			for _, tx := range e.NewTransactions.Transactions {
-				i.LiveStats.Submit(tx)
+		case *eventpbtypes.Event_Mempool:
+			switch e := e.Mempool.Type.(type) {
+			case *mempoolpbtypes.Event_NewTransactions:
+				i.LiveStats.CutBatch(len(e.NewTransactions.Transactions))
+
+				// only used for latency measurements, updated by client
+				/*for _, tx := range e.NewTransactions.Transactions {
+					i.LiveStats.Submit(tx)
+				}*/
 			}
-		}*/
 		case *eventpbtypes.Event_BatchFetcher:
 
 			// Skip events destined to other modules than the one consuming the transactions.
