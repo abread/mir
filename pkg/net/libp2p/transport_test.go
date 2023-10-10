@@ -27,7 +27,7 @@ import (
 
 func testMsg() *messagepbtypes.Message {
 	// message can't be completely empty
-	return &messagepbtypes.Message{ DestModule: "test" }
+	return &messagepbtypes.Message{DestModule: "test"}
 }
 
 type mockLibp2pCommunication struct {
