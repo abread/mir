@@ -25,6 +25,11 @@ import (
 	libp2putil "github.com/filecoin-project/mir/pkg/util/libp2p"
 )
 
+func testMsg() *messagepbtypes.Message {
+	// message can't be completely empty
+	return &messagepbtypes.Message{ DestModule: "test" }
+}
+
 type mockLibp2pCommunication struct {
 	t          *testing.T
 	params     Params
@@ -387,7 +392,7 @@ func TestCallSendWithoutConnect(t *testing.T) {
 	a := m.transports[nodeA]
 	m.StartAllTransports()
 
-	err := a.Send(nodeB, &messagepbtypes.Message{})
+	err := a.Send(nodeB, testMsg())
 	require.Error(t, err)
 
 	m.StopAllTransports()
@@ -407,8 +412,6 @@ func TestSendReceive(t *testing.T) {
 	nodeC := types.NodeID("c")
 	nodeD := types.NodeID("d")
 	// nodeE := types.NodeID("e")
-
-	testMsg := &messagepbtypes.Message{}
 
 	m := newMockLibp2pCommunication(t, DefaultParams(), []types.NodeID{nodeA, nodeB, nodeC, nodeD}, logger)
 
@@ -445,11 +448,11 @@ func TestSendReceive(t *testing.T) {
 	nodeBEventsChan := b.EventsOut()
 	nodeCEventsChan := c.EventsOut()
 
-	err := a.Send(nodeB, testMsg)
+	err := a.Send(nodeB, testMsg())
 	require.NoError(t, err)
 	m.testThatSenderIs(<-nodeBEventsChan, nodeA)
 
-	err = a.Send(nodeC, testMsg)
+	err = a.Send(nodeC, testMsg())
 	require.NoError(t, err)
 	m.testThatSenderIs(<-nodeCEventsChan, nodeA)
 
@@ -514,11 +517,11 @@ func TestSendReceiveEmptyMessage(t *testing.T) { // nolint:unused
 	nodeBEventsChan := b.EventsOut()
 	nodeCEventsChan := c.EventsOut()
 
-	err := a.Send(nodeB, &messagepbtypes.Message{})
+	err := a.Send(nodeB, testMsg())
 	require.NoError(t, err)
 	m.testThatSenderIs(<-nodeBEventsChan, nodeA)
 
-	err = a.Send(nodeC, &messagepbtypes.Message{})
+	err = a.Send(nodeC, testMsg())
 	require.NoError(t, err)
 	m.testThatSenderIs(<-nodeCEventsChan, nodeA)
 
@@ -604,8 +607,6 @@ func TestMessaging(t *testing.T) {
 	nodeA := types.NodeID("a")
 	nodeB := types.NodeID("b")
 
-	testMsg := &messagepbtypes.Message{}
-
 	m := newMockLibp2pCommunication(t, DefaultParams(), []types.NodeID{nodeA, nodeB}, logger)
 
 	a := m.transports[nodeA]
@@ -682,7 +683,7 @@ func TestMessaging(t *testing.T) {
 				sentBeforeDisconnect = sent
 				disconnect <- struct{}{}
 			case <-send.C:
-				err := a.Send(nodeB, testMsg)
+				err := a.Send(nodeB, testMsg())
 				if err != nil {
 					m.t.Log(err)
 				} else {
@@ -718,8 +719,6 @@ func TestSendingReceiveWithWaitFor(t *testing.T) {
 	nodeA := types.NodeID("a")
 	nodeB := types.NodeID("b")
 
-	testMsg := &messagepbtypes.Message{}
-
 	m := newMockLibp2pCommunication(t, DefaultParams(), []types.NodeID{nodeA, nodeB}, logger)
 	a := m.transports[nodeA]
 	b := m.transports[nodeB]
@@ -740,7 +739,7 @@ func TestSendingReceiveWithWaitFor(t *testing.T) {
 
 	t.Log(">>> sending messages")
 	nodeBEventsChan := b.EventsOut()
-	err = a.Send(nodeB, testMsg)
+	err = a.Send(nodeB, testMsg())
 	require.NoError(t, err)
 	m.testThatSenderIs(<-nodeBEventsChan, nodeA)
 
@@ -800,8 +799,6 @@ func TestSendReceiveWithWaitForAndBlock(t *testing.T) {
 	require.Equal(t, nodeA, a.ownID)
 	require.Equal(t, nodeB, b.ownID)
 
-	testMsg := &messagepbtypes.Message{}
-
 	t.Log(">>> connecting nodes")
 
 	initialNodes := m.MembershipOf(nodeA, nodeB)
@@ -816,7 +813,7 @@ func TestSendReceiveWithWaitForAndBlock(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Log(">>> send a message")
-	err = a.Send(nodeB, testMsg)
+	err = a.Send(nodeB, testMsg())
 	require.NoError(t, err)
 
 	nodeBEventsChan := b.incomingMessages
@@ -827,13 +824,13 @@ func TestSendReceiveWithWaitForAndBlock(t *testing.T) {
 
 	go func() {
 		b.incomingMessages <- events.ListOf(
-			transportpbevents.MessageReceived("1", "blocker", testMsg),
+			transportpbevents.MessageReceived("1", "blocker", testMsg()),
 		)
 		b.incomingMessages <- events.ListOf(
-			transportpbevents.MessageReceived("1", "blocker", testMsg),
+			transportpbevents.MessageReceived("1", "blocker", testMsg()),
 		)
 	}()
-	err = a.Send(nodeB, testMsg)
+	err = a.Send(nodeB, testMsg())
 	time.Sleep(5 * time.Second)
 	require.NoError(t, err)
 
@@ -942,8 +939,6 @@ func TestMessagingWithNewNodes(t *testing.T) {
 	initialNodes := m.MembershipOf(nodes[:N]...)
 	allNodes := m.MembershipOf(nodes...)
 
-	testMsg := &messagepbtypes.Message{}
-
 	t.Logf(">>> connecting nodes")
 	for i := 0; i < N; i++ {
 		m.transports[nodes[i]].Connect(initialNodes)
@@ -967,7 +962,7 @@ func TestMessagingWithNewNodes(t *testing.T) {
 
 		for i := 0; i < 100; i++ {
 			time.Sleep(time.Duration(rand.Intn(50)) * time.Millisecond) // nolint
-			err := m.transports[src].Send(dst, testMsg)
+			err := m.transports[src].Send(dst, testMsg())
 			if err != nil {
 				t.Logf("%v->%v failed to send: %v", src, dst, err)
 			} else {
