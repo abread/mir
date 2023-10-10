@@ -320,7 +320,12 @@ func includeBatchFetching( // nolint: gocognit,gocyclo
 
 	directorpbdsl.UponNewEpoch(m, func(epoch tt.EpochNr) error {
 		state.epochNr = epoch
-		state.epochFetchedSlots[epoch] = make([]bcpbtypes.Slot, 0, len(certDB)/len(state.epochFetchedSlots))
+
+		szHint := len(certDB)
+		if len(state.epochFetchedSlots) > 0 {
+			szHint /= len(state.epochFetchedSlots)
+		}
+		state.epochFetchedSlots[epoch] = make([]bcpbtypes.Slot, 0, szHint)
 		return nil
 	})
 

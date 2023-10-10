@@ -11,6 +11,7 @@ import (
 
 	"github.com/filecoin-project/mir/pkg/alea/aleatypes"
 	"github.com/filecoin-project/mir/pkg/alea/broadcast/bccommon"
+	"github.com/filecoin-project/mir/pkg/alea/queueselectionpolicy"
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/logging"
@@ -19,6 +20,9 @@ import (
 	bcpbtypes "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/types"
 	bcqueuepbdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/dsl"
 	bcqueuepbevents "github.com/filecoin-project/mir/pkg/pb/aleapb/bcqueuepb/events"
+	directorpbdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/directorpb/dsl"
+	apppbdsl "github.com/filecoin-project/mir/pkg/pb/apppb/dsl"
+	checkpointpbtypes "github.com/filecoin-project/mir/pkg/pb/checkpointpb/types"
 	messagepbtypes "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
 	modringpbtypes "github.com/filecoin-project/mir/pkg/pb/modringpb/types"
 	reliablenetpbevents "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/events"
@@ -178,8 +182,8 @@ func newQueueController(mc ModuleConfig, params *ModuleParams, tunables ModuleTu
 		return nil
 	})
 
-	bcqueuepbdsl.UponFreeStale(m, func(queueSlot aleatypes.QueueSlot) error {
-		if err := slots.AdvanceViewToAtLeastSubmodule(uint64(queueSlot)); err != nil {
+	freeSlotsBefore := func(minSlot aleatypes.QueueSlot) error {
+		if err := slots.AdvanceViewToAtLeastSubmodule(uint64(minSlot)); err != nil {
 			return err
 		}
 		evsOut, err := slots.FreePast()
@@ -189,6 +193,66 @@ func newQueueController(mc ModuleConfig, params *ModuleParams, tunables ModuleTu
 		dsl.EmitEvents(m, evsOut)
 
 		return nil
+	}
+
+	// track last freed slot in each epoch to properly garbage collect them
+	// note that slots are only freed after delivery
+	var currentEpoch tt.EpochNr
+	epochLastFreedSlot := make(map[tt.EpochNr]aleatypes.QueueSlot)
+	epochLastFreedSlot[0] = aleatypes.QueueSlot(math.MaxUint64) // ensure first epoch is always initialized
+
+	directorpbdsl.UponNewEpoch(m, func(epochNr tt.EpochNr) error {
+		currentEpoch = epochNr
+		epochLastFreedSlot[currentEpoch] = aleatypes.QueueSlot(math.MaxUint64)
+		return nil
+	})
+	bcqueuepbdsl.UponFreeSlot(m, func(queueSlot aleatypes.QueueSlot) error {
+		if epochLastFreedSlot[currentEpoch] < queueSlot || epochLastFreedSlot[currentEpoch] == math.MaxUint64 {
+			epochLastFreedSlot[currentEpoch] = queueSlot
+		}
+		return nil
+	})
+
+	// garbage collect slots that are not needed anymore
+	directorpbdsl.UponGCEpochs(m, func(minEpoch tt.EpochNr) error {
+		maxFreedSlot := aleatypes.QueueSlot(math.MaxUint64)
+
+		for epoch := range epochLastFreedSlot {
+			if epoch >= minEpoch {
+				continue // keep epoch
+			}
+
+			if epochLastFreedSlot[epoch] != math.MaxUint64 {
+				// something was freed in this epoch
+				if epochLastFreedSlot[epoch] > maxFreedSlot || maxFreedSlot == math.MaxUint64 {
+					maxFreedSlot = epochLastFreedSlot[epoch]
+				}
+			}
+
+			delete(epochLastFreedSlot, epoch)
+		}
+
+		if maxFreedSlot != math.MaxUint64 {
+			// forget slots delivered in old epochs
+			return freeSlotsBefore(maxFreedSlot + 1)
+		}
+
+		return nil
+	})
+
+	// when restoring from checkpoint, free all slots before the checkpoint to avoid tracking useless slots
+	apppbdsl.UponRestoreState(m, func(checkpoint *checkpointpbtypes.StableCheckpoint) error {
+		if params.QueueOwner == nodeID {
+			// own queue does not need to restore state from the outside world
+			return nil
+		}
+
+		qsp, err := queueselectionpolicy.QueuePolicyFromBytes(checkpoint.Snapshot.EpochData.LeaderPolicy)
+		if err != nil {
+			return err
+		}
+
+		return freeSlotsBefore(qsp.QueueHead(params.QueueIdx))
 	})
 
 	return m

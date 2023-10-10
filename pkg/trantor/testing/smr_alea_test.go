@@ -510,6 +510,11 @@ func newDeploymentAlea(conf *TestConfig) (*deploytest.Deployment, error) {
 		tConf.ReliableNet.MaxRetransmissionBurst = 4
 		tConf.Net = libp2p.Params{} // should be unused anyway
 
+		// make epochs progress fast
+		tConf.Alea.Adjust(4, 1)
+		tConf.Alea.RetainEpochs = 1
+		tConf.Alea.MaxAgStall = 150 * time.Millisecond
+
 		if conf.ParamsModifier != nil {
 			conf.ParamsModifier(&tConf)
 		}

@@ -27,7 +27,6 @@ message Event {
     BcStarted    bc_started     = 5;
     BcQuorumDone bc_quorum_done = 6;
     BcAllDone    bc_all_done    = 7;
-    FreeStale    free_stale     = 8;
   }
 }
 
@@ -82,11 +81,4 @@ message BcAllDone {
 
   // Time between receiving 2F+1 VCB Done messages (from different nodes) and the remaining F.
   int64 quorum_done_delta = 2 [(mir.type) = "time.Duration"];
-}
-
-// Free all slots up to (but not including) the given queue slot.
-message FreeStale {
-  option (mir.event) = true;
-
-  uint64 queue_slot = 1 [(mir.type) = "github.com/filecoin-project/mir/pkg/alea/aleatypes.QueueSlot"];
 }
