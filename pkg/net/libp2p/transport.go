@@ -397,6 +397,7 @@ func (tr *Transport) handleIncomingConnection(s network.Stream) {
 	select {
 	case <-tr.stop:
 		// If we are shutting down right now, ignore this connection.
+		tr.connectionsLock.RUnlock()
 		return
 	default:
 		// If new connections are still accepted, make sure we will wait for this handler to terminate when stopping.
