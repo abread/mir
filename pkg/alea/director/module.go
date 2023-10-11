@@ -684,8 +684,9 @@ func NewModule( // nolint: gocyclo,gocognit
 		now := time.Since(timeRef)
 
 		// only schedule timer if needed (request AND there is no timer scheduled already for somewhere before this period)
+		// Note: when now+d==lastScheduledWakeup, we must schedule a timer, since monotonic clocks may return the same time twice.
 		d := state.nextCoalescedTimerDuration
-		if d != math.MaxInt64 && now+d > state.lastScheduledWakeup {
+		if d != math.MaxInt64 && now+d >= state.lastScheduledWakeup {
 			eventpbdsl.TimerDelay(m, mc.Timer,
 				[]*eventpbtypes.Event{
 					directorpbevents.Heartbeat(mc.Self),
