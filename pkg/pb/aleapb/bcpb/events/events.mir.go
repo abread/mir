@@ -85,14 +85,15 @@ func EstimateUpdate(destModule types.ModuleID, maxOwnBcDuration time.Duration, m
 	}
 }
 
-func DoFillGap(destModule types.ModuleID, slot *types2.Slot) *types1.Event {
+func DoFillGap(destModule types.ModuleID, slot *types2.Slot, nextReplica uint32) *types1.Event {
 	return &types1.Event{
 		DestModule: destModule,
 		Type: &types1.Event_AleaBc{
 			AleaBc: &types2.Event{
 				Type: &types2.Event_FillGap{
 					FillGap: &types2.DoFillGap{
-						Slot: slot,
+						Slot:        slot,
+						NextReplica: nextReplica,
 					},
 				},
 			},

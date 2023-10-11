@@ -401,7 +401,8 @@ func (*EstimateUpdate) MirReflect() mirreflect.Type {
 }
 
 type DoFillGap struct {
-	Slot *Slot
+	Slot        *Slot
+	NextReplica uint32
 }
 
 func DoFillGapFromPb(pb *bcpb.DoFillGap) *DoFillGap {
@@ -409,7 +410,8 @@ func DoFillGapFromPb(pb *bcpb.DoFillGap) *DoFillGap {
 		return nil
 	}
 	return &DoFillGap{
-		Slot: SlotFromPb(pb.Slot),
+		Slot:        SlotFromPb(pb.Slot),
+		NextReplica: pb.NextReplica,
 	}
 }
 
@@ -422,6 +424,7 @@ func (m *DoFillGap) Pb() *bcpb.DoFillGap {
 		if m.Slot != nil {
 			pbMessage.Slot = (m.Slot).Pb()
 		}
+		pbMessage.NextReplica = m.NextReplica
 	}
 
 	return pbMessage

@@ -75,6 +75,7 @@ message DoFillGap {
   option (mir.event) = true;
 
   Slot slot = 1;
+  uint32 next_replica = 2; // next replica to try to contact
 }
 
 message MarkStableProposal {

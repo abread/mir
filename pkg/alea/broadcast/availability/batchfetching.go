@@ -1,7 +1,6 @@
 package availability
 
 import (
-	"fmt"
 	"time"
 
 	es "github.com/go-errors/errors"
@@ -28,7 +27,6 @@ import (
 	threshDsl "github.com/filecoin-project/mir/pkg/pb/threshcryptopb/dsl"
 	transportpbdsl "github.com/filecoin-project/mir/pkg/pb/transportpb/dsl"
 	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
-	"github.com/filecoin-project/mir/pkg/reliablenet/rntypes"
 	"github.com/filecoin-project/mir/pkg/timer/types"
 	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 	t "github.com/filecoin-project/mir/pkg/types"
@@ -49,10 +47,9 @@ type batchFetchingState struct {
 // RequestsState represents the state related to a request on the source node of the request.
 // The node disposes of this state as soon as the request is completed.
 type RequestsState struct {
-	ReqOrigins  []*availabilitypbtypes.RequestTransactionsOrigin
-	SentFillGap bool
-	Replies     map[t.NodeID]struct{}
-	EpochNr     tt.EpochNr
+	ReqOrigins []*availabilitypbtypes.RequestTransactionsOrigin
+	Replies    map[t.NodeID]struct{}
+	EpochNr    tt.EpochNr
 }
 
 // includeBatchFetching registers event handlers for processing availabilitypb.RequestTransactions events.
@@ -74,11 +71,6 @@ func includeBatchFetching( // nolint: gocognit,gocyclo
 	}
 
 	scheduleFillGap := func(slot *bcpbtypes.Slot, reqState *RequestsState) error {
-		if reqState.SentFillGap {
-			return es.Errorf("tried to send FILL-GAP twice")
-		}
-		reqState.SentFillGap = true
-
 		// send FILL-GAP after a timeout (if request was not satisfied)
 		// this way bc has more chances of completing before even trying to send a fill-gap message
 		delay := time.Duration(0)
@@ -90,9 +82,11 @@ func includeBatchFetching( // nolint: gocognit,gocyclo
 			}
 		}
 
-		// TODO: adjust delay according to bc estimate. don't delay when bc slot was already freed
+		// send fill gap after timeout to next node after queue owner
+		// we assume the queue owner is faulty, since it hasn't sent the broadcast on time
+		// TODO: be smarter and use erasure codes or contact a node that voted yes in ABA
 		dsl.EmitEvent(m, eventpbevents.TimerDelay(mc.Timer, []*eventpbtypes.Event{
-			bcpbevents.DoFillGap(mc.Self, slot),
+			bcpbevents.DoFillGap(mc.Self, slot, uint32(slot.QueueIdx+1)%uint32(len(params.AllNodes))),
 		}, types.Duration(delay)))
 
 		return nil
@@ -155,11 +149,6 @@ func includeBatchFetching( // nolint: gocognit,gocyclo
 			batchdbpbdsl.UpdateBatchRetention(m, mc.BatchDB, cert.BatchId, tt.RetentionIndex(state.epochNr))
 		}
 
-		if reqState.SentFillGap {
-			// no need for FILLER anymore
-			rnetdsl.MarkRecvd(m, mc.ReliableNet, mc.Self, FillGapMsgID(&slot), params.AllNodes)
-		}
-
 		delete(state.RequestsState, slot)
 	}
 
@@ -179,7 +168,7 @@ func includeBatchFetching( // nolint: gocognit,gocyclo
 		return nil
 	})
 
-	bcpbdsl.UponDoFillGap(m, func(slot *bcpbtypes.Slot) error {
+	bcpbdsl.UponDoFillGap(m, func(slot *bcpbtypes.Slot, nextReplica uint32) error {
 		reqState, present := state.RequestsState[*slot]
 		if !present {
 			return nil // already handled
@@ -189,15 +178,19 @@ func includeBatchFetching( // nolint: gocognit,gocyclo
 
 		// logger.Log(logging.LevelDebug, "broadcast component fell behind. requesting slot from other replicas with FILL-GAP", "queueIdx", slot.QueueIdx, "queueSlot", slot.QueueSlot)
 
-		// TODO: do this more inteligently: only contact some nodes, and try others if a timer expires
-		// until all were tried or a response is received.
+		// TODO: do this more inteligently: randomization, maybe something with erasure codes
 		// It would also be nice to pass a hint in the certificate that says which nodes to try first,
 		// this could be provided by the agreement component based on INIT(v, 0) messages received by the abba instances.
-		rnetdsl.SendMessage(m, mc.ReliableNet,
-			FillGapMsgID(slot),
+		// NOTE: this approach can fill outgoing message buffers in a prolonged network outage.
+		transportpbdsl.SendMessage(m, mc.Net,
 			bcpbmsgs.FillGapMessage(mc.Self, slot),
-			params.AllNodes,
+			[]t.NodeID{params.AllNodes[nextReplica]},
 		)
+
+		// set a timer to try another replica if no reply is received from the previous one in time
+		dsl.EmitEvent(m, eventpbevents.TimerDelay(mc.Timer, []*eventpbtypes.Event{
+			bcpbevents.DoFillGap(mc.Self, slot, (nextReplica+1)%uint32(len(params.AllNodes))),
+		}, types.Duration(est.MaxExtBcDuration())))
 		return nil
 	})
 
@@ -238,10 +231,6 @@ func includeBatchFetching( // nolint: gocognit,gocyclo
 
 	// After receiving a Filler message, we must validate the provided information (batchID, signature)
 	bcpbdsl.UponFillerMessageReceived(m, func(from t.NodeID, cert *bcpbtypes.Cert, txs []*trantorpbtypes.Transaction) error {
-		rnetdsl.MarkRecvd(m, mc.ReliableNet, mc.Self, FillGapMsgID(cert.Slot), []t.NodeID{from})
-
-		// TODO: do this smartly and try one node at a time instead of broadcasting FILL-GAP
-
 		reqState, present := state.RequestsState[*cert.Slot]
 		if !present || reqState.Replies == nil {
 			return nil // no request needs this message to be satisfied
@@ -381,14 +370,6 @@ func includeBatchFetching( // nolint: gocognit,gocyclo
 
 func certSigData(params *ModuleParams, cert *bcpbtypes.Cert) [][]byte {
 	return vcb.SigData(bccommon.VCBInstanceUID(params.AleaInstanceUID, cert.Slot.QueueIdx, cert.Slot.QueueSlot), cert.BatchId)
-}
-
-const (
-	MsgTypeFillGap = "f"
-)
-
-func FillGapMsgID(slot *bcpbtypes.Slot) rntypes.MsgID {
-	return rntypes.MsgID(fmt.Sprintf("%s.%d.%d", MsgTypeFillGap, slot.QueueIdx, slot.QueueSlot))
 }
 
 // Context data structures

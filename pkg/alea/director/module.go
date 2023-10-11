@@ -574,7 +574,7 @@ func NewModule( // nolint: gocyclo,gocognit
 		return nil
 	})
 	directorpbdsl.UponHelpNode(m, func(nodeID t.NodeID) error {
-		logger.Log(logging.LevelDebug, "wanted to help", "node", nodeID)
+		//logger.Log(logging.LevelDebug, "wanted to help", "node", nodeID)
 		if state.lastStableCheckpoint == nil {
 			// can't help if we don't have a checkpoint yet
 			return nil

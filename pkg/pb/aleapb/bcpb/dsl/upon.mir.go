@@ -53,9 +53,9 @@ func UponEstimateUpdate(m dsl.Module, handler func(maxOwnBcDuration time.Duratio
 	})
 }
 
-func UponDoFillGap(m dsl.Module, handler func(slot *types.Slot) error) {
+func UponDoFillGap(m dsl.Module, handler func(slot *types.Slot, nextReplica uint32) error) {
 	UponEvent[*types.Event_FillGap](m, func(ev *types.DoFillGap) error {
-		return handler(ev.Slot)
+		return handler(ev.Slot, ev.NextReplica)
 	})
 }
 
