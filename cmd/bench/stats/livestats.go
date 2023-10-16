@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	abbapbtypes "github.com/filecoin-project/mir/pkg/pb/abbapb/types"
 	ageventstypes "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents/types"
 	bcpbtypes "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/types"
 	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
@@ -31,6 +32,7 @@ type LiveStats struct {
 	currentAgRound    uint64
 	avgAgStall        time.Duration
 	cumPosAgStall     time.Duration
+	nonInstantAgCount int
 	trueAgDelivers    int
 	falseAgDelivers   int
 
@@ -94,10 +96,20 @@ func (s *LiveStats) AgInput(input *ageventstypes.InputValue) {
 
 		s.cumPosAgStall += stall
 		// $CA_{n+1} = CA_n + {x_{n+1} - CA_n \over n + 1}$
-		s.avgAgStall += (stall - s.avgAgStall) / time.Duration(input.Round+1)
+		s.avgAgStall += (stall - s.avgAgStall) / time.Duration(s.trueAgDelivers+s.falseAgDelivers)
 	} else {
 		s.agInputTimestamps[input.Round] = time.Now()
 	}
+	s.lock.Unlock()
+}
+
+func (s *LiveStats) AbbaRoundContinue(roundNum string, _ *abbapbtypes.RoundContinue) {
+	if roundNum != "0" {
+		return
+	}
+
+	s.lock.Lock()
+	s.nonInstantAgCount++
 	s.lock.Unlock()
 }
 
@@ -176,6 +188,7 @@ func (s *LiveStats) WriteCSVHeader(w *csv.Writer) error {
 		"bcDelivers",
 		"trueAgDelivers",
 		"falseAgDelivers",
+		"nonInstantAgCount",
 		"avgAgStall",
 		"cumPosAgStall",
 		"estUnanimousAgTime",
@@ -191,6 +204,7 @@ func (s *LiveStats) WriteCSVRecord(w *csv.Writer, d time.Duration) error {
 	bcDelivers := s.bcDelivers
 	trueAgDelivers := s.trueAgDelivers
 	falseAgDelivers := s.falseAgDelivers
+	nonInstantAgCount := s.nonInstantAgCount
 	avgAgStall := s.avgAgStall
 	cumPosAgStall := s.cumPosAgStall
 	estUnanimousAgTime := s.estUnanimousAgTime
@@ -202,6 +216,7 @@ func (s *LiveStats) WriteCSVRecord(w *csv.Writer, d time.Duration) error {
 	s.bcDelivers = 0
 	s.trueAgDelivers = 0
 	s.falseAgDelivers = 0
+	s.nonInstantAgCount = 0
 	s.avgBatchSize256 = 0
 	s.deliveredBatchCount = 0
 	s.lock.Unlock()
@@ -215,6 +230,7 @@ func (s *LiveStats) WriteCSVRecord(w *csv.Writer, d time.Duration) error {
 		strconv.Itoa(bcDelivers),
 		strconv.Itoa(trueAgDelivers),
 		strconv.Itoa(falseAgDelivers),
+		strconv.Itoa(nonInstantAgCount),
 		fmt.Sprintf("%.6f", avgAgStall.Seconds()),
 		fmt.Sprintf("%.6f", cumPosAgStall.Seconds()),
 		fmt.Sprintf("%.6f", estUnanimousAgTime.Seconds()),

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/filecoin-project/mir/pkg/events"
+	abbapbtypes "github.com/filecoin-project/mir/pkg/pb/abbapb/types"
 	ageventstypes "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents/types"
 	bcpbtypes "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/types"
 	batchfetcherpbtypes "github.com/filecoin-project/mir/pkg/pb/batchfetcherpb/types"
@@ -83,8 +84,21 @@ func (i *StatInterceptor) Intercept(events events.EventList) error {
 			case *ageventstypes.Event_InnerAbbaRoundTime:
 				i.LiveStats.InnerAbbaTime(e2.InnerAbbaRoundTime)
 			}
+		case *eventpbtypes.Event_Abba:
+			switch e2 := e.Abba.Type.(type) {
+			case *abbapbtypes.Event_Round:
+				switch e3 := e2.Round.Type.(type) {
+				case *abbapbtypes.RoundEvent_Continue:
+					// TODO: don't depend on module structure details
+					// assumes abba round module IDs have form <ag mod id>/<ag round id>/r/<abba round id>
+					abbaRoundIDStr := string(evt.DestModule.Sub().Sub().Sub().Top())
+
+					i.LiveStats.AbbaRoundContinue(abbaRoundIDStr, e3.Continue)
+				}
+			}
 		case *eventpbtypes.Event_AleaBc:
-			if e2, ok := e.AleaBc.Type.(*bcpbtypes.Event_DeliverCert); ok {
+			switch e2 := e.AleaBc.Type.(type) {
+			case *bcpbtypes.Event_DeliverCert:
 				i.LiveStats.BcDeliver(e2.DeliverCert)
 			}
 		}
