@@ -216,7 +216,7 @@ func runNode(ctx context.Context) error {
 	trantorInstance.WithModule("localtxgen", txGen)
 
 	// Create trackers for gathering statistics about the performance.
-	liveStats := stats.NewLiveStats()
+	liveStats := stats.NewLiveStats(aleatypes.QueueIdx(slices.Index(params.Trantor.Alea.AllNodes(), ownID)))
 	clientStats := stats.NewClientStats(time.Millisecond, 5*time.Second)
 	txGen.TrackStats(liveStats)
 	txGen.TrackStats(clientStats)

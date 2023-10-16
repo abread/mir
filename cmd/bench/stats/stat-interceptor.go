@@ -98,6 +98,8 @@ func (i *StatInterceptor) Intercept(events events.EventList) error {
 			}
 		case *eventpbtypes.Event_AleaBc:
 			switch e2 := e.AleaBc.Type.(type) {
+			case *bcpbtypes.Event_RequestCert:
+				i.LiveStats.RequestCert()
 			case *bcpbtypes.Event_DeliverCert:
 				i.LiveStats.BcDeliver(e2.DeliverCert)
 			}

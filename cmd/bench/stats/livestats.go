@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/filecoin-project/mir/pkg/alea/aleatypes"
 	abbapbtypes "github.com/filecoin-project/mir/pkg/pb/abbapb/types"
 	ageventstypes "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents/types"
 	bcpbtypes "github.com/filecoin-project/mir/pkg/pb/aleapb/bcpb/types"
@@ -25,7 +26,11 @@ type LiveStats struct {
 	timestampedTransactions int
 	deliveredTransactions   int
 
-	bcDelivers int
+	ownQueueIdx       aleatypes.QueueIdx
+	bcDelivers        int
+	ownBcStartedCount int
+	bcStallStart      time.Time
+	avgBcStall        time.Duration
 
 	agInputTimestamps map[uint64]time.Time
 	stalledAgStart    time.Time
@@ -48,18 +53,37 @@ type txKey struct {
 	TxNo     tt.TxNo
 }
 
-func NewLiveStats() *LiveStats {
+func NewLiveStats(ownQueueIdx aleatypes.QueueIdx) *LiveStats {
 	return &LiveStats{
 		txTimestamps:      make(map[txKey]time.Time),
 		agInputTimestamps: make(map[uint64]time.Time),
+
+		ownQueueIdx: ownQueueIdx,
 	}
 }
 
 func (s *LiveStats) Fill() {}
 
-func (s *LiveStats) BcDeliver(_ *bcpbtypes.DeliverCert) {
+func (s *LiveStats) RequestCert() {
+	var zeroTime time.Time
+	s.lock.Lock()
+	s.ownBcStartedCount++
+	if s.bcStallStart != zeroTime {
+		stall := time.Since(s.bcStallStart)
+
+		// $CA_{n+1} = CA_n + {x_{n+1} - CA_n \over n + 1}$
+		s.avgBcStall += (stall - s.avgBcStall) / time.Duration(s.ownBcStartedCount)
+	}
+	s.lock.Unlock()
+}
+
+func (s *LiveStats) BcDeliver(cert *bcpbtypes.DeliverCert) {
 	s.lock.Lock()
 	s.bcDelivers++
+
+	if cert.Cert.Slot.QueueIdx == s.ownQueueIdx {
+		s.bcStallStart = time.Now()
+	}
 	s.lock.Unlock()
 }
 
@@ -190,13 +214,14 @@ func (s *LiveStats) WriteCSVHeader(w *csv.Writer) error {
 		"tps",
 		"avgLatency",
 		"bcDelivers",
+		"avgBcStall",
+		"avgBatchSize",
 		"trueAgDelivers",
 		"falseAgDelivers",
 		"nonInstantAgCount",
 		"avgAgStall",
 		"cumPosAgStall",
 		"estUnanimousAgTime",
-		"avgBatchSize",
 	}
 	return w.Write(record)
 }
@@ -206,18 +231,23 @@ func (s *LiveStats) WriteCSVRecord(w *csv.Writer, d time.Duration) error {
 	deliveredTxs := s.deliveredTransactions
 	avgLatency := s.avgLatency
 	bcDelivers := s.bcDelivers
+	avgBcStall := s.avgBcStall
+	avgBatchSize256 := s.avgBatchSize256
 	trueAgDelivers := s.trueAgDelivers
 	falseAgDelivers := s.falseAgDelivers
 	nonInstantAgCount := s.nonInstantAgCount
 	avgAgStall := s.avgAgStall
 	cumPosAgStall := s.cumPosAgStall
 	estUnanimousAgTime := s.estUnanimousAgTime
-	avgBatchSize256 := s.avgBatchSize256
 
 	s.avgLatency = 0
 	s.timestampedTransactions = 0
 	s.deliveredTransactions = 0
 	s.bcDelivers = 0
+	s.avgBcStall = 0
+	s.ownBcStartedCount = 0
+	s.avgBatchSize256 = 0
+	s.deliveredBatchCount = 0
 	s.trueAgDelivers = 0
 	s.falseAgDelivers = 0
 	s.nonInstantAgCount = 0
@@ -225,8 +255,6 @@ func (s *LiveStats) WriteCSVRecord(w *csv.Writer, d time.Duration) error {
 	s.cumPosAgStall = 0
 	s.estUnanimousAgTime = 0
 	s.innerAbbaTimeCount = 0
-	s.avgBatchSize256 = 0
-	s.deliveredBatchCount = 0
 	s.lock.Unlock()
 
 	tps := float64(deliveredTxs) / (float64(d) / float64(time.Second))
@@ -236,13 +264,14 @@ func (s *LiveStats) WriteCSVRecord(w *csv.Writer, d time.Duration) error {
 		fmt.Sprintf("%.1f", tps),
 		fmt.Sprintf("%.6f", avgLatency.Seconds()),
 		strconv.Itoa(bcDelivers),
+		fmt.Sprintf("%.6f", avgBcStall.Seconds()),
+		fmt.Sprintf("%.3f", float64(avgBatchSize256)/256.0),
 		strconv.Itoa(trueAgDelivers),
 		strconv.Itoa(falseAgDelivers),
 		strconv.Itoa(nonInstantAgCount),
 		fmt.Sprintf("%.6f", avgAgStall.Seconds()),
 		fmt.Sprintf("%.6f", cumPosAgStall.Seconds()),
 		fmt.Sprintf("%.6f", estUnanimousAgTime.Seconds()),
-		fmt.Sprintf("%.3f", float64(avgBatchSize256)/256.0),
 	}
 	return w.Write(record)
 }
