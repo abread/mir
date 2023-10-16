@@ -70,7 +70,7 @@ func (s *LiveStats) AgDeliver(deliver *ageventstypes.Deliver) {
 		stall := -time.Since(t) // negative stall: input is before deliver of the previous round
 
 		// $CA_{n+1} = CA_n + {x_{n+1} - CA_n \over n + 1}$
-		s.avgAgStall += (stall - s.avgAgStall) / time.Duration(deliver.Round+2)
+		s.avgAgStall += (stall - s.avgAgStall) / time.Duration(s.trueAgDelivers+s.falseAgDelivers+1)
 
 		delete(s.agInputTimestamps, deliver.Round+1)
 	} else {
@@ -96,7 +96,11 @@ func (s *LiveStats) AgInput(input *ageventstypes.InputValue) {
 
 		s.cumPosAgStall += stall
 		// $CA_{n+1} = CA_n + {x_{n+1} - CA_n \over n + 1}$
-		s.avgAgStall += (stall - s.avgAgStall) / time.Duration(s.trueAgDelivers+s.falseAgDelivers)
+		count := s.trueAgDelivers + s.falseAgDelivers
+		if count == 0 {
+			count = 1
+		}
+		s.avgAgStall += (stall - s.avgAgStall) / time.Duration(count)
 	} else {
 		s.agInputTimestamps[input.Round] = time.Now()
 	}
@@ -217,6 +221,10 @@ func (s *LiveStats) WriteCSVRecord(w *csv.Writer, d time.Duration) error {
 	s.trueAgDelivers = 0
 	s.falseAgDelivers = 0
 	s.nonInstantAgCount = 0
+	s.avgAgStall = 0
+	s.cumPosAgStall = 0
+	s.estUnanimousAgTime = 0
+	s.innerAbbaTimeCount = 0
 	s.avgBatchSize256 = 0
 	s.deliveredBatchCount = 0
 	s.lock.Unlock()
