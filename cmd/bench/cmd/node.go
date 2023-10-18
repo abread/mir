@@ -145,6 +145,7 @@ func runNode(ctx context.Context) error {
 	transport := libp2p2.NewTransport(params.Trantor.Net, ownID, h, logger, netStats)
 
 	// Instantiate the crypto module.
+	logger.Log(logging.LevelWarn, "generating crypto keys...")
 	localCryptoSystem, err := deploytest.NewLocalCryptoSystem(params.CryptoImpl, params.CryptoSeed, membership.GetIDs(initialMembership), logger)
 	if err != nil {
 		return es.Errorf("could not create a local crypto system: %w", err)
@@ -155,6 +156,7 @@ func runNode(ctx context.Context) error {
 	}
 
 	// Instantiate the threshold crypto module.
+	logger.Log(logging.LevelWarn, "generating threshcrypto keys...")
 	F := (len(initialMembership.Nodes) - 1) / 3
 	thresh := 2*F + 1
 	localThreshCryptoSystem, err := deploytest.NewLocalThreshCryptoSystem(params.ThreshCryptoImpl, params.CryptoSeed, membership.GetIDs(initialMembership), thresh)
@@ -182,6 +184,7 @@ func runNode(ctx context.Context) error {
 	txGen := localtxgenerator.New(localtxgenerator.DefaultModuleConfig(), params.TxGen)
 
 	// Create a Trantor instance.
+	logger.Log(logging.LevelWarn, "creating trantor instance")
 	trantorInstance, err := trantor.New(
 		ownID,
 		transport,
@@ -231,10 +234,12 @@ func runNode(ctx context.Context) error {
 		return es.Errorf("could not create node: %w", err)
 	}
 
+	logger.Log(logging.LevelWarn, "starting trantor instance")
 	if err := trantorInstance.Start(); err != nil {
 		return es.Errorf("could not start bench app: %w", err)
 	}
 
+	logger.Log(logging.LevelWarn, "waiting for all nodes to connect")
 	if err := transport.WaitFor(len(initialMembership.Nodes)); err != nil {
 		return es.Errorf("failed waiting for network connections: %w", err)
 	}
@@ -304,18 +309,18 @@ func runNode(ctx context.Context) error {
 			if err != nil {
 				logger.Log(logging.LevelError, "Aborting waiting for other nodes transaction delivery.", "error", err)
 			} else {
-				logger.Log(logging.LevelInfo, "All nodes successfully delivered all transactions they submitted.",
+				logger.Log(logging.LevelWarn, "All nodes successfully delivered all transactions they submitted.",
 					"error", err)
 			}
 		}
 
 		// Stop Mir node and Trantor instance.
-		logger.Log(logging.LevelInfo, "Stopping Mir node.")
+		logger.Log(logging.LevelWarn, "Stopping Mir node.")
 		node.Stop()
-		logger.Log(logging.LevelInfo, "Mir node stopped.")
-		logger.Log(logging.LevelInfo, "Stopping Trantor.")
+		logger.Log(logging.LevelWarn, "Mir node stopped.")
+		logger.Log(logging.LevelWarn, "Stopping Trantor.")
 		trantorInstance.Stop()
-		logger.Log(logging.LevelInfo, "Trantor stopped.")
+		logger.Log(logging.LevelWarn, "Trantor stopped.")
 
 		close(trantorStopped)
 		statsWg.Wait()
@@ -344,13 +349,14 @@ func runNode(ctx context.Context) error {
 			case <-ctx.Done():
 				return
 			case <-time.After(time.Duration(params.CrashAfter)):
-				logger.Log(logging.LevelError, "Simulating node crash")
+				logger.Log(logging.LevelWarn, "Simulating node crash")
 				os.Exit(0)
 			}
 		}()
 	}
 
 	// Start generating the load and measuring performance.
+	logger.Log(logging.LevelWarn, "applying load")
 	clientStats.Start()
 	netStats.Start()
 	txGen.Start()
