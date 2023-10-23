@@ -385,7 +385,7 @@ func writeFinalStats(
 	if err != nil {
 		logger.Log(logging.LevelError, "Could not marshal benchmark output", "error", err)
 	}
-	if err = os.WriteFile(statFileName, []byte(fmt.Sprintf("%s\n", string(statsData))), 0600); err != nil {
+	if err = os.WriteFile(statFileName, []byte(fmt.Sprintf("%s\n", string(statsData))), 0644); err != nil {
 		logger.Log(logging.LevelError, "Could not write benchmark output to file",
 			"file", statFileName, "error", err)
 	}
