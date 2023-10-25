@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math"
 	"strconv"
 	"strings"
 	"sync"
@@ -185,6 +186,8 @@ func (at *AleaTracer) Intercept(evs events.EventList) error {
 	return nil
 }
 
+var EmptySlot = bcpbtypes.Slot{QueueIdx: math.MaxUint32, QueueSlot: math.MaxUint64}
+
 func (at *AleaTracer) interceptOne(event *eventpbtypes.Event) error { // nolint: gocognit,gocyclo
 	ts := time.Since(timeRef)
 
@@ -243,14 +246,16 @@ func (at *AleaTracer) interceptOne(event *eventpbtypes.Event) error { // nolint:
 
 			if e.Deliver.Decision {
 				slot := at.slotForAgRound(e.Deliver.Round)
-				at.agQueueHeads[slot.QueueIdx]++
 				at.bfDeliverQueue = append(at.bfDeliverQueue, slot)
+				at.agQueueHeads[slot.QueueIdx]++
 				delete(at.unagreedSlots[slot.QueueIdx], slot.QueueSlot)
 
 				if slot.QueueIdx == at.ownQueueIdx && at.nextBatchToCut == slot.QueueSlot {
 					at.nextBatchToCut++
 					at.startBatchCutStallSpan(ts, at.nextBatchToCut)
 				}
+			} else {
+				at.bfDeliverQueue = append(at.bfDeliverQueue, EmptySlot)
 			}
 
 			at.nextAgRound = e.Deliver.Round + 1
@@ -368,17 +373,18 @@ func (at *AleaTracer) interceptOne(event *eventpbtypes.Event) error { // nolint:
 		case *batchfetcherpbtypes.Event_NewOrderedBatch:
 			slot := at.bfDeliverQueue[0]
 			at.bfDeliverQueue = at.bfDeliverQueue[1:]
+			if slot != EmptySlot {
+				at.endDeliveryStalledSpan(ts, slot)
 
-			at.endDeliveryStalledSpan(ts, slot)
-
-			for _, tx := range e.NewOrderedBatch.Txs {
-				at.endTxSpan(ts, tx.ClientId, tx.TxNo)
+				for _, tx := range e.NewOrderedBatch.Txs {
+					at.endTxSpan(ts, tx.ClientId, tx.TxNo)
+				}
 			}
 		}
 	case *eventpbtypes.Event_Hasher:
 		switch ev.Hasher.Type.(type) {
 		case *hasherpbtypes.Event_ResultOne:
-			if strings.HasPrefix(string(event.DestModule), "availability/0/") {
+			if strings.HasPrefix(string(event.DestModule), "availability/") {
 				slot := parseSlotFromModuleID(event.DestModule)
 				at.endBcComputeSigDataSpan(ts, slot)
 			}
@@ -432,7 +438,7 @@ func (at *AleaTracer) interceptOne(event *eventpbtypes.Event) error { // nolint:
 			if !ok {
 				return nil
 			}
-			if strings.HasPrefix(string(e.Recover.Origin.Module), "availability/0/") {
+			if strings.HasPrefix(string(e.Recover.Origin.Module), "availability/") {
 				slot := parseSlotFromModuleID(e.Recover.Origin.Module)
 				if slot.QueueIdx == at.ownQueueIdx {
 					at.endBcAwaitEchoSpan(ts, slot)
@@ -474,8 +480,8 @@ func (at *AleaTracer) registerModStart(ts time.Duration, event *eventpbtypes.Eve
 
 			at.startAbbaRoundModSpan(ts, abbaRoundID{agRound, abbaRound})
 		}
-	} else if strings.HasPrefix(string(id), "availability/0/") {
-		id = t.ModuleID(strings.TrimPrefix(string(id), "availability/0/"))
+	} else if strings.HasPrefix(string(id), "availability/") {
+		id = t.ModuleID(strings.TrimPrefix(string(id), "availability/"))
 
 		queueIdx, err := strconv.ParseUint(string(id.Top()), 10, 64)
 		if err != nil {
@@ -1014,11 +1020,11 @@ func (at *AleaTracer) writeSpan(s *span) {
 }
 
 func parseSlotFromModuleID(moduleID t.ModuleID) bcpbtypes.Slot {
-	if !strings.HasPrefix(string(moduleID), "availability/0/") {
+	if !strings.HasPrefix(string(moduleID), "availability/") {
 		panic(es.Errorf("id is not from a bcqueue: %s", moduleID))
 	}
 
-	modID := t.ModuleID(strings.TrimPrefix(string(moduleID), "availability/0/"))
+	modID := t.ModuleID(strings.TrimPrefix(string(moduleID), "availability/"))
 	queueIdxStr := string(modID.Top())
 	queueSlotStr := string(modID.Sub().Top())
 
@@ -1039,11 +1045,11 @@ func parseSlotFromModuleID(moduleID t.ModuleID) bcpbtypes.Slot {
 }
 
 func parseQueueIdxFromModuleID(moduleID t.ModuleID) aleatypes.QueueIdx {
-	if !strings.HasPrefix(string(moduleID), "availability/0/") {
+	if !strings.HasPrefix(string(moduleID), "availability/") {
 		panic(es.Errorf("id is not from a bcqueue: %s", moduleID))
 	}
 
-	modID := t.ModuleID(strings.TrimPrefix(string(moduleID), "availability/0/"))
+	modID := t.ModuleID(strings.TrimPrefix(string(moduleID), "availability/"))
 	queueIdxStr := string(modID.Top())
 
 	queueIdx, err := strconv.ParseUint(queueIdxStr, 10, 32)
