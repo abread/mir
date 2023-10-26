@@ -11,9 +11,11 @@ import (
 	"fmt"
 	gonet "net"
 	"os"
+	"os/signal"
 	"runtime"
 	"strconv"
 	"sync"
+	"syscall"
 	"time"
 
 	es "github.com/go-errors/errors"
@@ -338,9 +340,19 @@ func runNode(ctx context.Context) error {
 			close(done)
 		}()
 	} else {
-		// TODO: This is not right. Only have this branch to quit on node error.
-		//   Set up signal handlers so that the nodes stops and cleans up after itself upon SIGINT and / or SIGTERM.
-		close(done)
+		// Setup signal notification channel
+		sigs := make(chan os.Signal, 1)
+		signal.Notify(sigs, syscall.SIGTERM, syscall.SIGINT)
+
+		go func() {
+			// Wait for a closing signal and shut down the node.
+			select {
+			case <-ctx.Done():
+			case <-sigs:
+			}
+			shutDown()
+			close(done)
+		}()
 	}
 
 	if params.CrashAfter > 0 {
