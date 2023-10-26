@@ -8,10 +8,10 @@ import (
 	"context"
 	"crypto"
 	"encoding/csv"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"math/rand"
 	"net"
 	"os"
 	"strconv"
@@ -20,17 +20,27 @@ import (
 
 	es "github.com/go-errors/errors"
 	"github.com/spf13/cobra"
-	rateLimiter "golang.org/x/time/rate"
+	"golang.org/x/exp/slices"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
+	"github.com/filecoin-project/mir/cmd/bench/localtxgenerator"
+	"github.com/filecoin-project/mir/cmd/bench/stats"
+	"github.com/filecoin-project/mir/pkg/alea/aleatypes"
 	"github.com/filecoin-project/mir/pkg/dummyclient"
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/membership"
+	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
+	mempoolpbtypes "github.com/filecoin-project/mir/pkg/pb/mempoolpb/types"
+	"github.com/filecoin-project/mir/pkg/pb/trantorpb"
+	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
+	"github.com/filecoin-project/mir/pkg/rendezvous"
 	"github.com/filecoin-project/mir/pkg/rrclient"
 	"github.com/filecoin-project/mir/pkg/transactionreceiver"
 	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 	t "github.com/filecoin-project/mir/pkg/types"
+	"github.com/filecoin-project/mir/pkg/util/maputil"
+	"github.com/filecoin-project/mir/pkg/util/sliceutil"
 )
 
 const (
@@ -38,13 +48,7 @@ const (
 )
 
 var (
-	txSize       int
-	rate         float64
-	burst        int
-	duration     time.Duration
-	clientType   string
-	statFileName string
-	//statPeriod   time.Duration
+	clientType string
 
 	clientCmd = &cobra.Command{
 		Use:   "client",
@@ -58,17 +62,24 @@ var (
 
 func init() {
 	rootCmd.AddCommand(clientCmd)
-	clientCmd.Flags().StringVarP(&membershipFile, "membership", "m", "", "total number of nodes")
-	_ = clientCmd.MarkFlagRequired("membership")
+
+	// Required arguments
+	clientCmd.Flags().StringVarP(&configFileName, "config-file", "c", "", "configuration file")
+	_ = clientCmd.MarkFlagRequired("config-file")
 	clientCmd.PersistentFlags().StringVarP(&id, "id", "i", "", "client ID")
 	_ = clientCmd.MarkPersistentFlagRequired("id")
-	clientCmd.Flags().IntVarP(&txSize, "txSize", "s", 256, "size of each transaction in bytes")
-	clientCmd.Flags().Float64VarP(&rate, "rate", "r", 1000, "average number of transactions per second")
-	clientCmd.Flags().IntVarP(&burst, "burst", "b", 1, "maximum number of transactions in a burst")
-	clientCmd.Flags().DurationVarP(&duration, "duration", "T", 10*time.Second, "benchmarking duration")
+
+	// Optional arguments
 	clientCmd.Flags().StringVarP(&clientType, "type", "t", "dummy", "client type (one of: dummy, rr)")
-	clientCmd.Flags().StringVarP(&statFileName, "statFile", "o", "", "output file for statistics")
-	clientCmd.Flags().DurationVar(&statPeriod, "statPeriod", time.Second, "statistic record period")
+
+	clientCmd.Flags().DurationVar(&statPeriod, "stat-period", 5*time.Second, "statistic record period")
+	clientCmd.Flags().StringVar(&clientStatsFileName, "client-stat-file", "", "live cumulative client statistics output file")
+	clientCmd.Flags().StringVar(&liveStatsFileName, "live-stat-file", "", "output file for live statistics, default is standard output")
+	clientCmd.Flags().StringVar(&statSummaryFileName, "summary-stat-file", "", "output file for summarized statistics")
+
+	// Sync files
+	clientCmd.Flags().StringVar(&readySyncFileName, "ready-sync-file", "", "file to use for initial synchronization when ready to start the benchmark")
+	clientCmd.Flags().StringVar(&deliverSyncFileName, "deliver-sync-file", "", "file to use for synchronization when waiting to deliver all transactions")
 }
 
 type mirClient interface {
@@ -89,17 +100,29 @@ var clientFactories = map[string]mirClientFactory{
 }
 
 func runClient(ctx context.Context) error {
+	ctx, cancelCtx := context.WithCancel(ctx)
+	defer cancelCtx()
+
 	var logger logging.Logger
 	if verbose {
 		logger = logging.ConsoleDebugLogger
 	} else {
-		logger = logging.ConsoleInfoLogger
+		logger = logging.ConsoleWarnLogger
 	}
 
-	initialMembership, err := membership.FromFileName(membershipFile)
-	if err != nil {
-		return es.Errorf("could not load membership: %w", err)
+	// Load configuration parameters
+	var params BenchParams
+	if err := loadFromFile(configFileName, &params); err != nil {
+		return es.Errorf("could not load parameters from file '%s': %w", configFileName, err)
 	}
+
+	// Check if own id is in the membership
+	initialMembership := params.Trantor.Iss.InitialMembership
+	if _, ok := initialMembership.Nodes[t.NodeID(id)]; !ok {
+		return es.Errorf("own ID (%v) not found in membership (%v)", id, maputil.GetKeys(initialMembership.Nodes))
+	}
+	ownID := t.NodeID(id)
+
 	addresses, err := membership.GetIPs(initialMembership)
 	if err != nil {
 		return es.Errorf("could not load node IPs: %w", err)
@@ -123,160 +146,185 @@ func runClient(ctx context.Context) error {
 	}
 	logger.Log(logging.LevelInfo, "processed node list", "txReceiverAddrs", txReceiverAddrs)
 
-	ctxStats, stopStats := context.WithCancel(ctx)
-	defer stopStats()
-	ctx, stop := context.WithCancel(ctx)
-
 	client := clientFactories[clientType](
-		tt.ClientID(id),
+		tt.ClientID(id+".0"),
 		crypto.SHA256,
 		logger,
 	)
+
+	// Synchronize with other nodes if necessary.
+	// If invoked, this code blocks until all the nodes have connected to each other.
+	// (The file created by Ready must be deleted by some external code (or manually) after all nodes have created it.)
+	if readySyncFileName != "" {
+		syncCtx, cancelFunc := context.WithTimeout(ctx, syncLimit)
+		err = rendezvous.NewFileSyncer(readySyncFileName, syncPollInterval).Ready(syncCtx)
+		cancelFunc()
+		if err != nil {
+			return fmt.Errorf("error synchronizing nodes: %w", err)
+		}
+	}
+
 	client.Connect(ctx, txReceiverAddrs)
 	defer client.Disconnect()
 	logger.Log(logging.LevelInfo, "client connected")
+	time.Sleep(3)
 
-	clock := time.Now()
-	txs := make(map[tt.TxNo]time.Duration, int(rate*statPeriod.Seconds()))
-	txsMutex := &sync.Mutex{}
-	nextTxNo := tt.TxNo(0)
-	if statFileName != "" {
-		go clientStats(ctxStats, txReceiverAddrs, clock, txs, txsMutex)
-		logger.Log(logging.LevelInfo, "started stats collection")
+	// Create a local transaction generator.
+	// It has, at the same time, the interface of a trantor App,
+	// so it knows when transactions are delivered and can submit new ones accordingly.
+	// We will abuse it to send transactions over the network and track statistics
+	params.TxGen.ClientID = tt.ClientID(ownID)
+	params.TxGen.NumClients = 1
+	txGen := localtxgenerator.New(localtxgenerator.DefaultModuleConfig(), params.TxGen)
+
+	// Create trackers for gathering statistics about the performance.
+	liveStats := stats.NewLiveStats(aleatypes.QueueIdx(slices.Index(params.Trantor.Alea.AllNodes(), ownID)))
+	clientStats := stats.NewClientStats(time.Millisecond, 5*time.Second)
+	txGen.TrackStats(liveStats)
+	txGen.TrackStats(clientStats)
+
+	// Output the statistics.
+	var statFile *os.File
+	if liveStatsFileName != "" {
+		statFile, err = os.Create(liveStatsFileName)
+		if err != nil {
+			return es.Errorf("could not open output file for statistics: %w", err)
+		}
+	} else {
+		statFile = os.Stdout
 	}
 
+	clientStopped := make(chan struct{})
+	statsWg := &sync.WaitGroup{}
+	statsCtx, stopStats := context.WithCancel(ctx)
+	defer stopStats()
+
+	replicaStatsCSV := csv.NewWriter(statFile)
+	goDisplayLiveStats(statsCtx, statsWg, clientStopped, liveStats, replicaStatsCSV)
+
+	if clientStatsFileName != "" {
+		clientStatFile, err := os.Create(clientStatsFileName)
+		if err != nil {
+			return es.Errorf("could not open output file for client statistics: %w", err)
+		}
+		clientStatsCSV := csv.NewWriter(clientStatFile)
+		goDisplayLiveStats(statsCtx, statsWg, clientStopped, clientStats, clientStatsCSV)
+	}
+
+	clientAdapterWg := &sync.WaitGroup{}
+	clientAdapterStop := make(chan struct{})
+
+	// Stop outputting real-time stats and submitting transactions,
+	// wait until everything is delivered, and stop node.
+	shutDown := func() {
+		stopStats()
+		txGen.Stop()
+
+		// Wait for other nodes to deliver their transactions.
+		if deliverSyncFileName != "" {
+			syncerCtx, stopWaiting := context.WithTimeout(ctx, syncLimit)
+			err := rendezvous.NewFileSyncer(deliverSyncFileName, syncPollInterval).Ready(syncerCtx)
+			stopWaiting()
+			if err != nil {
+				logger.Log(logging.LevelError, "Aborting waiting for other nodes transaction delivery.", "error", err)
+			} else {
+				logger.Log(logging.LevelWarn, "All nodes successfully delivered all transactions they submitted.",
+					"error", err)
+			}
+		}
+
+		close(clientAdapterStop)
+		clientAdapterWg.Wait()
+
+		close(clientStopped)
+		statsWg.Wait()
+	}
+
+	done := make(chan struct{})
+	if params.Duration > 0 {
+		go func() {
+			// Wait until the end of the benchmark and shut down the node.
+			select {
+			case <-ctx.Done():
+			case <-time.After(time.Duration(params.Duration)):
+			}
+			shutDown()
+			close(done)
+		}()
+	} else {
+		// TODO: This is not right. Only have this branch to quit on node error.
+		//   Set up signal handlers so that the nodes stops and cleans up after itself upon SIGINT and / or SIGTERM.
+		close(done)
+	}
+
+	// submit transactions through client
+	clientAdapterWg.Add(1)
 	go func() {
-		time.Sleep(duration)
-		stop()
+		defer clientAdapterWg.Done()
+
+		for {
+			select {
+			case <-clientAdapterStop:
+				return
+			case evs := <-txGen.EventsOut():
+				for _, ev := range evs.Slice() {
+					txs := ev.Type.(*eventpbtypes.Event_Mempool).Mempool.Type.(*mempoolpbtypes.Event_NewTransactions).NewTransactions.Transactions
+
+					for _, tx := range txs {
+						if err := client.SubmitTransaction(tx.Data); err != nil {
+							if errors.Is(err, io.EOF) {
+								select {
+								case <-clientAdapterStop:
+									return
+								default:
+									panic(err)
+								}
+
+							}
+							panic(err)
+						}
+					}
+				}
+			}
+		}
 	}()
 
-	limiter := rateLimiter.NewLimiter(rateLimiter.Limit(rate), 1)
-	txBytes := make([]byte, txSize)
-SendLoop:
-	for i := 0; ; i++ {
-		select {
-		case <-ctx.Done():
-			break SendLoop
-		default:
-		}
+	// assume last node is healthy and can tell us which txs were properly received
+	go registerDeliveredTxs(ctx, txReceiverAddrs[t.NewNodeIDFromInt(len(txReceiverAddrs)-1)], txGen)
 
-		if err := limiter.Wait(ctx); err != nil {
-			if errors.Is(err, context.Canceled) {
-				err = nil
-			}
-			return err
-		}
+	// Start generating the load and measuring performance.
+	logger.Log(logging.LevelWarn, "applying load")
+	clientStats.Start()
+	txGen.Start()
 
-		rand.Read(txBytes) //nolint:gosec
-		logger.Log(logging.LevelDebug, fmt.Sprintf("Submitting transaction #%d", i))
-		if statFileName != "" {
-			txsMutex.Lock()
-			txs[nextTxNo] = time.Since(clock)
-			txsMutex.Unlock()
-			nextTxNo++
-		}
-		if err := client.SubmitTransaction(txBytes); err != nil {
-			if errors.Is(err, io.EOF) {
-				select {
-				case <-ctx.Done():
-					return nil
-				default:
-					return err
-				}
-
-			}
-			return err
-		}
-	}
-
-	// sleep a bit before returning
-	time.Sleep(10 * time.Second)
+	<-done
+	writeClientFinalStats(clientStats, statSummaryFileName, logger)
 	return nil
 }
 
-func clientStats(ctx context.Context, txReceiverAddrs map[t.NodeID]string, clock time.Time, txs map[tt.TxNo]time.Duration, txsMutex *sync.Mutex) {
-	confirmations := make(chan time.Duration, int(rate*statPeriod.Seconds()))
-
-	for _, addr := range txReceiverAddrs {
-		go populateClientStats(ctx, addr, clock, txs, txsMutex, confirmations)
-	}
-
-	ticker := time.NewTicker(statPeriod)
-	defer ticker.Stop()
-
-	latencySum := time.Duration(0)
-	txCount := int64(0)
-
-	var outputFile *os.File
+func writeClientFinalStats(
+	clientStats *stats.ClientStats,
+	statFileName string,
+	logger logging.Logger,
+) {
 	if statFileName == "" {
-		outputFile = os.Stdout
-	} else {
-		var err error
-		outputFile, err = os.Create(statFileName)
-		if err != nil {
-			panic(es.Errorf("could not open output file for statistics: %w", err))
-		}
-		defer outputFile.Close()
+		return
 	}
 
-	writer := csv.NewWriter(outputFile)
-	defer writer.Flush()
+	data := make(map[string]any)
+	data["Client"] = clientStats
 
-	if err := writer.Write([]string{"ts", "nrDelivered", "tps", "avgLatency"}); err != nil {
-		panic(err)
+	statsData, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		logger.Log(logging.LevelError, "Could not marshal benchmark output", "error", err)
 	}
-	writer.Flush()
-
-	defer func() {
-		txsMutex.Lock()
-		defer txsMutex.Unlock()
-
-		if len(txs) == 0 {
-			return
-		}
-
-		now := time.Since(clock)
-		ts := fmt.Sprintf("%.4f", now.Seconds())
-
-		if err := writer.Write([]string{ts, fmt.Sprintf("%v", len(txs)), "0", "inf"}); err != nil {
-			panic(err)
-		}
-	}()
-
-	lastWrite := time.Since(clock)
-	writeStats := func() {
-		now := time.Since(clock)
-
-		ts := fmt.Sprintf("%.4f", now.Seconds())
-		nrDelivered := fmt.Sprintf("%v", txCount)
-		tps := fmt.Sprintf("%.5f", float64(txCount)/(float64(now-lastWrite)/float64(time.Second)))
-		avgLatency := fmt.Sprintf("%.5f", float64(latencySum)/float64(txCount)/float64(time.Second))
-
-		if err := writer.Write([]string{ts, nrDelivered, tps, avgLatency}); err != nil {
-			panic(err)
-		}
-		writer.Flush()
-
-		lastWrite = now
-		txCount = 0
-		latencySum = 0
-	}
-
-	for {
-		select {
-		case <-ctx.Done():
-			writeStats()
-			return
-		case <-ticker.C:
-			writeStats()
-		case ts := <-confirmations:
-			latencySum += ts
-			txCount++
-		}
+	if err = os.WriteFile(statFileName, []byte(fmt.Sprintf("%s\n", string(statsData))), 0644); err != nil {
+		logger.Log(logging.LevelError, "Could not write benchmark output to file",
+			"file", statFileName, "error", err)
 	}
 }
 
-func populateClientStats(ctx context.Context, txReceiverAddr string, clock time.Time, txs map[tt.TxNo]time.Duration, txsMutex *sync.Mutex, confirmations chan<- time.Duration) {
+func registerDeliveredTxs(ctx context.Context, txReceiverAddr string, txGen *localtxgenerator.LocalTXGen) {
 	maxMessageSize := 1073741824
 	dialOpts := []grpc.DialOption{
 		grpc.WithBlock(),
@@ -307,18 +355,11 @@ func populateClientStats(ctx context.Context, txReceiverAddr string, clock time.
 			return
 		}
 
-		txsMutex.Lock()
-		for _, tx := range batch.Txs {
-			if tx.ClientId != id {
-				continue
-			}
-
-			if ts, ok := txs[tt.TxNo(tx.TxNo)]; ok {
-				confirmations <- time.Since(clock) - ts
-				delete(txs, tt.TxNo(tx.TxNo))
-			}
+		if err := txGen.ApplyTXs(sliceutil.Transform(batch.Txs, func(_ int, tx *trantorpb.Transaction) *trantorpbtypes.Transaction {
+			return trantorpbtypes.TransactionFromPb(tx)
+		})); err != nil {
+			panic(err)
 		}
-		txsMutex.Unlock()
 	}
 
 }

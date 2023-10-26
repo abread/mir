@@ -31,16 +31,23 @@ import (
 	"github.com/filecoin-project/mir/pkg/alea/aleatypes"
 	"github.com/filecoin-project/mir/pkg/deploytest"
 	"github.com/filecoin-project/mir/pkg/eventlog"
+	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/membership"
 	libp2p2 "github.com/filecoin-project/mir/pkg/net/libp2p"
+	batchfetcherpbtypes "github.com/filecoin-project/mir/pkg/pb/batchfetcherpb/types"
+	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
+	"github.com/filecoin-project/mir/pkg/pb/trantorpb"
+	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	"github.com/filecoin-project/mir/pkg/rendezvous"
+	"github.com/filecoin-project/mir/pkg/transactionreceiver"
 	"github.com/filecoin-project/mir/pkg/trantor"
 	"github.com/filecoin-project/mir/pkg/trantor/appmodule"
 	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 	"github.com/filecoin-project/mir/pkg/util/libp2p"
 	"github.com/filecoin-project/mir/pkg/util/maputil"
+	"github.com/filecoin-project/mir/pkg/util/sliceutil"
 )
 
 const (
@@ -226,7 +233,12 @@ func runNode(ctx context.Context) error {
 	txGen.TrackStats(liveStats)
 	txGen.TrackStats(clientStats)
 
-	interceptor := eventlog.MultiInterceptor(tracer, stats.NewStatInterceptor(liveStats, trantor.DefaultModuleConfig().App, string(params.TxGen.ClientID)+"."))
+	txReceiverInterceptor := &txReceiverInterceptor{AppModuleID: trantor.DefaultModuleConfig().App}
+	interceptor := eventlog.MultiInterceptor(
+		tracer,
+		stats.NewStatInterceptor(liveStats, trantor.DefaultModuleConfig().App, string(params.TxGen.ClientID)+"."),
+		txReceiverInterceptor,
+	)
 	// Instantiate the Mir Node.
 	nodeConfig := mir.DefaultNodeConfig().WithLogger(logger)
 	nodeConfig.Stats.Period = 5 * time.Second
@@ -235,6 +247,18 @@ func runNode(ctx context.Context) error {
 	if err != nil {
 		return es.Errorf("could not create node: %w", err)
 	}
+
+	numericID, err := strconv.Atoi(id)
+	if err != nil {
+		return es.Errorf("only numeric node ids are supported")
+	}
+	txRecvListener, err := gonet.Listen("tcp", fmt.Sprintf(":%d", TxReceiverBasePort+numericID))
+	if err != nil {
+		return es.Errorf("could not create tx listener: %w")
+	}
+
+	txReceiver := transactionreceiver.NewTransactionReceiver(node, trantor.DefaultModuleConfig().Mempool, logger)
+	txReceiverInterceptor.TxReceiver = txReceiver
 
 	logger.Log(logging.LevelWarn, "starting trantor instance")
 	if err := trantorInstance.Start(); err != nil {
@@ -302,6 +326,7 @@ func runNode(ctx context.Context) error {
 
 		stopStats()
 		txGen.Stop()
+		txReceiver.Stop()
 
 		// Wait for other nodes to deliver their transactions.
 		if deliverSyncFileName != "" {
@@ -366,6 +391,9 @@ func runNode(ctx context.Context) error {
 			}
 		}()
 	}
+
+	// Start accepting transactions from the outside world
+	txReceiver.Start(txRecvListener)
 
 	// Start generating the load and measuring performance.
 	logger.Log(logging.LevelWarn, "applying load")
@@ -455,4 +483,26 @@ func getPortStr(addressStr string) (string, error) {
 	}
 
 	return portStr, nil
+}
+
+type txReceiverInterceptor struct {
+	AppModuleID t.ModuleID
+	TxReceiver  *transactionreceiver.TransactionReceiver
+}
+
+func (i *txReceiverInterceptor) Intercept(evs events.EventList) error {
+	for _, ev := range evs.Slice() {
+		if bfEvW, ok := ev.Type.(*eventpbtypes.Event_BatchFetcher); ok {
+			if newBatchEvW, ok := bfEvW.BatchFetcher.Type.(*batchfetcherpbtypes.Event_NewOrderedBatch); ok {
+				i.TxReceiver.NotifyBatchDeliver(
+					sliceutil.Transform(
+						newBatchEvW.NewOrderedBatch.Txs,
+						func(_ int, tx *trantorpbtypes.Transaction) *trantorpb.Transaction { return tx.Pb() },
+					),
+				)
+			}
+		}
+	}
+
+	return nil
 }

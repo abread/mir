@@ -165,6 +165,10 @@ func (rr *TransactionReceiver) Start(listener net.Listener) {
 	rr.grpcServerWg.Add(1)
 	go func() {
 		rr.grpcServerError = rr.grpcServer.Serve(listener)
+		if rr.grpcServerError != nil {
+			rr.logger.Log(logging.LevelError, "error in tx listener", "err", rr.grpcServerError)
+		}
+
 		rr.grpcServerWg.Done()
 	}()
 }

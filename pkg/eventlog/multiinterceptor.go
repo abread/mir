@@ -5,11 +5,11 @@ import (
 	"github.com/filecoin-project/mir/pkg/util/sliceutil"
 )
 
-type repeater struct {
+type multiInterceptor struct {
 	interceptors []Interceptor
 }
 
-func (r *repeater) Intercept(events events.EventList) error {
+func (r *multiInterceptor) Intercept(events events.EventList) error {
 
 	// Avoid nil dereference if Intercept is called on a nil *Recorder and simply do nothing.
 	// This can happen if a pointer type to *Recorder is assigned to a variable with the interface type Interceptor.
@@ -36,5 +36,5 @@ func MultiInterceptor(interceptors ...Interceptor) Interceptor {
 		return NilInterceptor
 	}
 
-	return &repeater{interceptors: interceptors}
+	return &multiInterceptor{interceptors: interceptors}
 }
