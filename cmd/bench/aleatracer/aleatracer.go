@@ -23,7 +23,6 @@ import (
 	availabilitypbtypes "github.com/filecoin-project/mir/pkg/pb/availabilitypb/types"
 	batchfetcherpbtypes "github.com/filecoin-project/mir/pkg/pb/batchfetcherpb/types"
 	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
-	hasherpbtypes "github.com/filecoin-project/mir/pkg/pb/hasherpb/types"
 	mempoolpbtypes "github.com/filecoin-project/mir/pkg/pb/mempoolpb/types"
 	messagepbtypes "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
 	threshcryptopbtypes "github.com/filecoin-project/mir/pkg/pb/threshcryptopb/types"
@@ -209,6 +208,11 @@ func (at *AleaTracer) interceptOne(event *eventpbtypes.Event) error { // nolint:
 			}
 		case *mempoolpbtypes.Event_RequestBatch:
 			at.endBatchCutStallSpan(ts, at.nextBatchToCut)
+		case *mempoolpbtypes.Event_BatchIdResponse:
+			if strings.HasPrefix(string(event.DestModule), "availability/") {
+				slot := parseSlotFromModuleID(event.DestModule)
+				at.endBcComputeSigDataSpan(ts, slot)
+			}
 		}
 	case *eventpbtypes.Event_AleaBcqueue:
 		switch e := ev.AleaBcqueue.Type.(type) {
@@ -379,14 +383,6 @@ func (at *AleaTracer) interceptOne(event *eventpbtypes.Event) error { // nolint:
 				for _, tx := range e.NewOrderedBatch.Txs {
 					at.endTxSpan(ts, tx.ClientId, tx.TxNo)
 				}
-			}
-		}
-	case *eventpbtypes.Event_Hasher:
-		switch ev.Hasher.Type.(type) {
-		case *hasherpbtypes.Event_ResultOne:
-			if strings.HasPrefix(string(event.DestModule), "availability/") {
-				slot := parseSlotFromModuleID(event.DestModule)
-				at.endBcComputeSigDataSpan(ts, slot)
 			}
 		}
 	case *eventpbtypes.Event_ThreshCrypto:
