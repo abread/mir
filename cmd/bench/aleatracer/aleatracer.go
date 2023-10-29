@@ -325,6 +325,8 @@ func (at *AleaTracer) interceptOne(event *eventpbtypes.Event) error { // nolint:
 			}
 			at.endAgStallSpan(ts, agRoundID)
 			at.startAgSpan(ts, agRoundID)
+
+			at.startAbbaRoundSpan(ts, abbaRoundID{agRoundID, 0})
 			at.agRunning = true
 		case *abbapbtypes.Event_Round:
 			switch e2 := e.Round.Type.(type) {
@@ -333,7 +335,10 @@ func (at *AleaTracer) interceptOne(event *eventpbtypes.Event) error { // nolint:
 				if err != nil {
 					return es.Errorf("invalid abba round id: %w", err)
 				}
-				at.startAbbaRoundSpan(ts, abbaRoundID)
+
+				if abbaRoundID.abbaRound != 0 || (abbaRoundID.agRound == at.nextAgRound && at.agRunning) {
+					at.startAbbaRoundSpan(ts, abbaRoundID)
+				}
 			case *abbapbtypes.RoundEvent_Deliver:
 				agRoundStr := event.DestModule.StripParent("ordering")
 				agRound, err := strconv.ParseUint(string(agRoundStr), 10, 64)
