@@ -127,11 +127,11 @@ func (cs *ClientStats) fillAtDuration(t time.Duration) {
 	}
 }
 
-func (cs *ClientStats) AvgThroughput() int {
+func (cs *ClientStats) AvgThroughput() float64 {
 	if cs.duration == 0 {
 		return 0
 	}
-	return cs.totalDelivered / int(cs.duration.Seconds())
+	return float64(cs.totalDelivered) / cs.duration.Seconds()
 }
 
 func (cs *ClientStats) AvgLatency() time.Duration {
@@ -174,7 +174,7 @@ func (cs *ClientStats) WriteCSVRecord(w *csv.Writer, _ time.Duration) error {
 	cs.timestampsLock.Lock()
 	record := []string{
 		fmt.Sprintf("%.6f", cs.duration.Seconds()),
-		fmt.Sprintf("%d", cs.AvgThroughput()),
+		fmt.Sprintf("%.3f", cs.AvgThroughput()),
 		fmt.Sprintf("%.6f", cs.AvgLatency().Seconds()),
 		fmt.Sprintf("%.6f", cs.LatencyPctile(0.5).Seconds()),
 		fmt.Sprintf("%.6f", cs.LatencyPctile(0.95).Seconds()),
