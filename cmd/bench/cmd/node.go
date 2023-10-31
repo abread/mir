@@ -89,7 +89,7 @@ func init() {
 	_ = nodeCmd.MarkPersistentFlagRequired("id")
 
 	// Optional arguments
-	nodeCmd.Flags().DurationVar(&statPeriod, "stat-period", 5*time.Second, "statistic record period")
+	nodeCmd.Flags().DurationVar(&statPeriod, "stat-period", 1*time.Second, "statistic record period")
 	nodeCmd.Flags().StringVar(&clientStatsFileName, "client-stat-file", "", "live cumulative client statistics output file")
 	nodeCmd.Flags().StringVar(&netStatsFileName, "net-stat-file", "", "live cumulative net statistics output file")
 	nodeCmd.Flags().StringVar(&liveStatsFileName, "replica-stat-file", "", "output file for live statistics, default is standard output")
