@@ -20,13 +20,11 @@ import (
 
 	es "github.com/go-errors/errors"
 	"github.com/spf13/cobra"
-	"golang.org/x/exp/slices"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/filecoin-project/mir/cmd/bench/localtxgenerator"
 	"github.com/filecoin-project/mir/cmd/bench/stats"
-	"github.com/filecoin-project/mir/pkg/alea/aleatypes"
 	"github.com/filecoin-project/mir/pkg/dummyclient"
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/membership"
@@ -50,36 +48,35 @@ const (
 var (
 	clientType string
 
-	clientCmd = &cobra.Command{
-		Use:   "client",
+	latClientCmd = &cobra.Command{
+		Use:   "latclient",
 		Short: "Generate and submit transactions to a Mir cluster",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			return runClient(ctx)
+			return runLatClient(ctx)
 		},
 	}
 )
 
 func init() {
-	rootCmd.AddCommand(clientCmd)
+	rootCmd.AddCommand(latClientCmd)
 
 	// Required arguments
-	clientCmd.Flags().StringVarP(&configFileName, "config-file", "c", "", "configuration file")
-	_ = clientCmd.MarkFlagRequired("config-file")
-	clientCmd.PersistentFlags().StringVarP(&id, "id", "i", "", "client ID")
-	_ = clientCmd.MarkPersistentFlagRequired("id")
+	latClientCmd.Flags().StringVarP(&configFileName, "config-file", "c", "", "configuration file")
+	_ = latClientCmd.MarkFlagRequired("config-file")
+	latClientCmd.PersistentFlags().StringVarP(&id, "id", "i", "", "client ID")
+	_ = latClientCmd.MarkPersistentFlagRequired("id")
 
 	// Optional arguments
-	clientCmd.Flags().StringVarP(&clientType, "type", "t", "dummy", "client type (one of: dummy, rr)")
+	latClientCmd.Flags().StringVarP(&clientType, "type", "t", "dummy", "client type (one of: dummy, rr)")
 
-	clientCmd.Flags().DurationVar(&statPeriod, "stat-period", 5*time.Second, "statistic record period")
-	clientCmd.Flags().StringVar(&clientStatsFileName, "client-stat-file", "", "live cumulative client statistics output file")
-	clientCmd.Flags().StringVar(&liveStatsFileName, "live-stat-file", "", "output file for live statistics, default is standard output")
-	clientCmd.Flags().StringVar(&statSummaryFileName, "summary-stat-file", "", "output file for summarized statistics")
+	latClientCmd.Flags().DurationVar(&statPeriod, "stat-period", 5*time.Second, "statistic record period")
+	latClientCmd.Flags().StringVar(&clientStatsFileName, "live-stat-file", "", "output file for live statistics, default is standard output")
+	latClientCmd.Flags().StringVar(&statSummaryFileName, "summary-stat-file", "", "output file for summarized statistics")
 
 	// Sync files
-	clientCmd.Flags().StringVar(&readySyncFileName, "ready-sync-file", "", "file to use for initial synchronization when ready to start the benchmark")
-	clientCmd.Flags().StringVar(&deliverSyncFileName, "deliver-sync-file", "", "file to use for synchronization when waiting to deliver all transactions")
+	latClientCmd.Flags().StringVar(&readySyncFileName, "ready-sync-file", "", "file to use for initial synchronization when ready to start the benchmark")
+	latClientCmd.Flags().StringVar(&deliverSyncFileName, "deliver-sync-file", "", "file to use for synchronization when waiting to deliver all transactions")
 }
 
 type mirClient interface {
@@ -99,7 +96,7 @@ var clientFactories = map[string]mirClientFactory{
 	},
 }
 
-func runClient(ctx context.Context) error {
+func runLatClient(ctx context.Context) error {
 	ctx, cancelCtx := context.WithCancel(ctx)
 	defer cancelCtx()
 
@@ -178,15 +175,13 @@ func runClient(ctx context.Context) error {
 	txGen := localtxgenerator.New(localtxgenerator.DefaultModuleConfig(), params.TxGen)
 
 	// Create trackers for gathering statistics about the performance.
-	liveStats := stats.NewLiveStats(aleatypes.QueueIdx(slices.Index(params.Trantor.Alea.AllNodes(), ownID)))
-	clientStats := stats.NewClientStats(time.Millisecond, 5*time.Second)
-	txGen.TrackStats(liveStats)
+	clientStats := stats.NewClientStats(time.Millisecond, 5*time.Second, 4*params.Trantor.Mempool.MaxTransactionsInBatch)
 	txGen.TrackStats(clientStats)
 
 	// Output the statistics.
 	var statFile *os.File
-	if liveStatsFileName != "" {
-		statFile, err = os.Create(liveStatsFileName)
+	if clientStatsFileName != "" {
+		statFile, err = os.Create(clientStatsFileName)
 		if err != nil {
 			return es.Errorf("could not open output file for statistics: %w", err)
 		}
@@ -199,17 +194,8 @@ func runClient(ctx context.Context) error {
 	statsCtx, stopStats := context.WithCancel(ctx)
 	defer stopStats()
 
-	replicaStatsCSV := csv.NewWriter(statFile)
-	goDisplayLiveStats(statsCtx, statsWg, clientStopped, liveStats, replicaStatsCSV)
-
-	if clientStatsFileName != "" {
-		clientStatFile, err := os.Create(clientStatsFileName)
-		if err != nil {
-			return es.Errorf("could not open output file for client statistics: %w", err)
-		}
-		clientStatsCSV := csv.NewWriter(clientStatFile)
-		goDisplayLiveStats(statsCtx, statsWg, clientStopped, clientStats, clientStatsCSV)
-	}
+	liveStatsCSV := csv.NewWriter(statFile)
+	goDisplayLiveStats(statsCtx, statsWg, clientStopped, clientStats, liveStatsCSV)
 
 	clientAdapterWg := &sync.WaitGroup{}
 	clientAdapterStop := make(chan struct{})

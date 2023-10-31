@@ -229,7 +229,7 @@ func runNode(ctx context.Context) error {
 
 	// Create trackers for gathering statistics about the performance.
 	liveStats := stats.NewLiveStats(aleatypes.QueueIdx(slices.Index(params.Trantor.Alea.AllNodes(), ownID)))
-	clientStats := stats.NewClientStats(time.Millisecond, 5*time.Second)
+	clientStats := stats.NewClientStats(time.Millisecond, 5*time.Second, 4*params.Trantor.Mempool.MaxTransactionsInBatch)
 	txGen.TrackStats(liveStats)
 	txGen.TrackStats(clientStats)
 

@@ -37,6 +37,8 @@ type ClientStats struct {
 	// Total number of transactions delivered.
 	totalDelivered int
 
+	preInitDiscardCount int
+
 	latencyStep    time.Duration
 	SamplingPeriod time.Duration
 }
@@ -44,13 +46,15 @@ type ClientStats struct {
 func NewClientStats(
 	latencyStep time.Duration,
 	samplingPeriod time.Duration,
+	preInitDiscardCount int,
 ) *ClientStats {
 	return &ClientStats{
-		txTimestamps:   make(map[txKey]time.Time),
-		LatencyHist:    map[time.Duration]int{0: 0}, // The rest of the code can assume this map is never empty.
-		DeliveredTxs:   make(map[time.Duration]int),
-		latencyStep:    latencyStep,
-		SamplingPeriod: samplingPeriod,
+		txTimestamps:        make(map[txKey]time.Time),
+		LatencyHist:         map[time.Duration]int{0: 0}, // The rest of the code can assume this map is never empty.
+		DeliveredTxs:        make(map[time.Duration]int),
+		preInitDiscardCount: preInitDiscardCount,
+		latencyStep:         latencyStep,
+		SamplingPeriod:      samplingPeriod,
 	}
 }
 
@@ -74,6 +78,12 @@ func (cs *ClientStats) Submit(tx *trantorpbtypes.Transaction) {
 func (cs *ClientStats) Deliver(tx *trantorpbtypes.Transaction) {
 	cs.timestampsLock.Lock()
 	defer cs.timestampsLock.Unlock()
+
+	if cs.preInitDiscardCount > 0 {
+		delete(cs.txTimestamps, txKey{tx.ClientId, tx.TxNo})
+		cs.preInitDiscardCount--
+		return
+	}
 
 	// Get delivery time and latency.
 	t := time.Since(cs.startTime)
@@ -101,14 +111,18 @@ func (cs *ClientStats) Deliver(tx *trantorpbtypes.Transaction) {
 
 func (cs *ClientStats) AssumeDelivered(tx *trantorpbtypes.Transaction) {
 	cs.timestampsLock.Lock()
-
-	// Consider transaction for throughput measurement, but not for latency (latency is distorted).
-	cs.totalDelivered++
+	defer cs.timestampsLock.Unlock()
 
 	txID := txKey{tx.ClientId, tx.TxNo}
 	delete(cs.txTimestamps, txID)
 
-	cs.timestampsLock.Unlock()
+	if cs.preInitDiscardCount > 0 {
+		cs.preInitDiscardCount--
+		return
+	}
+
+	// Consider transaction for throughput measurement, but not for latency (latency is distorted).
+	cs.totalDelivered++
 }
 
 // Fill adds padding to DeliveredTxs. In case no transactions have been delivered for some time,
