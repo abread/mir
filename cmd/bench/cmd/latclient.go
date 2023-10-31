@@ -14,8 +14,10 @@ import (
 	"io"
 	"net"
 	"os"
+	"os/signal"
 	"strconv"
 	"sync"
+	"syscall"
 	"time"
 
 	es "github.com/go-errors/errors"
@@ -71,7 +73,7 @@ func init() {
 	latClientCmd.Flags().StringVarP(&clientType, "type", "t", "dummy", "client type (one of: dummy, rr)")
 
 	latClientCmd.Flags().DurationVar(&statPeriod, "stat-period", 5*time.Second, "statistic record period")
-	latClientCmd.Flags().StringVar(&clientStatsFileName, "live-stat-file", "", "output file for live statistics, default is standard output")
+	latClientCmd.Flags().StringVar(&clientStatsFileName, "client-stat-file", "", "output file for client statistics, default is standard output")
 	latClientCmd.Flags().StringVar(&statSummaryFileName, "summary-stat-file", "", "output file for summarized statistics")
 
 	// Sync files
@@ -164,7 +166,7 @@ func runLatClient(ctx context.Context) error {
 	client.Connect(ctx, txReceiverAddrs)
 	defer client.Disconnect()
 	logger.Log(logging.LevelInfo, "client connected")
-	time.Sleep(3)
+	time.Sleep(3 * time.Second)
 
 	// Create a local transaction generator.
 	// It has, at the same time, the interface of a trantor App,
@@ -238,9 +240,19 @@ func runLatClient(ctx context.Context) error {
 			close(done)
 		}()
 	} else {
-		// TODO: This is not right. Only have this branch to quit on node error.
-		//   Set up signal handlers so that the nodes stops and cleans up after itself upon SIGINT and / or SIGTERM.
-		close(done)
+		// Setup signal notification channel
+		sigs := make(chan os.Signal, 1)
+		signal.Notify(sigs, syscall.SIGTERM, syscall.SIGINT)
+
+		go func() {
+			// Wait for a closing signal and shut down the node.
+			select {
+			case <-ctx.Done():
+			case <-sigs:
+			}
+			shutDown()
+			close(done)
+		}()
 	}
 
 	// submit transactions through client
