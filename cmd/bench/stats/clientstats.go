@@ -82,6 +82,10 @@ func (cs *ClientStats) Deliver(tx *trantorpbtypes.Transaction) {
 	if cs.preInitDiscardCount > 0 {
 		delete(cs.txTimestamps, txKey{tx.ClientId, tx.TxNo})
 		cs.preInitDiscardCount--
+
+		if cs.preInitDiscardCount == 0 {
+			cs.Start() //restart timer
+		}
 		return
 	}
 
@@ -131,7 +135,9 @@ func (cs *ClientStats) AssumeDelivered(tx *trantorpbtypes.Transaction) {
 // especially if no transactions have been delivered at all. In such a case, DeliveredTxs would otherwise stay empty
 // and not represent the true result of data collection (namely zeroes for all the duration.)
 func (cs *ClientStats) Fill() {
+	cs.timestampsLock.Lock()
 	cs.fillAtDuration(time.Since(cs.startTime))
+	cs.timestampsLock.Unlock()
 }
 
 func (cs *ClientStats) fillAtDuration(t time.Duration) {
