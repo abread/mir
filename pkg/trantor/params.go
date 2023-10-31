@@ -6,6 +6,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/alea"
 	"github.com/filecoin-project/mir/pkg/availability/multisigcollector"
 	issconfig "github.com/filecoin-project/mir/pkg/iss/config"
+	"github.com/filecoin-project/mir/pkg/iss/leaderselectionpolicy"
 	"github.com/filecoin-project/mir/pkg/mempool/simplemempool"
 	"github.com/filecoin-project/mir/pkg/net/libp2p"
 	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
@@ -36,6 +37,8 @@ func DefaultParams(initialMembership *trantorpbtypes.Membership) Params {
 		ReliableNet:  reliablenet.DefaultModuleParams(allNodes),
 		Availability: multisigcollector.DefaultParamsTemplate(),
 	}
+
+	p.Iss.LeaderSelectionPolicy = leaderselectionpolicy.Blacklist
 
 	return p
 }
