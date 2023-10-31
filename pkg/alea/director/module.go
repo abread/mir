@@ -385,12 +385,8 @@ func NewModule( // nolint: gocyclo,gocognit
 		// consider how many batches we have pending delivery
 		waitRoundCount += int(unagreedOwnBatchCount) * N
 
-		// give one ag round of leeway
-		if waitRoundCount > 0 {
-			waitRoundCount--
-		}
-
-		timeToOwnQueueAgRound := est.AgFastPathEst() * time.Duration(waitRoundCount)
+		agRoundTime := est.AgFastPathEst()
+		timeToOwnQueueAgRound := agRoundTime * time.Duration(waitRoundCount)
 		bcRuntimeEst := est.OwnBcMaxDurationEst()
 
 		// We have a lot of time before we reach our agreement round. Let the batch fill up!
@@ -398,10 +394,13 @@ func NewModule( // nolint: gocyclo,gocognit
 		if timeToOwnQueueAgRound > bcRuntimeEst && (unagreedOwnBatchCount > 0 || agCanDeliverK(F+1)) {
 			// ensure we are woken up to create a batch before we run out of time
 			maxDelay := timeToOwnQueueAgRound - bcRuntimeEst
-			// logger.Log(logging.LevelDebug, "stalling batch cut", "max delay", maxDelay)
-			state.wakeUpAfter(maxDelay)
 
-			return nil
+			if maxDelay > agRoundTime { // don't delay batch cut for very short periods of time
+				// logger.Log(logging.LevelDebug, "stalling batch cut", "max delay", maxDelay)
+				state.wakeUpAfter(maxDelay)
+
+				return nil
+			}
 		}
 
 		logger.Log(logging.LevelDebug, "requesting more transactions")
