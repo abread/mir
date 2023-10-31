@@ -266,6 +266,8 @@ func (at *AleaTracer) interceptOne(event *eventpbtypes.Event) error { // nolint:
 			nextQueueIdx := aleatypes.QueueIdx(at.nextAgRound % uint64(at.nodeCount))
 			if _, ok := at.unagreedSlots[nextQueueIdx][at.agQueueHeads[nextQueueIdx]]; ok {
 				// slot is present, ag will start immediately
+				at.startAgStallSpan(ts, at.nextAgRound)
+				at.endAgStallSpan(ts, at.nextAgRound)
 				at.startAgSpan(ts, at.nextAgRound)
 			} else {
 				// slot not present, ag will potentially stall a bit
