@@ -235,6 +235,7 @@ func (at *AleaTracer) interceptOne(event *eventpbtypes.Event) error { // nolint:
 			slot := e.Deliver.Cert.Slot
 
 			if slot.QueueIdx == at.ownQueueIdx && slot.QueueSlot == at.nextBatchToCut {
+				at.nextBatchToCut++
 				at.startBatchCutStallSpan(ts, at.nextBatchToCut)
 			}
 
@@ -253,11 +254,6 @@ func (at *AleaTracer) interceptOne(event *eventpbtypes.Event) error { // nolint:
 				at.bfDeliverQueue = append(at.bfDeliverQueue, slot)
 				at.agQueueHeads[slot.QueueIdx]++
 				delete(at.unagreedSlots[slot.QueueIdx], slot.QueueSlot)
-
-				if slot.QueueIdx == at.ownQueueIdx && at.nextBatchToCut == slot.QueueSlot {
-					at.nextBatchToCut++
-					at.startBatchCutStallSpan(ts, at.nextBatchToCut)
-				}
 			} else {
 				at.bfDeliverQueue = append(at.bfDeliverQueue, EmptySlot)
 			}
