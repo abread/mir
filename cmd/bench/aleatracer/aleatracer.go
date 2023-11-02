@@ -299,6 +299,11 @@ func (at *AleaTracer) interceptOne(event *eventpbtypes.Event) error { // nolint:
 					at.startBcAwaitEchoSpan(ts, slot)
 				case *vcbpbtypes.Message_FinalMessage:
 					at.startBcAwaitQuorumDoneSpan(ts, slot)
+				case *vcbpbtypes.Message_DoneMessage:
+					if slot.QueueIdx != at.ownQueueIdx {
+						at.endBcSpan(ts, slot)
+					}
+					// for own queue, wait for slot to be freed by agreement or all VCBs completing
 				}
 			}
 		case *transportpbtypes.Event_MessageReceived:
