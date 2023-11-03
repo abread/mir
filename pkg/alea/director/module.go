@@ -270,6 +270,23 @@ func NewModule( // nolint: gocyclo,gocognit
 		return nil
 	})
 
+	agCanDeliverCount := func() int {
+		nCanDeliver := 0
+
+		for round := state.agRound; round < state.agRound+uint64(N); round++ {
+			slot, ok := state.queueSelectionPolicy.Slot(round)
+			if !ok {
+				continue
+			}
+
+			if _, bcDone := state.slotsReadyToDeliver[slot]; bcDone {
+				nCanDeliver++
+			}
+		}
+
+		return nCanDeliver
+	}
+
 	agCanDeliverK := func(k int) bool {
 		nCanDeliver := 0
 
@@ -281,7 +298,6 @@ func NewModule( // nolint: gocyclo,gocognit
 
 			if _, bcDone := state.slotsReadyToDeliver[slot]; bcDone {
 				nCanDeliver++
-
 				if nCanDeliver >= k {
 					return true
 				}
@@ -296,7 +312,7 @@ func NewModule( // nolint: gocyclo,gocognit
 	dsl.UponStateUpdates(m, func() error {
 		if !state.stalledAgRound {
 			return nil // nothing to do
-		} else if !agCanDeliverK(1) && tunables.MaxAgStall > (time.Since(timeRef)-state.lastAgInput) {
+		} else if agCanDeliverCount() == 0 && tunables.MaxAgStall > (time.Since(timeRef)-state.lastAgInput) {
 			// just continue stalling for a while more: we don't have anything to deliver yet
 			state.wakeUpAfter(tunables.MaxAgStall - (time.Since(timeRef) - state.lastAgInput))
 			return nil
@@ -372,8 +388,8 @@ func NewModule( // nolint: gocyclo,gocognit
 		// agQueueHeads[ownQueueIdx] is the next slot to be agreed on
 		unagreedOwnBatchCount := uint64(state.bcOwnQueueHead - state.queueSelectionPolicy.QueueHead(ownQueueIdx))
 
-		if !state.stalledBatchCut || unagreedOwnBatchCount >= uint64(tunables.MaxOwnUnagreedBatchCount) {
-			// batch cut in progress, or enough are cut already
+		if unagreedOwnBatchCount >= uint64(tunables.MaxOwnUnagreedBatchCount) {
+			// enough are cut already
 			return nil
 		}
 
@@ -384,6 +400,10 @@ func NewModule( // nolint: gocyclo,gocognit
 
 		// consider how many batches we have pending delivery
 		waitRoundCount += int(unagreedOwnBatchCount) * N
+
+		// consider how many batches can be instantly delivered
+		// TODO: may increase tx duplication when clients multicast txs and byz nodes exist
+		waitRoundCount -= agCanDeliverCount()
 
 		agRoundTime := est.AgFastPathEst()
 		timeToOwnQueueAgRound := agRoundTime * time.Duration(waitRoundCount)
