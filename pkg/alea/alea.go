@@ -74,7 +74,7 @@ func DefaultParams(membership *trantorpbtypes.Membership) *Params {
 		InstanceUID:              []byte{42},
 		Membership:               membership,
 		MaxAbbaRoundLookahead:    4,
-		EstimateWindowSize:       32,
+		EstimateWindowSize:       64,
 		MaxExtSlowdownFactor:     1.5,
 		QueueSelectionPolicyType: queueselectionpolicy.RoundRobin,
 		EpochLength:              uint64(EpochLength),
