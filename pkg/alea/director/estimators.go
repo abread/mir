@@ -46,7 +46,18 @@ func (e *estimators) AgFastPathEst() time.Duration {
 	// The unanimity optimization lowers convergence to the time for one message broadcast (per node):
 	// the INPUT message
 	// One abba round takes roughly 3 message broadcasts (per node), +1 for the common coin
-	return e.abbaRoundNoCoinDuration.MinEstimate() / 3
+	abbaEst := e.abbaRoundNoCoinDuration.MinEstimate() / 3
+
+	// VCB is supposed to take roughly ~2 broadcasts to deliver (from the POV of the leader or follower)
+	vcbEstL := e.maxOwnBcLocalDuration / 2
+	vcbEstF := e.maxExtBcDuration / 2
+
+	if abbaEst < vcbEstL && abbaEst < vcbEstF {
+		return abbaEst
+	} else if vcbEstF < vcbEstL {
+		return vcbEstF
+	}
+	return vcbEstL
 }
 
 func (e *estimators) BcRuntime(slot bcpbtypes.Slot) (time.Duration, bool) {
