@@ -117,10 +117,13 @@ func newEstimators(m dsl.Module, params ModuleParams, tunables ModuleTunables, n
 		if queueIdx != ownQueueIdx {
 			if posQuorumWait == math.MaxInt64 {
 				// failed deadline, double margin
-				m := est.extBcDoneMargin.MaxEstimate()
+				m := est.extBcDoneMargin.ComponentMaxEstimate(int(queueIdx))
 
-				est.extBcDoneMargin.Clear(int(queueIdx))
-				est.extBcDoneMargin.AddSample(int(queueIdx), 2*m)
+				if 2*m < est.maxExtBcDuration {
+					est.extBcDoneMargin.AddSample(int(queueIdx), 2*m)
+				} else if m != est.maxExtBcDuration {
+					est.extBcDoneMargin.AddSample(int(queueIdx), est.maxExtBcDuration)
+				}
 			} else {
 				// limit slow node influence
 				if float64(posTotalDelta) > float64(posQuorumWait)*tunables.MaxExtSlowdownFactor {

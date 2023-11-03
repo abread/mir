@@ -40,6 +40,10 @@ func (e *ByzEstimator) Clear(i int) {
 	e.median = -1
 }
 
+func (e *ByzEstimator) ComponentMaxEstimate(i int) time.Duration {
+	return e.children[i].MaxEstimate()
+}
+
 func (e *ByzEstimator) MaxEstimate() time.Duration {
 	if e.maxEst == -1 {
 		e.maxEst = e._maxEstimate()
