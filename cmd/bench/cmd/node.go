@@ -218,8 +218,7 @@ func runNode(ctx context.Context) error {
 			_ = traceFile.Close()
 		}()
 
-		ownQueueIdx := slices.Index(params.Trantor.Alea.AllNodes(), ownID)
-		aleaTracer := aleatracer.NewAleaTracer(ctx, aleatypes.QueueIdx(ownQueueIdx), len(initialMembership.Nodes), traceFile)
+		aleaTracer := aleatracer.NewAleaTracer(ctx, &params.Trantor, ownID, traceFile)
 		defer aleaTracer.Stop()
 		tracer = aleaTracer
 	}

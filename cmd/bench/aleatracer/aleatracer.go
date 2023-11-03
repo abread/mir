@@ -11,6 +11,7 @@ import (
 	"time"
 
 	es "github.com/go-errors/errors"
+	"golang.org/x/exp/slices"
 
 	"github.com/filecoin-project/mir/pkg/alea/aleatypes"
 	"github.com/filecoin-project/mir/pkg/clientprogress"
@@ -28,13 +29,14 @@ import (
 	threshcryptopbtypes "github.com/filecoin-project/mir/pkg/pb/threshcryptopb/types"
 	transportpbtypes "github.com/filecoin-project/mir/pkg/pb/transportpb/types"
 	vcbpbtypes "github.com/filecoin-project/mir/pkg/pb/vcbpb/types"
+	"github.com/filecoin-project/mir/pkg/trantor"
 	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
 type AleaTracer struct {
 	ownQueueIdx aleatypes.QueueIdx
-	nodeCount   int
+	params      *trantor.Params
 
 	wipTxSpan                map[txID]*span
 	wipBcSpan                map[bcpbtypes.Slot]*span
@@ -96,49 +98,51 @@ const N = 128
 
 var timeRef = time.Now()
 
-func NewAleaTracer(ctx context.Context, ownQueueIdx aleatypes.QueueIdx, nodeCount int, out io.Writer) *AleaTracer {
+func NewAleaTracer(ctx context.Context, params *trantor.Params, nodeID t.NodeID, out io.Writer) *AleaTracer {
 	tracerCtx, cancel := context.WithCancel(ctx)
 
+	N := len(params.Alea.Membership.Nodes)
+
 	tracer := &AleaTracer{
-		ownQueueIdx: ownQueueIdx,
-		nodeCount:   nodeCount,
+		ownQueueIdx: aleatypes.QueueIdx(slices.Index(params.Alea.AllNodes(), nodeID)),
+		params:      params,
 
 		wipTxSpan:                make(map[txID]*span, 256),
-		wipBcSpan:                make(map[bcpbtypes.Slot]*span, nodeCount),
-		wipBcAwaitEchoSpan:       make(map[bcpbtypes.Slot]*span, nodeCount),
-		wipBcAwaitFinalSpan:      make(map[bcpbtypes.Slot]*span, nodeCount),
-		wipBcComputeSigDataSpan:  make(map[bcpbtypes.Slot]*span, nodeCount),
-		wipBcAwaitQuorumDoneSpan: make(map[bcpbtypes.Slot]*span, nodeCount),
-		wipBcAwaitAllDoneSpan:    make(map[bcpbtypes.Slot]*span, nodeCount),
-		wipBcModSpan:             make(map[bcpbtypes.Slot]*span, nodeCount),
-		wipAgSpan:                make(map[uint64]*span, nodeCount),
-		wipAgModSpan:             make(map[uint64]*span, nodeCount),
-		wipAbbaRoundSpan:         make(map[abbaRoundID]*span, nodeCount*16),
-		wipAbbaRoundModSpan:      make(map[abbaRoundID]*span, nodeCount*16),
-		wipBfSpan:                make(map[bcpbtypes.Slot]*span, nodeCount),
-		wipBfStalledSpan:         make(map[bcpbtypes.Slot]*span, nodeCount),
-		wipThreshCryptoSpan:      make(map[string]*span, nodeCount*32),
+		wipBcSpan:                make(map[bcpbtypes.Slot]*span, N),
+		wipBcAwaitEchoSpan:       make(map[bcpbtypes.Slot]*span, N),
+		wipBcAwaitFinalSpan:      make(map[bcpbtypes.Slot]*span, N),
+		wipBcComputeSigDataSpan:  make(map[bcpbtypes.Slot]*span, N),
+		wipBcAwaitQuorumDoneSpan: make(map[bcpbtypes.Slot]*span, N),
+		wipBcAwaitAllDoneSpan:    make(map[bcpbtypes.Slot]*span, N),
+		wipBcModSpan:             make(map[bcpbtypes.Slot]*span, N),
+		wipAgSpan:                make(map[uint64]*span, N),
+		wipAgModSpan:             make(map[uint64]*span, N),
+		wipAbbaRoundSpan:         make(map[abbaRoundID]*span, N*16),
+		wipAbbaRoundModSpan:      make(map[abbaRoundID]*span, N*16),
+		wipBfSpan:                make(map[bcpbtypes.Slot]*span, N),
+		wipBfStalledSpan:         make(map[bcpbtypes.Slot]*span, N),
+		wipThreshCryptoSpan:      make(map[string]*span, N*32),
 
 		nextBatchToCut:       0,
 		nextAgRound:          0,
 		wipBatchCutStallSpan: nil,
 		wipAgStallSpan:       nil,
-		unagreedSlots:        make(map[aleatypes.QueueIdx]map[aleatypes.QueueSlot]struct{}, nodeCount),
+		unagreedSlots:        make(map[aleatypes.QueueIdx]map[aleatypes.QueueSlot]struct{}, N),
 
-		bfWipSlotsCtxID: make(map[uint64]bcpbtypes.Slot, nodeCount),
+		bfWipSlotsCtxID: make(map[uint64]bcpbtypes.Slot, N),
 		bfDeliverQueue:  nil,
 
-		agQueueHeads:            make([]aleatypes.QueueSlot, nodeCount),
-		agUndeliveredAbbaRounds: make(map[uint64]map[uint64]struct{}, nodeCount),
+		agQueueHeads:            make([]aleatypes.QueueSlot, N),
+		agUndeliveredAbbaRounds: make(map[uint64]map[uint64]struct{}, N),
 
 		txTracker: clientprogress.NewClientProgress(),
 
-		inChan: make(chan events.EventList, nodeCount*16),
+		inChan: make(chan events.EventList, N*16),
 		cancel: cancel,
 		out:    out,
 	}
 
-	for i := aleatypes.QueueIdx(0); i < aleatypes.QueueIdx(nodeCount); i++ {
+	for i := aleatypes.QueueIdx(0); i < aleatypes.QueueIdx(N); i++ {
 		tracer.unagreedSlots[i] = make(map[aleatypes.QueueSlot]struct{}, 32)
 	}
 
@@ -173,6 +177,10 @@ func NewAleaTracer(ctx context.Context, ownQueueIdx aleatypes.QueueIdx, nodeCoun
 	}()
 
 	return tracer
+}
+
+func (at *AleaTracer) nodeCount() int {
+	return len(at.params.Alea.Membership.Nodes)
 }
 
 func (at *AleaTracer) Stop() {
@@ -230,7 +238,6 @@ func (at *AleaTracer) interceptOne(event *eventpbtypes.Event) error { // nolint:
 				QueueSlot: e.FreeSlot.QueueSlot,
 			}
 			at.endBcSpan(ts, slot)
-			at.endBcModSpan(ts, slot)
 		case *bcqueuepbtypes.Event_Deliver:
 			slot := e.Deliver.Cert.Slot
 
@@ -259,7 +266,7 @@ func (at *AleaTracer) interceptOne(event *eventpbtypes.Event) error { // nolint:
 			}
 
 			at.nextAgRound = e.Deliver.Round + 1
-			nextQueueIdx := aleatypes.QueueIdx(at.nextAgRound % uint64(at.nodeCount))
+			nextQueueIdx := aleatypes.QueueIdx(at.nextAgRound % uint64(at.nodeCount()))
 			if _, ok := at.unagreedSlots[nextQueueIdx][at.agQueueHeads[nextQueueIdx]]; ok {
 				// slot is present, ag will start immediately
 				at.startAgStallSpan(ts, at.nextAgRound)
@@ -302,6 +309,7 @@ func (at *AleaTracer) interceptOne(event *eventpbtypes.Event) error { // nolint:
 				case *vcbpbtypes.Message_DoneMessage:
 					if slot.QueueIdx != at.ownQueueIdx {
 						at.endBcSpan(ts, slot)
+						at.endBcModSpan(ts, slot)
 					}
 					// for own queue, wait for slot to be freed by agreement or all VCBs completing
 				}
@@ -495,6 +503,14 @@ func (at *AleaTracer) registerModStart(ts time.Duration, event *eventpbtypes.Eve
 		if err != nil {
 			return
 		}
+
+		// end prev mod span
+		if queueSlot > uint64(at.params.Alea.MaxConcurrentVcbPerQueue) {
+			at.endBcModSpan(ts, bcpbtypes.Slot{
+				QueueIdx:  aleatypes.QueueIdx(queueIdx),
+				QueueSlot: aleatypes.QueueSlot(queueSlot - uint64(at.params.Alea.MaxConcurrentVcbPerQueue)),
+			})
+		}
 		at.startBcModSpan(ts, bcpbtypes.Slot{
 			QueueIdx:  aleatypes.QueueIdx(queueIdx),
 			QueueSlot: aleatypes.QueueSlot(queueSlot),
@@ -548,7 +564,7 @@ func (at *AleaTracer) parseAbbaRoundID(id t.ModuleID) (abbaRoundID, error) {
 }
 
 func (at *AleaTracer) slotForAgRound(round uint64) bcpbtypes.Slot {
-	queueIdx := round % uint64(at.nodeCount)
+	queueIdx := round % uint64(at.nodeCount())
 	queueSlot := at.agQueueHeads[queueIdx]
 
 	return bcpbtypes.Slot{
@@ -764,7 +780,7 @@ func (at *AleaTracer) startBcAwaitQuorumDoneSpan(ts time.Duration, slot bcpbtype
 }
 func (at *AleaTracer) endBcAwaitQuorumDoneSpan(ts time.Duration, slot bcpbtypes.Slot) {
 	s := at._bcAwaitQuorumDoneSpan(ts, slot)
-	if s.end == 0 {
+	if s != nil && s.end == 0 {
 		s.end = ts
 		at.writeSpan(s)
 	}
@@ -792,7 +808,7 @@ func (at *AleaTracer) startBcAwaitAllDoneSpan(ts time.Duration, slot bcpbtypes.S
 }
 func (at *AleaTracer) endBcAwaitAllDoneSpan(ts time.Duration, slot bcpbtypes.Slot) {
 	s := at._bcAwaitAllDoneSpan(ts, slot)
-	if s.end == 0 {
+	if s != nil && s.end == 0 {
 		s.end = ts
 		at.writeSpan(s)
 	}
