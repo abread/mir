@@ -236,6 +236,7 @@ func New(
 				MaxOwnUnagreedBatchCount: params.Alea.MaxOwnUnagreedBatchCount,
 				EstimateWindowSize:       params.Alea.EstimateWindowSize,
 				MaxExtSlowdownFactor:     params.Alea.MaxExtSlowdownFactor,
+				MaxAgRoundAdvanceInput:   params.Alea.MaxAgRoundAdvanceInput,
 				MaxAgStall:               params.Alea.MaxAgStall,
 			},
 			startingCheckpoint,

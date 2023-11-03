@@ -55,5 +55,12 @@ type ModuleTunables struct {
 	// Must be >= 1
 	MaxExtSlowdownFactor float64
 
+	// Maximum number of agreement rounds for which we send input before
+	// allowing them to progress in the normal path.
+	// Must be at least 0, must be less that MaxRoundLookahead
+	// Setting this parameter too high will lead to costly retransmissions!
+	// Should likely be less than MaxRoundLookahead/2 - 1.
+	MaxAgRoundAdvanceInput int
+
 	MaxAgStall time.Duration
 }
