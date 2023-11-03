@@ -34,7 +34,7 @@ func (e *estimators) OwnBcMaxDurationEst() time.Duration {
 	return e.maxOwnBcDuration
 }
 
-func (e *estimators) OwnBcMedianDurationEstNoMargin() time.Duration {
+func (e *estimators) OwnBcLocalMaxDurationEst() time.Duration {
 	return e.maxOwnBcLocalDuration
 }
 

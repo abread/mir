@@ -312,7 +312,7 @@ func NewModule( // nolint: gocyclo,gocognit
 
 		// delay inputting 0 when a broadcast is in progress
 		if bcRuntime, ok := est.BcRuntime(nextSlot); ok {
-			if nextSlot.QueueIdx == ownQueueIdx && bcRuntime < est.OwnBcMedianDurationEstNoMargin() && bcRuntime < tunables.MaxAgStall {
+			if nextSlot.QueueIdx == ownQueueIdx && bcRuntime < est.OwnBcLocalMaxDurationEst() && bcRuntime < tunables.MaxAgStall {
 				//logger.Log(logging.LevelDebug, "stalling agreement input for own batch")
 				state.wakeUpAfter(tunables.MaxAgStall - bcRuntime)
 				return nil
