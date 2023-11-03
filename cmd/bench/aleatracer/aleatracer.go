@@ -559,7 +559,7 @@ func (at *AleaTracer) slotForAgRound(round uint64) bcpbtypes.Slot {
 
 func (at *AleaTracer) _bcSpan(ts time.Duration, slot bcpbtypes.Slot) *span {
 	s, ok := at.wipBcSpan[slot]
-	if !ok {
+	if !ok && at.agQueueHeads[slot.QueueIdx] <= slot.QueueSlot {
 		at.wipBcSpan[slot] = &span{
 			class: "bc",
 			id:    fmt.Sprintf("%d/%d", slot.QueueIdx, slot.QueueSlot),
@@ -590,8 +590,6 @@ func (at *AleaTracer) endBcSpan(ts time.Duration, slot bcpbtypes.Slot) {
 	delete(at.wipBcAwaitEchoSpan, slot)
 	delete(at.wipBcAwaitFinalSpan, slot)
 	delete(at.wipBcComputeSigDataSpan, slot)
-	delete(at.wipBcAwaitQuorumDoneSpan, slot)
-	delete(at.wipBcAwaitAllDoneSpan, slot)
 }
 
 func (at *AleaTracer) _txSpan(ts time.Duration, clientID tt.ClientID, txNo tt.TxNo) *span {
@@ -691,8 +689,8 @@ func (at *AleaTracer) startBcAwaitEchoSpan(ts time.Duration, slot bcpbtypes.Slot
 	at._bcAwaitEchoSpan(ts, slot)
 }
 func (at *AleaTracer) endBcAwaitEchoSpan(ts time.Duration, slot bcpbtypes.Slot) {
-	s := at._bcAwaitEchoSpan(ts, slot)
-	if s.end == 0 {
+	s, ok := at.wipBcAwaitEchoSpan[slot]
+	if ok && s.end == 0 {
 		s.end = ts
 		at.writeSpan(s)
 	}
@@ -714,8 +712,8 @@ func (at *AleaTracer) startBcAwaitFinalSpan(ts time.Duration, slot bcpbtypes.Slo
 	at._bcAwaitFinalSpan(ts, slot)
 }
 func (at *AleaTracer) endBcAwaitFinalSpan(ts time.Duration, slot bcpbtypes.Slot) {
-	s := at._bcAwaitFinalSpan(ts, slot)
-	if s.end == 0 {
+	s, ok := at.wipBcAwaitFinalSpan[slot]
+	if ok && s.end == 0 {
 		s.end = ts
 		at.writeSpan(s)
 	}
@@ -737,8 +735,8 @@ func (at *AleaTracer) startBcComputeSigDataSpan(ts time.Duration, slot bcpbtypes
 	at._bcComputeSigDataSpan(ts, slot)
 }
 func (at *AleaTracer) endBcComputeSigDataSpan(ts time.Duration, slot bcpbtypes.Slot) {
-	s := at._bcComputeSigDataSpan(ts, slot)
-	if s.end == 0 {
+	s, ok := at.wipBcComputeSigDataSpan[slot]
+	if ok && s.end == 0 {
 		s.end = ts
 		at.writeSpan(s)
 	}
@@ -747,6 +745,11 @@ func (at *AleaTracer) endBcComputeSigDataSpan(ts time.Duration, slot bcpbtypes.S
 func (at *AleaTracer) _bcAwaitQuorumDoneSpan(ts time.Duration, slot bcpbtypes.Slot) *span {
 	s, ok := at.wipBcAwaitQuorumDoneSpan[slot]
 	if !ok {
+		_, modOk := at.wipBcModSpan[slot]
+		if !modOk {
+			return nil
+		}
+
 		at.wipBcAwaitQuorumDoneSpan[slot] = &span{
 			class: "bc:awaitQuorum",
 			id:    fmt.Sprintf("%d/%d", slot.QueueIdx, slot.QueueSlot),
@@ -770,6 +773,11 @@ func (at *AleaTracer) endBcAwaitQuorumDoneSpan(ts time.Duration, slot bcpbtypes.
 func (at *AleaTracer) _bcAwaitAllDoneSpan(ts time.Duration, slot bcpbtypes.Slot) *span {
 	s, ok := at.wipBcAwaitAllDoneSpan[slot]
 	if !ok {
+		_, modOk := at.wipBcModSpan[slot]
+		if !modOk {
+			return nil
+		}
+
 		at.wipBcAwaitAllDoneSpan[slot] = &span{
 			class: "bc:awaitAll",
 			id:    fmt.Sprintf("%d/%d", slot.QueueIdx, slot.QueueSlot),
@@ -814,6 +822,8 @@ func (at *AleaTracer) endBcModSpan(ts time.Duration, slot bcpbtypes.Slot) {
 	at.writeSpan(s)
 
 	delete(at.wipBcModSpan, slot)
+	delete(at.wipBcAwaitQuorumDoneSpan, slot)
+	delete(at.wipBcAwaitAllDoneSpan, slot)
 }
 
 func (at *AleaTracer) _agSpan(ts time.Duration, round uint64) *span {
