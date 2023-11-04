@@ -68,7 +68,7 @@ func FreeSlot(destModule types.ModuleID, slot *types2.Slot) *types1.Event {
 	}
 }
 
-func EstimateUpdate(destModule types.ModuleID, maxOwnBcDuration time.Duration, maxOwnBcLocalDuration time.Duration, maxExtBcDuration time.Duration) *types1.Event {
+func EstimateUpdate(destModule types.ModuleID, maxOwnBcDuration time.Duration, maxOwnBcLocalDuration time.Duration, maxExtBcDuration time.Duration, minNetLatency time.Duration) *types1.Event {
 	return &types1.Event{
 		DestModule: destModule,
 		Type: &types1.Event_AleaBc{
@@ -78,6 +78,7 @@ func EstimateUpdate(destModule types.ModuleID, maxOwnBcDuration time.Duration, m
 						MaxOwnBcDuration:      maxOwnBcDuration,
 						MaxOwnBcLocalDuration: maxOwnBcLocalDuration,
 						MaxExtBcDuration:      maxExtBcDuration,
+						MinNetLatency:         minNetLatency,
 					},
 				},
 			},

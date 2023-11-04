@@ -2,13 +2,13 @@ package bcqueue
 
 import (
 	"math"
-	"strconv"
 	"time"
 
 	es "github.com/go-errors/errors"
 
 	"golang.org/x/exp/slices"
 
+	"github.com/filecoin-project/mir/pkg/abba/abbatypes"
 	"github.com/filecoin-project/mir/pkg/alea/aleatypes"
 	"github.com/filecoin-project/mir/pkg/alea/broadcast/bccommon"
 	"github.com/filecoin-project/mir/pkg/alea/queueselectionpolicy"
@@ -23,9 +23,11 @@ import (
 	directorpbdsl "github.com/filecoin-project/mir/pkg/pb/aleapb/directorpb/dsl"
 	apppbdsl "github.com/filecoin-project/mir/pkg/pb/apppb/dsl"
 	checkpointpbtypes "github.com/filecoin-project/mir/pkg/pb/checkpointpb/types"
+	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
 	messagepbtypes "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
 	modringpbtypes "github.com/filecoin-project/mir/pkg/pb/modringpb/types"
 	reliablenetpbevents "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/events"
+	transportpbdsl "github.com/filecoin-project/mir/pkg/pb/transportpb/dsl"
 	transportpbevents "github.com/filecoin-project/mir/pkg/pb/transportpb/events"
 	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	vcbpbdsl "github.com/filecoin-project/mir/pkg/pb/vcbpb/dsl"
@@ -55,11 +57,32 @@ func New(mc ModuleConfig, params ModuleParams, tunables ModuleTunables, nodeID t
 
 	controller := newQueueController(mc, &params, tunables, nodeID, logger, slots)
 
-	return modules.RoutedModule(mc.Self, controller, slots), nil
+	var children modules.PassiveModule = slots
+	if params.QueueOwner == nodeID {
+		// instrument VCB for network latency estimates
+		children = modules.MultiApplyModule([]modules.PassiveModule{
+			slots,
+			newMinNetworkLatEstimator(mc, &params, nodeID),
+		})
+	}
+
+	return modules.RoutedModule(mc.Self, controller, children), nil
 }
 
 func newQueueController(mc ModuleConfig, params *ModuleParams, tunables ModuleTunables, nodeID t.NodeID, logger logging.Logger, slots *modring.Module) modules.PassiveModule {
 	m := dsl.NewModule(mc.Self)
+
+	parseSlotFromModuleID := func(id t.ModuleID) (bcpbtypes.Slot, error) {
+		queueSlot, err := mc.ParseQueueSlotFromModuleID(id)
+		if err != nil {
+			return bcpbtypes.Slot{}, err
+		}
+
+		return bcpbtypes.Slot{
+			QueueIdx:  params.QueueIdx,
+			QueueSlot: queueSlot,
+		}, nil
+	}
 
 	bcqueuepbdsl.UponInputValue(m, func(queueSlot aleatypes.QueueSlot, txIDs []tt.TxID, txs []*trantorpbtypes.Transaction) error {
 		if len(txs) == 0 {
@@ -77,20 +100,14 @@ func newQueueController(mc ModuleConfig, params *ModuleParams, tunables ModuleTu
 
 	// upon vcb deliver, store batch and deliver to broadcast component
 	vcbpbdsl.UponDeliver(m, func(batchID string, signature tctypes.FullSig, srcModule t.ModuleID) error {
-		queueSlotStr := srcModule.StripParent(mc.Self).Top()
-		queueSlot, err := strconv.ParseUint(string(queueSlotStr), 10, 64)
+		slot, err := parseSlotFromModuleID(srcModule)
 		if err != nil {
 			return es.Errorf("deliver event for invalid round: %w", err)
 		}
 
-		slot := &bcpbtypes.Slot{
-			QueueIdx:  params.QueueIdx,
-			QueueSlot: aleatypes.QueueSlot(queueSlot),
-		}
-
 		logger.Log(logging.LevelDebug, "delivering broadcast", "queueSlot", slot.QueueSlot)
 		bcqueuepbdsl.Deliver(m, mc.Consumer, &bcpbtypes.Cert{
-			Slot:      slot,
+			Slot:      &slot,
 			BatchId:   batchID,
 			Signature: signature,
 		})
@@ -101,8 +118,7 @@ func newQueueController(mc ModuleConfig, params *ModuleParams, tunables ModuleTu
 		slotDeliverTimes := make(map[aleatypes.QueueSlot]time.Time, tunables.MaxConcurrentVcb)
 
 		vcbpbdsl.UponDeliver(m, func(_ string, _ tctypes.FullSig, srcModule t.ModuleID) error {
-			queueSlotStr := srcModule.StripParent(mc.Self).Top()
-			queueSlot, err := strconv.ParseUint(string(queueSlotStr), 10, 64)
+			queueSlot, err := mc.ParseQueueSlotFromModuleID(srcModule)
 			if err != nil {
 				return es.Errorf("deliver event for invalid round: %w", err)
 			}
@@ -112,20 +128,14 @@ func newQueueController(mc ModuleConfig, params *ModuleParams, tunables ModuleTu
 		})
 
 		vcbpbdsl.UponQuorumDone(m, func(srcModule t.ModuleID) error {
-			queueSlotStr := srcModule.StripParent(mc.Self).Top()
-			queueSlot, err := strconv.ParseUint(string(queueSlotStr), 10, 64)
+			slot, err := parseSlotFromModuleID(srcModule)
 			if err != nil {
 				return es.Errorf("deliver event for invalid round: %w", err)
 			}
 
-			slot := &bcpbtypes.Slot{
-				QueueIdx:  params.QueueIdx,
-				QueueSlot: aleatypes.QueueSlot(queueSlot),
-			}
-
 			if startTime, ok := slotDeliverTimes[slot.QueueSlot]; ok {
 				deliverDelta := time.Since(startTime)
-				bcqueuepbdsl.BcQuorumDone(m, mc.Consumer, slot, deliverDelta)
+				bcqueuepbdsl.BcQuorumDone(m, mc.Consumer, &slot, deliverDelta)
 
 				// add delta to avoid including it in the fully done delta calc
 				slotDeliverTimes[slot.QueueSlot] = startTime.Add(deliverDelta)
@@ -135,20 +145,14 @@ func newQueueController(mc ModuleConfig, params *ModuleParams, tunables ModuleTu
 		})
 
 		vcbpbdsl.UponAllDone(m, func(srcModule t.ModuleID) error {
-			queueSlotStr := srcModule.StripParent(mc.Self).Top()
-			queueSlot, err := strconv.ParseUint(string(queueSlotStr), 10, 64)
+			slot, err := parseSlotFromModuleID(srcModule)
 			if err != nil {
 				return es.Errorf("deliver event for invalid round: %w", err)
 			}
 
-			slot := &bcpbtypes.Slot{
-				QueueIdx:  params.QueueIdx,
-				QueueSlot: aleatypes.QueueSlot(queueSlot),
-			}
-
 			if startTime, ok := slotDeliverTimes[slot.QueueSlot]; ok {
 				deliverDelta := time.Since(startTime)
-				bcqueuepbdsl.BcAllDone(m, mc.Consumer, slot, deliverDelta)
+				bcqueuepbdsl.BcAllDone(m, mc.Consumer, &slot, deliverDelta)
 			}
 
 			return nil
@@ -320,4 +324,79 @@ func newVcbGenerator(queueMc ModuleConfig, queueParams *ModuleParams, nodeID t.N
 			}),
 		), nil
 	}
+}
+
+type netLatEstVcbInfo struct {
+	ownEchoTime time.Time
+	recvdEchos  abbatypes.RecvTracker // TODO: move type into separate common package
+}
+
+func newMinNetworkLatEstimator(mc ModuleConfig, params *ModuleParams, nodeID t.NodeID) modules.PassiveModule {
+	m := dsl.NewModule(mc.Self)
+
+	N := len(params.AllNodes)
+	F := (N - 1) / 3
+	measurementThreshold := F + 2 // own node + F byz nodes + first honest node
+
+	state := make(map[aleatypes.QueueSlot]*netLatEstVcbInfo)
+
+	bcqueuepbdsl.UponInputValue(m, func(queueSlot aleatypes.QueueSlot, txIds []tt.TxID, txs []*trantorpbtypes.Transaction) error {
+		state[queueSlot] = &netLatEstVcbInfo{}
+		return nil
+	})
+
+	transportpbdsl.UponMessageReceived(m, func(from t.NodeID, msg *messagepbtypes.Message) error {
+		if vcbMsgW, ok := msg.Type.(*messagepbtypes.Message_Vcb); ok {
+			if _, isEcho := vcbMsgW.Vcb.Type.(*vcbpbtypes.Message_EchoMessage); isEcho {
+				queueSlot, err := mc.ParseQueueSlotFromModuleID(msg.DestModule)
+				if err != nil {
+					return nil // message for invalid vcb slot
+				}
+
+				vcbInfo, ok := state[queueSlot]
+				if !ok {
+					return nil // slot was already processed
+				}
+
+				if !vcbInfo.recvdEchos.Register(from) {
+					return nil // message already processed
+				}
+
+				if from == nodeID {
+					// register time for own ECHO message
+					vcbInfo.ownEchoTime = time.Now()
+				}
+
+				if vcbInfo.recvdEchos.Len() == measurementThreshold {
+					var emptyTime time.Time
+
+					// we have information for an estimate!
+					var minEst time.Duration
+					if vcbInfo.ownEchoTime != emptyTime {
+						// the leader of a VCB instance send SEND immediately upon starting the broadcast
+						// afterwards, it computes a sig share and sends it to itself via an ECHO message (with ~0 latency)
+						// simultaneously, followers receive the SEND message, compute their sig share, and send it via an ECHO message
+						// the difference between receiving a local ECHO and remote ECHOs should be 1 RTT (~2x the network latency)
+						minEst = time.Since(vcbInfo.ownEchoTime) / 2
+					} else {
+						// network latency is so small and signatures so fast (or processing time so slow)
+						// that the followers reply was processed first!
+						minEst = 0
+					}
+
+					// propagate estimate and clean up state
+					bcqueuepbdsl.NetLatencyEstimate(m, mc.Consumer, minEst)
+					delete(state, queueSlot)
+				}
+			}
+		}
+
+		return nil
+	})
+
+	dsl.UponOtherEvent(m, func(ev *eventpbtypes.Event) error {
+		return nil
+	})
+
+	return m
 }

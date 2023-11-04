@@ -27,6 +27,8 @@ type bcEstimators struct {
 
 	extBcDuration *util.ByzEstimator
 
+	minNetLatency *util.Estimator
+
 	estimatesModified bool
 }
 
@@ -66,6 +68,7 @@ func newBcEstimators(m dsl.Module, mc ModuleConfig, params ModuleParams, tunable
 		ownBcQuorumDoneMargin: util.NewEstimator(tunables.EstimateWindowSize),
 		ownBcTotalDoneMargin:  util.NewEstimator(tunables.EstimateWindowSize),
 		extBcDuration:         util.NewByzEstimator(tunables.EstimateWindowSize, len(params.AllNodes)),
+		minNetLatency:         util.NewEstimator(tunables.EstimateWindowSize),
 	}
 	ownQueueIdx := aleatypes.QueueIdx(slices.Index(params.AllNodes, nodeID))
 
@@ -122,9 +125,15 @@ func newBcEstimators(m dsl.Module, mc ModuleConfig, params ModuleParams, tunable
 		return nil
 	})
 
+	bcqueuepbdsl.UponNetLatencyEstimate(m, func(minEstimate time.Duration) error {
+		estimators.minNetLatency.AddSample(minEstimate)
+		estimators.estimatesModified = true
+		return nil
+	})
+
 	dsl.UponStateUpdates(m, func() error {
 		if estimators.estimatesModified {
-			bcpbdsl.EstimateUpdate(m, mc.AleaDirector, estimators.MaxOwnBcDuration(), estimators.MaxOwnBcLocalDuration(), estimators.MaxExtBcDuration())
+			bcpbdsl.EstimateUpdate(m, mc.AleaDirector, estimators.MaxOwnBcDuration(), estimators.MaxOwnBcLocalDuration(), estimators.MaxExtBcDuration(), estimators.minNetLatency.MinEstimate())
 			estimators.estimatesModified = false
 		}
 

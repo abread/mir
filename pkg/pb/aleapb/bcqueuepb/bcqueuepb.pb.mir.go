@@ -15,5 +15,6 @@ func (*Event) ReflectTypeOptions() []reflect.Type {
 		reflect.TypeOf((*Event_BcStarted)(nil)),
 		reflect.TypeOf((*Event_BcQuorumDone)(nil)),
 		reflect.TypeOf((*Event_BcAllDone)(nil)),
+		reflect.TypeOf((*Event_NetLatEst)(nil)),
 	}
 }

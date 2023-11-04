@@ -44,3 +44,7 @@ func BcQuorumDone(m dsl.Module, destModule types.ModuleID, slot *types3.Slot, de
 func BcAllDone(m dsl.Module, destModule types.ModuleID, slot *types3.Slot, quorumDoneDelta time.Duration) {
 	dsl.EmitEvent(m, events.BcAllDone(destModule, slot, quorumDoneDelta))
 }
+
+func NetLatencyEstimate(m dsl.Module, destModule types.ModuleID, minEstimate time.Duration) {
+	dsl.EmitEvent(m, events.NetLatencyEstimate(destModule, minEstimate))
+}

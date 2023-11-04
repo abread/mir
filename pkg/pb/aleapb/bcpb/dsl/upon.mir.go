@@ -47,9 +47,9 @@ func UponFreeSlot(m dsl.Module, handler func(slot *types.Slot) error) {
 	})
 }
 
-func UponEstimateUpdate(m dsl.Module, handler func(maxOwnBcDuration time.Duration, maxOwnBcLocalDuration time.Duration, maxExtBcDuration time.Duration) error) {
+func UponEstimateUpdate(m dsl.Module, handler func(maxOwnBcDuration time.Duration, maxOwnBcLocalDuration time.Duration, maxExtBcDuration time.Duration, minNetLatency time.Duration) error) {
 	UponEvent[*types.Event_EstimateUpdate](m, func(ev *types.EstimateUpdate) error {
-		return handler(ev.MaxOwnBcDuration, ev.MaxOwnBcLocalDuration, ev.MaxExtBcDuration)
+		return handler(ev.MaxOwnBcDuration, ev.MaxOwnBcLocalDuration, ev.MaxExtBcDuration, ev.MinNetLatency)
 	})
 }
 

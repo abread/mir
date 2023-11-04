@@ -125,3 +125,18 @@ func BcAllDone(destModule types.ModuleID, slot *types5.Slot, quorumDoneDelta tim
 		},
 	}
 }
+
+func NetLatencyEstimate(destModule types.ModuleID, minEstimate time.Duration) *types3.Event {
+	return &types3.Event{
+		DestModule: destModule,
+		Type: &types3.Event_AleaBcqueue{
+			AleaBcqueue: &types4.Event{
+				Type: &types4.Event_NetLatEst{
+					NetLatEst: &types4.NetLatencyEstimate{
+						MinEstimate: minEstimate,
+					},
+				},
+			},
+		},
+	}
+}

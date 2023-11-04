@@ -51,6 +51,8 @@ func Event_TypeFromPb(pb bcqueuepb.Event_Type) Event_Type {
 		return &Event_BcQuorumDone{BcQuorumDone: BcQuorumDoneFromPb(pb.BcQuorumDone)}
 	case *bcqueuepb.Event_BcAllDone:
 		return &Event_BcAllDone{BcAllDone: BcAllDoneFromPb(pb.BcAllDone)}
+	case *bcqueuepb.Event_NetLatEst:
+		return &Event_NetLatEst{NetLatEst: NetLatencyEstimateFromPb(pb.NetLatEst)}
 	}
 	return nil
 }
@@ -221,6 +223,30 @@ func (w *Event_BcAllDone) Pb() bcqueuepb.Event_Type {
 
 func (*Event_BcAllDone) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*bcqueuepb.Event_BcAllDone]()}
+}
+
+type Event_NetLatEst struct {
+	NetLatEst *NetLatencyEstimate
+}
+
+func (*Event_NetLatEst) isEvent_Type() {}
+
+func (w *Event_NetLatEst) Unwrap() *NetLatencyEstimate {
+	return w.NetLatEst
+}
+
+func (w *Event_NetLatEst) Pb() bcqueuepb.Event_Type {
+	if w == nil {
+		return nil
+	}
+	if w.NetLatEst == nil {
+		return &bcqueuepb.Event_NetLatEst{}
+	}
+	return &bcqueuepb.Event_NetLatEst{NetLatEst: (w.NetLatEst).Pb()}
+}
+
+func (*Event_NetLatEst) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*bcqueuepb.Event_NetLatEst]()}
 }
 
 func EventFromPb(pb *bcqueuepb.Event) *Event {
@@ -489,4 +515,33 @@ func (m *BcAllDone) Pb() *bcqueuepb.BcAllDone {
 
 func (*BcAllDone) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*bcqueuepb.BcAllDone]()}
+}
+
+type NetLatencyEstimate struct {
+	MinEstimate time.Duration
+}
+
+func NetLatencyEstimateFromPb(pb *bcqueuepb.NetLatencyEstimate) *NetLatencyEstimate {
+	if pb == nil {
+		return nil
+	}
+	return &NetLatencyEstimate{
+		MinEstimate: (time.Duration)(pb.MinEstimate),
+	}
+}
+
+func (m *NetLatencyEstimate) Pb() *bcqueuepb.NetLatencyEstimate {
+	if m == nil {
+		return nil
+	}
+	pbMessage := &bcqueuepb.NetLatencyEstimate{}
+	{
+		pbMessage.MinEstimate = (int64)(m.MinEstimate)
+	}
+
+	return pbMessage
+}
+
+func (*NetLatencyEstimate) MirReflect() mirreflect.Type {
+	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*bcqueuepb.NetLatencyEstimate]()}
 }

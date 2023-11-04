@@ -27,6 +27,8 @@ message Event {
     BcStarted    bc_started     = 5;
     BcQuorumDone bc_quorum_done = 6;
     BcAllDone    bc_all_done    = 7;
+
+    NetLatencyEstimate net_lat_est = 8;
   }
 }
 
@@ -81,4 +83,10 @@ message BcAllDone {
 
   // Time between receiving 2F+1 VCB Done messages (from different nodes) and the remaining F.
   int64 quorum_done_delta = 2 [(mir.type) = "time.Duration"];
+}
+
+message NetLatencyEstimate {
+  option (mir.event) = true;
+
+  int64 min_estimate = 1 [(mir.type) = "time.Duration"];
 }

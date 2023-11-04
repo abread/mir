@@ -23,6 +23,7 @@ type estimators struct {
 	maxOwnBcDuration      time.Duration
 	maxOwnBcLocalDuration time.Duration
 	maxExtBcDuration      time.Duration
+	minNetLatencyVcb      time.Duration
 
 	// tracked here, because it depends on agreement input timing
 	extBcDoneMargin *util.ByzEstimator
@@ -48,16 +49,13 @@ func (e *estimators) AgFastPathEst() time.Duration {
 	// One abba round takes roughly 3 message broadcasts (per node), +1 for the common coin
 	abbaEst := e.abbaRoundNoCoinDuration.MinEstimate() / 3
 
-	// VCB is supposed to take roughly ~2 broadcasts to deliver (from the POV of the leader or follower)
-	vcbEstL := e.maxOwnBcLocalDuration / 2
-	vcbEstF := e.maxExtBcDuration / 2
+	// VCB also provides an estimate of network latency
+	vcbEst := e.minNetLatencyVcb
 
-	if abbaEst < vcbEstL && abbaEst < vcbEstF {
+	if abbaEst < vcbEst {
 		return abbaEst
-	} else if vcbEstF < vcbEstL {
-		return vcbEstF
 	}
-	return vcbEstL
+	return vcbEst
 }
 
 func (e *estimators) BcRuntime(slot bcpbtypes.Slot) (time.Duration, bool) {
@@ -85,10 +83,11 @@ func newEstimators(m dsl.Module, params ModuleParams, tunables ModuleTunables, n
 		abbaRoundNoCoinDuration: util.NewEstimator(tunables.EstimateWindowSize),
 	}
 
-	bcpbdsl.UponEstimateUpdate(m, func(maxOwnBcDuration, maxOwnBcLocalDuration, maxExtBcDuration time.Duration) error {
+	bcpbdsl.UponEstimateUpdate(m, func(maxOwnBcDuration, maxOwnBcLocalDuration, maxExtBcDuration, minNetLatency time.Duration) error {
 		est.maxOwnBcDuration = maxOwnBcDuration
 		est.maxOwnBcLocalDuration = maxOwnBcLocalDuration
 		est.maxExtBcDuration = maxExtBcDuration
+		est.minNetLatencyVcb = minNetLatency
 		return nil
 	})
 

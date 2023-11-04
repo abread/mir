@@ -1,6 +1,10 @@
 package bcqueue
 
 import (
+	"strconv"
+
+	es "github.com/go-errors/errors"
+
 	"github.com/filecoin-project/mir/pkg/alea/aleatypes"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
@@ -14,6 +18,20 @@ type ModuleConfig struct {
 	Net          t.ModuleID
 	ReliableNet  t.ModuleID
 	ThreshCrypto t.ModuleID
+}
+
+func (mc *ModuleConfig) ParseQueueSlotFromModuleID(id t.ModuleID) (aleatypes.QueueSlot, error) {
+	if !id.IsSubOf(mc.Self) {
+		return 0, es.Errorf("could not parse queue slot: %v is not a submodule of %v", id, mc.Self)
+	}
+
+	queueSlotStr := id.StripParent(mc.Self).Top()
+	queueSlot, err := strconv.ParseUint(string(queueSlotStr), 10, 64)
+	if err != nil {
+		return 0, es.Errorf("deliver event for invalid round: %w", err)
+	}
+
+	return aleatypes.QueueSlot(queueSlot), nil
 }
 
 // ModuleParams sets the values for the parameters of an instance of the protocol.

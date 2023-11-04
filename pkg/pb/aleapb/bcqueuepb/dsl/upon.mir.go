@@ -69,3 +69,9 @@ func UponBcAllDone(m dsl.Module, handler func(slot *types4.Slot, quorumDoneDelta
 		return handler(ev.Slot, ev.QuorumDoneDelta)
 	})
 }
+
+func UponNetLatencyEstimate(m dsl.Module, handler func(minEstimate time.Duration) error) {
+	UponEvent[*types.Event_NetLatEst](m, func(ev *types.NetLatencyEstimate) error {
+		return handler(ev.MinEstimate)
+	})
+}

@@ -65,10 +65,13 @@ message EstimateUpdate {
 
   // estimated worst-case duration for broadcasts of local transactions, excluding time for remote
   // nodes to receive the final message and verify it.
-  int64 maxOwnBcLocalDuration = 3 [(mir.type) = "time.Duration"];
+  int64 maxOwnBcLocalDuration = 2 [(mir.type) = "time.Duration"];
 
   // estimated worst-case duration for incoming transactions from remote nodes
-  int64 maxExtBcDuration = 2 [(mir.type) = "time.Duration"];
+  int64 maxExtBcDuration = 3 [(mir.type) = "time.Duration"];
+
+  // estimated best-case network latency
+  int64 minNetLatency = 4 [(mir.type) = "time.Duration"];
 }
 
 message DoFillGap {

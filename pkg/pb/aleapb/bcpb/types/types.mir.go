@@ -369,6 +369,7 @@ type EstimateUpdate struct {
 	MaxOwnBcDuration      time.Duration
 	MaxOwnBcLocalDuration time.Duration
 	MaxExtBcDuration      time.Duration
+	MinNetLatency         time.Duration
 }
 
 func EstimateUpdateFromPb(pb *bcpb.EstimateUpdate) *EstimateUpdate {
@@ -379,6 +380,7 @@ func EstimateUpdateFromPb(pb *bcpb.EstimateUpdate) *EstimateUpdate {
 		MaxOwnBcDuration:      (time.Duration)(pb.MaxOwnBcDuration),
 		MaxOwnBcLocalDuration: (time.Duration)(pb.MaxOwnBcLocalDuration),
 		MaxExtBcDuration:      (time.Duration)(pb.MaxExtBcDuration),
+		MinNetLatency:         (time.Duration)(pb.MinNetLatency),
 	}
 }
 
@@ -391,6 +393,7 @@ func (m *EstimateUpdate) Pb() *bcpb.EstimateUpdate {
 		pbMessage.MaxOwnBcDuration = (int64)(m.MaxOwnBcDuration)
 		pbMessage.MaxOwnBcLocalDuration = (int64)(m.MaxOwnBcLocalDuration)
 		pbMessage.MaxExtBcDuration = (int64)(m.MaxExtBcDuration)
+		pbMessage.MinNetLatency = (int64)(m.MinNetLatency)
 	}
 
 	return pbMessage

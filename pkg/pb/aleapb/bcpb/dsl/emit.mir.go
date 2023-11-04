@@ -29,8 +29,8 @@ func FreeSlot(m dsl.Module, destModule types.ModuleID, slot *types1.Slot) {
 	dsl.EmitEvent(m, events.FreeSlot(destModule, slot))
 }
 
-func EstimateUpdate(m dsl.Module, destModule types.ModuleID, maxOwnBcDuration time.Duration, maxOwnBcLocalDuration time.Duration, maxExtBcDuration time.Duration) {
-	dsl.EmitEvent(m, events.EstimateUpdate(destModule, maxOwnBcDuration, maxOwnBcLocalDuration, maxExtBcDuration))
+func EstimateUpdate(m dsl.Module, destModule types.ModuleID, maxOwnBcDuration time.Duration, maxOwnBcLocalDuration time.Duration, maxExtBcDuration time.Duration, minNetLatency time.Duration) {
+	dsl.EmitEvent(m, events.EstimateUpdate(destModule, maxOwnBcDuration, maxOwnBcLocalDuration, maxExtBcDuration, minNetLatency))
 }
 
 func DoFillGap(m dsl.Module, destModule types.ModuleID, slot *types1.Slot, nextReplica uint32) {
