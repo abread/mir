@@ -412,7 +412,7 @@ func NewModule( // nolint: gocyclo,gocognit
 		// Fast path delivers in 1 broadcast, but needs 2 to terminate
 		// We want ABBA to *terminate* so it doesn't perform any additional work (i.e. signing coins)
 		// when asked to continue.
-		waitRoundCount -= 1
+		waitRoundCount--
 
 		agRoundTime := est.AgFastPathEst()
 		timeToOwnQueueAgRound := agRoundTime * time.Duration(waitRoundCount)
