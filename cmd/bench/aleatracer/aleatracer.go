@@ -38,7 +38,8 @@ type AleaTracer struct {
 	ownQueueIdx aleatypes.QueueIdx
 	params      *trantor.Params
 
-	wipTxSpan                map[txID]*span
+	wipTxSSpan               map[txID]*span
+	wipTxFSpan               map[txID]*span
 	wipBcSpan                map[bcpbtypes.Slot]*span
 	wipBcAwaitEchoSpan       map[bcpbtypes.Slot]*span
 	wipBcAwaitFinalSpan      map[bcpbtypes.Slot]*span
@@ -107,7 +108,8 @@ func NewAleaTracer(ctx context.Context, params *trantor.Params, nodeID t.NodeID,
 		ownQueueIdx: aleatypes.QueueIdx(slices.Index(params.Alea.AllNodes(), nodeID)),
 		params:      params,
 
-		wipTxSpan:                make(map[txID]*span, 256),
+		wipTxSSpan:               make(map[txID]*span, 256),
+		wipTxFSpan:               make(map[txID]*span, 256),
 		wipBcSpan:                make(map[bcpbtypes.Slot]*span, N),
 		wipBcAwaitEchoSpan:       make(map[bcpbtypes.Slot]*span, N),
 		wipBcAwaitFinalSpan:      make(map[bcpbtypes.Slot]*span, N),
@@ -212,10 +214,14 @@ func (at *AleaTracer) interceptOne(event *eventpbtypes.Event) error { // nolint:
 		switch e := ev.Mempool.Type.(type) {
 		case *mempoolpbtypes.Event_NewTransactions:
 			for _, tx := range e.NewTransactions.Transactions {
-				at.startTxSpan(ts, tx.ClientId, tx.TxNo)
+				at.startTxFSpan(ts, tx.ClientId, tx.TxNo)
 			}
 		case *mempoolpbtypes.Event_RequestBatch:
 			at.endBatchCutStallSpan(ts, at.nextBatchToCut)
+		case *mempoolpbtypes.Event_NewBatch:
+			for _, tx := range e.NewBatch.Txs {
+				at.startTxSSpan(ts, tx.ClientId, tx.TxNo)
+			}
 		case *mempoolpbtypes.Event_BatchIdResponse:
 			if strings.HasPrefix(string(event.DestModule), "availability/") {
 				slot := parseSlotFromModuleID(event.DestModule)
@@ -608,36 +614,51 @@ func (at *AleaTracer) endBcSpan(ts time.Duration, slot bcpbtypes.Slot) {
 	delete(at.wipBcComputeSigDataSpan, slot)
 }
 
-func (at *AleaTracer) _txSpan(ts time.Duration, clientID tt.ClientID, txNo tt.TxNo) *span {
+func (at *AleaTracer) startTxSSpan(ts time.Duration, clientID tt.ClientID, txNo tt.TxNo) {
+	id := txID{clientID, txNo}
+	at.wipTxSSpan[id] = &span{
+		class: "tx:bestLat",
+		id:    fmt.Sprintf("%s:%d", clientID, txNo),
+		start: ts,
+	}
+}
+func (at *AleaTracer) _txFSpan(ts time.Duration, clientID tt.ClientID, txNo tt.TxNo) *span {
 	id := txID{clientID, txNo}
 
-	s, ok := at.wipTxSpan[id]
+	s, ok := at.wipTxFSpan[id]
 	if !ok {
-		at.wipTxSpan[id] = &span{
+		at.wipTxFSpan[id] = &span{
 			class: "tx",
 			id:    fmt.Sprintf("%s:%d", clientID, txNo),
 			start: ts,
 		}
-		s = at.wipTxSpan[id]
+		s = at.wipTxFSpan[id]
 	}
 	return s
 }
-func (at *AleaTracer) startTxSpan(ts time.Duration, clientID tt.ClientID, txNo tt.TxNo) {
+func (at *AleaTracer) startTxFSpan(ts time.Duration, clientID tt.ClientID, txNo tt.TxNo) {
 	if at.txTracker.Add(clientID, txNo) {
-		at._txSpan(ts, clientID, txNo)
+		at._txFSpan(ts, clientID, txNo)
 	}
 }
 func (at *AleaTracer) endTxSpan(ts time.Duration, clientID tt.ClientID, txNo tt.TxNo) {
 	id := txID{clientID, txNo}
 
-	s, ok := at.wipTxSpan[id]
-	if !ok {
-		return
-	}
-	s.end = ts
-	at.writeSpan(s)
+	s, ok := at.wipTxFSpan[id]
+	if ok {
+		s.end = ts
+		at.writeSpan(s)
 
-	delete(at.wipTxSpan, id)
+		delete(at.wipTxFSpan, id)
+	}
+
+	s, ok = at.wipTxSSpan[id]
+	if ok {
+		s.end = ts
+		at.writeSpan(s)
+
+		delete(at.wipTxSSpan, id)
+	}
 }
 
 func (at *AleaTracer) _batchCutStallSpan(ts time.Duration, queueSlot aleatypes.QueueSlot) *span {
