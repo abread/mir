@@ -56,15 +56,16 @@ const (
 )
 
 var (
-	configFileName      string
-	statSummaryFileName string
-	liveStatsFileName   string
-	clientStatsFileName string
-	netStatsFileName    string
-	statPeriod          time.Duration
-	traceFileName       string
-	readySyncFileName   string
-	deliverSyncFileName string
+	configFileName            string
+	statSummaryFileName       string
+	liveStatsFileName         string
+	clientStatsFileName       string
+	clientOptLatStatsFileName string
+	netStatsFileName          string
+	statPeriod                time.Duration
+	traceFileName             string
+	readySyncFileName         string
+	deliverSyncFileName       string
 
 	nodeCmd = &cobra.Command{
 		Use:   "node",
@@ -90,6 +91,7 @@ func init() {
 
 	// Optional arguments
 	nodeCmd.Flags().DurationVar(&statPeriod, "stat-period", 1*time.Second, "statistic record period")
+	nodeCmd.Flags().StringVar(&clientOptLatStatsFileName, "client-optlat-stat-file", "", "live cumulative client statistics (optimal latency measurement) output file")
 	nodeCmd.Flags().StringVar(&clientStatsFileName, "client-stat-file", "", "live cumulative client statistics output file")
 	nodeCmd.Flags().StringVar(&netStatsFileName, "net-stat-file", "", "live cumulative net statistics output file")
 	nodeCmd.Flags().StringVar(&liveStatsFileName, "replica-stat-file", "", "output file for live statistics, default is standard output")
@@ -227,15 +229,18 @@ func runNode(ctx context.Context) error {
 	trantorInstance.WithModule("localtxgen", txGen)
 
 	// Create trackers for gathering statistics about the performance.
+	discardBatchCount := 4
 	liveStats := stats.NewLiveStats(aleatypes.QueueIdx(slices.Index(params.Trantor.Alea.AllNodes(), ownID)))
-	clientStats := stats.NewClientStats(time.Millisecond, 5*time.Second, 4*params.Trantor.Mempool.MaxTransactionsInBatch)
+	clientStats := stats.NewClientStats(time.Millisecond, 5*time.Second, discardBatchCount*params.Trantor.Mempool.MaxTransactionsInBatch)
 	txGen.TrackStats(liveStats)
 	txGen.TrackStats(clientStats)
 
+	txClientIDPrefix := string(params.TxGen.ClientID) + "."
+	clientOptLatStats := stats.NewClientOptLatStats(time.Millisecond, 5*time.Second, txClientIDPrefix, discardBatchCount)
 	txReceiverInterceptor := &txReceiverInterceptor{AppModuleID: trantor.DefaultModuleConfig().App}
 	interceptor := eventlog.MultiInterceptor(
 		tracer,
-		stats.NewStatInterceptor(liveStats, trantor.DefaultModuleConfig().App, string(params.TxGen.ClientID)+"."),
+		stats.NewStatInterceptor(liveStats, clientOptLatStats, trantor.DefaultModuleConfig().App, txClientIDPrefix),
 		txReceiverInterceptor,
 	)
 	// Instantiate the Mir Node.
@@ -308,6 +313,15 @@ func runNode(ctx context.Context) error {
 		}
 		clientStatsCSV := csv.NewWriter(clientStatFile)
 		goDisplayLiveStats(statsCtx, statsWg, trantorStopped, clientStats, clientStatsCSV)
+	}
+
+	if clientOptLatStatsFileName != "" {
+		clientOptLatStatFile, err := os.Create(clientOptLatStatsFileName)
+		if err != nil {
+			return es.Errorf("could not open output file for clientOptLat statistics: %w", err)
+		}
+		clientOptLatStatsCSV := csv.NewWriter(clientOptLatStatFile)
+		goDisplayLiveStats(statsCtx, statsWg, trantorStopped, clientOptLatStats, clientOptLatStatsCSV)
 	}
 
 	if netStatsFileName != "" {

@@ -22,6 +22,7 @@ import (
 
 type StatInterceptor struct {
 	*LiveStats
+	*ClientOptLatStats
 
 	// ID of the module that is consuming the transactions.
 	// Statistics will only be performed on transactions destined to this module
@@ -31,8 +32,8 @@ type StatInterceptor struct {
 	ownClientIDPrefix string
 }
 
-func NewStatInterceptor(s *LiveStats, txConsumer t.ModuleID, ownClientIDPrefix string) *StatInterceptor {
-	return &StatInterceptor{s, txConsumer, ownClientIDPrefix}
+func NewStatInterceptor(s *LiveStats, cs *ClientOptLatStats, txConsumer t.ModuleID, ownClientIDPrefix string) *StatInterceptor {
+	return &StatInterceptor{s, cs, txConsumer, ownClientIDPrefix}
 }
 
 func (i *StatInterceptor) Intercept(events events.EventList) error {
@@ -52,6 +53,7 @@ func (i *StatInterceptor) Intercept(events events.EventList) error {
 			switch e := e.Mempool.Type.(type) {
 			case *mempoolpbtypes.Event_NewBatch:
 				i.LiveStats.CutBatch(len(e.NewBatch.Txs))
+				i.ClientOptLatStats.CutBatch(e.NewBatch.Txs)
 
 				// only used for latency measurements, updated by client
 				/*for _, tx := range e.NewTransactions.Transactions {
@@ -72,6 +74,7 @@ func (i *StatInterceptor) Intercept(events events.EventList) error {
 					// only consider deliveries from other clients here (for throughput measurements)
 					if !strings.HasPrefix(string(tx.ClientId), i.ownClientIDPrefix) {
 						i.LiveStats.Deliver(tx)
+						i.ClientOptLatStats.Deliver(tx)
 					}
 				}
 			}
