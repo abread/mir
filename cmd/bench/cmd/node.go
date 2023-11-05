@@ -416,12 +416,13 @@ func runNode(ctx context.Context) error {
 
 	nodeError := node.Run(ctx)
 	<-done
-	writeFinalStats(clientStats, netStats, statSummaryFileName, logger)
+	writeFinalStats(clientStats, clientOptLatStats, netStats, statSummaryFileName, logger)
 	return nodeError
 }
 
 func writeFinalStats(
 	clientStats *stats.ClientStats,
+	clientOptLatStats *stats.ClientOptLatStats,
 	netStats *stats.NetStats,
 	statFileName string,
 	logger logging.Logger,
@@ -433,6 +434,7 @@ func writeFinalStats(
 	data := make(map[string]any)
 	data["Net"] = netStats
 	data["Client"] = clientStats
+	data["ClientOptLat"] = clientOptLatStats
 
 	statsData, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
