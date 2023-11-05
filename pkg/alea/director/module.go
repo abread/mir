@@ -409,6 +409,11 @@ func NewModule( // nolint: gocyclo,gocognit
 		// TODO: may increase tx duplication when clients multicast txs and byz nodes exist
 		waitRoundCount -= agCanInstantDeliverCount()
 
+		// Fast path delivers in 1 broadcast, but needs 2 to terminate
+		// We want ABBA to *terminate* so it doesn't perform any additional work (i.e. signing coins)
+		// when asked to continue.
+		waitRoundCount -= 1
+
 		agRoundTime := est.AgFastPathEst()
 		timeToOwnQueueAgRound := agRoundTime * time.Duration(waitRoundCount)
 		bcRuntimeEst := est.OwnBcMaxDurationEst()
