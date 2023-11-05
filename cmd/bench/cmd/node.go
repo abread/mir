@@ -258,7 +258,7 @@ func runNode(ctx context.Context) error {
 	}
 	txRecvListener, err := gonet.Listen("tcp", fmt.Sprintf(":%d", TxReceiverBasePort+numericID))
 	if err != nil {
-		return es.Errorf("could not create tx listener: %w")
+		return es.Errorf("could not create tx listener: %w", err)
 	}
 
 	txReceiver := transactionreceiver.NewTransactionReceiver(node, trantor.DefaultModuleConfig().Mempool, logger)
