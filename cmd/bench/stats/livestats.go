@@ -44,8 +44,8 @@ type LiveStats struct {
 	estUnanimousAgTime time.Duration
 	innerAbbaTimeCount int
 
-	avgBatchSize256     int
-	deliveredBatchCount int
+	avgBatchSize256  int
+	formedBatchCount int
 }
 
 type txKey struct {
@@ -174,9 +174,9 @@ func (s *LiveStats) Deliver(tx *trantorpbtypes.Transaction) {
 func (s *LiveStats) CutBatch(batchSz int) {
 	s.lock.Lock()
 
-	s.deliveredBatchCount++
+	s.formedBatchCount++
 	// batch size is multiplied by 256 to retain 8 bits of precision
-	s.avgBatchSize256 += (batchSz*256 - s.avgBatchSize256) / s.deliveredBatchCount
+	s.avgBatchSize256 += (batchSz*256 - s.avgBatchSize256) / s.formedBatchCount
 
 	s.lock.Unlock()
 }
@@ -247,7 +247,7 @@ func (s *LiveStats) WriteCSVRecord(w *csv.Writer, d time.Duration) error {
 	s.avgBcStall = 0
 	s.ownBcStartedCount = 0
 	s.avgBatchSize256 = 0
-	s.deliveredBatchCount = 0
+	s.formedBatchCount = 0
 	s.trueAgDelivers = 0
 	s.falseAgDelivers = 0
 	s.nonInstantAgCount = 0

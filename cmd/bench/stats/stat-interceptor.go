@@ -50,8 +50,8 @@ func (i *StatInterceptor) Intercept(events events.EventList) error {
 		switch e := evt.Type.(type) {
 		case *eventpbtypes.Event_Mempool:
 			switch e := e.Mempool.Type.(type) {
-			case *mempoolpbtypes.Event_NewTransactions:
-				i.LiveStats.CutBatch(len(e.NewTransactions.Transactions))
+			case *mempoolpbtypes.Event_NewBatch:
+				i.LiveStats.CutBatch(len(e.NewBatch.Txs))
 
 				// only used for latency measurements, updated by client
 				/*for _, tx := range e.NewTransactions.Transactions {
