@@ -141,6 +141,10 @@ func (cs *ClientStats) Fill() {
 }
 
 func (cs *ClientStats) fillAtDuration(t time.Duration) {
+	if cs.preInitDiscardCount > 0 {
+		return
+	}
+
 	for t >= cs.duration+cs.SamplingPeriod {
 		cs.duration += cs.SamplingPeriod
 		cs.DeliveredTxs[cs.duration] = 0

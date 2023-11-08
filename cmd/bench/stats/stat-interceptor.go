@@ -77,6 +77,7 @@ func (i *StatInterceptor) Intercept(events events.EventList) error {
 						i.ClientOptLatStats.Deliver(tx)
 					}
 				}
+				i.ClientOptLatStats.DeliveredBatch()
 			}
 		case *eventpbtypes.Event_AleaAgreement:
 			switch e2 := e.AleaAgreement.Type.(type) {

@@ -224,7 +224,6 @@ func (ns *NetStats) WriteCSVHeader(w *csv.Writer) error {
 }
 
 func (ns *NetStats) WriteCSVRecord(w *csv.Writer, _ time.Duration) error {
-
 	ns.Lock()
 	record := []string{
 		fmt.Sprintf("%.6f", ns.duration.Seconds()),

@@ -63,10 +63,19 @@ func NewClientOptLatStats(
 }
 
 func (cs *ClientOptLatStats) ToJSON() ([]byte, error) {
+	cs.timestampsLock.Lock()
+	defer cs.timestampsLock.Unlock()
+
 	return json.Marshal(cs)
 }
 
 func (cs *ClientOptLatStats) Start() {
+	cs.timestampsLock.Lock()
+	defer cs.timestampsLock.Unlock()
+	cs.start()
+}
+
+func (cs *ClientOptLatStats) start() {
 	now := time.Now()
 	cs.startTime = now
 	cs.duration = cs.SamplingPeriod
@@ -87,18 +96,14 @@ func (cs *ClientOptLatStats) CutBatch(batch []*trantorpbtypes.Transaction) {
 	cs.timestampsLock.Unlock()
 }
 
-func (cs *ClientOptLatStats) DeliveredBatch(batch []*trantorpbtypes.Transaction) {
+func (cs *ClientOptLatStats) DeliveredBatch() {
 	cs.timestampsLock.Lock()
 	defer cs.timestampsLock.Unlock()
 
 	if cs.preInitDiscardBatchCount > 0 {
-		for _, tx := range batch {
-			delete(cs.txTimestamps, txKey{tx.ClientId, tx.TxNo})
-		}
 		cs.preInitDiscardBatchCount--
-
 		if cs.preInitDiscardBatchCount == 0 {
-			cs.Start() //restart timer
+			cs.start() //restart timer
 		}
 	}
 }
@@ -107,16 +112,16 @@ func (cs *ClientOptLatStats) Deliver(tx *trantorpbtypes.Transaction) {
 	cs.timestampsLock.Lock()
 	defer cs.timestampsLock.Unlock()
 
-	if cs.preInitDiscardBatchCount > 0 {
-		return
-	}
-
 	// Get delivery time and latency.
-	t := time.Since(cs.startTime)
 	txID := txKey{tx.ClientId, tx.TxNo}
 	lRaw := time.Since(cs.txTimestamps[txID])
 	delete(cs.txTimestamps, txID)
 
+	if cs.preInitDiscardBatchCount > 0 {
+		return
+	}
+
+	t := time.Since(cs.startTime)
 	// Round values to the next lower step
 	t = (t / cs.SamplingPeriod) * cs.SamplingPeriod
 	l := (lRaw / cs.latencyStep) * cs.latencyStep
@@ -162,6 +167,10 @@ func (cs *ClientOptLatStats) Fill() {
 }
 
 func (cs *ClientOptLatStats) fillAtDuration(t time.Duration) {
+	if cs.preInitDiscardBatchCount > 0 {
+		return
+	}
+
 	for t >= cs.duration+cs.SamplingPeriod {
 		cs.duration += cs.SamplingPeriod
 		cs.DeliveredTxs[cs.duration] = 0
