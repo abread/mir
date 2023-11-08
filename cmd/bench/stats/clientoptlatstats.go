@@ -76,8 +76,13 @@ func (cs *ClientOptLatStats) Start() {
 }
 
 func (cs *ClientOptLatStats) start() {
-	now := time.Now()
-	cs.startTime = now
+	start := time.Now()
+	for _, txTime := range cs.txTimestamps {
+		if txTime.Before(start) {
+			start = txTime
+		}
+	}
+	cs.startTime = start
 	cs.duration = cs.SamplingPeriod
 }
 
@@ -114,17 +119,18 @@ func (cs *ClientOptLatStats) Deliver(tx *trantorpbtypes.Transaction) {
 
 	// Get delivery time and latency.
 	txID := txKey{tx.ClientId, tx.TxNo}
-	lRaw := time.Since(cs.txTimestamps[txID])
+	ts, ok := cs.txTimestamps[txID]
 	delete(cs.txTimestamps, txID)
 
-	if cs.preInitDiscardBatchCount > 0 {
+	if cs.preInitDiscardBatchCount > 0 || !ok {
 		return
 	}
 
-	t := time.Since(cs.startTime)
 	// Round values to the next lower step
-	t = (t / cs.SamplingPeriod) * cs.SamplingPeriod
+	lRaw := time.Since(ts)
 	l := (lRaw / cs.latencyStep) * cs.latencyStep
+	t := time.Since(cs.startTime)
+	t = (t / cs.SamplingPeriod) * cs.SamplingPeriod
 	if l > time.Hour {
 		fmt.Printf("HUGE LATENCY (raw: %s, computed: %s steps: %d steps) at time %v\n", lRaw, l, l/cs.latencyStep, t)
 	}
@@ -138,21 +144,6 @@ func (cs *ClientOptLatStats) Deliver(tx *trantorpbtypes.Transaction) {
 	// but makes it a bit more convenient to work with when iterating over the (sorted) items.
 	cs.fillAtDuration(t)
 	cs.DeliveredTxs[t]++
-}
-
-func (cs *ClientOptLatStats) AssumeDelivered(tx *trantorpbtypes.Transaction) {
-	cs.timestampsLock.Lock()
-	defer cs.timestampsLock.Unlock()
-
-	txID := txKey{tx.ClientId, tx.TxNo}
-	delete(cs.txTimestamps, txID)
-
-	if cs.preInitDiscardBatchCount > 0 {
-		return
-	}
-
-	// Consider transaction for throughput measurement, but not for latency (latency is distorted).
-	cs.totalDelivered++
 }
 
 // Fill adds padding to DeliveredTxs. In case no transactions have been delivered for some time,
