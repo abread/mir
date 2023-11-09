@@ -87,9 +87,12 @@ func (c *client) Start(cnt *atomic.Int64) {
 						continue // we haven't reached that transaction yet
 					}
 
-					if !tracker.DeliveredExactlyUpTo(tx.TxNo) {
-						panic(es.Errorf("transactions were forged (tracker: %v, last submmitted tx: %v)", tracker, tx))
-					}
+					// possible with external clients
+					/*
+						if !tracker.DeliveredExactlyUpTo(tx.TxNo) {
+							panic(es.Errorf("transactions were forged (tracker: %v, last submmitted tx: %v)", tracker, tx))
+						}
+					*/
 
 					if err := c.registerDelivery(tx, nil); err != nil {
 						c.logger.Log(logging.LevelError, "Error registering transaction delivery.", "err", err)

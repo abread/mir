@@ -39,7 +39,6 @@ import (
 	"github.com/filecoin-project/mir/pkg/transactionreceiver"
 	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 	t "github.com/filecoin-project/mir/pkg/types"
-	"github.com/filecoin-project/mir/pkg/util/maputil"
 	"github.com/filecoin-project/mir/pkg/util/sliceutil"
 )
 
@@ -117,11 +116,6 @@ func runLatClient(ctx context.Context) error {
 
 	// Check if own id is in the membership
 	initialMembership := params.Trantor.Iss.InitialMembership
-	if _, ok := initialMembership.Nodes[t.NodeID(id)]; !ok {
-		return es.Errorf("own ID (%v) not found in membership (%v)", id, maputil.GetKeys(initialMembership.Nodes))
-	}
-	ownID := t.NodeID(id)
-
 	addresses, err := membership.GetIPs(initialMembership)
 	if err != nil {
 		return es.Errorf("could not load node IPs: %w", err)
@@ -172,7 +166,7 @@ func runLatClient(ctx context.Context) error {
 	// It has, at the same time, the interface of a trantor App,
 	// so it knows when transactions are delivered and can submit new ones accordingly.
 	// We will abuse it to send transactions over the network and track statistics
-	params.TxGen.ClientID = tt.ClientID(ownID)
+	params.TxGen.ClientID = tt.ClientID(id)
 	params.TxGen.NumClients = 1
 	txGen := localtxgenerator.New(localtxgenerator.DefaultModuleConfig(), params.TxGen)
 

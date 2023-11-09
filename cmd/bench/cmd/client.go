@@ -29,7 +29,6 @@ import (
 	"github.com/filecoin-project/mir/pkg/rendezvous"
 	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 	t "github.com/filecoin-project/mir/pkg/types"
-	"github.com/filecoin-project/mir/pkg/util/maputil"
 )
 
 var (
@@ -86,12 +85,7 @@ func runClient(ctx context.Context) error {
 		return es.Errorf("could not load parameters from file '%s': %w", configFileName, err)
 	}
 
-	// Check if own id is in the membership
 	initialMembership := params.Trantor.Iss.InitialMembership
-	if _, ok := initialMembership.Nodes[t.NodeID(id)]; !ok {
-		return es.Errorf("own ID (%v) not found in membership (%v)", id, maputil.GetKeys(initialMembership.Nodes))
-	}
-
 	addresses, err := membership.GetIPs(initialMembership)
 	if err != nil {
 		return es.Errorf("could not load node IPs: %w", err)
