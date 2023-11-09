@@ -37,7 +37,7 @@ type ClientStats struct {
 	// Total number of transactions delivered.
 	totalDelivered int
 
-	preInitDiscardCount int
+	preInitDiscardBatchCount int
 
 	latencyStep    time.Duration
 	SamplingPeriod time.Duration
@@ -46,15 +46,15 @@ type ClientStats struct {
 func NewClientStats(
 	latencyStep time.Duration,
 	samplingPeriod time.Duration,
-	preInitDiscardCount int,
+	preInitDiscardBatchCount int,
 ) *ClientStats {
 	return &ClientStats{
-		txTimestamps:        make(map[txKey]time.Time),
-		LatencyHist:         map[time.Duration]int{0: 0}, // The rest of the code can assume this map is never empty.
-		DeliveredTxs:        make(map[time.Duration]int),
-		preInitDiscardCount: preInitDiscardCount,
-		latencyStep:         latencyStep,
-		SamplingPeriod:      samplingPeriod,
+		txTimestamps:             make(map[txKey]time.Time),
+		LatencyHist:              map[time.Duration]int{0: 0}, // The rest of the code can assume this map is never empty.
+		DeliveredTxs:             make(map[time.Duration]int),
+		preInitDiscardBatchCount: preInitDiscardBatchCount,
+		latencyStep:              latencyStep,
+		SamplingPeriod:           samplingPeriod,
 	}
 }
 
@@ -63,9 +63,27 @@ func (cs *ClientStats) ToJSON() ([]byte, error) {
 }
 
 func (cs *ClientStats) Start() {
-	now := time.Now()
-	cs.startTime = now
+	cs.timestampsLock.Lock()
+	cs.start()
+	cs.timestampsLock.Unlock()
+}
+
+func (cs *ClientStats) start() {
+	fmt.Println("restart clientstats")
+
+	start := time.Now()
+	for _, txTime := range cs.txTimestamps {
+		if txTime.Before(start) {
+			start = txTime
+		}
+	}
+	cs.startTime = start
 	cs.duration = cs.SamplingPeriod
+
+	cs.LatencyHist = map[time.Duration]int{0: 0}
+	cs.DeliveredTxs = make(map[time.Duration]int)
+	cs.totalDelivered = 0
+	cs.fillAtDuration(time.Since(start))
 }
 
 func (cs *ClientStats) Submit(tx *trantorpbtypes.Transaction) {
@@ -75,19 +93,22 @@ func (cs *ClientStats) Submit(tx *trantorpbtypes.Transaction) {
 	cs.timestampsLock.Unlock()
 }
 
-func (cs *ClientStats) Deliver(tx *trantorpbtypes.Transaction) {
+func (cs *ClientStats) DeliveredBatch() {
 	cs.timestampsLock.Lock()
 	defer cs.timestampsLock.Unlock()
 
-	if cs.preInitDiscardCount > 0 {
-		delete(cs.txTimestamps, txKey{tx.ClientId, tx.TxNo})
-		cs.preInitDiscardCount--
+	if cs.preInitDiscardBatchCount > 0 {
+		cs.preInitDiscardBatchCount--
 
-		if cs.preInitDiscardCount == 0 {
-			cs.Start() //restart timer
+		if cs.preInitDiscardBatchCount == 0 {
+			cs.start() //restart timer
 		}
-		return
 	}
+}
+
+func (cs *ClientStats) Deliver(tx *trantorpbtypes.Transaction) {
+	cs.timestampsLock.Lock()
+	defer cs.timestampsLock.Unlock()
 
 	// Get delivery time and latency.
 	t := time.Since(cs.startTime)
@@ -120,11 +141,6 @@ func (cs *ClientStats) AssumeDelivered(tx *trantorpbtypes.Transaction) {
 	txID := txKey{tx.ClientId, tx.TxNo}
 	delete(cs.txTimestamps, txID)
 
-	if cs.preInitDiscardCount > 0 {
-		cs.preInitDiscardCount--
-		return
-	}
-
 	// Consider transaction for throughput measurement, but not for latency (latency is distorted).
 	cs.totalDelivered++
 }
@@ -141,10 +157,6 @@ func (cs *ClientStats) Fill() {
 }
 
 func (cs *ClientStats) fillAtDuration(t time.Duration) {
-	if cs.preInitDiscardCount > 0 {
-		return
-	}
-
 	for t >= cs.duration+cs.SamplingPeriod {
 		cs.duration += cs.SamplingPeriod
 		cs.DeliveredTxs[cs.duration] = 0

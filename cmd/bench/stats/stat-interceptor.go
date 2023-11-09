@@ -22,6 +22,7 @@ import (
 
 type StatInterceptor struct {
 	*LiveStats
+	*ClientStats
 	*ClientOptLatStats
 
 	// ID of the module that is consuming the transactions.
@@ -32,8 +33,8 @@ type StatInterceptor struct {
 	ownClientIDPrefix string
 }
 
-func NewStatInterceptor(s *LiveStats, cs *ClientOptLatStats, txConsumer t.ModuleID, ownClientIDPrefix string) *StatInterceptor {
-	return &StatInterceptor{s, cs, txConsumer, ownClientIDPrefix}
+func NewStatInterceptor(s *LiveStats, cs *ClientStats, cols *ClientOptLatStats, txConsumer t.ModuleID, ownClientIDPrefix string) *StatInterceptor {
+	return &StatInterceptor{s, cs, cols, txConsumer, ownClientIDPrefix}
 }
 
 func (i *StatInterceptor) Intercept(events events.EventList) error {
@@ -85,6 +86,7 @@ func (i *StatInterceptor) interceptOne(evt *eventpbtypes.Event) {
 
 				i.ClientOptLatStats.Deliver(tx)
 			}
+			i.ClientStats.DeliveredBatch()
 			i.ClientOptLatStats.DeliveredBatch()
 		}
 	case *eventpbtypes.Event_AleaAgreement:

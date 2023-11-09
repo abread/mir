@@ -71,11 +71,13 @@ func (cs *ClientOptLatStats) ToJSON() ([]byte, error) {
 
 func (cs *ClientOptLatStats) Start() {
 	cs.timestampsLock.Lock()
-	defer cs.timestampsLock.Unlock()
 	cs.start()
+	cs.timestampsLock.Unlock()
 }
 
 func (cs *ClientOptLatStats) start() {
+	fmt.Println("restart clientoplatstats")
+
 	start := time.Now()
 	for _, txTime := range cs.txTimestamps {
 		if txTime.Before(start) {
@@ -84,6 +86,11 @@ func (cs *ClientOptLatStats) start() {
 	}
 	cs.startTime = start
 	cs.duration = cs.SamplingPeriod
+
+	cs.LatencyHist = map[time.Duration]int{0: 0}
+	cs.DeliveredTxs = make(map[time.Duration]int)
+	cs.totalDelivered = 0
+	cs.fillAtDuration(time.Since(start))
 }
 
 func (cs *ClientOptLatStats) CutBatch(batch []*trantorpbtypes.Transaction) {
@@ -107,6 +114,7 @@ func (cs *ClientOptLatStats) DeliveredBatch() {
 
 	if cs.preInitDiscardBatchCount > 0 {
 		cs.preInitDiscardBatchCount--
+
 		if cs.preInitDiscardBatchCount == 0 {
 			cs.start() //restart timer
 		}
@@ -120,17 +128,16 @@ func (cs *ClientOptLatStats) Deliver(tx *trantorpbtypes.Transaction) {
 	// Get delivery time and latency.
 	txID := txKey{tx.ClientId, tx.TxNo}
 	ts, ok := cs.txTimestamps[txID]
-	delete(cs.txTimestamps, txID)
-
-	if cs.preInitDiscardBatchCount > 0 || !ok {
+	if !ok {
 		return
 	}
+	t := time.Since(cs.startTime)
+	lRaw := time.Since(ts)
+	delete(cs.txTimestamps, txID)
 
 	// Round values to the next lower step
-	lRaw := time.Since(ts)
-	l := (lRaw / cs.latencyStep) * cs.latencyStep
-	t := time.Since(cs.startTime)
 	t = (t / cs.SamplingPeriod) * cs.SamplingPeriod
+	l := (lRaw / cs.latencyStep) * cs.latencyStep
 	if l > time.Hour {
 		fmt.Printf("HUGE LATENCY (raw: %s, computed: %s steps: %d steps) at time %v\n", lRaw, l, l/cs.latencyStep, t)
 	}
@@ -158,10 +165,6 @@ func (cs *ClientOptLatStats) Fill() {
 }
 
 func (cs *ClientOptLatStats) fillAtDuration(t time.Duration) {
-	if cs.preInitDiscardBatchCount > 0 {
-		return
-	}
-
 	for t >= cs.duration+cs.SamplingPeriod {
 		cs.duration += cs.SamplingPeriod
 		cs.DeliveredTxs[cs.duration] = 0

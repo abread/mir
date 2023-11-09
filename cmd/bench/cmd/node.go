@@ -231,7 +231,7 @@ func runNode(ctx context.Context) error {
 	// Create trackers for gathering statistics about the performance.
 	discardBatchCount := params.Trantor.Alea.EstimateWindowSize * 3 / 2
 	liveStats := stats.NewLiveStats(aleatypes.QueueIdx(slices.Index(params.Trantor.Alea.AllNodes(), ownID)))
-	clientStats := stats.NewClientStats(time.Millisecond, 5*time.Second, discardBatchCount*params.Trantor.Mempool.MaxTransactionsInBatch/2)
+	clientStats := stats.NewClientStats(time.Millisecond, 5*time.Second, discardBatchCount)
 	txGen.TrackStats(liveStats)
 	txGen.TrackStats(clientStats)
 
@@ -240,7 +240,7 @@ func runNode(ctx context.Context) error {
 	txReceiverInterceptor := &txReceiverInterceptor{AppModuleID: trantor.DefaultModuleConfig().App}
 	interceptor := eventlog.MultiInterceptor(
 		tracer,
-		stats.NewStatInterceptor(liveStats, clientOptLatStats, trantor.DefaultModuleConfig().App, txClientIDPrefix),
+		stats.NewStatInterceptor(liveStats, clientStats, clientOptLatStats, trantor.DefaultModuleConfig().App, txClientIDPrefix),
 		txReceiverInterceptor,
 	)
 	// Instantiate the Mir Node.
@@ -410,6 +410,7 @@ func runNode(ctx context.Context) error {
 
 	// Start generating the load and measuring performance.
 	logger.Log(logging.LevelWarn, "applying load")
+	clientOptLatStats.Start()
 	clientStats.Start()
 	netStats.Start()
 	txGen.Start()
