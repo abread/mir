@@ -114,6 +114,9 @@ func runLatClient(ctx context.Context) error {
 		return es.Errorf("could not load parameters from file '%s': %w", configFileName, err)
 	}
 
+	// distinguish lat client from colocated node clients
+	id = "lc." + id
+
 	// Check if own id is in the membership
 	initialMembership := params.Trantor.Iss.InitialMembership
 	addresses, err := membership.GetIPs(initialMembership)

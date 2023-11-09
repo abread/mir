@@ -85,6 +85,9 @@ func runClient(ctx context.Context) error {
 		return es.Errorf("could not load parameters from file '%s': %w", configFileName, err)
 	}
 
+	// distinguish openloop client from colocated node clients
+	id = "c." + id
+
 	initialMembership := params.Trantor.Iss.InitialMembership
 	addresses, err := membership.GetIPs(initialMembership)
 	if err != nil {
@@ -110,7 +113,7 @@ func runClient(ctx context.Context) error {
 	logger.Log(logging.LevelInfo, "processed node list", "txReceiverAddrs", txReceiverAddrs)
 
 	client := clientFactories[clientType](
-		tt.ClientID(id+".0"),
+		tt.ClientID(id),
 		crypto.SHA256,
 		logger,
 	)

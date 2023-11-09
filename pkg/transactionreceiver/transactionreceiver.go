@@ -120,6 +120,10 @@ func (rr *TransactionReceiver) Listen(srv TransactionReceiver_ListenServer) erro
 }
 
 func (rr *TransactionReceiver) NotifyBatchDeliver(deliveredBatch []*trantorpb.Transaction) {
+	if len(deliveredBatch) == 0 {
+		return // save bandwidth
+	}
+
 	rr.outputListeners.Range(func(key, value any) bool {
 		listenerChan := key.(chan []*trantorpb.Transaction)
 		listenerChan <- deliveredBatch
