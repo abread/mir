@@ -126,7 +126,8 @@ func (c *client) RestoreState(deliveredTxs *clientprogress.DeliveredTXs) {
 func (c *client) registerDelivery(submitted, delivered *trantorpbtypes.Transaction) error {
 	// Transactions that are not delivered can still be indirectly propagated via checkpointing.
 	if delivered == nil {
-		c.logger.Log(logging.LevelWarn, "assuming transaction was correctly delivered by other nodes (restored state from checkpoint)", "tx", submitted)
+		// log is too big of a slowdown with large client numbers
+		//c.logger.Log(logging.LevelTrace, "assuming transaction was correctly delivered by other nodes (restored state from checkpoint)", "tx", submitted)
 
 		// Track delivery statistics.
 		for _, statsTracker := range c.statsTrackers {
