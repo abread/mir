@@ -278,10 +278,11 @@ func (s *ReplicaStats) WriteCSVRecord(w *csv.Writer, d time.Duration) error {
 	cumPosAgStall := s.cumPosAgStall
 	estUnanimousAgTime := s.estUnanimousAgTime
 
-	s.avgLatency = 0
-	s.optAvgLatency = 0
-	s.timestampedTransactions = 0
 	s.deliveredTransactions = 0
+	s.avgLatency = 0
+	s.timestampedTransactions = 0
+	s.optAvgLatency = 0
+	s.optTimestampedTransactions = 0
 	s.bcDelivers = 0
 	s.avgBcStall = 0
 	s.ownBcStartedCount = 0
