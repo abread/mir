@@ -58,7 +58,7 @@ const (
 var (
 	configFileName            string
 	statSummaryFileName       string
-	liveStatsFileName         string
+	replicaStatsFileName      string
 	clientStatsFileName       string
 	clientOptLatStatsFileName string
 	netStatsFileName          string
@@ -94,7 +94,7 @@ func init() {
 	nodeCmd.Flags().StringVar(&clientOptLatStatsFileName, "client-optlat-stat-file", "", "live cumulative client statistics (optimal latency measurement) output file")
 	nodeCmd.Flags().StringVar(&clientStatsFileName, "client-stat-file", "", "live cumulative client statistics output file")
 	nodeCmd.Flags().StringVar(&netStatsFileName, "net-stat-file", "", "live cumulative net statistics output file")
-	nodeCmd.Flags().StringVar(&liveStatsFileName, "replica-stat-file", "", "output file for live statistics, default is standard output")
+	nodeCmd.Flags().StringVar(&replicaStatsFileName, "replica-stat-file", "", "output file for replica live statistics, default is standard output")
 	nodeCmd.Flags().StringVar(&statSummaryFileName, "summary-stat-file", "", "output file for summarized statistics")
 	nodeCmd.Flags().StringVar(&traceFileName, "traceFile", "", "output file for alea tracing")
 
@@ -230,9 +230,8 @@ func runNode(ctx context.Context) error {
 
 	// Create trackers for gathering statistics about the performance.
 	discardBatchCount := params.Trantor.Alea.EstimateWindowSize * 3 / 2
-	liveStats := stats.NewLiveStats(aleatypes.QueueIdx(slices.Index(params.Trantor.Alea.AllNodes(), ownID)))
+	replicaStats := stats.NewReplicaStats(aleatypes.QueueIdx(slices.Index(params.Trantor.Alea.AllNodes(), ownID)))
 	clientStats := stats.NewClientStats(time.Millisecond, 5*time.Second, discardBatchCount)
-	txGen.TrackStats(liveStats)
 	txGen.TrackStats(clientStats)
 
 	txClientIDPrefix := string(params.TxGen.ClientID) + "."
@@ -240,7 +239,7 @@ func runNode(ctx context.Context) error {
 	txReceiverInterceptor := &txReceiverInterceptor{AppModuleID: trantor.DefaultModuleConfig().App}
 	interceptor := eventlog.MultiInterceptor(
 		tracer,
-		stats.NewStatInterceptor(liveStats, clientStats, clientOptLatStats, trantor.DefaultModuleConfig().App, txClientIDPrefix),
+		stats.NewStatInterceptor(replicaStats, clientStats, clientOptLatStats, trantor.DefaultModuleConfig().App, txClientIDPrefix),
 		txReceiverInterceptor,
 	)
 	// Instantiate the Mir Node.
@@ -288,14 +287,14 @@ func runNode(ctx context.Context) error {
 	}
 
 	// Output the statistics.
-	var statFile *os.File
-	if liveStatsFileName != "" {
-		statFile, err = os.Create(liveStatsFileName)
+	var replicaStatFile *os.File
+	if replicaStatsFileName != "" {
+		replicaStatFile, err = os.Create(replicaStatsFileName)
 		if err != nil {
 			return es.Errorf("could not open output file for statistics: %w", err)
 		}
 	} else {
-		statFile = os.Stdout
+		replicaStatFile = os.Stdout
 	}
 
 	trantorStopped := make(chan struct{})
@@ -303,8 +302,8 @@ func runNode(ctx context.Context) error {
 	statsCtx, stopStats := context.WithCancel(ctx)
 	defer stopStats()
 
-	replicaStatsCSV := csv.NewWriter(statFile)
-	goDisplayLiveStats(statsCtx, statsWg, trantorStopped, liveStats, replicaStatsCSV)
+	replicaStatsCSV := csv.NewWriter(replicaStatFile)
+	goDisplayLiveStats(statsCtx, statsWg, trantorStopped, replicaStats, replicaStatsCSV)
 
 	if clientStatsFileName != "" {
 		clientStatFile, err := os.Create(clientStatsFileName)

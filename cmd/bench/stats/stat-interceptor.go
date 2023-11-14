@@ -5,8 +5,6 @@
 package stats
 
 import (
-	"strings"
-
 	"github.com/filecoin-project/mir/pkg/events"
 	abbapbtypes "github.com/filecoin-project/mir/pkg/pb/abbapb/types"
 	ageventstypes "github.com/filecoin-project/mir/pkg/pb/aleapb/agreementpb/agevents/types"
@@ -21,7 +19,7 @@ import (
 )
 
 type StatInterceptor struct {
-	*LiveStats
+	*ReplicaStats
 	*ClientStats
 	*ClientOptLatStats
 
@@ -33,7 +31,7 @@ type StatInterceptor struct {
 	ownClientIDPrefix string
 }
 
-func NewStatInterceptor(s *LiveStats, cs *ClientStats, cols *ClientOptLatStats, txConsumer t.ModuleID, ownClientIDPrefix string) *StatInterceptor {
+func NewStatInterceptor(s *ReplicaStats, cs *ClientStats, cols *ClientOptLatStats, txConsumer t.ModuleID, ownClientIDPrefix string) *StatInterceptor {
 	return &StatInterceptor{s, cs, cols, txConsumer, ownClientIDPrefix}
 }
 
@@ -59,14 +57,11 @@ func (i *StatInterceptor) interceptOne(evt *eventpbtypes.Event) {
 	switch e := evt.Type.(type) {
 	case *eventpbtypes.Event_Mempool:
 		switch e := e.Mempool.Type.(type) {
+		case *mempoolpbtypes.Event_NewTransactions:
+			i.ReplicaStats.NewTransactions(e.NewTransactions.Transactions)
 		case *mempoolpbtypes.Event_NewBatch:
-			i.LiveStats.CutBatch(len(e.NewBatch.Txs))
+			i.ReplicaStats.CutBatch(len(e.NewBatch.Txs))
 			i.ClientOptLatStats.CutBatch(e.NewBatch.Txs)
-
-			// only used for latency measurements, updated by client
-			/*for _, tx := range e.NewTransactions.Transactions {
-				i.LiveStats.Submit(tx)
-			}*/
 		}
 	case *eventpbtypes.Event_BatchFetcher:
 
@@ -77,26 +72,23 @@ func (i *StatInterceptor) interceptOne(evt *eventpbtypes.Event) {
 
 		switch e := e.BatchFetcher.Type.(type) {
 		case *batchfetcherpbtypes.Event_NewOrderedBatch:
-			for _, tx := range e.NewOrderedBatch.Txs {
-				// LiveStats tracks deliveries through clients as well
-				// only consider deliveries from other clients here (for throughput measurements)
-				if !strings.HasPrefix(string(tx.ClientId), i.ownClientIDPrefix) {
-					i.LiveStats.Deliver(tx)
-				}
+			i.ReplicaStats.DeliverBatch(e.NewOrderedBatch.Txs)
 
+			for _, tx := range e.NewOrderedBatch.Txs {
 				i.ClientOptLatStats.Deliver(tx)
 			}
-			i.ClientStats.DeliveredBatch()
 			i.ClientOptLatStats.DeliveredBatch()
+
+			i.ClientStats.DeliveredBatch()
 		}
 	case *eventpbtypes.Event_AleaAgreement:
 		switch e2 := e.AleaAgreement.Type.(type) {
 		case *ageventstypes.Event_InputValue:
-			i.LiveStats.AgInput(e2.InputValue)
+			i.ReplicaStats.AgInput(e2.InputValue)
 		case *ageventstypes.Event_Deliver:
-			i.LiveStats.AgDeliver(e2.Deliver)
+			i.ReplicaStats.AgDeliver(e2.Deliver)
 		case *ageventstypes.Event_InnerAbbaRoundTime:
-			i.LiveStats.InnerAbbaTime(e2.InnerAbbaRoundTime)
+			i.ReplicaStats.InnerAbbaTime(e2.InnerAbbaRoundTime)
 		}
 	case *eventpbtypes.Event_Abba:
 		switch e2 := e.Abba.Type.(type) {
@@ -107,15 +99,15 @@ func (i *StatInterceptor) interceptOne(evt *eventpbtypes.Event) {
 				// assumes abba round module IDs have form <ag mod id>/<ag round id>/r/<abba round id>
 				abbaRoundIDStr := string(evt.DestModule.Sub().Sub().Sub().Top())
 
-				i.LiveStats.AbbaRoundContinue(abbaRoundIDStr, e3.Continue)
+				i.ReplicaStats.AbbaRoundContinue(abbaRoundIDStr, e3.Continue)
 			}
 		}
 	case *eventpbtypes.Event_AleaBc:
 		switch e2 := e.AleaBc.Type.(type) {
 		case *bcpbtypes.Event_RequestCert:
-			i.LiveStats.RequestCert()
+			i.ReplicaStats.RequestCert()
 		case *bcpbtypes.Event_DeliverCert:
-			i.LiveStats.BcDeliver(e2.DeliverCert)
+			i.ReplicaStats.BcDeliver(e2.DeliverCert)
 		}
 	}
 }

@@ -19,7 +19,7 @@ import (
 	tt "github.com/filecoin-project/mir/pkg/trantor/types"
 )
 
-type LiveStats struct {
+type ReplicaStats struct {
 	lock                    sync.RWMutex
 	txTimestamps            map[txKey]time.Time
 	avgLatency              time.Duration
@@ -53,8 +53,8 @@ type txKey struct {
 	TxNo     tt.TxNo
 }
 
-func NewLiveStats(ownQueueIdx aleatypes.QueueIdx) *LiveStats {
-	return &LiveStats{
+func NewReplicaStats(ownQueueIdx aleatypes.QueueIdx) *ReplicaStats {
+	return &ReplicaStats{
 		txTimestamps:      make(map[txKey]time.Time),
 		agInputTimestamps: make(map[uint64]time.Time),
 
@@ -62,9 +62,9 @@ func NewLiveStats(ownQueueIdx aleatypes.QueueIdx) *LiveStats {
 	}
 }
 
-func (s *LiveStats) Fill() {}
+func (s *ReplicaStats) Fill() {}
 
-func (s *LiveStats) RequestCert() {
+func (s *ReplicaStats) RequestCert() {
 	var zeroTime time.Time
 	s.lock.Lock()
 	s.ownBcStartedCount++
@@ -77,7 +77,7 @@ func (s *LiveStats) RequestCert() {
 	s.lock.Unlock()
 }
 
-func (s *LiveStats) BcDeliver(cert *bcpbtypes.DeliverCert) {
+func (s *ReplicaStats) BcDeliver(cert *bcpbtypes.DeliverCert) {
 	s.lock.Lock()
 	s.bcDelivers++
 
@@ -87,7 +87,7 @@ func (s *LiveStats) BcDeliver(cert *bcpbtypes.DeliverCert) {
 	s.lock.Unlock()
 }
 
-func (s *LiveStats) AgDeliver(deliver *ageventstypes.Deliver) {
+func (s *ReplicaStats) AgDeliver(deliver *ageventstypes.Deliver) {
 	s.lock.Lock()
 	s.currentAgRound = deliver.Round + 1
 	if t, ok := s.agInputTimestamps[deliver.Round+1]; ok {
@@ -109,7 +109,7 @@ func (s *LiveStats) AgDeliver(deliver *ageventstypes.Deliver) {
 	s.lock.Unlock()
 }
 
-func (s *LiveStats) AgInput(input *ageventstypes.InputValue) {
+func (s *ReplicaStats) AgInput(input *ageventstypes.InputValue) {
 	if input.Round == 0 {
 		return // ignore first round
 	}
@@ -131,7 +131,7 @@ func (s *LiveStats) AgInput(input *ageventstypes.InputValue) {
 	s.lock.Unlock()
 }
 
-func (s *LiveStats) AbbaRoundContinue(roundNum string, _ *abbapbtypes.RoundContinue) {
+func (s *ReplicaStats) AbbaRoundContinue(roundNum string, _ *abbapbtypes.RoundContinue) {
 	if roundNum != "0" {
 		return
 	}
@@ -141,7 +141,7 @@ func (s *LiveStats) AbbaRoundContinue(roundNum string, _ *abbapbtypes.RoundConti
 	s.lock.Unlock()
 }
 
-func (s *LiveStats) InnerAbbaTime(t *ageventstypes.InnerAbbaRoundTime) {
+func (s *ReplicaStats) InnerAbbaTime(t *ageventstypes.InnerAbbaRoundTime) {
 	s.lock.Lock()
 	s.innerAbbaTimeCount++
 	unanimousLatency := t.DurationNoCoin / 3
@@ -149,29 +149,37 @@ func (s *LiveStats) InnerAbbaTime(t *ageventstypes.InnerAbbaRoundTime) {
 	s.lock.Unlock()
 }
 
-func (s *LiveStats) Submit(tx *trantorpbtypes.Transaction) {
+func (s *ReplicaStats) NewTransactions(txs []*trantorpbtypes.Transaction) {
+	now := time.Now()
 	s.lock.Lock()
-	k := txKey{tx.ClientId, tx.TxNo}
-	s.txTimestamps[k] = time.Now()
-	s.lock.Unlock()
-}
-
-func (s *LiveStats) Deliver(tx *trantorpbtypes.Transaction) {
-	s.lock.Lock()
-	s.deliveredTransactions++
-	k := txKey{tx.ClientId, tx.TxNo}
-	if t, ok := s.txTimestamps[k]; ok {
-		delete(s.txTimestamps, k)
-		s.timestampedTransactions++
-		d := time.Since(t)
-
-		// $CA_{n+1} = CA_n + {x_{n+1} - CA_n \over n + 1}$
-		s.avgLatency += (d - s.avgLatency) / time.Duration(s.timestampedTransactions)
+	for _, tx := range txs {
+		k := txKey{tx.ClientId, tx.TxNo}
+		s.txTimestamps[k] = now
 	}
 	s.lock.Unlock()
 }
 
-func (s *LiveStats) CutBatch(batchSz int) {
+func (s *ReplicaStats) DeliverBatch(txs []*trantorpbtypes.Transaction) {
+	s.lock.Lock()
+
+	s.deliveredTransactions += len(txs)
+
+	for _, tx := range txs {
+		k := txKey{tx.ClientId, tx.TxNo}
+		if t, ok := s.txTimestamps[k]; ok {
+			delete(s.txTimestamps, k)
+			s.timestampedTransactions++
+			d := time.Since(t)
+
+			// $CA_{n+1} = CA_n + {x_{n+1} - CA_n \over n + 1}$
+			s.avgLatency += (d - s.avgLatency) / time.Duration(s.timestampedTransactions)
+		}
+	}
+
+	s.lock.Unlock()
+}
+
+func (s *ReplicaStats) CutBatch(batchSz int) {
 	s.lock.Lock()
 
 	s.formedBatchCount++
@@ -181,7 +189,7 @@ func (s *LiveStats) CutBatch(batchSz int) {
 	s.lock.Unlock()
 }
 
-func (s *LiveStats) AssumeDelivered(tx *trantorpbtypes.Transaction) {
+func (s *ReplicaStats) AssumeDelivered(tx *trantorpbtypes.Transaction) {
 	s.lock.Lock()
 
 	// Consider transaction for throughput measurement, but not for latency (latency is distorted).
@@ -193,21 +201,21 @@ func (s *LiveStats) AssumeDelivered(tx *trantorpbtypes.Transaction) {
 	s.lock.Unlock()
 }
 
-func (s *LiveStats) AvgLatency() time.Duration {
+func (s *ReplicaStats) AvgLatency() time.Duration {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
 
 	return s.avgLatency
 }
 
-func (s *LiveStats) DeliveredTransactions() int {
+func (s *ReplicaStats) DeliveredTransactions() int {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
 
 	return s.deliveredTransactions
 }
 
-func (s *LiveStats) WriteCSVHeader(w *csv.Writer) error {
+func (s *ReplicaStats) WriteCSVHeader(w *csv.Writer) error {
 	record := []string{
 		"time",
 		"nrDelivered",
@@ -226,7 +234,7 @@ func (s *LiveStats) WriteCSVHeader(w *csv.Writer) error {
 	return w.Write(record)
 }
 
-func (s *LiveStats) WriteCSVRecord(w *csv.Writer, d time.Duration) error {
+func (s *ReplicaStats) WriteCSVRecord(w *csv.Writer, d time.Duration) error {
 	s.lock.Lock()
 	deliveredTxs := s.deliveredTransactions
 	avgLatency := s.avgLatency
