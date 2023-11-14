@@ -21,7 +21,7 @@ import (
 
 type ReplicaStats struct {
 	lock                    sync.RWMutex
-	txTimestamps            map[txKey]time.Time
+	txTimestamps            map[txKey]time.Duration
 	avgLatency              time.Duration
 	timestampedTransactions int
 	deliveredTransactions   int
@@ -29,11 +29,11 @@ type ReplicaStats struct {
 	ownQueueIdx       aleatypes.QueueIdx
 	bcDelivers        int
 	ownBcStartedCount int
-	bcStallStart      time.Time
+	bcStallStart      time.Duration
 	avgBcStall        time.Duration
 
-	agInputTimestamps map[uint64]time.Time
-	stalledAgStart    time.Time
+	agInputTimestamps map[uint64]time.Duration
+	stalledAgStart    time.Duration
 	currentAgRound    uint64
 	avgAgStall        time.Duration
 	cumPosAgStall     time.Duration
@@ -53,10 +53,12 @@ type txKey struct {
 	TxNo     tt.TxNo
 }
 
+var timeRef = time.Now()
+
 func NewReplicaStats(ownQueueIdx aleatypes.QueueIdx) *ReplicaStats {
 	return &ReplicaStats{
-		txTimestamps:      make(map[txKey]time.Time),
-		agInputTimestamps: make(map[uint64]time.Time),
+		txTimestamps:      make(map[txKey]time.Duration),
+		agInputTimestamps: make(map[uint64]time.Duration),
 
 		ownQueueIdx: ownQueueIdx,
 	}
@@ -65,11 +67,12 @@ func NewReplicaStats(ownQueueIdx aleatypes.QueueIdx) *ReplicaStats {
 func (s *ReplicaStats) Fill() {}
 
 func (s *ReplicaStats) RequestCert() {
-	var zeroTime time.Time
+	now := time.Since(timeRef)
+
 	s.lock.Lock()
 	s.ownBcStartedCount++
-	if s.bcStallStart != zeroTime {
-		stall := time.Since(s.bcStallStart)
+	if s.bcStallStart != 0 {
+		stall := now - s.bcStallStart
 
 		// $CA_{n+1} = CA_n + {x_{n+1} - CA_n \over n + 1}$
 		s.avgBcStall += (stall - s.avgBcStall) / time.Duration(s.ownBcStartedCount)
@@ -78,27 +81,31 @@ func (s *ReplicaStats) RequestCert() {
 }
 
 func (s *ReplicaStats) BcDeliver(cert *bcpbtypes.DeliverCert) {
+	now := time.Since(timeRef)
+
 	s.lock.Lock()
 	s.bcDelivers++
 
 	if cert.Cert.Slot.QueueIdx == s.ownQueueIdx {
-		s.bcStallStart = time.Now()
+		s.bcStallStart = now
 	}
 	s.lock.Unlock()
 }
 
 func (s *ReplicaStats) AgDeliver(deliver *ageventstypes.Deliver) {
+	now := time.Since(timeRef)
+
 	s.lock.Lock()
 	s.currentAgRound = deliver.Round + 1
 	if t, ok := s.agInputTimestamps[deliver.Round+1]; ok {
-		stall := -time.Since(t) // negative stall: input is before deliver of the previous round
+		stall := -(now - t) // negative stall: input is before deliver of the previous round
 
 		// $CA_{n+1} = CA_n + {x_{n+1} - CA_n \over n + 1}$
 		s.avgAgStall += (stall - s.avgAgStall) / time.Duration(s.trueAgDelivers+s.falseAgDelivers+1)
 
 		delete(s.agInputTimestamps, deliver.Round+1)
 	} else {
-		s.stalledAgStart = time.Now()
+		s.stalledAgStart = now
 	}
 
 	if deliver.Decision {
@@ -113,10 +120,11 @@ func (s *ReplicaStats) AgInput(input *ageventstypes.InputValue) {
 	if input.Round == 0 {
 		return // ignore first round
 	}
+	now := time.Since(timeRef)
 
 	s.lock.Lock()
 	if s.currentAgRound == input.Round {
-		stall := time.Since(s.stalledAgStart)
+		stall := now - s.stalledAgStart
 
 		s.cumPosAgStall += stall
 		// $CA_{n+1} = CA_n + {x_{n+1} - CA_n \over n + 1}$
@@ -126,7 +134,7 @@ func (s *ReplicaStats) AgInput(input *ageventstypes.InputValue) {
 		}
 		s.avgAgStall += (stall - s.avgAgStall) / time.Duration(count)
 	} else {
-		s.agInputTimestamps[input.Round] = time.Now()
+		s.agInputTimestamps[input.Round] = now
 	}
 	s.lock.Unlock()
 }
@@ -150,7 +158,7 @@ func (s *ReplicaStats) InnerAbbaTime(t *ageventstypes.InnerAbbaRoundTime) {
 }
 
 func (s *ReplicaStats) NewTransactions(txs []*trantorpbtypes.Transaction) {
-	now := time.Now()
+	now := time.Since(timeRef)
 	s.lock.Lock()
 	for _, tx := range txs {
 		k := txKey{tx.ClientId, tx.TxNo}
@@ -160,6 +168,7 @@ func (s *ReplicaStats) NewTransactions(txs []*trantorpbtypes.Transaction) {
 }
 
 func (s *ReplicaStats) DeliverBatch(txs []*trantorpbtypes.Transaction) {
+	now := time.Since(timeRef)
 	s.lock.Lock()
 
 	s.deliveredTransactions += len(txs)
@@ -169,7 +178,7 @@ func (s *ReplicaStats) DeliverBatch(txs []*trantorpbtypes.Transaction) {
 		if t, ok := s.txTimestamps[k]; ok {
 			delete(s.txTimestamps, k)
 			s.timestampedTransactions++
-			d := time.Since(t)
+			d := now - t
 
 			// $CA_{n+1} = CA_n + {x_{n+1} - CA_n \over n + 1}$
 			s.avgLatency += (d - s.avgLatency) / time.Duration(s.timestampedTransactions)
