@@ -198,10 +198,10 @@ func (cs *ClientStats) WriteCSVHeader(w *csv.Writer) error {
 	record := []string{
 		"duration",
 		"throughput",
-		"latency-avg",
-		"latency-median",
-		"latency-95p",
-		"latency-max",
+		"latency_avg",
+		"latency_median",
+		"latency_95p",
+		"latency_max",
 	}
 	return w.Write(record)
 }
