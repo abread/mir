@@ -60,7 +60,7 @@ func (i *StatInterceptor) interceptOne(evt *eventpbtypes.Event) {
 		case *mempoolpbtypes.Event_NewTransactions:
 			i.ReplicaStats.NewTransactions(e.NewTransactions.Transactions)
 		case *mempoolpbtypes.Event_NewBatch:
-			i.ReplicaStats.CutBatch(len(e.NewBatch.Txs))
+			i.ReplicaStats.CutBatch(e.NewBatch.Txs)
 			i.ClientOptLatStats.CutBatch(e.NewBatch.Txs)
 		}
 	case *eventpbtypes.Event_BatchFetcher:

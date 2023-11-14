@@ -20,11 +20,14 @@ import (
 )
 
 type ReplicaStats struct {
-	lock                    sync.RWMutex
-	txTimestamps            map[txKey]time.Duration
-	avgLatency              time.Duration
-	timestampedTransactions int
-	deliveredTransactions   int
+	lock                       sync.RWMutex
+	txTimestamps               map[txKey]time.Duration
+	avgLatency                 time.Duration
+	timestampedTransactions    int
+	batchTxTimestamps          map[txKey]time.Duration
+	optAvgLatency              time.Duration
+	optTimestampedTransactions int
+	deliveredTransactions      int
 
 	ownQueueIdx       aleatypes.QueueIdx
 	bcDelivers        int
@@ -58,6 +61,7 @@ var timeRef = time.Now()
 func NewReplicaStats(ownQueueIdx aleatypes.QueueIdx) *ReplicaStats {
 	return &ReplicaStats{
 		txTimestamps:      make(map[txKey]time.Duration),
+		batchTxTimestamps: make(map[txKey]time.Duration),
 		agInputTimestamps: make(map[uint64]time.Duration),
 
 		ownQueueIdx: ownQueueIdx,
@@ -183,17 +187,32 @@ func (s *ReplicaStats) DeliverBatch(txs []*trantorpbtypes.Transaction) {
 			// $CA_{n+1} = CA_n + {x_{n+1} - CA_n \over n + 1}$
 			s.avgLatency += (d - s.avgLatency) / time.Duration(s.timestampedTransactions)
 		}
+
+		if t, ok := s.batchTxTimestamps[k]; ok {
+			delete(s.batchTxTimestamps, k)
+			s.optTimestampedTransactions++
+			d := now - t
+
+			// $CA_{n+1} = CA_n + {x_{n+1} - CA_n \over n + 1}$
+			s.optAvgLatency += (d - s.optAvgLatency) / time.Duration(s.optTimestampedTransactions)
+		}
 	}
 
 	s.lock.Unlock()
 }
 
-func (s *ReplicaStats) CutBatch(batchSz int) {
+func (s *ReplicaStats) CutBatch(txs []*trantorpbtypes.Transaction) {
+	now := time.Since(timeRef)
 	s.lock.Lock()
 
 	s.formedBatchCount++
 	// batch size is multiplied by 256 to retain 8 bits of precision
-	s.avgBatchSize256 += (batchSz*256 - s.avgBatchSize256) / s.formedBatchCount
+	s.avgBatchSize256 += (len(txs)*256 - s.avgBatchSize256) / s.formedBatchCount
+
+	for _, tx := range txs {
+		k := txKey{tx.ClientId, tx.TxNo}
+		s.batchTxTimestamps[k] = now
+	}
 
 	s.lock.Unlock()
 }
@@ -230,6 +249,7 @@ func (s *ReplicaStats) WriteCSVHeader(w *csv.Writer) error {
 		"nrDelivered",
 		"tps",
 		"avgLatency",
+		"optAvgLatency",
 		"bcDelivers",
 		"avgBcStall",
 		"avgBatchSize",
@@ -247,6 +267,7 @@ func (s *ReplicaStats) WriteCSVRecord(w *csv.Writer, d time.Duration) error {
 	s.lock.Lock()
 	deliveredTxs := s.deliveredTransactions
 	avgLatency := s.avgLatency
+	optAvgLatency := s.optAvgLatency
 	bcDelivers := s.bcDelivers
 	avgBcStall := s.avgBcStall
 	avgBatchSize256 := s.avgBatchSize256
@@ -258,6 +279,7 @@ func (s *ReplicaStats) WriteCSVRecord(w *csv.Writer, d time.Duration) error {
 	estUnanimousAgTime := s.estUnanimousAgTime
 
 	s.avgLatency = 0
+	s.optAvgLatency = 0
 	s.timestampedTransactions = 0
 	s.deliveredTransactions = 0
 	s.bcDelivers = 0
@@ -280,6 +302,7 @@ func (s *ReplicaStats) WriteCSVRecord(w *csv.Writer, d time.Duration) error {
 		strconv.Itoa(deliveredTxs),
 		fmt.Sprintf("%.1f", tps),
 		fmt.Sprintf("%.6f", avgLatency.Seconds()),
+		fmt.Sprintf("%.6f", optAvgLatency.Seconds()),
 		strconv.Itoa(bcDelivers),
 		fmt.Sprintf("%.6f", avgBcStall.Seconds()),
 		fmt.Sprintf("%.3f", float64(avgBatchSize256)/256.0),
