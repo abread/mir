@@ -308,6 +308,8 @@ func (inst *TBLSInst) Recover(_ [][]byte, sigShares []tctypes.SigShare) (tctypes
 		i, err := sh.Index()
 		if err != nil {
 			continue
+		} else if i > len(inst.members)+1 {
+			continue // share is from non-group member (index too large). Note: indices start with 1
 		}
 		point := inst.sigGroup.Point()
 		if err := point.UnmarshalBinary(sh.Value()); err != nil {

@@ -98,7 +98,7 @@ func (inst *HerumiTBLSInst) VerifyShare(msg [][]byte, sigShare tctypes.SigShare,
 		return es.Errorf("invalid signer: %v", nodeID)
 	}
 
-	sig, id, err := deserializeHerumiSigShare(sigShare)
+	sig, id, err := deserializeHerumiSigShare(sigShare, uint64(len(inst.members)))
 	if err != nil {
 		return es.Errorf("failed to parse share: %w", err)
 	}
@@ -141,7 +141,7 @@ func (inst *HerumiTBLSInst) Recover(_ [][]byte, sigShares []tctypes.SigShare) (t
 	parsedShares := make([]bls.Sign, len(sigShares))
 	parsedIDs := make([]bls.ID, len(sigShares))
 	for i, share := range sigShares {
-		parsedShare, parsedID, err := deserializeHerumiSigShare(share)
+		parsedShare, parsedID, err := deserializeHerumiSigShare(share, uint64(len(inst.members)))
 		if err != nil {
 			return nil, es.Errorf("failed to deserialize share #%d: %w", i, err)
 		}
@@ -172,8 +172,12 @@ func serializeHerumiSigShare(sig *bls.Sign, id uint64) []byte {
 	return serialized
 }
 
-func deserializeHerumiSigShare(serialized []byte) (*bls.Sign, bls.ID, error) {
+func deserializeHerumiSigShare(serialized []byte, N uint64) (*bls.Sign, bls.ID, error) {
 	idNum := serializing.Uint64FromBytes(serialized[0:8])
+	if idNum > N {
+		return nil, bls.ID{}, es.Errorf("signer id out-of-bounds")
+	}
+
 	id, err := herumiID(idNum)
 	if err != nil {
 		return nil, id, err
