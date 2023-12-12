@@ -7,6 +7,7 @@ package stats
 import (
 	"encoding/csv"
 	"fmt"
+	"runtime"
 	"strconv"
 	"sync"
 	"time"
@@ -259,12 +260,24 @@ func (s *ReplicaStats) WriteCSVHeader(w *csv.Writer) error {
 		"avgAgStall",
 		"cumPosAgStall",
 		"estUnanimousAgTime",
+		"memMallocs",
+		"memFrees",
+		"memHeapAlloc",
+		"memHeapIdle",
+		"memHeapInuse",
+		"memHeapObjects",
+		"memStackInuse",
+		"memPauseTotalNs",
+		"memNumGC",
 	}
 	return w.Write(record)
 }
 
 func (s *ReplicaStats) WriteCSVRecord(w *csv.Writer, d time.Duration) error {
+	var memStats runtime.MemStats
+
 	s.lock.Lock()
+	runtime.ReadMemStats(&memStats)
 	deliveredTxs := s.deliveredTransactions
 	avgLatency := s.avgLatency
 	optAvgLatency := s.optAvgLatency
@@ -313,6 +326,15 @@ func (s *ReplicaStats) WriteCSVRecord(w *csv.Writer, d time.Duration) error {
 		fmt.Sprintf("%.6f", avgAgStall.Seconds()),
 		fmt.Sprintf("%.6f", cumPosAgStall.Seconds()),
 		fmt.Sprintf("%.6f", estUnanimousAgTime.Seconds()),
+		strconv.FormatUint(memStats.Mallocs, 10),
+		strconv.FormatUint(memStats.Frees, 10),
+		strconv.FormatUint(memStats.HeapAlloc, 10),
+		strconv.FormatUint(memStats.HeapIdle, 10),
+		strconv.FormatUint(memStats.HeapInuse, 10),
+		strconv.FormatUint(memStats.HeapObjects, 10),
+		strconv.FormatUint(memStats.StackInuse, 10),
+		strconv.FormatUint(memStats.PauseTotalNs, 10),
+		strconv.FormatUint(uint64(memStats.NumGC), 10),
 	}
 	return w.Write(record)
 }
