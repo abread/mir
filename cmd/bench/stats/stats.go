@@ -14,6 +14,7 @@ type Tracker interface {
 }
 
 type Stats interface {
+	Start()
 	Fill()
 	WriteCSVHeader(w *csv.Writer) error
 	WriteCSVRecord(w *csv.Writer, d time.Duration) error

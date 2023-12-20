@@ -69,6 +69,10 @@ func NewReplicaStats(ownQueueIdx aleatypes.QueueIdx) *ReplicaStats {
 	}
 }
 
+func (s *ReplicaStats) Start() {
+	// counters are reset on every write, no need for restart
+}
+
 func (s *ReplicaStats) Fill() {}
 
 func (s *ReplicaStats) RequestCert() {

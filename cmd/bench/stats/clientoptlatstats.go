@@ -38,7 +38,6 @@ type ClientOptLatStats struct {
 	// Total number of transactions delivered.
 	totalDelivered int
 
-	preInitDiscardBatchCount int
 	clientIDPrefix           string
 
 	latencyStep    time.Duration
@@ -55,7 +54,6 @@ func NewClientOptLatStats(
 		txTimestamps:             make(map[txKey]time.Time),
 		LatencyHist:              map[time.Duration]int{0: 0}, // The rest of the code can assume this map is never empty.
 		DeliveredTxs:             make(map[time.Duration]int),
-		preInitDiscardBatchCount: preInitDiscardBatchCount,
 		clientIDPrefix:           clientIDPrefix,
 		latencyStep:              latencyStep,
 		SamplingPeriod:           samplingPeriod,
@@ -109,16 +107,6 @@ func (cs *ClientOptLatStats) CutBatch(batch []*trantorpbtypes.Transaction) {
 }
 
 func (cs *ClientOptLatStats) DeliveredBatch() {
-	cs.timestampsLock.Lock()
-	defer cs.timestampsLock.Unlock()
-
-	if cs.preInitDiscardBatchCount > 0 {
-		cs.preInitDiscardBatchCount--
-
-		if cs.preInitDiscardBatchCount == 0 {
-			cs.start() //restart timer
-		}
-	}
 }
 
 func (cs *ClientOptLatStats) Deliver(tx *trantorpbtypes.Transaction) {

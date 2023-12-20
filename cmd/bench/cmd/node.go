@@ -404,6 +404,21 @@ func runNode(ctx context.Context) error {
 		}()
 	}
 
+	if params.WarmupDuration > 0 {
+		go func() {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(time.Duration(params.WarmupDuration)):
+				logger.Log(logging.LevelWarn, "resetting stat counters after warmup")
+				clientOptLatStats.Start()
+				clientStats.Start()
+				netStats.Start()
+				replicaStats.Start()
+			}
+		}()
+	}
+
 	// Start accepting transactions from the outside world
 	txReceiver.Start(txRecvListener)
 

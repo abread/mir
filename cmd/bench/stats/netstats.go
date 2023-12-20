@@ -61,10 +61,20 @@ func (ns *NetStats) Start() {
 	ns.Lock()
 	defer ns.Unlock()
 
+	for _, m := range []map[string]map[time.Duration]int{ns.SentData, ns.DroppedData, ns.ReceivedData} {
+		for lbl := range m {
+			m[lbl] = make(map[time.Duration]int, len(m[lbl]))
+		}
+	}
+
+	ns.TotalSentData = make(map[time.Duration]int, len(ns.TotalSentData))
+	ns.TotalReceivedData = make(map[time.Duration]int, len(ns.TotalReceivedData))
+	ns.TotalDroppedData = make(map[time.Duration]int, len(ns.TotalDroppedData))
+
 	now := time.Now()
+	ns.started = true
 	ns.startTime = now
 	ns.duration = ns.SamplingPeriod
-	ns.started = true
 }
 
 func (ns *NetStats) Sent(nBytes int, label string) {

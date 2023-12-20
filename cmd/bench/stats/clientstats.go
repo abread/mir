@@ -37,8 +37,6 @@ type ClientStats struct {
 	// Total number of transactions delivered.
 	totalDelivered int
 
-	preInitDiscardBatchCount int
-
 	latencyStep    time.Duration
 	SamplingPeriod time.Duration
 }
@@ -52,7 +50,6 @@ func NewClientStats(
 		txTimestamps:             make(map[txKey]time.Time),
 		LatencyHist:              map[time.Duration]int{0: 0}, // The rest of the code can assume this map is never empty.
 		DeliveredTxs:             make(map[time.Duration]int),
-		preInitDiscardBatchCount: preInitDiscardBatchCount,
 		latencyStep:              latencyStep,
 		SamplingPeriod:           samplingPeriod,
 	}
@@ -94,16 +91,6 @@ func (cs *ClientStats) Submit(tx *trantorpbtypes.Transaction) {
 }
 
 func (cs *ClientStats) DeliveredBatch() {
-	cs.timestampsLock.Lock()
-	defer cs.timestampsLock.Unlock()
-
-	if cs.preInitDiscardBatchCount > 0 {
-		cs.preInitDiscardBatchCount--
-
-		if cs.preInitDiscardBatchCount == 0 {
-			cs.start() //restart timer
-		}
-	}
 }
 
 func (cs *ClientStats) Deliver(tx *trantorpbtypes.Transaction) {

@@ -61,6 +61,7 @@ type BenchParams struct {
 	ThreshCryptoImpl string
 	CryptoSeed       int64 `json:",string"`
 	Duration         Duration
+	WarmupDuration   Duration
 	CrashAfter       Duration
 }
 
