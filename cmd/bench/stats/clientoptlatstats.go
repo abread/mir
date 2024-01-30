@@ -38,7 +38,7 @@ type ClientOptLatStats struct {
 	// Total number of transactions delivered.
 	totalDelivered int
 
-	clientIDPrefix           string
+	clientIDPrefix string
 
 	latencyStep    time.Duration
 	SamplingPeriod time.Duration
@@ -51,12 +51,12 @@ func NewClientOptLatStats(
 	preInitDiscardBatchCount int,
 ) *ClientOptLatStats {
 	return &ClientOptLatStats{
-		txTimestamps:             make(map[txKey]time.Time),
-		LatencyHist:              map[time.Duration]int{0: 0}, // The rest of the code can assume this map is never empty.
-		DeliveredTxs:             make(map[time.Duration]int),
-		clientIDPrefix:           clientIDPrefix,
-		latencyStep:              latencyStep,
-		SamplingPeriod:           samplingPeriod,
+		txTimestamps:   make(map[txKey]time.Time),
+		LatencyHist:    map[time.Duration]int{0: 0}, // The rest of the code can assume this map is never empty.
+		DeliveredTxs:   make(map[time.Duration]int),
+		clientIDPrefix: clientIDPrefix,
+		latencyStep:    latencyStep,
+		SamplingPeriod: samplingPeriod,
 	}
 }
 

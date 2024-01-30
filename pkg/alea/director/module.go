@@ -271,13 +271,13 @@ func NewModule( // nolint: gocyclo,gocognit
 	})
 
 	maxAgAdvInput := uint64(tunables.MaxAgRoundAdvanceInput)
-	if maxAgAdvInput > uint64(N) {
-		maxAgAdvInput = uint64(N)
+	if maxAgAdvInput >= uint64(N) {
+		maxAgAdvInput = uint64(N - 1)
 	}
 	agCanInstantDeliverCount := func() int {
 		nCanDeliver := 0
 
-		for round := state.agRound; round < state.agRound+maxAgAdvInput; round++ {
+		for round := state.agRound; round <= state.agRound+maxAgAdvInput; round++ {
 			slot, ok := state.queueSelectionPolicy.Slot(round)
 			if !ok {
 				continue

@@ -47,11 +47,11 @@ func NewClientStats(
 	preInitDiscardBatchCount int,
 ) *ClientStats {
 	return &ClientStats{
-		txTimestamps:             make(map[txKey]time.Time),
-		LatencyHist:              map[time.Duration]int{0: 0}, // The rest of the code can assume this map is never empty.
-		DeliveredTxs:             make(map[time.Duration]int),
-		latencyStep:              latencyStep,
-		SamplingPeriod:           samplingPeriod,
+		txTimestamps:   make(map[txKey]time.Time),
+		LatencyHist:    map[time.Duration]int{0: 0}, // The rest of the code can assume this map is never empty.
+		DeliveredTxs:   make(map[time.Duration]int),
+		latencyStep:    latencyStep,
+		SamplingPeriod: samplingPeriod,
 	}
 }
 
