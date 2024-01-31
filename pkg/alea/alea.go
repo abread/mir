@@ -24,38 +24,38 @@ type Params struct {
 
 	// Maximum number of concurrent VCB instances per queue
 	// Must be at least 1
-	MaxConcurrentVcbPerQueue int
+	MaxConcurrentVcbPerQueue int `json:",string"`
 
 	// Maximum number of unagreed batches that the broadcast component can have in this node's queue
 	// Must be at least 1
-	MaxOwnUnagreedBatchCount int
+	MaxOwnUnagreedBatchCount int `json:",string"`
 
 	// Maximum number of concurrent ABBA rounds for which we process messages
 	// Must be at least 1
-	MaxAbbaRoundLookahead int
+	MaxAbbaRoundLookahead int `json:",string"`
 
 	// Maximum number of concurrent agreement rounds for which we process messages
 	// Must be at least 1
-	MaxAgRoundLookahead int
+	MaxAgRoundLookahead int `json:",string"`
 
 	// Maximum number of agreement rounds for which we send input before
 	// allowing them to progress in the normal path.
 	// Must be at least 0, must be less that MaxRoundLookahead
 	// Setting this parameter too high will lead to costly retransmissions!
 	// Should likely be less than MaxRoundLookahead/2 - 1.
-	MaxAgRoundAdvanceInput int
+	MaxAgRoundAdvanceInput int `json:",string"`
 
 	// Subprotocol duration estimates window size
-	EstimateWindowSize int
+	EstimateWindowSize int `json:",string"`
 
 	// How slower can the F slowest nodes be compared to the rest
 	// A factor of 2, means we allow F nodes to take double the time we expect the rest to take.
 	// Must be >=1
-	MaxExtSlowdownFactor float64
+	MaxExtSlowdownFactor float64 `json:",string"`
 
 	QueueSelectionPolicyType queueselectionpolicy.QueuePolicyType
-	EpochLength              uint64
-	RetainEpochs             uint64
+	EpochLength              uint64 `json:",string"`
+	RetainEpochs             uint64 `json:",string"`
 
 	MaxAgStall time.Duration
 }
