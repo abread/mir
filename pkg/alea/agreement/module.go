@@ -313,8 +313,8 @@ func newAgController(mc ModuleConfig, params ModuleParams, tunables ModuleTunabl
 
 	// give input to new rounds
 	dsl.UponStateUpdates(m, func() error {
-		for round, input := range state.pendingInput {
-			if agRounds.IsInView(round) && round <= state.currentRound+uint64(tunables.MaxRoundAdvanceInput) {
+		for round := state.currentRound; round <= state.currentRound+uint64(tunables.MaxRoundAdvanceInput) && agRounds.IsInView(round); round++ {
+			if input, ok := state.pendingInput[round]; ok {
 				logger.Log(logging.LevelDebug, "inputting value to agreement round", "agRound", round, "value", input)
 				roundModID := mc.agRoundModuleID(round)
 				dsl.EmitEvent(m, abbapbevents.InputValue(
