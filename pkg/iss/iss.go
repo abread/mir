@@ -15,6 +15,7 @@ import (
 	"encoding/binary"
 
 	es "github.com/go-errors/errors"
+	"golang.org/x/exp/slices"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/filecoin-project/mir/pkg/checkpoint"
@@ -22,6 +23,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/crypto"
 	"github.com/filecoin-project/mir/pkg/dsl"
 	issconfig "github.com/filecoin-project/mir/pkg/iss/config"
+	"github.com/filecoin-project/mir/pkg/iss/leaderselectionpolicy"
 	lsp "github.com/filecoin-project/mir/pkg/iss/leaderselectionpolicy"
 	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/modules"
@@ -342,8 +344,13 @@ func New(
 			// we first need to agree on one (any of them).
 
 			// Choose a leader for the new orderer instance.
-			// TODO: Use the corresponding epoch's leader set to pick a leader, instead of just selecting one from all nodes.
-			leader := maputil.GetSortedKeys(membership.Nodes)[int(epoch)%len(membership.Nodes)]
+			lastLeaderPolicy, err := leaderselectionpolicy.LeaderPolicyFromBytes(snapshot.EpochData.LeaderPolicy)
+			if err != nil {
+				return err
+			}
+			possibleLeaders := lastLeaderPolicy.Leaders()
+			slices.Sort(possibleLeaders)
+			leader := possibleLeaders[int(epoch)%len(possibleLeaders)]
 
 			// Serialize checkpoint, so it can be proposed as a value.
 			stableCheckpoint := checkpointpbtypes.StableCheckpoint{
