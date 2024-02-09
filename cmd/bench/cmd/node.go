@@ -231,11 +231,11 @@ func runNode(ctx context.Context) error {
 	// Create trackers for gathering statistics about the performance.
 	discardBatchCount := params.Trantor.Alea.EstimateWindowSize * 3 / 2
 	replicaStats := stats.NewReplicaStats(aleatypes.QueueIdx(slices.Index(params.Trantor.Alea.AllNodes(), ownID)))
-	clientStats := stats.NewClientStats(time.Millisecond, 5*time.Second, discardBatchCount)
+	clientStats := stats.NewClientStats(50 * time.Microsecond, 5*time.Second, discardBatchCount)
 	txGen.TrackStats(clientStats)
 
 	txClientIDPrefix := string(params.TxGen.ClientID) + "."
-	clientOptLatStats := stats.NewClientOptLatStats(time.Millisecond, 5*time.Second, txClientIDPrefix, discardBatchCount)
+	clientOptLatStats := stats.NewClientOptLatStats(50 * time.Microsecond, 5*time.Second, txClientIDPrefix, discardBatchCount)
 	txReceiverInterceptor := &txReceiverInterceptor{AppModuleID: trantor.DefaultModuleConfig().App}
 	interceptor := eventlog.MultiInterceptor(
 		tracer,
