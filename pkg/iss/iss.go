@@ -645,14 +645,8 @@ func (iss *ISS) initAvailability() {
 
 // initOrderers sends the SBInit event to all orderers in the current epoch.
 func (iss *ISS) initOrderers() error {
-	unrotatedLeaders := iss.epoch.leaderPolicy.Leaders()
-	leaders := make([]t.NodeID, len(unrotatedLeaders))
-	// rotate leaders in round-robin fashion
-	shift := int(uint64(iss.epoch.Nr()) % uint64(len(leaders)))
-	for i := 0; i < len(leaders); i++ {
-		leaders[(i+shift)%len(leaders)] = unrotatedLeaders[i]
-	}
 
+	leaders := iss.epoch.leaderPolicy.Leaders()
 	for i, leader := range leaders {
 
 		// Create segment.
