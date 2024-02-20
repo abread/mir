@@ -31,7 +31,7 @@ func DefaultParams() Params {
 	return Params{
 		ProtocolID:           "/mir/0.0.1",
 		ConnectionTTL:        DefaultConnectionTTL,
-		ConnectionBufferSize: 384, // enough for ISS-PBFT view change avalanche
+		ConnectionBufferSize: 2048,
 		StreamWriteTimeout:   100 * time.Millisecond,
 		ReconnectionPeriod:   time.Second,
 		MinComplainPeriod:    time.Second,
