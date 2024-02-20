@@ -37,6 +37,10 @@ import (
 	libp2p2 "github.com/filecoin-project/mir/pkg/net/libp2p"
 	batchfetcherpbtypes "github.com/filecoin-project/mir/pkg/pb/batchfetcherpb/types"
 	eventpbtypes "github.com/filecoin-project/mir/pkg/pb/eventpb/types"
+	messagepbtypes "github.com/filecoin-project/mir/pkg/pb/messagepb/types"
+	pingpongpbmsgs "github.com/filecoin-project/mir/pkg/pb/pingpongpb/msgs"
+	pingpongpbtypes "github.com/filecoin-project/mir/pkg/pb/pingpongpb/types"
+	transportpbtypes "github.com/filecoin-project/mir/pkg/pb/transportpb/types"
 	"github.com/filecoin-project/mir/pkg/pb/trantorpb"
 	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
 	"github.com/filecoin-project/mir/pkg/rendezvous"
@@ -272,7 +276,6 @@ func runNode(ctx context.Context) error {
 	if err := transport.WaitFor(len(initialMembership.Nodes)); err != nil {
 		return es.Errorf("failed waiting for network connections: %w", err)
 	}
-	time.Sleep(3 * time.Second) // wait a bit for the network to settle everywhere
 
 	// Synchronize with other nodes if necessary.
 	// If invoked, this code blocks until all the nodes have connected to each other.
@@ -284,6 +287,40 @@ func runNode(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("error synchronizing nodes: %w", err)
 		}
+	} else {
+		// alternate strategy: network sync
+		logger.Log(logging.LevelWarn, "Sending ping to all nodes")
+		ping := pingpongpbmsgs.Ping("ping", 0)
+		for nId := range initialMembership.Nodes {
+			if err := transport.Send(nId, ping); err != nil {
+				return fmt.Errorf("error sending initial ping message: %w", err)
+			}
+		}
+
+		logger.Log(logging.LevelWarn, "Waiting for all nodes to send ping")
+		nPingsRecvd := 0
+		t := time.NewTimer(60 * time.Second)
+		for nPingsRecvd < len(initialMembership.Nodes) {
+			t.Reset(60 * time.Second)
+			select {
+			case evList := <-transport.EventsOut():
+				for _, ev := range evList.Slice() {
+					tpEv := ev.Type.(*eventpbtypes.Event_Transport)
+					msgRecvdEv := tpEv.Transport.Type.(*transportpbtypes.Event_MessageReceived)
+					msg := msgRecvdEv.MessageReceived.Msg
+					if msg.DestModule != ping.DestModule || msg.Type.(*messagepbtypes.Message_Pingpong).Pingpong.Type.(*pingpongpbtypes.Message_Ping).Ping.SeqNr != 0 {
+						return fmt.Errorf("unexpected message received during sync")
+					}
+					nPingsRecvd++
+				}
+			case <-t.C:
+				return fmt.Errorf("spent 60s waiting for node pings without receiving anything. giving up")
+			}
+		}
+		t.Stop()
+
+		logger.Log(logging.LevelWarn, "All nodes are ready, starting in 3s")
+		time.Sleep(3 * time.Second)
 	}
 
 	// Output the statistics.
