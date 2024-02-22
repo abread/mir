@@ -389,6 +389,17 @@ func (tr *Transport) handleIncomingConnection(s network.Stream) {
 	}()
 
 	tr.connectionsLock.RLock()
+	// HACK: wait for network to be ready
+	for len(tr.connections) == 0 {
+		tr.connectionsLock.RUnlock()
+		select {
+		case <-time.After(500 * time.Millisecond):
+			// noop, will relock connectionsLock and check if we are ready
+		case <-tr.stop:
+			return
+		}
+		tr.connectionsLock.RLock()
+	}
 
 	// Check if connection has been received from a known node (as per ID declared by the remote node).
 	// (The actual check is performed after we release the lock.)
