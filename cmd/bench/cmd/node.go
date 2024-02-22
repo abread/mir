@@ -267,6 +267,10 @@ func runNode(ctx context.Context) error {
 	txReceiver := transactionreceiver.NewTransactionReceiver(node, trantor.DefaultModuleConfig().Mempool, logger)
 	txReceiverInterceptor.TxReceiver = txReceiver
 
+	// prematurely start transport to allow nodes to connect to eachother
+	if err := transport.Start(); err != nil {
+		return es.Errorf("could not start transport: %w", err)
+	}
 	logger.Log(logging.LevelWarn, "pausing for 10s to give other nodes time to initialize")
 	time.Sleep(10 * time.Second)
 
