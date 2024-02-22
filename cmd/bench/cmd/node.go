@@ -326,7 +326,8 @@ func runNode(ctx context.Context) error {
 		}
 		t.Stop()
 
-		logger.Log(logging.LevelWarn, "All nodes are ready, starting")
+		logger.Log(logging.LevelWarn, "All nodes are ready, starting in 3s")
+		time.Sleep(3 * time.Second)
 	}
 
 	// Output the statistics.
