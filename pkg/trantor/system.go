@@ -77,9 +77,6 @@ func (sys *System) WithModule(moduleID t.ModuleID, module modules.Module) *Syste
 // Start starts the operation of the modules of the SMR system.
 // It starts the network transport and connects to the initial members of the system.
 func (sys *System) Start() error {
-	if err := sys.transport.Start(); err != nil {
-		return errors.Wrap(err, "could not start network transport")
-	}
 	for _, membership := range sys.initialMemberships {
 		sys.transport.Connect(membership)
 	}
