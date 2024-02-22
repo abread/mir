@@ -267,6 +267,9 @@ func runNode(ctx context.Context) error {
 	txReceiver := transactionreceiver.NewTransactionReceiver(node, trantor.DefaultModuleConfig().Mempool, logger)
 	txReceiverInterceptor.TxReceiver = txReceiver
 
+	logger.Log(logging.LevelWarn, "pausing for 10s to give other nodes time to initialize")
+	time.Sleep(10 * time.Second)
+
 	logger.Log(logging.LevelWarn, "starting trantor instance")
 	if err := trantorInstance.Start(); err != nil {
 		return es.Errorf("could not start bench app: %w", err)
@@ -319,8 +322,7 @@ func runNode(ctx context.Context) error {
 		}
 		t.Stop()
 
-		logger.Log(logging.LevelWarn, "All nodes are ready, starting in 3s")
-		time.Sleep(3 * time.Second)
+		logger.Log(logging.LevelWarn, "All nodes are ready, starting")
 	}
 
 	// Output the statistics.
