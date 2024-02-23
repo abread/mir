@@ -31,7 +31,7 @@ require (
 	github.com/go-errors/errors v1.4.2
 	github.com/herumi/bls-eth-go-binary v1.29.1
 	github.com/libp2p/go-yamux/v4 v4.0.1
-	github.com/mattn/go-sqlite3 v1.14.16
+	github.com/mattn/go-sqlite3 v1.14.19
 	github.com/multiformats/go-multiaddr v0.10.1
 	github.com/reactivex/rxgo/v2 v2.5.0
 	github.com/spf13/cobra v1.5.0
