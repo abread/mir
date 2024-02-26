@@ -38,14 +38,30 @@ func (sc *StableCheckpoint) DslStruct() *threshcheckpointpbtypes.StableCheckpoin
 	return (*threshcheckpointpbtypes.StableCheckpoint)(sc)
 }
 
+var certEnc cbor.EncMode
+var certDec cbor.DecMode
+
+func init() {
+	var err error
+	certEnc, err = cbor.CoreDetEncOptions().EncMode()
+	if err != nil {
+		panic(err)
+	}
+
+	decOptions := cbor.DecOptions{
+		MaxArrayElements: 131072,
+		MaxMapPairs:      128 * 8192 * 8 * 2, // for ~128 nodes, with ~8192 batch size and ~8*B*N clients
+		IndefLength:      cbor.IndefLengthForbidden,
+	}
+	certDec, err = decOptions.DecMode()
+	if err != nil {
+		panic(err)
+	}
+}
+
 // Serialize returns the stable checkpoint serialized as a byte slice.
 // It is the inverse of Deserialize, to which the returned byte slice can be passed to restore the checkpoint.
 func (sc *StableCheckpoint) Serialize() ([]byte, error) {
-	em, err := cbor.CoreDetEncOptions().EncMode()
-	if err != nil {
-		return nil, err
-	}
-
 	// TODO: This is a DIRTY DIRTY hack. It works around the problem of protocol buffers not distinguishing between
 	//   an empty slice and a nil value (both get serialized to the same bytes and deserialized to nil).
 	//   CBOR, however does make this distinction. The checkpoint data structure does contain slices that may be empty
@@ -66,7 +82,7 @@ func (sc *StableCheckpoint) Serialize() ([]byte, error) {
 		return nil, err
 	}
 
-	return em.Marshal(&pbChkp)
+	return certEnc.Marshal(&pbChkp)
 }
 
 // Deserialize populates its fields from the serialized representation
@@ -76,7 +92,7 @@ func (sc *StableCheckpoint) Deserialize(data []byte) error {
 	// TODO: See comment in the serialization function for an explanation of
 	//   why we serialize the protobuf and not the checkpoint object directly.
 	var pbChkp threshcheckpointpb.StableCheckpoint
-	if err := cbor.Unmarshal(data, &pbChkp); err != nil {
+	if err := certDec.Unmarshal(data, &pbChkp); err != nil {
 		return es.Errorf("failed to CBOR unmarshal stable checkpoint: %w", err)
 	}
 	*sc = StableCheckpoint(*threshcheckpointpbtypes.StableCheckpointFromPb(&pbChkp))
