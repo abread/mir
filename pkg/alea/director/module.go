@@ -540,15 +540,6 @@ func NewModule( // nolint: gocyclo,gocognit
 				Snapshot:  snapshot,
 				Signature: signature,
 			})
-
-			// preemptively help nodes that are very far behind, to ensure liveness
-			currentEpochNr := state.lastStableCheckpoint.Snapshot.EpochData.EpochConfig.EpochNr
-			for nodeID, epochNr := range state.nodeEpochMap {
-				// Note: we add the current node idx to avoid overloading the remote node with snapshots
-				if epochNr+tt.EpochNr(params.RetainEpochs)+tt.EpochNr(ownQueueIdx) < currentEpochNr {
-					directorpbdsl.HelpNode(m, mc.Self, nodeID)
-				}
-			}
 		}
 
 		return nil
