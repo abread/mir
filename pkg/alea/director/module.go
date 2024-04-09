@@ -1,7 +1,6 @@
 package director
 
 import (
-	"fmt"
 	"math"
 	"time"
 
@@ -31,13 +30,11 @@ import (
 	factorypbdsl "github.com/filecoin-project/mir/pkg/pb/factorypb/dsl"
 	factorypbtypes "github.com/filecoin-project/mir/pkg/pb/factorypb/types"
 	isspbdsl "github.com/filecoin-project/mir/pkg/pb/isspb/dsl"
-	reliablenetpbdsl "github.com/filecoin-project/mir/pkg/pb/reliablenetpb/dsl"
 	threshcheckpointpbdsl "github.com/filecoin-project/mir/pkg/pb/threshcheckpointpb/dsl"
 	threshchkpvalidatorpbdsl "github.com/filecoin-project/mir/pkg/pb/threshcheckpointpb/threshchkpvalidatorpb/dsl"
 	threshcheckpointpbtypes "github.com/filecoin-project/mir/pkg/pb/threshcheckpointpb/types"
 	transportpbdsl "github.com/filecoin-project/mir/pkg/pb/transportpb/dsl"
 	trantorpbtypes "github.com/filecoin-project/mir/pkg/pb/trantorpb/types"
-	"github.com/filecoin-project/mir/pkg/reliablenet/rntypes"
 	"github.com/filecoin-project/mir/pkg/threshcrypto/tctypes"
 	timert "github.com/filecoin-project/mir/pkg/timer/types"
 	tt "github.com/filecoin-project/mir/pkg/trantor/types"
@@ -60,11 +57,9 @@ type state struct {
 	stalledAgRound      bool
 	lastAgInput         time.Duration
 
-	minAgRound            uint64
-	nodeEpochMap          map[t.NodeID]tt.EpochNr
-	lastStableCheckpoint  *threshcheckpointpbtypes.StableCheckpoint
-	helpedNodes           map[t.NodeID]struct{}
-	liveStableCheckpoints map[tt.SeqNr]struct{}
+	minAgRound           uint64
+	nodeEpochMap         map[t.NodeID]tt.EpochNr
+	lastStableCheckpoint *threshcheckpointpbtypes.StableCheckpoint
 
 	nextCoalescedTimerDuration time.Duration
 	lastWakeUp                 time.Duration
@@ -503,8 +498,6 @@ func NewModule( // nolint: gocyclo,gocognit
 		// when the application receives the snapshot request.
 		apppbdsl.SnapshotRequest(m, mc.BatchFetcher, chkpModuleID)
 
-		state.liveStableCheckpoints[nextSeqNr] = struct{}{}
-
 		return nil
 	}
 	aagdsl.UponDeliver(m, func(round uint64, _ bool, _, _ time.Duration) error {
@@ -538,23 +531,9 @@ func NewModule( // nolint: gocyclo,gocognit
 
 			// cleanup old checkpointing instances
 			factorypbdsl.GarbageCollect(m, mc.Checkpoint, tt.RetentionIndex(firstRetainedEpoch))
-
-			// ensure we don't retain stale checkpoint messages as well
-			for sn := range state.liveStableCheckpoints {
-				if sn < tt.SeqNr(uint64(firstRetainedEpoch)*params.EpochLength) {
-					chkpEpochNr := uint64(sn) / params.EpochLength
-
-					// TODO: make it work with membership changes
-					reliablenetpbdsl.MarkModuleMsgsRecvd(m, mc.ReliableNet, mc.Checkpoint.Then(t.NewModuleIDFromInt(chkpEpochNr)), allNodes)
-					delete(state.liveStableCheckpoints, sn)
-				}
-			}
 		}
 	}
 	threshcheckpointpbdsl.UponStableCheckpoint(m, func(sn tt.SeqNr, snapshot *trantorpbtypes.StateSnapshot, signature tctypes.FullSig) error {
-		// we got it, no longer pending
-		delete(state.liveStableCheckpoints, sn)
-
 		if state.lastStableCheckpoint == nil || sn > state.lastStableCheckpoint.Sn {
 			saveLatestStableCheckpoint(&threshcheckpointpbtypes.StableCheckpoint{
 				Sn:        sn,
@@ -568,13 +547,6 @@ func NewModule( // nolint: gocyclo,gocognit
 				// Note: we add the current node idx to avoid overloading the remote node with snapshots
 				if epochNr+tt.EpochNr(params.RetainEpochs)+tt.EpochNr(ownQueueIdx) < currentEpochNr {
 					directorpbdsl.HelpNode(m, mc.Self, nodeID)
-					transportpbdsl.ForceSendMessage(m, mc.Net,
-						directorpbmsgs.StableCheckpoint(
-							mc.Self,
-							state.lastStableCheckpoint,
-						),
-						[]t.NodeID{nodeID},
-					)
 				}
 			}
 		}
@@ -590,9 +562,6 @@ func NewModule( // nolint: gocyclo,gocognit
 	checkpointpbdsl.UponEpochProgress(m, func(nodeId t.NodeID, epoch tt.EpochNr) error {
 		if epoch > state.nodeEpochMap[nodeId] {
 			state.nodeEpochMap[nodeId] = epoch
-
-			// TODO: don't send events to reliablenet if the node was not helped (volume should be low anyway)
-			reliablenetpbdsl.MarkRecvd(m, mc.ReliableNet, mc.Self, rntypes.MsgID(fmt.Sprintf("s%d", epoch)), []t.NodeID{nodeId})
 		}
 		return nil
 	})
@@ -604,24 +573,17 @@ func NewModule( // nolint: gocyclo,gocognit
 		}
 
 		epochNr := state.lastStableCheckpoint.Snapshot.EpochData.EpochConfig.EpochNr
-		if state.nodeEpochMap[nodeID] < epochNr+tt.EpochNr(params.RetainEpochs) {
-			if _, ok := state.helpedNodes[nodeID]; ok {
-				return nil // already helped
-			}
+		if state.nodeEpochMap[nodeID]+tt.EpochNr(params.RetainEpochs) < epochNr {
 			state.nodeEpochMap[nodeID] = epochNr
-			state.helpedNodes[nodeID] = struct{}{}
 
 			logger.Log(logging.LevelDebug, "Helping node catch up", "node", nodeID, "chkpEpoch", epochNr, "theirEpoch", state.nodeEpochMap[nodeID])
-			reliablenetpbdsl.ForceSendMessage(m, mc.ReliableNet, rntypes.MsgID(fmt.Sprintf("s%d", epochNr)),
+			transportpbdsl.ForceSendMessage(m, mc.Net,
 				directorpbmsgs.StableCheckpoint(
 					mc.Self,
 					state.lastStableCheckpoint,
 				),
 				[]t.NodeID{nodeID},
 			)
-
-			// clear previous help attempts
-			reliablenetpbdsl.MarkModuleMsgsRecvd(m, mc.ReliableNet, mc.Self, []t.NodeID{nodeID})
 		}
 		return nil
 	})
@@ -634,13 +596,14 @@ func NewModule( // nolint: gocyclo,gocognit
 			state.nodeEpochMap[from] = epochNr
 		}
 
-		if checkpoint.Sn < tt.SeqNr(state.agRound) {
+		currentEpoch := tt.EpochNr(state.agRound / params.EpochLength)
+		if state.agRound%params.EpochLength > 0 {
+			currentEpoch++
+		}
+		if epochNr < currentEpoch+tt.EpochNr(params.RetainEpochs) {
 			// stale checkpoint
 			return nil
 		}
-
-		// TODO: use go 1.21's clear method
-		state.helpedNodes = make(map[t.NodeID]struct{})
 
 		threshchkpvalidatorpbdsl.ValidateCheckpoint(m, mc.ChkpValidator, checkpoint, 0, memberships, checkpoint)
 		return nil
@@ -653,7 +616,11 @@ func NewModule( // nolint: gocyclo,gocognit
 			return nil
 		}
 
-		if checkpoint.Sn <= tt.SeqNr(state.agRound) {
+		currentEpoch := tt.EpochNr(state.agRound / params.EpochLength)
+		if state.agRound%params.EpochLength > 0 {
+			currentEpoch++
+		}
+		if checkpoint.Snapshot.EpochData.EpochConfig.EpochNr < currentEpoch+tt.EpochNr(params.RetainEpochs) {
 			// stale checkpoint
 			return nil
 		}
@@ -741,12 +708,10 @@ func newState(params ModuleParams, tunables ModuleTunables, qsp queueselectionpo
 	N := len(params.Membership.Nodes)
 
 	state := &state{
-		bcOwnQueueHead:        0,
-		queueSelectionPolicy:  qsp,
-		slotsReadyToDeliver:   make(set[bcpbtypes.Slot], N*tunables.MaxConcurrentVcbPerQueue),
-		nodeEpochMap:          make(map[t.NodeID]tt.EpochNr, N),
-		helpedNodes:           make(map[t.NodeID]struct{}),
-		liveStableCheckpoints: make(map[tt.SeqNr]struct{}),
+		bcOwnQueueHead:       0,
+		queueSelectionPolicy: qsp,
+		slotsReadyToDeliver:  make(set[bcpbtypes.Slot], N*tunables.MaxConcurrentVcbPerQueue),
+		nodeEpochMap:         make(map[t.NodeID]tt.EpochNr, N),
 
 		nextCoalescedTimerDuration: math.MaxInt64,
 	}
