@@ -58,9 +58,3 @@ func UponDoFillGap(m dsl.Module, handler func(slot *types.Slot, nextReplica uint
 		return handler(ev.Slot, ev.NextReplica)
 	})
 }
-
-func UponMarkStableProposal(m dsl.Module, handler func(slot *types.Slot) error) {
-	UponEvent[*types.Event_MarkStable](m, func(ev *types.MarkStableProposal) error {
-		return handler(ev.Slot)
-	})
-}

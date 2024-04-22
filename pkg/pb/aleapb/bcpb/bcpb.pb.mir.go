@@ -14,7 +14,6 @@ func (*Event) ReflectTypeOptions() []reflect.Type {
 		reflect.TypeOf((*Event_FreeSlot)(nil)),
 		reflect.TypeOf((*Event_EstimateUpdate)(nil)),
 		reflect.TypeOf((*Event_FillGap)(nil)),
-		reflect.TypeOf((*Event_MarkStable)(nil)),
 	}
 }
 

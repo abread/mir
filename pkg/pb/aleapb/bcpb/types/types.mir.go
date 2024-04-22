@@ -47,8 +47,6 @@ func Event_TypeFromPb(pb bcpb.Event_Type) Event_Type {
 		return &Event_EstimateUpdate{EstimateUpdate: EstimateUpdateFromPb(pb.EstimateUpdate)}
 	case *bcpb.Event_FillGap:
 		return &Event_FillGap{FillGap: DoFillGapFromPb(pb.FillGap)}
-	case *bcpb.Event_MarkStable:
-		return &Event_MarkStable{MarkStable: MarkStableProposalFromPb(pb.MarkStable)}
 	}
 	return nil
 }
@@ -195,30 +193,6 @@ func (w *Event_FillGap) Pb() bcpb.Event_Type {
 
 func (*Event_FillGap) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*bcpb.Event_FillGap]()}
-}
-
-type Event_MarkStable struct {
-	MarkStable *MarkStableProposal
-}
-
-func (*Event_MarkStable) isEvent_Type() {}
-
-func (w *Event_MarkStable) Unwrap() *MarkStableProposal {
-	return w.MarkStable
-}
-
-func (w *Event_MarkStable) Pb() bcpb.Event_Type {
-	if w == nil {
-		return nil
-	}
-	if w.MarkStable == nil {
-		return &bcpb.Event_MarkStable{}
-	}
-	return &bcpb.Event_MarkStable{MarkStable: (w.MarkStable).Pb()}
-}
-
-func (*Event_MarkStable) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*bcpb.Event_MarkStable]()}
 }
 
 func EventFromPb(pb *bcpb.Event) *Event {
@@ -435,37 +409,6 @@ func (m *DoFillGap) Pb() *bcpb.DoFillGap {
 
 func (*DoFillGap) MirReflect() mirreflect.Type {
 	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*bcpb.DoFillGap]()}
-}
-
-type MarkStableProposal struct {
-	Slot *Slot
-}
-
-func MarkStableProposalFromPb(pb *bcpb.MarkStableProposal) *MarkStableProposal {
-	if pb == nil {
-		return nil
-	}
-	return &MarkStableProposal{
-		Slot: SlotFromPb(pb.Slot),
-	}
-}
-
-func (m *MarkStableProposal) Pb() *bcpb.MarkStableProposal {
-	if m == nil {
-		return nil
-	}
-	pbMessage := &bcpb.MarkStableProposal{}
-	{
-		if m.Slot != nil {
-			pbMessage.Slot = (m.Slot).Pb()
-		}
-	}
-
-	return pbMessage
-}
-
-func (*MarkStableProposal) MirReflect() mirreflect.Type {
-	return mirreflect.TypeImpl{PbType_: reflectutil.TypeOf[*bcpb.MarkStableProposal]()}
 }
 
 type Message struct {

@@ -86,8 +86,6 @@ func New(mc ModuleConfig, params ModuleParams, nodeID t.NodeID, logger logging.L
 			},
 			InitialNodeCount: len(params.AllNodes),
 		}, logging.Decorate(logger, "ThresholdSigAggregator: ")),
-
-		relStartTime: time.Since(timeRef),
 	}
 
 	abbadsl.UponRoundInputValue(m, func(input bool) error {
@@ -181,6 +179,10 @@ func New(mc ModuleConfig, params ModuleParams, nodeID t.NodeID, logger logging.L
 					params.AllNodes,
 				)
 				state.auxSent = true
+
+				if state.relStartTime == 0 {
+					state.relStartTime = time.Since(timeRef)
+				}
 			}
 		}
 

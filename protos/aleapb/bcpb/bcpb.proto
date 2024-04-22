@@ -25,7 +25,6 @@ message Event {
     FreeSlot           free_slot       = 4;
     EstimateUpdate     estimate_update = 5;
     DoFillGap          fill_gap        = 6;
-    MarkStableProposal mark_stable     = 7;
   }
 }
 
@@ -79,12 +78,6 @@ message DoFillGap {
 
   Slot slot = 1;
   uint32 next_replica = 2; // next replica to try to contact
-}
-
-message MarkStableProposal {
-  option (mir.event) = true;
-
-  Slot slot = 1;
 }
 
 // ============================================================

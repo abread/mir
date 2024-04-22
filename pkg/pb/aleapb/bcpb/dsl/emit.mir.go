@@ -36,7 +36,3 @@ func EstimateUpdate(m dsl.Module, destModule types.ModuleID, maxOwnBcDuration ti
 func DoFillGap(m dsl.Module, destModule types.ModuleID, slot *types1.Slot, nextReplica uint32) {
 	dsl.EmitEvent(m, events.DoFillGap(destModule, slot, nextReplica))
 }
-
-func MarkStableProposal(m dsl.Module, destModule types.ModuleID, slot *types1.Slot) {
-	dsl.EmitEvent(m, events.MarkStableProposal(destModule, slot))
-}

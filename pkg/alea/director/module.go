@@ -229,8 +229,6 @@ func NewModule( // nolint: gocyclo,gocognit
 			logger.Log(logging.LevelDebug, "INPUT AG (AG-done)", "round", nextRoundSameQueue, "value", true)
 			aagdsl.InputValue(m, mc.AleaAgreement, nextRoundSameQueue, true)
 			state.lastAgInput = time.Since(timeRef)
-
-			bcpbdsl.MarkStableProposal(m, mc.AleaBroadcast, &slot)
 		}
 		return nil
 	})
