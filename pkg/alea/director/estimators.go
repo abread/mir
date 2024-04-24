@@ -131,9 +131,9 @@ func newEstimators(m dsl.Module, params ModuleParams, tunables ModuleTunables, n
 					posTotalDelta = time.Duration(float64(posQuorumWait) * tunables.MaxExtSlowdownFactor)
 				}
 
-				// failed deadline, ensure margin is at least doubled
+				// failed deadline, consider maximum posTotalDelta
 				if !decision && posTotalDelta < posQuorumWait {
-					posTotalDelta = posQuorumWait
+					posTotalDelta = time.Duration(float64(posQuorumWait) * tunables.MaxExtSlowdownFactor)
 				}
 
 				est.extBcDoneMargin.AddSample(int(queueIdx), posQuorumWait+posTotalDelta)
