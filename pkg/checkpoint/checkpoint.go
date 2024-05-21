@@ -49,7 +49,7 @@ func init() {
 	}
 
 	decOptions := cbor.DecOptions{
-		MaxArrayElements: 131072,
+		MaxArrayElements: 128 * 8192 * 8 * 2, // for ~128 nodes, with ~8192 batch size and ~8*B*N clients
 		MaxMapPairs:      128 * 8192 * 8 * 2, // for ~128 nodes, with ~8192 batch size and ~8*B*N clients
 		IndefLength:      cbor.IndefLengthForbidden,
 	}
