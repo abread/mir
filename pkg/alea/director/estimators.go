@@ -47,9 +47,10 @@ func (e *estimators) AgFastPathEst() time.Duration {
 	// The unanimity optimization lowers convergence to the time for one message broadcast (per node):
 	// the INPUT message
 	// One abba round takes roughly 4 message broadcasts (per node), plus the time to compute the common coin.
-	// However, the abbaRoundNoCoinDuration estimate excludes the time for the first (INIT) message broadcast.
-	// Thus we can divide this value by 3 to obtain the correct estimate.
-	abbaEst := e.abbaRoundNoCoinDuration.MinEstimate() / 3
+	// However, the abbaRoundNoCoinDuration estimate goes from broadcasting AUX to coin recovery start, meaning
+	// it only encompasses broadcasting AUX and CONF.
+	// Thus we can divide this value by 2 to obtain the correct estimate.
+	abbaEst := e.abbaRoundNoCoinDuration.MinEstimate() / 2
 
 	// VCB also provides an estimate of network latency
 	vcbEst := e.minNetLatencyVcb
