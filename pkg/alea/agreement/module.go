@@ -85,7 +85,7 @@ type ModuleTunables struct {
 	// Must be at least 0, must be less that MaxRoundLookahead
 	// Setting this parameter too high will lead to costly retransmissions!
 	// Should likely be less than MaxRoundLookahead/2 - 1.
-	MaxRoundAdvanceInput int
+	MaxRoundEagerInput int
 }
 
 func NewModule(
@@ -105,9 +105,9 @@ func NewModule(
 		return nil, es.Errorf("MaxRoundLookahead must be at least 1")
 	} else if tunables.MaxAbbaRoundLookahead <= 0 {
 		return nil, es.Errorf("MaxAbbaRoundLookahead must be at least 1")
-	} else if tunables.MaxRoundAdvanceInput < 0 {
+	} else if tunables.MaxRoundEagerInput < 0 {
 		return nil, es.Errorf("MaxRoundAdvanceInput must be at least 0")
-	} else if tunables.MaxRoundAdvanceInput > tunables.MaxRoundLookahead {
+	} else if tunables.MaxRoundEagerInput > tunables.MaxRoundLookahead {
 		return nil, es.Errorf("MaxRoundAdvanceInput must be less than MaxRoundLookahead")
 	} else if startingSn%tt.SeqNr(params.EpochLength) != 0 {
 		return nil, es.Errorf("startingSn must be a multiple of EpochLength (the start of an epoch)")
@@ -313,7 +313,7 @@ func newAgController(mc ModuleConfig, params ModuleParams, tunables ModuleTunabl
 
 	// give input to new rounds
 	dsl.UponStateUpdates(m, func() error {
-		for round := state.currentRound; round <= state.currentRound+uint64(tunables.MaxRoundAdvanceInput) && agRounds.IsInView(round); round++ {
+		for round := state.currentRound; round <= state.currentRound+uint64(tunables.MaxRoundEagerInput) && agRounds.IsInView(round); round++ {
 			if input, ok := state.pendingInput[round]; ok {
 				logger.Log(logging.LevelDebug, "inputting value to agreement round", "agRound", round, "value", input)
 				roundModID := mc.agRoundModuleID(round)

@@ -60,7 +60,7 @@ type ModuleTunables struct {
 	// Must be at least 0, must be less that MaxRoundLookahead
 	// Setting this parameter too high will lead to costly retransmissions!
 	// Should likely be less than MaxRoundLookahead/2 - 1.
-	MaxAgRoundAdvanceInput int
+	MaxAgRoundEagerInput int
 
 	MaxAgStall time.Duration
 }

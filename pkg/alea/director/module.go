@@ -263,7 +263,7 @@ func NewModule( // nolint: gocyclo,gocognit
 		return nil
 	})
 
-	maxAgAdvInput := uint64(tunables.MaxAgRoundAdvanceInput)
+	maxAgAdvInput := uint64(tunables.MaxAgRoundEagerInput)
 	if maxAgAdvInput >= uint64(N) {
 		maxAgAdvInput = uint64(N - 1)
 	}

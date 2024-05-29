@@ -233,7 +233,7 @@ func New(
 				MaxOwnUnagreedBatchCount: params.Alea.MaxOwnUnagreedBatchCount,
 				EstimateWindowSize:       params.Alea.EstimateWindowSize,
 				MaxExtSlowdownFactor:     params.Alea.MaxExtSlowdownFactor,
-				MaxAgRoundAdvanceInput:   params.Alea.MaxAgRoundAdvanceInput,
+				MaxAgRoundEagerInput:     params.Alea.MaxAgRoundEagerInput,
 				MaxAgStall:               params.Alea.MaxAgStall,
 			},
 			startingCheckpoint,
@@ -274,7 +274,7 @@ func New(
 			agreement.ModuleTunables{
 				MaxRoundLookahead:     params.Alea.MaxAgRoundLookahead,
 				MaxAbbaRoundLookahead: params.Alea.MaxAbbaRoundLookahead,
-				MaxRoundAdvanceInput:  params.Alea.MaxAgRoundAdvanceInput,
+				MaxRoundEagerInput:    params.Alea.MaxAgRoundEagerInput,
 			},
 			startingCheckpoint,
 			ownID,

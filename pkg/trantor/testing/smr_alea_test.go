@@ -168,7 +168,7 @@ func testIntegrationWithAlea(t *testing.T) { // nolint: gocognit,gocyclo
 					// bring all abba instances into view
 					params.Alea.MaxAbbaRoundLookahead = 10
 					params.Alea.MaxAgRoundLookahead = 10
-					params.Alea.MaxAgRoundAdvanceInput = 5
+					params.Alea.MaxAgRoundEagerInput = 5
 				},
 			}},
 

@@ -43,7 +43,7 @@ type Params struct {
 	// Must be at least 0, must be less that MaxRoundLookahead
 	// Setting this parameter too high will lead to costly retransmissions!
 	// Should likely be less than MaxRoundLookahead/2 - 1.
-	MaxAgRoundAdvanceInput int `json:",string"`
+	MaxAgRoundEagerInput int `json:",string"`
 
 	// Subprotocol duration estimates window size
 	EstimateWindowSize int `json:",string"`
@@ -95,7 +95,7 @@ func (p *Params) Adjust(epochSz int, maxOwnUnagBatchCount int) {
 	}
 
 	p.MaxAgRoundLookahead = epochSz * 2
-	p.MaxAgRoundAdvanceInput = epochSz - 1
+	p.MaxAgRoundEagerInput = epochSz - 1
 	p.EpochLength = uint64(epochSz)
 }
 
